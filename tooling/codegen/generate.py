@@ -69,7 +69,9 @@ def go_type(schema):
             optional = name not in required
             if optional and not typ.startswith(('*', '[]', 'map[')) and typ != 'json.RawMessage':
                 typ = '*' + typ
-            tag = name + (',omitempty' if optional else '')
+            # A present empty object/array is distinct from an omitted field.
+            omission = ',omitzero' if typ.startswith(('[]', 'map[')) else ',omitempty'
+            tag = name + (omission if optional else '')
             fields.append(f'{go_name(name)} {typ} `json:"{tag}"`')
         return 'struct {\n' + '\n'.join(fields) + '\n}'
     if kind == 'array':

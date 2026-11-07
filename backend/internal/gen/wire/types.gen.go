@@ -110,7 +110,7 @@ type Diagnostic struct {
 	EventKey      *string  `json:"event_key,omitempty"`
 	SchemaVersion *int64   `json:"schema_version,omitempty"`
 	Code          string   `json:"code"`
-	FieldPaths    []string `json:"field_paths,omitempty"`
+	FieldPaths    []string `json:"field_paths,omitzero"`
 	Count         *int64   `json:"count,omitempty"`
 	Stage         string   `json:"stage"`
 }
@@ -133,11 +133,11 @@ type Draft struct {
 type DraftInput struct {
 	DisplayName        *string        `json:"display_name,omitempty"`
 	Schema             map[string]any `json:"schema"`
-	FieldMetadata      map[string]any `json:"field_metadata,omitempty"`
+	FieldMetadata      map[string]any `json:"field_metadata,omitzero"`
 	Trigger            *string        `json:"trigger,omitempty"`
-	AllowedSourceKinds []string       `json:"allowed_source_kinds,omitempty"`
+	AllowedSourceKinds []string       `json:"allowed_source_kinds,omitzero"`
 	FactKind           *string        `json:"fact_kind,omitempty"`
-	ExampleProperties  map[string]any `json:"example_properties,omitempty"`
+	ExampleProperties  map[string]any `json:"example_properties,omitzero"`
 }
 
 type ErasureInput json.RawMessage
@@ -210,12 +210,12 @@ type EventPlan struct {
 	Environment           string         `json:"environment"`
 	ReleaseRevision       int64          `json:"release_revision"`
 	Description           *string        `json:"description,omitempty"`
-	Source                map[string]any `json:"source,omitempty"`
-	EnvelopeContract      map[string]any `json:"envelope_contract,omitempty"`
+	Source                map[string]any `json:"source,omitzero"`
+	EnvelopeContract      map[string]any `json:"envelope_contract,omitzero"`
 	SystemEventReferences []struct {
 		EventKey      string `json:"event_key"`
 		SchemaVersion int64  `json:"schema_version"`
-	} `json:"system_event_references,omitempty"`
+	} `json:"system_event_references,omitzero"`
 	Events []struct {
 		EventKey             string         `json:"event_key"`
 		DisplayName          string         `json:"display_name"`
@@ -224,12 +224,12 @@ type EventPlan struct {
 		FactKind             string         `json:"fact_kind"`
 		Trigger              string         `json:"trigger"`
 		Schema               map[string]any `json:"schema"`
-		FieldMetadata        map[string]any `json:"field_metadata,omitempty"`
+		FieldMetadata        map[string]any `json:"field_metadata,omitzero"`
 		ExampleProperties    map[string]any `json:"example_properties"`
 		ImplementationStatus *string        `json:"implementation_status,omitempty"`
 	} `json:"events"`
-	ImplementationNotes []string `json:"implementation_notes,omitempty"`
-	Acceptance          []string `json:"acceptance,omitempty"`
+	ImplementationNotes []string `json:"implementation_notes,omitzero"`
+	Acceptance          []string `json:"acceptance,omitzero"`
 }
 
 type ExportInput struct {
@@ -281,7 +281,7 @@ type Problem struct {
 	Code      string         `json:"code"`
 	Message   string         `json:"message"`
 	RequestID string         `json:"request_id"`
-	Details   map[string]any `json:"details,omitempty"`
+	Details   map[string]any `json:"details,omitzero"`
 }
 
 type Project struct {
@@ -323,7 +323,7 @@ type QueryJob struct {
 	Error       *struct {
 		Code       string   `json:"code"`
 		Retryable  bool     `json:"retryable"`
-		FieldPaths []string `json:"field_paths,omitempty"`
+		FieldPaths []string `json:"field_paths,omitzero"`
 	} `json:"error,omitempty"`
 }
 
@@ -335,7 +335,7 @@ type QueryRequest struct {
 		To   string `json:"to"`
 	} `json:"time_range"`
 	Timezone         string          `json:"timezone"`
-	EventKeys        []string        `json:"event_keys,omitempty"`
+	EventKeys        []string        `json:"event_keys,omitzero"`
 	Filter           json.RawMessage `json:"filter,omitempty"`
 	Subject          *string         `json:"subject,omitempty"`
 	IdentityRevision *int64          `json:"identity_revision,omitempty"`
@@ -343,12 +343,12 @@ type QueryRequest struct {
 		UID         *string `json:"uid,omitempty"`
 		AnonymousID *string `json:"anonymous_id,omitempty"`
 	} `json:"identity_filter,omitempty"`
-	GroupBy []json.RawMessage `json:"group_by,omitempty"`
+	GroupBy []json.RawMessage `json:"group_by,omitzero"`
 	Metrics []struct {
 		Op       string          `json:"op"`
 		Field    json.RawMessage `json:"field,omitempty"`
 		Accuracy *string         `json:"accuracy,omitempty"`
-	} `json:"metrics,omitempty"`
+	} `json:"metrics,omitzero"`
 	Interval *string `json:"interval,omitempty"`
 	Funnel   *struct {
 		Steps []struct {
@@ -361,7 +361,7 @@ type QueryRequest struct {
 		SameEntity    []struct {
 			StepIndex int64           `json:"step_index"`
 			Field     json.RawMessage `json:"field"`
-		} `json:"same_entity,omitempty"`
+		} `json:"same_entity,omitzero"`
 	} `json:"funnel,omitempty"`
 	Limit  *int64  `json:"limit,omitempty"`
 	Cursor *string `json:"cursor,omitempty"`
@@ -492,7 +492,7 @@ type SourceInput struct {
 	Name           string   `json:"name"`
 	Environment    string   `json:"environment"`
 	Kind           string   `json:"kind"`
-	AllowedOrigins []string `json:"allowed_origins,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins,omitzero"`
 }
 
 type SourceIssued struct {
@@ -514,7 +514,7 @@ type SourceList struct {
 
 type SourceUpdate struct {
 	Status         *string  `json:"status,omitempty"`
-	AllowedOrigins []string `json:"allowed_origins,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins,omitzero"`
 }
 
 type ValidationInput struct {
