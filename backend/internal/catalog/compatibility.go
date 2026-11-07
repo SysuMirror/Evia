@@ -6,6 +6,15 @@ func Compatibility(previous *DraftInput, next DraftInput) string {
 	if previous == nil {
 		return "initial"
 	}
+	// Until semantic metadata has a typed contract, any metadata change may
+	// alter interpretation (for example duration milliseconds versus seconds).
+	// Compare canonical JSON, so map iteration/key order has no effect. Missing
+	// and explicitly empty metadata retain their existing distinct semantics.
+	beforeMetadata, beforeError := Hash(previous.FieldMetadata)
+	afterMetadata, afterError := Hash(next.FieldMetadata)
+	if beforeError != nil || afterError != nil || beforeMetadata != afterMetadata {
+		return "breaking"
+	}
 	for _, kind := range previous.AllowedSourceKinds {
 		found := false
 		for _, v := range next.AllowedSourceKinds {
