@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -160,7 +161,7 @@ func Validate(r *Request) error {
 		if (f.UID == nil) == (f.AnonymousID == nil) {
 			return Invalid("INVALID_IDENTITY_FILTER", "必须指定且仅指定一个身份", "/identity_filter")
 		}
-		if f.UID != nil && (strings.TrimSpace(*f.UID) == "" || len(*f.UID) > 128 || r.Subject != "uid") {
+		if f.UID != nil && (!utf8.ValidString(*f.UID) || strings.ContainsRune(*f.UID, 0) || strings.TrimSpace(*f.UID) == "" || utf8.RuneCountInString(*f.UID) > 128 || r.Subject != "uid") {
 			return Invalid("INVALID_IDENTITY_FILTER", "UID 过滤必须匹配 uid 主体", "/identity_filter")
 		}
 		if f.AnonymousID != nil && (len(*f.AnonymousID) != 36 || r.Subject != "anonymous") {

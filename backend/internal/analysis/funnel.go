@@ -1,9 +1,9 @@
 package analysis
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -30,6 +30,12 @@ func follows(previous, next funnelEvent) bool {
 // advance only when their common session supplies an increasing causal sequence.
 // Candidate starts are retained so a later valid start can satisfy the window.
 func EvaluateFunnel(request Request, rows []map[string]any) ([]map[string]any, error) {
+	return evaluateFunnel(context.Background(), request, rows)
+}
+func evaluateFunnel(ctx context.Context, request Request, rows []map[string]any) ([]map[string]any, error) {
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
 	f := request.Funnel
 	if f == nil {
 		return nil, Invalid("INVALID_FUNNEL", "漏斗配置缺失")
@@ -40,6 +46,9 @@ func EvaluateFunnel(request Request, rows []map[string]any) ([]map[string]any, e
 		entitySteps[field.StepIndex] = true
 	}
 	for _, row := range rows {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
 		subject := stringValue(row["subject_id"])
 		if subject == "" {
 			continue
@@ -71,30 +80,22 @@ func EvaluateFunnel(request Request, rows []map[string]any) ([]map[string]any, e
 	totals := make([]int, len(f.Steps))
 	statesBudget := 0
 	for _, events := range bySubject {
-		sort.Slice(events, func(i, j int) bool {
-			a, b := events[i], events[j]
-			if a.time != b.time {
-				return a.time < b.time
-			}
-			if a.session != b.session {
-				return a.session < b.session
-			}
-			if a.tab != b.tab {
-				return a.tab < b.tab
-			}
-			if a.sequence != b.sequence {
-				return a.sequence < b.sequence
-			}
-			if a.source != b.source {
-				return a.source < b.source
-			}
-			return a.id < b.id
-		})
+		if e := sortFunnelEvents(ctx, events); e != nil {
+			return nil, e
+		}
 		states := []progress{}
 		reached := 0
 		for _, event := range events {
+			if e := ctx.Err(); e != nil {
+				return nil, e
+			}
 			nextStates := make([]progress, 0, len(states)+1)
-			for _, candidate := range states {
+			for index, candidate := range states {
+				if index&127 == 0 {
+					if e := ctx.Err(); e != nil {
+						return nil, e
+					}
+				}
 				if event.time-candidate.start.time > int64(time.Duration(f.WindowSeconds)*time.Second) {
 					continue
 				}
@@ -134,7 +135,12 @@ func EvaluateFunnel(request Request, rows []map[string]any) ([]map[string]any, e
 			// because they may satisfy different windows and entity constraints.
 			seen := map[string]bool{}
 			states = states[:0]
-			for _, candidate := range nextStates {
+			for index, candidate := range nextStates {
+				if index&127 == 0 {
+					if e := ctx.Err(); e != nil {
+						return nil, e
+					}
+				}
 				key := fmt.Sprintf("%d|%s|%s|%d|%s|%s|%d|%s", candidate.start.time, candidate.start.source, candidate.start.id, candidate.last.time, candidate.last.source, candidate.last.id, candidate.next, candidate.entity)
 				if !seen[key] {
 					seen[key] = true
@@ -166,4 +172,61 @@ func EvaluateFunnel(request Request, rows []map[string]any) ([]map[string]any, e
 		out = append(out, map[string]any{"step_index": i, "event_key": step.EventKey, "subjects": totals[i], "conversion_rate": rate})
 	}
 	return out, nil
+}
+
+func earlierFunnelEvent(a, b funnelEvent) bool {
+	if a.time != b.time {
+		return a.time < b.time
+	}
+	if a.session != b.session {
+		return a.session < b.session
+	}
+	if a.tab != b.tab {
+		return a.tab < b.tab
+	}
+	if a.sequence != b.sequence {
+		return a.sequence < b.sequence
+	}
+	if a.source != b.source {
+		return a.source < b.source
+	}
+	return a.id < b.id
+}
+
+// A bottom-up merge sort permits cancellation inside sorting without a panic,
+// an unbounded goroutine, or a comparator that violates strict ordering.
+func sortFunnelEvents(ctx context.Context, events []funnelEvent) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	if len(events) < 2 {
+		return nil
+	}
+	buffer := make([]funnelEvent, len(events))
+	for width := 1; width < len(events); width *= 2 {
+		for left := 0; left < len(events); left += 2 * width {
+			if e := ctx.Err(); e != nil {
+				return e
+			}
+			middle := min(left+width, len(events))
+			right := min(left+2*width, len(events))
+			a, b := left, middle
+			for destination := left; destination < right; destination++ {
+				if destination&127 == 0 {
+					if e := ctx.Err(); e != nil {
+						return e
+					}
+				}
+				if a < middle && (b >= right || !earlierFunnelEvent(events[b], events[a])) {
+					buffer[destination] = events[a]
+					a++
+				} else {
+					buffer[destination] = events[b]
+					b++
+				}
+			}
+		}
+		copy(events, buffer)
+	}
+	return ctx.Err()
 }
