@@ -111,7 +111,7 @@ func (c *Collector) loadPlan(ctx context.Context, key, project, env string, revi
 	if p.ProjectID != project || p.Environment != env || p.Revision != revision {
 		return compiledPlan{}, unavailable("EVENT_PLAN_SCOPE_MISMATCH")
 	}
-	if !p.Ready || !p.Active {
+	if !p.Ready || !p.Active || p.ValidFor <= 0 {
 		return compiledPlan{}, unavailable("EVENT_PLAN_NOT_READY")
 	}
 	if e = ctx.Err(); e != nil {
@@ -136,6 +136,9 @@ func (c *Collector) loadPlan(ctx context.Context, key, project, env string, revi
 		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
 	}
 	compiled := compiledPlan{plan: p, schemas: cached.schemas, expires: started.Add(2 * time.Second), hash: hash}
+	if horizon := started.Add(p.ValidFor); horizon.Before(compiled.expires) {
+		compiled.expires = horizon
+	}
 	if len(p.Events) > 200 {
 		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
 	}
@@ -178,6 +181,9 @@ func (c *Collector) loadPlan(ctx context.Context, key, project, env string, revi
 	c.cache[key] = compiled
 	c.cacheRules += len(compiled.schemas)
 	c.mu.Unlock()
+	if !compiled.expires.After(time.Now()) {
+		return compiledPlan{}, unavailable("EVENT_PLAN_NOT_READY")
+	}
 	return compiled, nil
 }
 
@@ -241,6 +247,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 	}
 	out := Receipt{BatchID: batch.ID, ReceiptID: ids.New(), Results: make([]ItemResult, len(batch.Events))}
 	records := make([]Record, 0, len(batch.Events))
+	itemIndices := make([]int, 0, len(batch.Events))
 	retryable := false
 	// Every distinct version is fetched at most once within this batch. Successful
 	// compiled manifests are shared across batches with a bounded staleness TTL.
@@ -297,6 +304,16 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			continue
 		}
 		plan, ok := batchPlans[event.Revision]
+		if ok && !plan.expires.After(time.Now()) {
+			plan, e = c.plan(ctx, source.Source.ProjectID, source.Source.Environment, event.Revision)
+			if e != nil {
+				planErrors[event.Revision] = e
+				delete(batchPlans, event.Revision)
+				ok = false
+			} else {
+				batchPlans[event.Revision] = plan
+			}
+		}
 		if !ok {
 			if _, seen := planErrors[event.Revision]; !seen {
 				// Bound adversarial cache-miss amplification independently of batch size.
@@ -354,18 +371,53 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			out.Results[i] = result
 			continue
 		}
+		if !plan.expires.After(time.Now()) {
+			reject("SCHEMA_NOT_READY", true, "release_revision")
+			out.Results[i] = result
+			continue
+		}
 		records = append(records, Record{ProjectID: source.Source.ProjectID, SourceID: source.Source.ID, SourceKind: source.Source.Kind, Environment: source.Source.Environment, ReceivedAt: now, EventID: event.ID, EventKey: event.Key, SchemaVersion: event.Version, ReleaseRevision: event.Revision, OccurredAt: event.Occurred.UTC(), UID: event.Identity.UID, AnonymousID: event.Identity.AnonymousID, Context: eventContext, ContextJSON: event.Context, PropertiesJSON: event.Properties, SDKName: event.SDK.Name, SDKVersion: event.SDK.Version})
+		itemIndices = append(itemIndices, i)
 		result.Status = "accepted"
 		out.Results[i] = result
 	}
+	// Recheck immediately before queue admission: slow batch validation must not
+	// submit events after their known lease or compatibility horizon has ended.
+	for revision, plan := range batchPlans {
+		if !plan.expires.After(time.Now()) {
+			fresh, e := c.plan(ctx, source.Source.ProjectID, source.Source.Environment, revision)
+			if e != nil {
+				delete(batchPlans, revision)
+			} else {
+				batchPlans[revision] = fresh
+			}
+		}
+	}
+	admitted := records[:0]
+	for j, record := range records {
+		if plan, ok := batchPlans[record.ReleaseRevision]; !ok || !plan.expires.After(time.Now()) {
+			item := &out.Results[itemIndices[j]]
+			item.Status = "rejected"
+			item.Error = &ItemError{Code: "SCHEMA_NOT_READY", Retryable: true, FieldPaths: []string{"release_revision"}}
+			retryable = true
+			continue
+		}
+		admitted = append(admitted, record)
+	}
+	records = admitted
 	if len(records) == 0 {
 		if retryable {
 			return Receipt{}, 0, unavailable("EVENT_PLAN_NOT_READY")
 		}
 		return out, 422, nil
 	}
+	if ctx.Err() != nil {
+		return Receipt{}, 0, unavailable("COLLECTION_DEADLINE_EXCEEDED")
+	}
 	if e = c.queue.Publish(ctx, records); e != nil {
 		return Receipt{}, 0, unavailable("DURABLE_QUEUE_UNAVAILABLE")
 	}
+	// Eligibility was checked before this write. An in-flight lease or source
+	// expiry cannot invalidate a durable acknowledgement of admitted events.
 	return out, 202, nil
 }

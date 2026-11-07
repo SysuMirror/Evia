@@ -105,7 +105,10 @@ type Plan struct {
 	ProjectID, Environment string
 	Revision               int64
 	Ready, Active          bool
-	Events                 map[string]EventRule
+	// ValidFor is remaining eligibility measured with the database clock.
+	// Ready and Active require a positive value; zero never implies a default.
+	ValidFor time.Duration
+	Events   map[string]EventRule
 }
 type PlanResolver interface {
 	ResolvePlan(context.Context, string, string, int64) (Plan, error)

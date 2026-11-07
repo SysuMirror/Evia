@@ -197,3 +197,107 @@ func TestCompiledRuleCountBoundEvictsLargePlans(t *testing.T) {
 		t.Fatal("compiled event-rule memory bound exceeded", c.cacheRules, len(c.cache))
 	}
 }
+
+type horizonPlans struct {
+	value   Plan
+	until   time.Time
+	calls   int
+	entered time.Time
+	delay   time.Duration
+}
+
+func (p *horizonPlans) ResolvePlan(ctx context.Context, _, _ string, r int64) (Plan, error) {
+	p.calls++
+	p.entered = time.Now()
+	if p.delay > 0 {
+		timer := time.NewTimer(p.delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return Plan{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	v := p.value
+	v.Revision = r
+	v.ValidFor = time.Until(p.until)
+	v.Ready = v.Ready && v.ValidFor > 0
+	return v, nil
+}
+func TestPlanCacheDoesNotOutliveServerEligibilityHorizon(t *testing.T) {
+	c, _, stub, _, _ := collectorFixture(t)
+	p := &horizonPlans{value: stub.value, until: time.Now().Add(80 * time.Millisecond), delay: 20 * time.Millisecond}
+	c.plans = p
+	v, e := c.plan(context.Background(), testProject, "development", 1)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if v.expires.After(p.until) || v.expires.After(p.entered.Add(80*time.Millisecond)) {
+		t.Fatal("metadata latency extended known eligibility horizon", v.expires, p.until)
+	}
+	timer := time.NewTimer(time.Until(v.expires.Add(time.Millisecond)))
+	defer timer.Stop()
+	<-timer.C
+	if _, e = c.plan(context.Background(), testProject, "development", 1); e == nil || p.calls != 2 {
+		t.Fatal("expired eligibility was served from cache", e, p.calls)
+	}
+}
+
+type delayedEnvelopeValidator struct {
+	delegate SchemaValidator
+	calls    int
+	until    time.Time
+}
+
+func (v *delayedEnvelopeValidator) Validate(name string, value any) error {
+	if name == "EventEnvelope" {
+		v.calls++
+		if v.calls == 2 {
+			timer := time.NewTimer(time.Until(v.until.Add(time.Millisecond)))
+			defer timer.Stop()
+			<-timer.C
+		}
+	}
+	return v.delegate.Validate(name, value)
+}
+func TestBatchCannotSubmitAfterKnownEligibilityExpires(t *testing.T) {
+	c, _, stub, q, _ := collectorFixture(t)
+	until := time.Now().Add(100 * time.Millisecond)
+	p := &horizonPlans{value: stub.value, until: until}
+	c.plans = p
+	c.validator = &delayedEnvelopeValidator{delegate: c.validator, until: until}
+	out, _, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent()), eventJSON(validEvent())), browserAuth())
+	if e == nil || fault.Public(e).Code != "EVENT_PLAN_NOT_READY" || q.calls != 0 || len(out.Results) != 0 || p.calls < 2 {
+		t.Fatal("slow batch submitted an expired earlier item", e, q.calls, out, p.calls)
+	}
+}
+
+type inFlightQueue struct {
+	until    time.Time
+	admitted time.Time
+	records  int
+}
+
+func (q *inFlightQueue) Publish(ctx context.Context, records []Record) error {
+	q.admitted = time.Now()
+	q.records = len(records)
+	timer := time.NewTimer(time.Until(q.until.Add(5 * time.Millisecond)))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+func TestValidAdmissionRetainsDurableAcknowledgementAfterInFlightLeaseExpiry(t *testing.T) {
+	c, _, stub, _, _ := collectorFixture(t)
+	until := time.Now().Add(80 * time.Millisecond)
+	c.plans = &horizonPlans{value: stub.value, until: until}
+	q := &inFlightQueue{until: until}
+	c.queue = q
+	out, status, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent())), browserAuth())
+	if e != nil || status != 202 || out.Results[0].Status != "accepted" || q.records != 1 || !q.admitted.Before(until) || time.Now().Before(until) {
+		t.Fatal("valid in-flight acknowledgement was spuriously invalidated", status, e, out, q.admitted, until)
+	}
+}

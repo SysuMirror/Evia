@@ -76,7 +76,7 @@ func collectorFixture(t *testing.T) (*Collector, *sourceStub, *planStub, *queueS
 		t.Fatal(e)
 	}
 	source := &sourceStub{value: AdmissionSource{Source: Source{ID: testSource, ProjectID: testProject, Kind: "browser", Environment: "development", Status: "active", AllowedOrigins: []string{"https://website.example"}}, Credential: Credential{ID: testSource}}}
-	plans := &planStub{value: Plan{ProjectID: testProject, Environment: "development", Revision: 1, Ready: true, Active: true, Events: map[string]EventRule{"lesson_opened": {Key: "lesson_opened", Version: 1, AllowedSourceKinds: []string{"browser", "server"}, Schema: map[string]any{"type": "object", "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}, "additionalProperties": false}}}}}
+	plans := &planStub{value: Plan{ProjectID: testProject, Environment: "development", Revision: 1, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]EventRule{"lesson_opened": {Key: "lesson_opened", Version: 1, AllowedSourceKinds: []string{"browser", "server"}, Schema: map[string]any{"type": "object", "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}, "additionalProperties": false}}}}}
 	queue, budget := &queueStub{}, &budgetStub{}
 	c, e := NewCollector(source, plans, queue, budget, v)
 	if e != nil {
@@ -123,6 +123,7 @@ func TestCollectionFailsClosedAndDoesNotAcknowledgeAmbiguousQueue(t *testing.T) 
 			s.value.Credential.SecretDigest = Digest(strings.Repeat("s", 43))
 		}},
 		{name: "unready", code: "EVENT_PLAN_NOT_READY", change: func(_ *sourceStub, p *planStub, _ *queueStub, _ *budgetStub) { p.value.Ready = false }, auth: browserAuth()},
+		{name: "missing eligibility horizon", code: "EVENT_PLAN_NOT_READY", change: func(_ *sourceStub, p *planStub, _ *queueStub, _ *budgetStub) { p.value.ValidFor = 0 }, auth: browserAuth()},
 		{name: "unactivated", code: "EVENT_PLAN_NOT_READY", change: func(_ *sourceStub, p *planStub, _ *queueStub, _ *budgetStub) { p.value.Active = false }, auth: browserAuth()},
 		{name: "cross project manifest", code: "EVENT_PLAN_NOT_READY", change: func(_ *sourceStub, p *planStub, _ *queueStub, _ *budgetStub) { p.value.ProjectID = testSource }, auth: browserAuth()},
 		{name: "budget denial", code: "COLLECTION_BUDGET_EXCEEDED", change: func(_ *sourceStub, _ *planStub, _ *queueStub, b *budgetStub) {
