@@ -155,3 +155,25 @@ func TestConfigurationErrorsDoNotEchoSecrets(t *testing.T) {
 		t.Fatal("configuration error exposed a credential")
 	}
 }
+
+func TestDeliveryConfigurationRequiresActualReadbackDependency(t *testing.T) {
+	values := runtimeValues()
+	values["EVIA_ANALYSIS_ENABLED"] = "false"
+	get := func(key string) string { return values[key] }
+	if c, err := Read(get); err != nil || !c.DeliveryEnabled || c.AnalysisEnabled {
+		t.Fatal("delivery cannot be enabled independently of query HTTP", err)
+	}
+	delete(values, "EVIA_CLICKHOUSE_URL")
+	if _, err := Read(get); err == nil {
+		t.Fatal("delivery omitted its actual ClickHouse readback dependency")
+	}
+	delete(values, "EVIA_KAFKA_PROBE_TOPIC")
+	if c, err := Read(get); err != nil || c.DeliveryEnabled {
+		t.Fatal("collection-only runtime unexpectedly requires delivery storage", err)
+	}
+	values["EVIA_COLLECTION_ENABLED"] = "false"
+	values["EVIA_KAFKA_PROBE_TOPIC"] = "ignored-while-collection-disabled"
+	if c, err := Read(get); err != nil || c.DeliveryEnabled {
+		t.Fatal("a topic name alone enabled release delivery", err)
+	}
+}

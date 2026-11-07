@@ -23,16 +23,16 @@ type Kafka struct {
 }
 type ClickHouse struct{ URL, Database, Username, Password string }
 type Config struct {
-	DatabaseURL, Listen, Origin                                   string
-	CursorKey                                                     []byte
-	SecureCookies                                                 bool
-	SourceSecretKey                                               []byte
-	CollectionEnabled, AnalysisEnabled, AllowInsecureDependencies bool
-	Budget                                                        budget.Config
-	Kafka                                                         Kafka
-	ClickHouse                                                    ClickHouse
-	QueryWorkers                                                  int
-	InstanceID                                                    string
+	DatabaseURL, Listen, Origin                                                    string
+	CursorKey                                                                      []byte
+	SecureCookies                                                                  bool
+	SourceSecretKey                                                                []byte
+	CollectionEnabled, AnalysisEnabled, DeliveryEnabled, AllowInsecureDependencies bool
+	Budget                                                                         budget.Config
+	Kafka                                                                          Kafka
+	ClickHouse                                                                     ClickHouse
+	QueryWorkers                                                                   int
+	InstanceID                                                                     string
 }
 
 var (
@@ -96,7 +96,8 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 			return c, err
 		}
 	}
-	if c.AnalysisEnabled && command == "serve" || command == "ingest-worker" || command == "query-worker" {
+	c.DeliveryEnabled = c.CollectionEnabled && c.Kafka.ProbeTopic != ""
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
