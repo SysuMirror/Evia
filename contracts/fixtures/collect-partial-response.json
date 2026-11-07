@@ -1,0 +1,22 @@
+{
+  "batch_id": "018f0000-0000-4000-8000-000000000203",
+  "receipt_id": "018f0000-0000-4000-8000-000000000301",
+  "results": [
+    {
+      "index": 0,
+      "event_id": "018f0000-0000-4000-8000-000000000101",
+      "status": "accepted"
+    },
+    {
+      "index": 1,
+      "status": "rejected",
+      "error": {
+        "code": "PROPERTY_TYPE_MISMATCH",
+        "retryable": false,
+        "field_paths": [
+          "properties.post_id"
+        ]
+      }
+    }
+  ]
+}
