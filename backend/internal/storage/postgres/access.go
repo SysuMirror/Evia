@@ -114,7 +114,7 @@ func (s *Store) CreateProject(ctx context.Context, userID string, p access.Proje
 	if _, e = tx.Exec(ctx, `INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,'owner')`, p.ID, userID); e != nil {
 		return e
 	}
-	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'project.created',$1)`, p.ID, userID); e != nil {
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'project.created',$3)`, p.ID, userID, p.ID); e != nil {
 		return e
 	}
 	return tx.Commit(ctx)
