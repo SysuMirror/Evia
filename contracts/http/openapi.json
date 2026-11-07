@@ -6040,7 +6040,7 @@
     "/v1/config": {
       "get": {
         "operationId": "getPublicConfig",
-        "summary": "只返回来源允许的已发布兼容清单；移除内部source与审计描述；不允许读取用户数据",
+        "summary": "返回已激活、与当前 SDK 兼容且该来源允许的最小配置",
         "security": [],
         "responses": {
           "200": {
@@ -6048,7 +6048,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "../event/event-plan.schema.json"
+                  "$ref": "#/components/schemas/PublicConfig"
                 }
               }
             },
@@ -6057,7 +6057,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "description": "不可变发布内容摘要"
+                "description": "来源类型筛选及移除内部注释后的配置内容摘要"
               }
             }
           },
@@ -6161,16 +6161,20 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
             }
           },
           {
             "name": "current_release_revision",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0
             }
           },
           {
@@ -6180,7 +6184,8 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "description": "浏览器来源验证精确 Origin；服务端来源验证 Bearer 来源密钥。每次请求先验证来源及发布接收资格，再处理 ETag。初次请求可省略 current_release_revision 或传 0；不能借助此接口读取事件示例、内部触发说明或用户数据。"
       }
     },
     "/api/v1/projects/{project_id}/settings": {
@@ -11092,6 +11097,68 @@
         "required": [
           "items",
           "next_cursor"
+        ]
+      },
+      "PublicConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "evia.public-config.v1"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "release_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "event_key": {
+                  "type": "string",
+                  "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                  "maxLength": 68
+                },
+                "schema_version": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "schema": {
+                  "type": "object",
+                  "description": "仅保留客户端校验所需关键词，移除示例、描述、默认值及内部元数据。"
+                }
+              },
+              "required": [
+                "event_key",
+                "schema_version",
+                "schema"
+              ]
+            },
+            "description": "只包含当前来源类型可上报的事件；允许为空。"
+          }
+        },
+        "required": [
+          "format",
+          "project_id",
+          "environment",
+          "release_revision",
+          "events"
         ]
       }
     }

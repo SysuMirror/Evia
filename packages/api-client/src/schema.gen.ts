@@ -451,7 +451,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 只返回来源允许的已发布兼容清单；移除内部source与审计描述；不允许读取用户数据 */
+        /**
+         * 返回已激活、与当前 SDK 兼容且该来源允许的最小配置
+         * @description 浏览器来源验证精确 Origin；服务端来源验证 Bearer 来源密钥。每次请求先验证来源及发布接收资格，再处理 ETag。初次请求可省略 current_release_revision 或传 0；不能借助此接口读取事件示例、内部触发说明或用户数据。
+         */
         get: operations["getPublicConfig"];
         put?: never;
         post?: never;
@@ -1082,6 +1085,22 @@ export interface components {
             items: components["schemas"]["ArchiveManifest"][];
             next_cursor: string | null;
         };
+        PublicConfig: {
+            /** @constant */
+            format: "evia.public-config.v1";
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {unknown} */
+            environment: "development" | "staging" | "production";
+            release_revision: number;
+            /** @description 只包含当前来源类型可上报的事件；允许为空。 */
+            events: {
+                event_key: string;
+                schema_version: number;
+                /** @description 仅保留客户端校验所需关键词，移除示例、描述、默认值及内部元数据。 */
+                schema: Record<string, never>;
+            }[];
+        };
         filter: {
             /** @enum {unknown} */
             op: "and" | "or";
@@ -1367,40 +1386,6 @@ export interface components {
                     field_paths?: string[];
                 };
             })[];
-        };
-        "event-plan.schema": {
-            /** @constant */
-            format: "activity.event-plan.v1";
-            /** @enum {unknown} */
-            status: "draft_example_not_published" | "published";
-            project_key: string;
-            /** @enum {unknown} */
-            environment: "development" | "staging" | "production";
-            release_revision: number;
-            description?: string;
-            source?: Record<string, never>;
-            envelope_contract?: Record<string, never>;
-            system_event_references?: {
-                event_key: string;
-                schema_version: number;
-            }[];
-            events: {
-                event_key: string;
-                display_name: string;
-                schema_version: number;
-                allowed_source_kinds: ("browser" | "server")[];
-                /** @enum {unknown} */
-                fact_kind: "user_intent" | "client_observed" | "server_confirmed";
-                trigger: string;
-                schema: Record<string, never>;
-                field_metadata?: Record<string, never>;
-                example_properties: {
-                    [key: string]: (string | boolean | number) | (string | boolean | number)[];
-                };
-                implementation_status?: string;
-            }[];
-            implementation_notes?: string[];
-            acceptance?: string[];
         };
         time_range: {
             /** Format: date-time */
@@ -6030,7 +6015,7 @@ export interface operations {
         parameters: {
             query: {
                 write_key: string;
-                current_release_revision: number;
+                current_release_revision?: number;
             };
             header?: {
                 "If-None-Match"?: string;
@@ -6043,12 +6028,12 @@ export interface operations {
             /** @description 成功 */
             200: {
                 headers: {
-                    /** @description 不可变发布内容摘要 */
+                    /** @description 来源类型筛选及移除内部注释后的配置内容摘要 */
                     ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["event-plan.schema"];
+                    "application/json": components["schemas"]["PublicConfig"];
                 };
             };
             /** @description 配置未变化 */

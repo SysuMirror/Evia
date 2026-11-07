@@ -313,6 +313,18 @@ type ProjectUpdate struct {
 	Timezone *string `json:"timezone,omitempty"`
 }
 
+type PublicConfig struct {
+	Format          string `json:"format"`
+	ProjectID       string `json:"project_id"`
+	Environment     string `json:"environment"`
+	ReleaseRevision int64  `json:"release_revision"`
+	Events          []struct {
+		EventKey      string         `json:"event_key"`
+		SchemaVersion int64          `json:"schema_version"`
+		Schema        map[string]any `json:"schema"`
+	} `json:"events"`
+}
+
 type QueryJob struct {
 	QueryID     string  `json:"query_id"`
 	State       string  `json:"state"`
