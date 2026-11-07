@@ -27,22 +27,68 @@ export function DesignProvider({ children }: { children: ReactNode }) {
       button={{ autoInsertSpace: false }}
       theme={{
         token: {
-          colorPrimary: '#25655b',
-          colorInfo: '#25655b',
-          colorText: '#243832',
-          colorTextSecondary: '#66776f',
-          colorBgLayout: '#f4f6f3',
-          colorBorder: '#dbe2dc',
-          borderRadius: 8,
+          colorPrimary: '#3561d8',
+          colorInfo: '#3561d8',
+          colorText: '#1f2937',
+          colorTextSecondary: '#64748b',
+          colorBgLayout: '#f5f6f8',
+          colorBorder: '#dce1e8',
+          borderRadius: 6,
           fontSize: 14,
           fontFamily:
             'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-          controlHeight: 40,
+          controlHeight: 34,
+        },
+        components: {
+          Table: {
+            headerBg: '#f7f8fa',
+            headerColor: '#64748b',
+            headerSplitColor: 'transparent',
+            cellPaddingBlock: 14,
+            cellPaddingInline: 20,
+          },
+          Modal: { titleFontSize: 18, padding: 24 },
+          Form: { itemMarginBottom: 20, labelColor: '#334155' },
+          Button: { defaultShadow: 'none', primaryShadow: 'none', fontWeight: 500 },
         },
       }}
     >
       <App>{children}</App>
     </ConfigProvider>
+  );
+}
+
+export function Brand({ href = '/projects' }: { href?: string }) {
+  return (
+    <a className="brand" href={href} aria-label="Evia 映途">
+      <img className="brand-icon" src="/evia-icon.png" alt="" width={28} height={28} />
+      <span>
+        Evia <span className="brand-name">映途</span>
+      </span>
+    </a>
+  );
+}
+
+export function AuthLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="auth-layout">
+      <header className="auth-header">
+        <Brand href="/login" />
+      </header>
+      <main className="auth-main">
+        <div className="auth-content">
+          <section className="auth-intro" aria-label="Evia">
+            <h2>连接事件与业务</h2>
+            <div className="auth-visual" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+          <div className="auth-form">{children}</div>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -63,28 +109,45 @@ export function WorkspaceShell({
         跳到主要内容
       </a>
       <header className="workspace-header">
-        <a className="brand" href="/projects">
-          <span className="brand-mark" aria-hidden="true">
-            e
-          </span>
-          <span>
-            Evia <small>映途</small>
-          </span>
-        </a>
+        <Brand />
         <div className="account-actions">
-          <span>{account}</span>
-          <Button loading={busy} onClick={onLogout}>
+          <span className="account-avatar" aria-hidden="true">
+            {account.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="account-name" title={account}>
+            {account}
+          </span>
+          <Button
+            type="text"
+            loading={busy}
+            onClick={onLogout}
+            aria-label="退出登录"
+            aria-busy={busy}
+          >
             退出登录
           </Button>
         </div>
       </header>
       <div className="workspace-body">
         <aside className="workspace-nav">
-          <span className="nav-label">工作空间</span>
-          <a href="/projects" aria-current="page">
-            项目管理
-          </a>
-          <p>按业务划分项目，管理独立的事件和访问范围。</p>
+          <nav aria-label="主导航">
+            <a href="/projects" aria-current="page">
+              <svg
+                className="nav-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden="true"
+              >
+                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+                <path d="M3.5 9h17M9 9v11.5" />
+              </svg>
+              项目管理
+            </a>
+          </nav>
         </aside>
         <main id="main-content" tabIndex={-1}>
           {children}
@@ -94,25 +157,60 @@ export function WorkspaceShell({
   );
 }
 
-export function PageHeading({
-  title,
-  description,
-  action,
-  eyebrow,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-  eyebrow?: string;
-}) {
+export function PageHeading({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="page-heading">
-      <div>
-        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-        <h1>{title}</h1>
-        <p>{description}</p>
+      <h1>{title}</h1>
+      {action && <div className="heading-actions">{action}</div>}
+    </div>
+  );
+}
+
+export function DataSurface({
+  label,
+  children,
+  footer,
+}: {
+  label: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <section className="data-surface" aria-label={label}>
+      {children}
+      {footer}
+    </section>
+  );
+}
+
+export function PaginationBar({
+  page,
+  count,
+  hasNext,
+  busy,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  count: number;
+  hasNext: boolean;
+  busy: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="pagination-bar">
+      <span className="pagination-summary">
+        第 {page} 页，本页 {count} 项
+      </span>
+      <div className="pagination-actions">
+        <Button disabled={page === 1 || busy} onClick={onPrevious}>
+          上一页
+        </Button>
+        <Button disabled={!hasNext || busy} onClick={onNext}>
+          下一页
+        </Button>
       </div>
-      {action && <div className="heading-action">{action}</div>}
     </div>
   );
 }
