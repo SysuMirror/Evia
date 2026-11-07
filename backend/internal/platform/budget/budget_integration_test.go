@@ -161,6 +161,24 @@ func TestRedisDeniesWholeBatchWithoutPartialDebit(t *testing.T) {
 	denied(t, limiter, project, "development", 1, fault.Limited)
 }
 
+func TestRedisHealthProbeDoesNotConsumeOrResetBudget(t *testing.T) {
+	limiter, _ := realBudget(t, nil)
+	project := ids.New()
+	if err := limiter.Ping(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	allowed(t, limiter, project, "development", 50)
+	if err := limiter.Ping(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	denied(t, limiter, project, "development", 1, fault.Limited)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := limiter.Ping(ctx); !isKind(err, fault.Unavailable) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("health probe did not fail closed on cancellation: %v", err)
+	}
+}
+
 func TestRedisRefillsUsingServerTime(t *testing.T) {
 	limiter, _ := realBudget(t, func(c *Config) { c.Default = Policy{Rate: 100, Burst: 50} })
 	project := ids.New()

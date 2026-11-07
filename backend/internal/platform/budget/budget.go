@@ -203,3 +203,13 @@ func (l *Limiter) ReserveCollection(ctx context.Context, projectID, environment 
 }
 
 func (l *Limiter) Close() error { return l.client.Close() }
+
+// Ping checks the existing bounded Redis connection pool without consuming quota.
+func (l *Limiter) Ping(ctx context.Context) error {
+	bounded, cancel := context.WithTimeout(ctx, l.timeout)
+	defer cancel()
+	if err := l.client.Ping(bounded).Err(); err != nil {
+		return unavailable(err)
+	}
+	return nil
+}
