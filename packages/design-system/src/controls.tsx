@@ -3,6 +3,9 @@ import {
   forwardRef,
   useContext,
   useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -24,19 +27,84 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     type = 'button',
     className = '',
     disabled,
+    onFocus,
+    onBlur,
     children,
     ...props
   },
   ref,
 ) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const focused = useRef(false);
+  const previousLoading = useRef(false);
+  const restoreFocus = useRef(false);
+  useImperativeHandle(ref, () => buttonRef.current!, []);
+  useLayoutEffect(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+    const beganLoading = loading && !previousLoading.current;
+    const endedLoading = !loading && previousLoading.current;
+    previousLoading.current = loading;
+    if (beganLoading) restoreFocus.current = focused.current || document.activeElement === button;
+    if (!loading && !endedLoading) return;
+    const relinquish = () => {
+      restoreFocus.current = false;
+      focused.current = false;
+    };
+    const focusMoved = (event: FocusEvent) => {
+      if (event.target !== button && event.target !== document.body) relinquish();
+    };
+    const pointerMoved = (event: PointerEvent) => {
+      if (event.target !== button) relinquish();
+    };
+    const tabPressed = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') relinquish();
+    };
+    document.addEventListener('focusin', focusMoved);
+    document.addEventListener('pointerdown', pointerMoved, true);
+    document.addEventListener('keydown', tabPressed, true);
+    window.addEventListener('blur', relinquish);
+    const removeListeners = () => {
+      document.removeEventListener('focusin', focusMoved);
+      document.removeEventListener('pointerdown', pointerMoved, true);
+      document.removeEventListener('keydown', tabPressed, true);
+      window.removeEventListener('blur', relinquish);
+    };
+    const frame = endedLoading
+      ? requestAnimationFrame(() => {
+          if (
+            restoreFocus.current &&
+            document.activeElement === document.body &&
+            !button.matches(':disabled') &&
+            button.getClientRects().length > 0
+          )
+            button.focus({ preventScroll: true });
+          restoreFocus.current = false;
+          focused.current = document.activeElement === button;
+          removeListeners();
+        })
+      : undefined;
+    return () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      removeListeners();
+    };
+  }, [loading, disabled]);
   return (
     <button
       {...props}
-      ref={ref}
+      ref={buttonRef}
       type={type}
       className={`evia-button evia-button-${variant} evia-button-${size} ${className}`}
       disabled={disabled || loading}
       aria-busy={loading || props['aria-busy'] || undefined}
+      onFocus={(event) => {
+        focused.current = true;
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        if (!loading || event.relatedTarget) focused.current = false;
+        onBlur?.(event);
+      }}
     >
       {loading && <span className="evia-spinner" aria-hidden="true" />}
       {children}
@@ -91,11 +159,9 @@ export function Field({
             {hint}
           </div>
         )}
-        {error && (
-          <div className="evia-field-error" id={errorID}>
-            {error}
-          </div>
-        )}
+        <div className="evia-field-error" id={errorID} aria-live="polite" aria-atomic="true">
+          {error}
+        </div>
       </div>
     </FieldContext.Provider>
   );
