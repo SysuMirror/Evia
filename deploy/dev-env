@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Manage disposable local dependencies without placing credentials in the repo."""
+import base64
+import os
+from pathlib import Path
+import secrets
+import stat
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+PROJECT = "evia-pipeline-dev"
+SERVICES = ["kafka", "clickhouse", "redis"]
+
+
+def fail(message):
+    raise SystemExit(message)
+
+
+def initialize(path):
+    if path.is_relative_to(ROOT):
+        fail("Dependency credentials must be stored outside the repository.")
+    redis_password = secrets.token_hex(24)
+    settings = {
+        # Compose resolves this even when only the pipeline services are selected.
+        "EVIA_POSTGRES_PASSWORD": secrets.token_hex(24),
+        "EVIA_DEV_KAFKA_CLUSTER_ID": base64.urlsafe_b64encode(uuid.uuid4().bytes)
+        .decode()
+        .rstrip("="),
+        "EVIA_TEST_KAFKA_BROKERS": "127.0.0.1:19092",
+        "EVIA_TEST_CLICKHOUSE_URL": "http://127.0.0.1:18123",
+        "EVIA_TEST_CLICKHOUSE_USERNAME": "evia",
+        "EVIA_TEST_CLICKHOUSE_PASSWORD": secrets.token_hex(24),
+        "EVIA_DEV_REDIS_PASSWORD": redis_password,
+        "EVIA_TEST_REDIS_URL": f"redis://default:{redis_password}@127.0.0.1:16379/0",
+    }
+    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(descriptor, "w") as stream:
+        for key, value in settings.items():
+            stream.write(f"{key}={value}\n")
+    print(f"Private dependency configuration created at {path}; no values printed.")
+
+
+def load(path):
+    if not path.is_file() or stat.S_IMODE(path.stat().st_mode) & 0o077:
+        fail("Use an existing private environment file with mode 0600.")
+    settings = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not key.startswith("EVIA_") or not key.isidentifier():
+            fail("Invalid dependency environment file; use deploy/dev-env init.")
+        settings[key] = value
+    for key in (
+        "EVIA_POSTGRES_PASSWORD",
+        "EVIA_DEV_KAFKA_CLUSTER_ID",
+        "EVIA_TEST_KAFKA_BROKERS",
+        "EVIA_TEST_CLICKHOUSE_URL",
+        "EVIA_TEST_CLICKHOUSE_USERNAME",
+        "EVIA_TEST_CLICKHOUSE_PASSWORD",
+        "EVIA_DEV_REDIS_PASSWORD",
+        "EVIA_TEST_REDIS_URL",
+    ):
+        if not settings.get(key):
+            fail(f"{key} is required in the private dependency environment.")
+    environment = dict(os.environ)
+    environment.update(settings)
+    return environment
+
+
+def compose(path, environment, arguments, quiet=False):
+    return subprocess.run(
+        [
+            "docker", "compose", "--project-name", PROJECT,
+            "--env-file", str(path), "-f", str(ROOT / "deploy/compose.dev.yaml"),
+            "--profile", "pipeline", *arguments,
+        ],
+        env=environment,
+        check=True,
+        stdout=subprocess.DEVNULL if quiet else None,
+    )
+
+
+def inspect_limits():
+    result = subprocess.run(
+        ["docker", "info", "--format", "{{.MemoryLimit}} {{.CPUCfsQuota}} {{.CgroupDriver}}"],
+        capture_output=True, text=True, check=True,
+    )
+    fields = result.stdout.strip().split()
+    if fields[:2] != ["true", "true"]:
+        print(
+            "Docker cannot enforce the requested per-container CPU/RAM limits here; "
+            "application limits remain enabled. Check executor limits separately.",
+            file=sys.stderr,
+        )
+
+
+def main():
+    if len(sys.argv) < 3:
+        fail("Usage: deploy/dev-env init|up|check|status|down|run ENV_FILE [SERVICES | -- COMMAND ...]")
+    action, path = sys.argv[1], Path(sys.argv[2]).expanduser().resolve()
+    if action == "init":
+        initialize(path)
+        return
+    environment = load(path)
+    services = sys.argv[3:] or SERVICES
+    if action != "run" and any(service not in SERVICES for service in services):
+        fail("Select only kafka, clickhouse or redis dependency services.")
+    if action == "up":
+        inspect_limits()
+        compose(path, environment, ["up", "-d", "--wait", "--wait-timeout", "180", *services])
+    elif action == "status":
+        compose(path, environment, ["ps", *services])
+    elif action == "down":
+        # Remove only these service containers; never stop the shared PostgreSQL.
+        compose(path, environment, ["rm", "--stop", "--force", *services])
+    elif action == "check":
+        if "kafka" in services:
+            compose(path, environment, [
+                "exec", "-T", "kafka", "/opt/kafka/bin/kafka-cluster.sh",
+                "api-versions", "--bootstrap-server", "localhost:9092",
+            ], quiet=True)
+            print("Kafka broker metadata verified.")
+        if "clickhouse" in services:
+            request = urllib.request.Request(
+                environment["EVIA_TEST_CLICKHOUSE_URL"] + "/?query=SELECT%20version()",
+                headers={
+                    "X-ClickHouse-User": environment["EVIA_TEST_CLICKHOUSE_USERNAME"],
+                    "X-ClickHouse-Key": environment["EVIA_TEST_CLICKHOUSE_PASSWORD"],
+                },
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                print("ClickHouse authenticated version:", response.read(256).decode().strip())
+        if "redis" in services:
+            compose(path, environment, [
+                "exec", "-T", "redis", "/bin/sh", "-ec",
+                'redis-cli --no-auth-warning --pass "$REDIS_PASSWORD" ping',
+            ], quiet=True)
+            print("Redis authenticated PING verified.")
+    elif action == "run":
+        arguments = sys.argv[3:]
+        if arguments and arguments[0] == "--":
+            arguments = arguments[1:]
+        if not arguments:
+            fail("run requires a command after the environment file.")
+        raise SystemExit(subprocess.run(arguments, env=environment, cwd=ROOT).returncode)
+    else:
+        fail(f"Unknown dependency action: {action}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, subprocess.CalledProcessError, urllib.error.URLError) as error:
+        # Do not print environment values or request headers in diagnostics.
+        fail(f"Dependency command failed ({type(error).__name__}).")
