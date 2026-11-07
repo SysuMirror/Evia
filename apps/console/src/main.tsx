@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-query';
 import { api, ApiError, type Session } from '@evia/api-client';
 import {
+  AuthLayout,
   Button,
   DesignProvider,
   ErrorPanel,
@@ -55,62 +56,41 @@ function LoginPage() {
     },
   });
   return (
-    <div className="login-page">
-      <section className="login-intro">
-        <a className="brand" href="/login">
-          <span className="brand-mark" aria-hidden="true">
-            e
-          </span>
-          <span>
-            Evia <small>映途</small>
-          </span>
-        </a>
-        <div>
-          <h1>
-            从每一次交互，
-            <br />
-            理解业务的发生。
-          </h1>
-          <p>在自己的基础设施中，建立统一的事件定义与分析空间。</p>
-        </div>
-        <small>SELF-HOSTED EVENT ANALYTICS</small>
-      </section>
-      <main className="login-form-area">
-        <div className="login-form">
-          <h1>登录工作空间</h1>
-          <p className="muted">使用平台管理员为你创建的账号。</p>
-          {login.error && <Failure error={login.error} />}
-          <Form
-            layout="vertical"
-            requiredMark={false}
-            onFinish={(values) => login.mutate(values)}
-            disabled={login.isPending}
-          >
-            <Form.Item
-              name="username"
-              label="账号"
-              rules={[
-                { required: true, message: '请输入账号' },
-                { pattern: /^[a-zA-Z0-9_.@-]{1,100}$/, message: '账号仅支持字母、数字和 . _ @ -' },
-              ]}
-            >
-              <Input autoComplete="username" autoFocus maxLength={100} />
-            </Form.Item>
-            <Form.Item
-              name="password"
-              label="密码"
-              rules={[{ required: true, message: '请输入密码' }]}
-            >
-              <Input.Password autoComplete="current-password" maxLength={72} />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block loading={login.isPending}>
-              登录
-            </Button>
-          </Form>
-          <p className="login-footer">无法登录时，请联系你的平台管理员。</p>
-        </div>
-      </main>
-    </div>
+    <AuthLayout>
+      <h1>登录</h1>
+      {login.error && <Failure error={login.error} />}
+      <Form
+        layout="vertical"
+        requiredMark={false}
+        onFinish={(values) => login.mutate(values)}
+        disabled={login.isPending}
+      >
+        <Form.Item
+          name="username"
+          label="账号"
+          rules={[
+            { required: true, message: '请输入账号' },
+            { pattern: /^[a-zA-Z0-9_.@-]{1,100}$/, message: '账号仅支持字母、数字和 . _ @ -' },
+          ]}
+        >
+          <Input autoComplete="username" autoFocus maxLength={100} />
+        </Form.Item>
+        <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+          <Input.Password autoComplete="current-password" maxLength={72} />
+        </Form.Item>
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          loading={login.isPending}
+          aria-label="登录"
+          aria-busy={login.isPending}
+        >
+          登录
+        </Button>
+      </Form>
+      <p className="auth-help">账号问题请联系平台管理员。</p>
+    </AuthLayout>
   );
 }
 function Workspace({ session }: { session: Session }) {

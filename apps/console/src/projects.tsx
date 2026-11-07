@@ -4,6 +4,7 @@ import { api, ApiError, type Project, type ProjectInput, type Session } from '@e
 import {
   App,
   Button,
+  DataSurface,
   Descriptions,
   EmptyPanel,
   ErrorPanel,
@@ -12,6 +13,7 @@ import {
   LoadingPanel,
   Modal,
   PageHeading,
+  PaginationBar,
   Select,
   Table,
   Tag,
@@ -87,54 +89,41 @@ export function ProjectsPage({ session }: { session: Session }) {
       dataIndex: 'name',
       key: 'name',
       render: (_, project) => (
-        <div>
-          <Button
-            type="link"
-            style={{ padding: 0, height: 'auto' }}
-            onClick={() => setSelected(project)}
-          >
-            <span className="project-name">{project.name}</span>
-          </Button>
-          <span className="project-id">{project.id}</span>
-        </div>
+        <Button type="link" className="project-link" onClick={() => setSelected(project)}>
+          <span className="project-name">{project.name}</span>
+        </Button>
       ),
     },
-    { title: '统计时区', dataIndex: 'timezone', key: 'timezone', width: 180 },
+    { title: '统计时区', dataIndex: 'timezone', key: 'timezone', width: 200 },
     {
       title: '我的权限',
       key: 'permissions',
-      width: 120,
+      width: 140,
       render: (_, project) => (
-        <Tag color={project.permissions.includes('project.write') ? 'green' : 'default'}>
+        <Tag color={project.permissions.includes('project.write') ? 'blue' : 'default'}>
           {project.permissions.includes('project.write') ? '可编辑' : '只读'}
         </Tag>
-      ),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 100,
-      render: (_, project) => (
-        <Button
-          size="small"
-          onClick={() => setSelected(project)}
-          aria-label={`查看${project.name}详情`}
-        >
-          详情
-        </Button>
       ),
     },
   ];
   return (
     <>
       <PageHeading
-        eyebrow="WORKSPACE / PROJECTS"
         title="项目管理"
-        description="为每个业务建立独立的项目。项目决定事件归属、统计时区和成员访问范围。"
         action={
-          <Button type="primary" onClick={openCreate}>
-            创建项目
-          </Button>
+          <>
+            <Button
+              onClick={() => void projects.refetch()}
+              loading={projects.isFetching}
+              aria-label="刷新"
+              aria-busy={projects.isFetching}
+            >
+              刷新
+            </Button>
+            <Button type="primary" onClick={openCreate}>
+              创建项目
+            </Button>
+          </>
         }
       />
       {projects.isError ? (
@@ -150,54 +139,34 @@ export function ProjectsPage({ session }: { session: Session }) {
       ) : projects.isPending ? (
         <LoadingPanel label="正在加载项目" />
       ) : (
-        <section className="surface" aria-label="项目列表">
-          <div className="surface-toolbar">
-            <div>
-              <h2>我的项目</h2>
-              <p>仅显示当前账号有权访问的项目</p>
-            </div>
-            <Button onClick={() => void projects.refetch()} loading={projects.isFetching}>
-              刷新
-            </Button>
-          </div>
+        <DataSurface
+          label="项目列表"
+          footer={
+            <PaginationBar
+              page={cursors.length + 1}
+              count={projects.data.items.length}
+              hasNext={!!projects.data.next_cursor}
+              busy={projects.isFetching}
+              onPrevious={() => setCursors((values) => values.slice(0, -1))}
+              onNext={() => {
+                if (projects.data.next_cursor)
+                  setCursors((values) => [...values, projects.data.next_cursor!]);
+              }}
+            />
+          }
+        >
           {projects.data.items.length ? (
             <Table
               columns={columns}
               dataSource={projects.data.items}
               rowKey="id"
               pagination={false}
-              scroll={{ x: 660 }}
+              scroll={{ x: 560 }}
             />
           ) : (
-            <EmptyPanel
-              description={
-                cursors.length ? '这一页没有更多项目' : '还没有项目。先为你的业务创建一个空间。'
-              }
-            />
+            <EmptyPanel description={cursors.length ? '这一页没有更多项目' : '暂无项目'} />
           )}
-          <div className="pagination-bar">
-            <span className="muted">
-              第 {cursors.length + 1} 页 · 本页 {projects.data.items.length} 个项目
-            </span>
-            <div className="pagination-actions">
-              <Button
-                disabled={!cursors.length || projects.isFetching}
-                onClick={() => setCursors((values) => values.slice(0, -1))}
-              >
-                上一页
-              </Button>
-              <Button
-                disabled={!projects.data.next_cursor || projects.isFetching}
-                onClick={() => {
-                  if (projects.data.next_cursor)
-                    setCursors((values) => [...values, projects.data.next_cursor!]);
-                }}
-              >
-                下一页
-              </Button>
-            </div>
-          </div>
-        </section>
+        </DataSurface>
       )}
       <Modal
         title="创建项目"
@@ -216,9 +185,6 @@ export function ProjectsPage({ session }: { session: Session }) {
           if (open) form.focusField('name');
         }}
       >
-        <p className="form-note">
-          项目是事件和访问权限的独立边界。名称便于识别业务，时区用于解释日历日期与报表周期。
-        </p>
         {create.error && (
           <div className="inline-notice">
             <ErrorPanel
@@ -249,7 +215,7 @@ export function ProjectsPage({ session }: { session: Session }) {
             name="timezone"
             label="统计时区"
             rules={[{ required: true, message: '请选择统计时区' }]}
-            extra="选择业务主要使用的时区；原始事件时间将统一使用 UTC。"
+            extra="用于划分报表中的日期，原始事件时间统一存储为 UTC。"
           >
             <Select showSearch optionFilterProp="label" options={zones} />
           </Form.Item>
