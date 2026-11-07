@@ -117,16 +117,16 @@ func (c *Config) readHTTP(get func(string) string) error {
 	if _, port, err := net.SplitHostPort(c.Listen); err != nil || !validPort(port) {
 		return errors.New("EVIA_LISTEN must be host:port with a valid TCP port")
 	}
-	c.Origin = strings.TrimSuffix(get("EVIA_PUBLIC_ORIGIN"), "/")
-	u, err := url.Parse(c.Origin)
-	if err != nil || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") || u.Port() != "" && !validPort(u.Port()) {
-		return errors.New("EVIA_PUBLIC_ORIGIN must be an http(s) origin without path or credentials")
+	var err error
+	c.Origin, err = canonicalOrigin(get("EVIA_PUBLIC_ORIGIN"))
+	if err != nil {
+		return err
 	}
 	allowHTTP, err := boolean(get, "EVIA_ALLOW_INSECURE_HTTP", false)
 	if err != nil {
 		return err
 	}
-	if u.Scheme == "http" {
+	if strings.HasPrefix(c.Origin, "http://") {
 		if !allowHTTP {
 			return errors.New("HTTP development requires EVIA_ALLOW_INSECURE_HTTP=true")
 		}
