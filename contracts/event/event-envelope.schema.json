@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.activity.invalid/v1/event-envelope.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_key": {
+      "type": "string",
+      "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+      "maxLength": 68
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "release_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "anonymous_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "tab_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "page_view_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_page_view_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "navigation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "route_name": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "route_template": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "source_module": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "navigation_type": {
+          "enum": [
+            "initial",
+            "push",
+            "replace",
+            "pop",
+            "restore"
+          ]
+        },
+        "previous_page_view_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [],
+      "dependentRequired": {
+        "sequence": [
+          "tab_id"
+        ]
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "properties": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "number",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "event_id",
+    "event_key",
+    "schema_version",
+    "release_revision",
+    "occurred_at",
+    "identity",
+    "context",
+    "sdk",
+    "properties"
+  ]
+}
