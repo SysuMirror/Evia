@@ -30,6 +30,7 @@ type API struct {
 	Catalog       CatalogService
 	Sources       SourceService
 	Analysis      AnalysisService
+	Delivery      DeliveryService
 	Cursor        *cursor.Codec
 	Origin        string
 	SecureCookies bool
@@ -48,6 +49,7 @@ func (a *API) Handler() http.Handler {
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
+	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.
 		for _, method := range []string{"GET", "POST", "PATCH", "DELETE"} {
