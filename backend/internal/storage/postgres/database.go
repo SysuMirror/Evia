@@ -20,6 +20,32 @@ var migrations embed.FS
 
 type Store struct{ Pool *pgxpool.Pool }
 
+func (s *Store) CheckMigrations(ctx context.Context) error {
+	entries, e := migrations.ReadDir("migrations")
+	if e != nil {
+		return e
+	}
+	var count int
+	if e = s.Pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&count); e != nil {
+		return errors.New("database schema is unavailable; run evia migrate")
+	}
+	if count != len(entries) {
+		return errors.New("database schema version differs; run matching migrations before serving")
+	}
+	for _, entry := range entries {
+		data, e := migrations.ReadFile("migrations/" + entry.Name())
+		if e != nil {
+			return e
+		}
+		sum := sha256.Sum256(data)
+		var checksum string
+		if e = s.Pool.QueryRow(ctx, `SELECT checksum FROM schema_migrations WHERE name=$1`, entry.Name()).Scan(&checksum); e != nil || checksum != hex.EncodeToString(sum[:]) {
+			return errors.New("database migration integrity check failed")
+		}
+	}
+	return nil
+}
+
 func Open(ctx context.Context, dsn string) (*Store, error) {
 	if dsn == "" {
 		return nil, errors.New("EVIA_DATABASE_URL is required")
