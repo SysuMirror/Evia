@@ -2,7 +2,7 @@
 
 Implement one reviewable responsibility per commit. Use `feat`, `fix`, `refactor`, `test`, `docs`, `build` or `chore`, an optional scope and a concrete imperative subject. Keep code and its necessary tests together. Split independent changes; never use file-count limits to separate a change from the tests proving it.
 
-Each module progresses through contract, domain policy, persistence adapter, HTTP transport, frontend and integration. The frontend uses shared components and generated transport types. Feature completeness includes failures, concurrency, empty states, permissions and recovery.
+Current delivery prioritizes backend modules: contract, domain policy, persistence adapter, HTTP transport and real-dependency verification. Coordinated frontend work follows, using shared components and generated transport types. Feature completeness includes failures, concurrency, empty states, permissions and recovery; this sequencing does not reduce those requirements.
 
 Tests are classified by evidence:
 

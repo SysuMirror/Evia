@@ -2,7 +2,7 @@
 
 Evia follows the accepted design 1.2: one Go backend module, independent stream-processing project, a TypeScript workspace for console/SDK/tools and separately packaged internal and public agent assets.
 
-The initial implementation focuses on project access and event definition, validation and release. Each module is completed through backend, frontend and verification. Later R1 requirements remain in PROGRESS.md; this order is not a reduction of the platform's scope.
+Project access and event definition, validation and publication provide the initial foundation. Backend ingestion, durable processing, distributed budgets and analysis are now developed in parallel with independent ownership and real-dependency evidence. Coordinated frontend delivery follows. Remaining R1 requirements stay in PROGRESS.md; this order is not a reduction of the platform's scope.
 
 ## Ownership
 
