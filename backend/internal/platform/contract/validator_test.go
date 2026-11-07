@@ -14,6 +14,9 @@ func TestDecodeRejectsAmbiguousOrUnboundedJSON(t *testing.T) {
 		"trailing":         `{} {}`,
 		"deep":             strings.Repeat("[", 34) + "0" + strings.Repeat("]", 34),
 		"utf8":             "{\"x\":\"\xff\"}",
+		"NUL string":       `{"x":"before\u0000after"}`,
+		"NUL object key":   `{"before\u0000after":"value"}`,
+		"nested NUL":       `{"x":[{"value":"\u0000"}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Decode([]byte(raw)); err == nil {

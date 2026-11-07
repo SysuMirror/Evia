@@ -38,6 +38,7 @@ func TestUniformRequestFailures(t *testing.T) {
 		{"valid", `{"name":"Forum","timezone":"UTC"}`, "application/json", 200},
 		{"unknown", `{"name":"Forum","timezone":"UTC","admin":true}`, "application/json", 400},
 		{"duplicate", `{"name":"a","name":"b","timezone":"UTC"}`, "application/json", 400},
+		{"NUL", `{"name":"valid\u0000suffix","timezone":"UTC"}`, "application/json", 400},
 		{"trailing", `{} {}`, "application/json", 400},
 		{"media", `{}`, "text/plain", 415},
 		{"oversize", strings.Repeat("x", 256*1024+1), "application/json", 413},
@@ -63,6 +64,37 @@ func TestUniformRequestFailures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMalformedQueryFailsBeforeEndpoint(t *testing.T) {
+	b := boundary(t)
+	called := false
+	h := b.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for _, query := range []string{"limit=%zz", "limit=1;limit=2", "unexpected=%zz", "limit=5&cursor=%"} {
+		t.Run(query, func(t *testing.T) {
+			called = false
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest("GET", "/?"+query, nil))
+			if called || w.Code != http.StatusBadRequest {
+				t.Fatal("malformed query reached endpoint", w.Code)
+			}
+			var problem wire.Problem
+			if e := json.Unmarshal(w.Body.Bytes(), &problem); e != nil {
+				t.Fatal(e)
+			}
+			if problem.Code != "INVALID_QUERY" || problem.RequestID == "" || problem.RequestID != w.Header().Get("X-Request-ID") {
+				t.Fatal("unstructured query error", problem)
+			}
+		})
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/?cursor=encoded%3Bvalue", nil))
+	if !called || w.Code != http.StatusNoContent {
+		t.Fatal("valid encoded query rejected")
 	}
 }
 

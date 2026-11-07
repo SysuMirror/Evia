@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -36,6 +37,9 @@ func decodeValue(d *json.Decoder, depth int) (any, error) {
 	}
 	delim, ok := token.(json.Delim)
 	if !ok {
+		if value, ok := token.(string); ok && strings.ContainsRune(value, 0) {
+			return nil, fmt.Errorf("JSON strings cannot contain U+0000")
+		}
 		return token, nil
 	}
 	switch delim {
@@ -47,7 +51,7 @@ func decodeValue(d *json.Decoder, depth int) (any, error) {
 				return nil, err
 			}
 			name, ok := key.(string)
-			if !ok {
+			if !ok || strings.ContainsRune(name, 0) {
 				return nil, fmt.Errorf("invalid object key")
 			}
 			if _, exists := result[name]; exists {

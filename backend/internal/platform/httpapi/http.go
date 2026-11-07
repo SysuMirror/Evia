@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -74,6 +75,10 @@ func (b *Boundary) Middleware(next http.Handler) http.Handler {
 				b.Error(w, r, fault.New(fault.Internal, "INTERNAL_ERROR", "请求未能完成"))
 			}
 		}()
+		if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+			b.Error(w, r, fault.New(fault.Invalid, "INVALID_QUERY", "查询参数编码不合法"))
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
