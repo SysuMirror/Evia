@@ -1,0 +1,234 @@
+import type { MouseEvent, ReactNode } from 'react';
+import { Button } from './controls';
+import { Alert } from './feedback';
+
+function navigate(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  onNavigate?: (href: string) => void,
+) {
+  if (
+    !onNavigate ||
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return;
+  event.preventDefault();
+  onNavigate(href);
+}
+
+export function Brand({
+  href = '/projects',
+  onNavigate,
+}: {
+  href?: string;
+  onNavigate?: (href: string) => void;
+}) {
+  return (
+    <a
+      className="brand"
+      href={href}
+      aria-label="Evia 映途"
+      onClick={(event) => navigate(event, href, onNavigate)}
+    >
+      <img className="brand-icon" src="/evia-icon.png" alt="" width={28} height={28} />
+      <span>
+        Evia <span className="brand-name">映途</span>
+      </span>
+    </a>
+  );
+}
+
+export function AuthLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="auth-layout">
+      <header className="auth-header">
+        <Brand href="/login" />
+      </header>
+      <main className="auth-main">
+        <div className="auth-content">
+          <section className="auth-intro" aria-label="Evia">
+            <h2>连接事件与业务</h2>
+            <div className="auth-visual" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+          <div className="auth-form">{children}</div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export function WorkspaceShell({
+  children,
+  account,
+  onLogout,
+  busy,
+  onNavigate,
+}: {
+  children: ReactNode;
+  account: string;
+  onLogout: () => void;
+  busy: boolean;
+  onNavigate?: (href: string) => void;
+}) {
+  return (
+    <div className="workspace">
+      <a className="skip-link" href="#main-content">
+        跳到主要内容
+      </a>
+      <header className="workspace-header">
+        <Brand onNavigate={onNavigate} />
+        <div className="account-actions">
+          <span className="account-avatar" aria-hidden="true">
+            {account.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="account-name" title={account}>
+            {account}
+          </span>
+          <Button variant="ghost" loading={busy} onClick={onLogout} aria-label="退出登录">
+            退出登录
+          </Button>
+        </div>
+      </header>
+      <div className="workspace-body">
+        <aside className="workspace-nav">
+          <nav aria-label="主导航">
+            <a
+              href="/projects"
+              aria-current="page"
+              onClick={(event) => navigate(event, '/projects', onNavigate)}
+            >
+              <svg
+                className="nav-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden="true"
+              >
+                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+                <path d="M3.5 9h17M9 9v11.5" />
+              </svg>
+              项目管理
+            </a>
+          </nav>
+        </aside>
+        <main id="main-content" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export function PageHeading({ title, action }: { title: string; action?: ReactNode }) {
+  return (
+    <div className="page-heading">
+      <h1>{title}</h1>
+      {action && <div className="heading-actions">{action}</div>}
+    </div>
+  );
+}
+
+export function DataSurface({
+  label,
+  children,
+  footer,
+}: {
+  label: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <section className="data-surface" aria-label={label}>
+      {children}
+      {footer}
+    </section>
+  );
+}
+
+export function PaginationBar({
+  page,
+  count,
+  hasNext,
+  busy,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  count: number;
+  hasNext: boolean;
+  busy: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="pagination-bar">
+      <span className="pagination-summary">
+        第 {page} 页，本页 {count} 项
+      </span>
+      <div className="pagination-actions">
+        <Button disabled={page === 1 || busy} onClick={onPrevious}>
+          上一页
+        </Button>
+        <Button disabled={!hasNext || busy} onClick={onNext}>
+          下一页
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function LoadingPanel({ label = '正在加载' }: { label?: string }) {
+  return (
+    <div className="loading-panel" role="status" aria-label={label}>
+      <span className="evia-spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+export function ErrorPanel({
+  message,
+  requestID,
+  retry,
+}: {
+  message: string;
+  requestID?: string;
+  retry?: () => void;
+}) {
+  return (
+    <Alert
+      tone="error"
+      title={message}
+      action={
+        retry ? (
+          <Button size="small" onClick={retry}>
+            重试
+          </Button>
+        ) : undefined
+      }
+    >
+      {requestID ? <span className="request-reference">请求编号：{requestID}</span> : undefined}
+    </Alert>
+  );
+}
+
+export function EmptyPanel({ description, action }: { description: string; action?: ReactNode }) {
+  return (
+    <div className="empty-panel">
+      <p>{description}</p>
+      {action}
+    </div>
+  );
+}
