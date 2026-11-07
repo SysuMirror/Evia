@@ -1,6 +1,8 @@
 # 控制台自建组件迁移
 
-状态：规范和交付顺序已确定，组件及页面迁移尚未完成。当前控制台仍使用经过浏览器验证的 Ant Design 基础版。按服务端优先的项目顺序开展前端交付，本计划适用于维护 Evia 的开发人员和 coding agent。
+状态：共享原生基础、现有登录/项目页面迁移及 Ant Design 依赖清理已完成，交互状态专项修复已验证，证据见 [前端验证记录](../verification/native-ui-2026-11-07.md)。下面的阶段 1–4 已执行，阶段 5 的业务页面继续按已验证服务端能力交付。本计划适用于维护 Evia 的开发人员和 coding agent。
+
+已交付 Button、Input、Textarea、Select、Checkbox、Field、Alert、Badge、原生 Modal、DataTable、分页、通知、复制和共享布局。Tabs、日期/条件编辑器与专业图表将随真实业务页面补齐；不能把基础组件交付理解为全部分析界面已完成。
 
 ## 组件与依赖边界
 
