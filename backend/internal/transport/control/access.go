@@ -27,6 +27,7 @@ type AccessService interface {
 type API struct {
 	Boundary      *httpapi.Boundary
 	Access        AccessService
+	Catalog       CatalogService
 	Cursor        *cursor.Codec
 	Origin        string
 	SecureCookies bool
@@ -42,6 +43,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/session", a.auth(true, a.logout))
 	mux.HandleFunc("GET /api/v1/projects", a.auth(false, a.listProjects))
 	mux.HandleFunc("POST /api/v1/projects", a.auth(true, a.createProject))
+	a.registerCatalog(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.
 		for _, method := range []string{"GET", "POST", "PATCH", "DELETE"} {

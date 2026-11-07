@@ -13,6 +13,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/config"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
@@ -80,7 +81,7 @@ func run(logger *slog.Logger) error {
 		return e
 	}
 	boundary := &httpapi.Boundary{Validator: validator, Logger: logger}
-	api := (&control.API{Boundary: boundary, Access: accounts, Cursor: codec, Origin: cfg.Origin, SecureCookies: cfg.SecureCookies}).Handler()
+	api := (&control.API{Boundary: boundary, Access: accounts, Catalog: catalog.New(store), Cursor: codec, Origin: cfg.Origin, SecureCookies: cfg.SecureCookies}).Handler()
 	mux := http.NewServeMux()
 	mux.Handle("/", api)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
