@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
@@ -19,38 +20,90 @@ import (
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type Collector struct {
-	sources   SourceResolver
-	plans     PlanResolver
-	queue     Queue
-	budget    Budget
-	validator SchemaValidator
-	mu        sync.Mutex
-	cache     map[string]compiledPlan
+	sources    SourceResolver
+	plans      PlanResolver
+	queue      Queue
+	budget     Budget
+	validator  SchemaValidator
+	mu         sync.Mutex
+	cache      map[string]compiledPlan
+	inflight   map[string]*planFlight
+	misses     chan struct{}
+	cacheRules int
 }
 type compiledPlan struct {
 	plan    Plan
 	schemas map[string]*jsonschema.Schema
 	expires time.Time
+	hash    string
+	invalid bool
 }
+type planFlight struct {
+	done  chan struct{}
+	value compiledPlan
+	err   error
+}
+
+const maxCachedPlans = 64
+const maxCachedRules = 4096
 
 func NewCollector(sources SourceResolver, plans PlanResolver, queue Queue, budget Budget, validator SchemaValidator) (*Collector, error) {
 	if sources == nil || plans == nil || queue == nil || budget == nil || validator == nil {
 		return nil, errors.New("collector requires source, plan, durable queue, global budget and contract adapters")
 	}
-	return &Collector{sources: sources, plans: plans, queue: queue, budget: budget, validator: validator, cache: map[string]compiledPlan{}}, nil
+	return &Collector{sources: sources, plans: plans, queue: queue, budget: budget, validator: validator, cache: map[string]compiledPlan{}, inflight: map[string]*planFlight{}, misses: make(chan struct{}, 8)}, nil
 }
 func unavailable(code string) error {
 	return fault.New(fault.Unavailable, code, "接收服务暂不可用，请保留原事件并稍后重试")
 }
 func (c *Collector) plan(ctx context.Context, project, env string, revision int64) (compiledPlan, error) {
+	if e := ctx.Err(); e != nil {
+		return compiledPlan{}, e
+	}
 	key := fmt.Sprintf("%s:%s:%d", project, env, revision)
 	now := time.Now()
 	c.mu.Lock()
 	cached, ok := c.cache[key]
-	c.mu.Unlock()
+	if ok && cached.invalid {
+		c.mu.Unlock()
+		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
+	}
 	if ok && cached.expires.After(now) {
+		c.mu.Unlock()
 		return cached, nil
 	}
+	if flight, ok := c.inflight[key]; ok {
+		c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return compiledPlan{}, ctx.Err()
+		case <-flight.done:
+			return flight.value, flight.err
+		}
+	}
+	select {
+	case c.misses <- struct{}{}:
+	default:
+		c.mu.Unlock()
+		return compiledPlan{}, unavailable("EVENT_PLAN_BUSY")
+	}
+	flight := &planFlight{done: make(chan struct{}), err: unavailable("EVENT_PLAN_UNAVAILABLE")}
+	c.inflight[key] = flight
+	c.mu.Unlock()
+	defer func() { c.mu.Lock(); delete(c.inflight, key); close(flight.done); c.mu.Unlock(); <-c.misses }()
+	lookup, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	value, e := c.loadPlan(lookup, key, project, env, revision, cached, ok, now)
+	c.mu.Lock()
+	flight.value, flight.err = value, e
+	c.mu.Unlock()
+	return value, e
+}
+
+// Mutable eligibility expires independently of immutable compiled schemas. A
+// cache refresh rechecks activation/readiness but never recompiles the same
+// immutable manifest unless its bounded cache entry was evicted.
+func (c *Collector) loadPlan(ctx context.Context, key, project, env string, revision int64, cached compiledPlan, exists bool, started time.Time) (compiledPlan, error) {
 	p, e := c.plans.ResolvePlan(ctx, project, env, revision)
 	if e != nil {
 		return compiledPlan{}, e
@@ -61,11 +114,41 @@ func (c *Collector) plan(ctx context.Context, project, env string, revision int6
 	if !p.Ready || !p.Active {
 		return compiledPlan{}, unavailable("EVENT_PLAN_NOT_READY")
 	}
-	compiled := compiledPlan{plan: p, schemas: map[string]*jsonschema.Schema{}, expires: now.Add(2 * time.Second)}
+	if e = ctx.Err(); e != nil {
+		return compiledPlan{}, e
+	}
+	hash, e := canonical.Hash(p.Events)
+	if e != nil {
+		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
+	}
+	if exists && hash != cached.hash {
+		// Retain a bounded tombstone: a changed immutable revision must not become
+		// silently trusted on the next request after this mismatch.
+		c.mu.Lock()
+		if current, ok := c.cache[key]; ok {
+			c.cacheRules -= len(current.schemas)
+			current.schemas = nil
+			current.plan.Events = nil
+			current.invalid = true
+			c.cache[key] = current
+		}
+		c.mu.Unlock()
+		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
+	}
+	compiled := compiledPlan{plan: p, schemas: cached.schemas, expires: started.Add(2 * time.Second), hash: hash}
 	if len(p.Events) > 200 {
 		return compiledPlan{}, unavailable("EVENT_PLAN_INVALID")
 	}
+	if !exists {
+		compiled.schemas = map[string]*jsonschema.Schema{}
+	}
 	for key, rule := range p.Events {
+		if exists {
+			break
+		}
+		if e = ctx.Err(); e != nil {
+			return compiledPlan{}, e
+		}
 		compiler := jsonschema.NewCompiler()
 		const uri = "https://schemas.evia.invalid/ingestion/properties"
 		if e = compiler.AddResource(uri, rule.Schema); e != nil {
@@ -77,21 +160,23 @@ func (c *Collector) plan(ctx context.Context, project, env string, revision int6
 		}
 		compiled.schemas[key] = schema
 	}
+	if e = ctx.Err(); e != nil {
+		return compiledPlan{}, e
+	}
 	c.mu.Lock()
-	if len(c.cache) >= 4096 {
+	if previous, ok := c.cache[key]; ok {
+		c.cacheRules -= len(previous.schemas)
+		delete(c.cache, key)
+	}
+	for len(c.cache) >= maxCachedPlans || c.cacheRules+len(compiled.schemas) > maxCachedRules {
 		for k, v := range c.cache {
-			if !v.expires.After(now) {
-				delete(c.cache, k)
-			}
-		}
-		if len(c.cache) >= 4096 {
-			for k := range c.cache {
-				delete(c.cache, k)
-				break
-			}
+			c.cacheRules -= len(v.schemas)
+			delete(c.cache, k)
+			break
 		}
 	}
 	c.cache[key] = compiled
+	c.cacheRules += len(compiled.schemas)
 	c.mu.Unlock()
 	return compiled, nil
 }
