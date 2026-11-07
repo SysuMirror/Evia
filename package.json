@@ -1,0 +1,21 @@
+{
+ "name":"evia-workspace",
+ "private":true,
+ "packageManager":"pnpm@11.25.0",
+ "engines":{"node":">=24.22.1 <25"},
+ "scripts":{
+  "generate:api":"openapi-typescript contracts/http/openapi.json -o packages/api-client/src/schema.gen.ts",
+  "typecheck":"tsc --noEmit",
+  "dev":"pnpm --filter @evia/console dev",
+  "build":"pnpm --filter @evia/console build",
+  "test:browser":"playwright test"
+ },
+ "devDependencies":{
+  "@playwright/test":"1.65.0",
+  "@types/node":"24.19.2",
+  "@types/react":"19.3.0",
+  "@types/react-dom":"19.3.0",
+  "openapi-typescript":"7.13.0",
+  "typescript":"5.9.3"
+ }
+}
