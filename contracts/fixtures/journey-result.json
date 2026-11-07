@@ -1,0 +1,458 @@
+{
+  "query_id": "018f0000-0000-4000-8000-000000000400",
+  "columns": [
+    {
+      "key": "event_key",
+      "type": "string",
+      "label": "行为"
+    },
+    {
+      "key": "event_time",
+      "type": "datetime",
+      "label": "时间"
+    }
+  ],
+  "rows": [
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000101",
+      "event_key": "sys.page_view",
+      "event_time": "2026-11-07T11:00:00.000Z",
+      "uid": "user-42",
+      "original_uid": null,
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 1,
+        "page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "route_name": "Home",
+        "route_template": "/"
+      },
+      "properties": {},
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000102",
+      "event_key": "sys.page_scroll",
+      "event_time": "2026-11-07T11:00:03.000Z",
+      "uid": "user-42",
+      "original_uid": null,
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 2,
+        "page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "route_name": "Home",
+        "route_template": "/"
+      },
+      "properties": {
+        "from_ratio": 0,
+        "to_ratio": 0.6,
+        "max_ratio": 0.6,
+        "direction": "down",
+        "duration_ms": 3000
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000103",
+      "event_key": "forum_post_impression",
+      "event_time": "2026-11-07T11:00:04.000Z",
+      "uid": "user-42",
+      "original_uid": null,
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 3,
+        "page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "route_name": "Home",
+        "route_template": "/"
+      },
+      "properties": {
+        "post_id": "456",
+        "list_id": "home-feed-a",
+        "position": 0,
+        "pinned": false,
+        "visible_ms": 1200,
+        "source_module": "home"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000104",
+      "event_key": "sys.identity_link",
+      "event_time": "2026-11-07T11:00:05.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 4,
+        "page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "route_name": "Home",
+        "route_template": "/"
+      },
+      "properties": {},
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000105",
+      "event_key": "forum_post_open",
+      "event_time": "2026-11-07T11:00:06.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 5,
+        "page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "route_name": "Home",
+        "route_template": "/",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {
+        "post_id": "456",
+        "entry": "card",
+        "list_id": "home-feed-a",
+        "position": 0
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000106",
+      "event_key": "sys.page_view",
+      "event_time": "2026-11-07T11:00:07.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 6,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {},
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000107",
+      "event_key": "forum_post_view",
+      "event_time": "2026-11-07T11:00:08.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 7,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {
+        "post_id": "456",
+        "entry": "card",
+        "post_title": "示例公开帖子标题"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000108",
+      "event_key": "forum_reaction_requested",
+      "event_time": "2026-11-07T11:00:12.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 8,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-like"
+      },
+      "properties": {
+        "target_type": "post",
+        "target_id": "456",
+        "post_id": "456",
+        "reaction": "like",
+        "desired_state": true,
+        "operation_id": "op-like"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000109",
+      "event_key": "forum_reaction_changed",
+      "event_time": "2026-11-07T11:00:13.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-like"
+      },
+      "properties": {
+        "target_type": "post",
+        "target_id": "456",
+        "post_id": "456",
+        "reaction": "like",
+        "state": true,
+        "operation_id": "op-like"
+      },
+      "source_kind": "server"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000110",
+      "event_key": "forum_comment_impression",
+      "event_time": "2026-11-07T11:00:17.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 9,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {
+        "post_id": "456",
+        "comment_id": "789",
+        "comment_kind": "primary",
+        "placement": "detail",
+        "visible_ms": 1200
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000111",
+      "event_key": "forum_comment_submit",
+      "event_time": "2026-11-07T11:00:20.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 10,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-reply"
+      },
+      "properties": {
+        "post_id": "456",
+        "parent_comment_id": "789",
+        "depth": 1,
+        "content_length": 12,
+        "operation_id": "op-reply",
+        "attempt": 1
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000112",
+      "event_key": "forum_comment_created",
+      "event_time": "2026-11-07T11:00:21.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-reply"
+      },
+      "properties": {
+        "post_id": "456",
+        "comment_id": "790",
+        "parent_comment_id": "789",
+        "depth": 1,
+        "operation_id": "op-reply"
+      },
+      "source_kind": "server"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000113",
+      "event_key": "forum_reaction_requested",
+      "event_time": "2026-11-07T11:00:22.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 11,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-comment-like"
+      },
+      "properties": {
+        "target_type": "comment",
+        "target_id": "789",
+        "post_id": "456",
+        "reaction": "like",
+        "desired_state": true,
+        "operation_id": "op-comment-like"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000114",
+      "event_key": "forum_reaction_changed",
+      "event_time": "2026-11-07T11:00:23.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-comment-like"
+      },
+      "properties": {
+        "target_type": "comment",
+        "target_id": "789",
+        "post_id": "456",
+        "reaction": "like",
+        "state": true,
+        "operation_id": "op-comment-like"
+      },
+      "source_kind": "server"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000115",
+      "event_key": "forum_reaction_requested",
+      "event_time": "2026-11-07T11:00:24.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 12,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-save"
+      },
+      "properties": {
+        "target_type": "post",
+        "target_id": "456",
+        "post_id": "456",
+        "reaction": "save",
+        "desired_state": true,
+        "operation_id": "op-save"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000116",
+      "event_key": "forum_reaction_changed",
+      "event_time": "2026-11-07T11:00:25.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006",
+        "operation_id": "op-save"
+      },
+      "properties": {
+        "target_type": "post",
+        "target_id": "456",
+        "post_id": "456",
+        "reaction": "save",
+        "state": true,
+        "operation_id": "op-save"
+      },
+      "source_kind": "server"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000117",
+      "event_key": "forum_post_read",
+      "event_time": "2026-11-07T11:00:35.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 13,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {
+        "post_id": "456",
+        "segment_id": "read-segment-1",
+        "active_read_ms": 25000,
+        "max_scroll_ratio": 0.7,
+        "end_reason": "route_leave"
+      },
+      "source_kind": "browser"
+    },
+    {
+      "event_id": "018f0000-0000-4000-8000-000000000118",
+      "event_key": "sys.session_end",
+      "event_time": "2026-11-07T11:00:36.000Z",
+      "uid": "user-42",
+      "original_uid": "user-42",
+      "context": {
+        "session_id": "018f0000-0000-4000-8000-000000000002",
+        "tab_id": "018f0000-0000-4000-8000-000000000003",
+        "sequence": 14,
+        "page_view_id": "018f0000-0000-4000-8000-000000000005",
+        "route_name": "Postdetail",
+        "route_template": "/postdetail/:id",
+        "source_page_view_id": "018f0000-0000-4000-8000-000000000004",
+        "navigation_id": "018f0000-0000-4000-8000-000000000006"
+      },
+      "properties": {
+        "reason": "logout"
+      },
+      "source_kind": "browser"
+    }
+  ],
+  "next_cursor": null,
+  "metadata": {
+    "data_watermark": "2026-11-07T11:00:40Z",
+    "identity_revision": 2,
+    "accuracy": "not_applicable",
+    "sample_rate": 1,
+    "coverage": {
+      "time_range": {
+        "from": "2026-11-07T11:00:00Z",
+        "to": "2026-11-07T12:00:00Z"
+      },
+      "state": "provisional",
+      "known_gaps": []
+    },
+    "cache_hit": false,
+    "generated_at": "2026-11-07T11:01:01Z"
+  }
+}

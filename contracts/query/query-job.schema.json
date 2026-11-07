@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.activity.invalid/v1/query-job.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "state": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "expired"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "poll_after_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "result_url": {
+      "type": "string"
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]+$"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "field_paths": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "required": [
+        "code",
+        "retryable"
+      ]
+    }
+  },
+  "required": [
+    "query_id",
+    "state",
+    "created_at"
+  ]
+}

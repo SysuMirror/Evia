@@ -1,12 +1,48 @@
-# Evia · 映途
+# Evia 映途
 
 私有化事件采集与用户行为分析平台。以业务事件定义、稳定用户身份和可解释的分析口径，把页面访问、阅读和互动连接起来。
 
-当前正在按模块开发，尚不是可用于生产的完整平台。实际完成项与验证证据以 [PROGRESS.md](PROGRESS.md) 为准。
+当前优先完善服务端，按可独立审查的小提交交付。已实现会话与项目管理、事件定义、来源管理、接收策略、Redis 配额、Kafka 到 ClickHouse 写入、有界查询，以及真实管道验证后的发布激活和公开配置。
+
+冻结快照 `8d2d9d5` 已通过真实 PostgreSQL、Redis、Kafka、ClickHouse 与独立工作进程组成的公开 HTTP 链路验收：发布、就绪、激活、接收重试、查询和来源停用均通过。自定义页面事件得到计数 **3**、精确 UID 去重数 **2**、指定 UID 行为链中的来源/事件标识对 **2**；详见 [2026-11-07 验证记录](docs/verification/backend-2026-11-07.md)。完整进度见 [PROGRESS.md](PROGRESS.md)，整个平台仍未达到生产交付条件。
+
+## 启动与验证
+
+使用 Go 1.27.3、Node 24.22.1、pnpm 11.25.0 和 PostgreSQL 17.9。按 [本地开发说明](docs/runbooks/development.md) 生成本地配置，显式执行数据库迁移及初始账号创建，再启动 API 和控制台。
+
+服务端链路测试另外使用 Kafka 4.4.0、ClickHouse 26.8.36.3 和 Redis 8.10.3，安装与私有配置见 [依赖说明](docs/runbooks/dependencies.md)。
+
+```sh
+make generated-check
+make check
+make integration-test
+make pipeline-test
+make budget-test
+make query-test
+make browser-test
+```
+
+集成测试和浏览器测试需要说明中配置的真实依赖及专用测试账号。完整服务端 HTTP 验收还需显式迁移及启动 API、接收工作进程和查询工作进程，按 [服务端验收说明](docs/runbooks/backend-smoke.md) 执行。缺少依赖时测试失败。部署边界见 [运维说明](docs/runbooks/deployment.md)。
 
 ## 技术方向
 
-Go 服务端、React 管理控制台、TypeScript SDK；PostgreSQL 管理元数据，Kafka 缓冲事件，Flink 处理有状态数据，ClickHouse 支撑分析。业务方通过公开 API、SDK 和接入 skill，在自己的仓库维护网站专属代码。
+Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲事件，ClickHouse 支撑分析，Redis 提供分布式接入配额。有状态的身份图与 Flink 处理单独规划。后续 TypeScript 浏览器 SDK 和公开接入 skill 将支持业务方在自己的仓库维护网站专属代码。
+
+发布定义保存后先等待交付验证：带项目、环境和版本范围的探针经过真实 Kafka 写入及 ClickHouse 回读，形成有期限的就绪租约；随后通过显式版本比较和幂等键激活。`ingestion_ready` 按有效租约派生，租约过期会失去就绪资格。公开配置先验证来源与发布资格，再处理 ETag。千万用户仍是架构目标，尚未进行对应硬件、流量分布和故障条件下的容量验证。
+
+## 仓库布局
+
+| 目录 | 职责 |
+| --- | --- |
+| `backend/` | 单一 Go 模块，应用策略、HTTP 边界、持久化适配分别组织 |
+| `contracts/` | OpenAPI、JSON Schema 与合成数据契约样例 |
+| `apps/console/` | 控制台业务页面 |
+| `packages/design-system/` | 共享主题、布局和交互组件 |
+| `packages/api-client/` | 生成的接口类型及统一请求处理 |
+| `.agents/skills/` | 平台内部开发规范 |
+| `deploy/`、`tooling/` | 本地依赖、迁移、生成与验证工具 |
+
+控制台已有经过浏览器验证的基础版本，当前仍使用 Ant Design，后续统一迁移为自建基础组件。浏览器 SDK、`sys.*` 内置事件运行时注册、身份关系图、成员管理、数据生命周期、报表看板导出、公开接入 skills/CLI 及对应分析界面仍待交付。`sys.*` 当前保留契约样例；本次页面事件计数使用显式发布的自定义事件。
 
 ## 工程规范
 

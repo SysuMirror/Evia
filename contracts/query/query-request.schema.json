@@ -1,0 +1,636 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.activity.invalid/v1/query-request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "enum": [
+        "events",
+        "trend",
+        "funnel",
+        "journey"
+      ]
+    },
+    "environment": {
+      "enum": [
+        "development",
+        "staging",
+        "production"
+      ]
+    },
+    "time_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "timezone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "event_keys": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+        "maxLength": 68
+      }
+    },
+    "filter": {
+      "$ref": "#/$defs/filter"
+    },
+    "subject": {
+      "enum": [
+        "uid",
+        "anonymous",
+        "resolved_person"
+      ]
+    },
+    "identity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "identity_filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "anonymous_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [],
+      "minProperties": 1
+    },
+    "group_by": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "system"
+              },
+              "key": {
+                "enum": [
+                  "event_key",
+                  "uid",
+                  "anonymous_id",
+                  "session_id",
+                  "page_view_id",
+                  "event_time",
+                  "operation_id"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "key"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "property"
+              },
+              "event_key": {
+                "type": "string",
+                "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                "maxLength": 68
+              },
+              "schema_version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              }
+            },
+            "required": [
+              "kind",
+              "event_key",
+              "schema_version",
+              "key"
+            ]
+          }
+        ]
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "enum": [
+              "count",
+              "unique",
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "p95"
+            ]
+          },
+          "field": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "system"
+                  },
+                  "key": {
+                    "enum": [
+                      "event_key",
+                      "uid",
+                      "anonymous_id",
+                      "session_id",
+                      "page_view_id",
+                      "event_time",
+                      "operation_id"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "key"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "property"
+                  },
+                  "event_key": {
+                    "type": "string",
+                    "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                    "maxLength": 68
+                  },
+                  "schema_version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "event_key",
+                  "schema_version",
+                  "key"
+                ]
+              }
+            ]
+          },
+          "accuracy": {
+            "enum": [
+              "exact",
+              "approximate"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      }
+    },
+    "interval": {
+      "enum": [
+        "minute",
+        "hour",
+        "day"
+      ]
+    },
+    "funnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "event_key": {
+                "type": "string",
+                "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                "maxLength": 68
+              },
+              "schema_version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "filter": {
+                "$ref": "#/$defs/filter"
+              }
+            },
+            "required": [
+              "event_key",
+              "schema_version"
+            ]
+          }
+        },
+        "window_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        },
+        "mode": {
+          "const": "ordered_with_interleaving"
+        },
+        "same_entity": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "step_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              },
+              "field": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "system"
+                      },
+                      "key": {
+                        "enum": [
+                          "event_key",
+                          "uid",
+                          "anonymous_id",
+                          "session_id",
+                          "page_view_id",
+                          "event_time",
+                          "operation_id"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "key"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "property"
+                      },
+                      "event_key": {
+                        "type": "string",
+                        "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                        "maxLength": 68
+                      },
+                      "schema_version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "event_key",
+                      "schema_version",
+                      "key"
+                    ]
+                  }
+                ]
+              }
+            },
+            "required": [
+              "step_index",
+              "field"
+            ]
+          }
+        }
+      },
+      "required": [
+        "steps",
+        "window_seconds",
+        "mode"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    },
+    "cursor": {
+      "type": "string",
+      "maxLength": 4096
+    }
+  },
+  "required": [
+    "kind",
+    "environment",
+    "time_range",
+    "timezone"
+  ],
+  "$defs": {
+    "filter": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "and",
+                "or"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "$ref": "#/$defs/filter"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "eq",
+                "neq",
+                "in",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "prefix",
+                "contains"
+              ]
+            },
+            "field": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "system"
+                    },
+                    "key": {
+                      "enum": [
+                        "event_key",
+                        "uid",
+                        "anonymous_id",
+                        "session_id",
+                        "page_view_id",
+                        "event_time",
+                        "operation_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "property"
+                    },
+                    "event_key": {
+                      "type": "string",
+                      "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                      "maxLength": 68
+                    },
+                    "schema_version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "event_key",
+                    "schema_version",
+                    "key"
+                  ]
+                }
+              ]
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  ]
+                },
+                {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "field",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "is_missing",
+                "is_present"
+              ]
+            },
+            "field": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "system"
+                    },
+                    "key": {
+                      "enum": [
+                        "event_key",
+                        "uid",
+                        "anonymous_id",
+                        "session_id",
+                        "page_view_id",
+                        "event_time",
+                        "operation_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "property"
+                    },
+                    "event_key": {
+                      "type": "string",
+                      "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+                      "maxLength": 68
+                    },
+                    "schema_version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "event_key",
+                    "schema_version",
+                    "key"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "field"
+          ]
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "journey"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "identity_filter"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "funnel"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "funnel",
+          "subject"
+        ]
+      }
+    }
+  ]
+}
