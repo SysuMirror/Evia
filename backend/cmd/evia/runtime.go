@@ -17,6 +17,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
+	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
@@ -217,6 +218,15 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		api.Analysis = analysis.New(store, engine, validator)
 		probes = append(probes, func(ctx context.Context) error { return clickHouseProbe(ctx, c, client) })
 	}
+	if c.DeliveryEnabled {
+		service, probe, err := newDelivery(c, store, validator, client, "readiness-api")
+		if err != nil {
+			return err
+		}
+		defer closeProbe(probe, &result)
+		api.Delivery = service
+		probes = append(probes, probe.Ping)
+	}
 	probe := func(ctx context.Context) error {
 		for _, check := range probes {
 			if err := check(ctx); err != nil {
@@ -248,7 +258,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		mux.ServeHTTP(w, r.WithContext(request))
 	})
 	server := httpapi.Server(c.Listen, bounded)
-	logger.Info("API starting", "listen", c.Listen, "collection_enabled", c.CollectionEnabled, "analysis_enabled", c.AnalysisEnabled, "sources_enabled", len(c.SourceSecretKey) > 0)
+	logger.Info("API starting", "listen", c.Listen, "collection_enabled", c.CollectionEnabled, "analysis_enabled", c.AnalysisEnabled, "delivery_enabled", c.DeliveryEnabled, "sources_enabled", len(c.SourceSecretKey) > 0)
 	return supervise(ctx, []task{{"HTTP listener", func(ctx context.Context) error { return runHTTP(ctx, server) }}, {"credential cleanup", func(ctx context.Context) error { return cleanup(ctx, store) }}}, 15*time.Second)
 }
 
@@ -319,13 +329,42 @@ func ingestWorker(ctx context.Context, c config.Config, store *postgres.Store, l
 	if err != nil {
 		return stageError("ingestion worker startup", err)
 	}
+	tasks := []task{}
+	if c.DeliveryEnabled {
+		validator, err := contract.New()
+		if err != nil {
+			return stageError("contract compilation", err)
+		}
+		service, probe, err := newDelivery(c, store, validator, client, "readiness-renewal")
+		if err != nil {
+			return err
+		}
+		defer closeProbe(probe, &result)
+		worker, err := pipeline.NewProbeWorker(probeKafkaConfig(c, "readiness-worker"), sinkConfig(c, client))
+		if err != nil {
+			return stageError("readiness worker configuration", err)
+		}
+		defer closeProbe(worker, &result)
+		startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err = probe.Ping(startup)
+		if err == nil {
+			err = worker.Ping(startup)
+		}
+		cancel()
+		if err != nil {
+			return stageError("readiness worker startup", err)
+		}
+		renewal := &delivery.Worker{Service: service, Interval: 10 * time.Second, Logger: logger}
+		tasks = append(tasks, task{"readiness receipt worker", worker.Run}, task{"release readiness renewal", renewal.Run})
+	}
 	reader, err := pipeline.NewKafkaReader(kafkaConfig(c, "materialize"))
 	if err != nil {
 		return stageError("Kafka reader configuration", err)
 	}
 	worker := &pipeline.Worker{Reader: reader, Sink: sink, Quarantine: producer, BatchSize: 128, BatchTimeout: 30 * time.Second, Logger: logger}
-	logger.Info("ingestion worker starting")
-	return supervise(ctx, []task{{"fact ingestion worker", worker.Run}}, 15*time.Second)
+	logger.Info("ingestion worker starting", "delivery_enabled", c.DeliveryEnabled)
+	tasks = append(tasks, task{"fact ingestion worker", worker.Run})
+	return supervise(ctx, tasks, 15*time.Second)
 }
 
 func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {

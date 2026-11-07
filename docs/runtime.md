@@ -12,9 +12,9 @@ The executable separates API serving, event materialization and durable query ex
 | evia migrate       | Explicitly apply embedded PostgreSQL migrations                                           | None                         |
 | evia bootstrap     | Create the initial synthetic or operator-provided administrator once                      | None                         |
 
-Every process needs EVIA_DATABASE_URL. Workers deliberately do not require the browser origin, cookie key or source encryption key. Apply the matching PostgreSQL migrations before serving or starting workers. Apply the reviewed ClickHouse schema in deploy/clickhouse before materialization/query use, and provision Kafka topics explicitly. The executable does not silently create topics, execute DDL, activate releases or mark ingestion ready.
+Every process needs EVIA_DATABASE_URL. Workers deliberately do not require the browser origin, cookie key or source encryption key. Apply the matching PostgreSQL migrations before serving or starting workers. Apply the reviewed ClickHouse schema in deploy/clickhouse before materialization/query use, and provision Kafka topics explicitly. The executable does not silently create topics, execute DDL or activate releases. Release readiness is established only by the explicit verified activation flow described below.
 
-For API serving, EVIA_PUBLIC_ORIGIN is a single http(s) origin and EVIA_CURSOR_KEY is 32 random bytes encoded as 64 hexadecimal characters. EVIA_LISTEN defaults to 127.0.0.1:8080. Secure cookies are the default; plain HTTP requires EVIA_ALLOW_INSECURE_HTTP=true. Neither a source write credential nor a Kafka acknowledgement grants management access.
+For API serving, EVIA_PUBLIC_ORIGIN is a single ASCII http(s) origin with no path, query, fragment or credentials; host case, default ports and IPv6 literals are normalized to browser form. EVIA_CURSOR_KEY is 32 random bytes encoded as 64 hexadecimal characters. EVIA_LISTEN defaults to 127.0.0.1:8080. Secure cookies are the default; plain HTTP requires EVIA_ALLOW_INSECURE_HTTP=true. Neither a source write credential nor a Kafka acknowledgement grants management access.
 
 ## Optional surfaces
 
@@ -51,13 +51,23 @@ Every non-local Redis endpoint must use rediss, Kafka uses TLS by default, and C
 
 Each query worker receives a distinct identifier containing a random process UUID and worker index. Job ownership is a durable PostgreSQL lease with a generation fence; an in-memory goroutine is not proof of ownership. The existing worker limits query execution to 30 seconds, monitors cancellation/access changes, bounds results, and completes only while the claimed lease is valid. Multiple worker processes can share the same queue; per-project claim limits remain enforced transactionally by the store.
 
+## Verified release delivery
+
+With collection enabled, supplying EVIA_KAFKA_PROBE_TOPIC enables the activation and source-scoped public configuration routes. This also requires ClickHouse settings even when analysis HTTP is disabled. Omitting the probe topic preserves collection-only operation and leaves delivery routes disabled; a topic name alone never creates a readiness proof.
+
+The API produces a scoped, expiring nonce to the separate readiness topic and waits for a matching persisted receipt. The ingest-worker command runs three supervised tasks when delivery is configured: fact materialization, readiness receipt processing, and readiness lease renewal. The receipt consumer has a separate consumer group derived by appending `-readiness` to EVIA_KAFKA_GROUP. It verifies actual fact table/view types and required grants before writing control receipts. Readiness records go to a dedicated control table, never the business fact table.
+
+Provision the readiness topic and apply the reviewed ClickHouse readiness and precision migrations before enabling delivery. PostgreSQL activation/readiness schema migrations must also be applied explicitly. The default delivery service uses a 10-second probe deadline, a one-minute readiness lease and a 24-hour compatibility window. A failed refresh does not extend the lease. A stopped or failing worker therefore cannot leave readiness permanently true; the collector and public configuration recheck actual scope, activation, manifest hash and lease expiry.
+
+Activation is an authenticated management mutation with revision and idempotency checks. Public configuration uses the source credential and its allowed origin, exposes only the source's permitted event definitions, and does not accept a platform session cookie as authorization. Metadata builds, activation, current pipeline readiness and queryability remain separate outcomes.
+
 ## Startup, health and shutdown
 
 Processes validate configuration before opening the HTTP listener or starting workers. Startup checks schema migration integrity. Enabled serving dependencies are probed using the existing Redis pool, Kafka producer and an authenticated bounded SELECT 1 against the configured ClickHouse database. Health checks consume no collection allowance and write no business fact rows.
 
 /healthz reports that the API process is serving. /readyz checks PostgreSQL and only the enabled collection/analysis dependencies with a bounded context; a failed check returns 503. Dependency connectivity is not a release activation or an ingestion-readiness proof. A collector still checks actual scoped release readiness and fails closed when plans are unavailable or inactive.
 
-HTTP operations have bounded contexts and server timeouts. SIGINT/SIGTERM cancels workers and stops accepting HTTP requests. The API has a ten-second graceful HTTP drain, worker supervision has a fifteen-second join limit, and acknowledged Kafka producers get a separate five-second final drain. Unfinished ingestion offsets remain uncommitted for replay. Query leases and generation fences prevent stale workers from committing late outcomes.
+HTTP operations have bounded contexts and server timeouts. SIGINT/SIGTERM cancels workers and stops accepting HTTP requests. The API has a ten-second graceful HTTP drain, worker supervision has a fifteen-second join limit, and each independent acknowledged Kafka producer gets a separate five-second final drain. Unfinished ingestion offsets remain uncommitted for replay. Query leases and generation fences prevent stale workers from committing late outcomes.
 
 Any unexpected worker return, including a clean early return, stops its sibling tasks and reaches the process exit status. A worker failure is not silently discarded in a background goroutine. Fatal external errors are wrapped with safe stage names; process logs never print raw driver errors, connection URLs, passwords, source credentials or event bodies. Cleanup failures also stop the supervised API instead of being silently ignored.
 

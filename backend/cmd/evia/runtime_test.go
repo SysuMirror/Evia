@@ -102,3 +102,18 @@ func TestInvalidCommandAndDisabledWorkersFailBeforeDatabase(t *testing.T) {
 		}
 	}
 }
+
+func TestReadinessKafkaStreamIsSeparateAndBounded(t *testing.T) {
+	c := config.Config{InstanceID: "instance", Kafka: config.Kafka{Brokers: []string{"127.0.0.1:19092"}, Topic: "evia.events", DeadLetterTopic: "evia.quarantine", Group: strings.Repeat("g", 64), ProbeTopic: "evia.readiness", TLSEnabled: true}}
+	probe := probeKafkaConfig(c, "readiness-worker")
+	facts := kafkaConfig(c, "materialize")
+	if probe.Topic != c.Kafka.ProbeTopic || probe.Topic == facts.Topic || probe.Group == facts.Group || len(probe.Group) > 128 || probe.TLS == nil {
+		t.Fatal("readiness traffic mixed with fact stream or escaped worker identity bounds")
+	}
+	if probe.ClientID == facts.ClientID {
+		t.Fatal("independent clients share a process identifier")
+	}
+	if c.Kafka.Topic != "evia.events" || c.Kafka.Group != strings.Repeat("g", 64) {
+		t.Fatal("probe configuration mutated fact consumer settings")
+	}
+}
