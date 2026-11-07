@@ -137,6 +137,9 @@ func (b *Boundary) Error(w http.ResponseWriter, r *http.Request, err error) {
 	if f.Code == "INVALID_CONTENT_TYPE" {
 		status = 415
 	}
+	if f.Code == "METHOD_NOT_ALLOWED" {
+		status = 405
+	}
 	if f.Kind == fault.Limited || f.Kind == fault.Unavailable {
 		w.Header().Set("Retry-After", "5")
 	}
