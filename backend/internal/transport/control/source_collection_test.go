@@ -26,7 +26,7 @@ func (collectionSources) ResolveSource(context.Context, string) (ingestion.Admis
 type collectionPlans struct{}
 
 func (collectionPlans) ResolvePlan(_ context.Context, p, e string, r int64) (ingestion.Plan, error) {
-	return ingestion.Plan{ProjectID: p, Environment: e, Revision: r, Ready: true, Active: true, Events: map[string]ingestion.EventRule{"page_opened": {Key: "page_opened", Version: 1, AllowedSourceKinds: []string{"browser"}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}}}, nil
+	return ingestion.Plan{ProjectID: p, Environment: e, Revision: r, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]ingestion.EventRule{"page_opened": {Key: "page_opened", Version: 1, AllowedSourceKinds: []string{"browser"}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}}}, nil
 }
 
 type collectionBudget struct{}

@@ -270,6 +270,12 @@ func TestSourceCollectorUsesCommittedScopeAndReadyActivation(t *testing.T) {
 	if _, e = f.s.Pool.Exec(ctx, `UPDATE catalog_release_delivery SET ingestion_ready=true WHERE release_id=$1`, release.ID); e != nil {
 		t.Fatal(e)
 	}
+	if _, e = f.s.Pool.Exec(ctx, `INSERT INTO catalog_release_readiness(release_id,project_id,environment,manifest_hash,nonce,capability,confirmed_at,ready_until) VALUES($1,$2,'development',$3,$4,'raw-facts-v1',clock_timestamp(),clock_timestamp()+interval '1 minute')`, release.ID, f.project, release.ManifestHash, ids.New()); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.Pool.Exec(ctx, `INSERT INTO catalog_release_activations(release_id,project_id,environment,revision) VALUES($1,$2,'development',$3)`, release.ID, f.project, release.Revision); e != nil {
+		t.Fatal(e)
+	}
 	if _, e = f.s.Pool.Exec(ctx, `UPDATE catalog_environments SET active_revision=$1 WHERE project_id=$2 AND environment='development'`, release.Revision, f.project); e != nil {
 		t.Fatal(e)
 	}
