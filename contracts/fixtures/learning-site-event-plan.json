@@ -1,0 +1,96 @@
+{
+  "format": "activity.event-plan.v1",
+  "status": "draft_example_not_published",
+  "project_key": "learning-site-example",
+  "environment": "development",
+  "release_revision": 1,
+  "description": "假设接入第二个网站：学习平台。用于验证核心协议不依赖帖子、评论或论坛路由；不是软工集市已实现功能。",
+  "events": [
+    {
+      "event_key": "lesson_completed",
+      "display_name": "客户端观察到课程单元完成",
+      "schema_version": 1,
+      "allowed_source_kinds": [
+        "browser"
+      ],
+      "fact_kind": "client_observed",
+      "trigger": "学习网站自己的业务代码确认达到完成条件后调用SDK；不代表服务端认证或证书颁发。",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "course_id",
+          "lesson_id",
+          "watched_ms",
+          "completion_ratio",
+          "entry"
+        ],
+        "properties": {
+          "course_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "lesson_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "watched_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completion_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "entry": {
+            "type": "string",
+            "enum": [
+              "course_catalog",
+              "continue_learning",
+              "recommendation",
+              "direct"
+            ]
+          }
+        }
+      },
+      "field_metadata": {
+        "course_id": {
+          "role": "entity_identifier",
+          "cardinality": "high"
+        },
+        "lesson_id": {
+          "role": "entity_identifier",
+          "cardinality": "high"
+        },
+        "watched_ms": {
+          "role": "measure",
+          "unit": "millisecond"
+        },
+        "completion_ratio": {
+          "role": "measure",
+          "unit": "ratio"
+        },
+        "entry": {
+          "role": "dimension"
+        }
+      },
+      "example_properties": {
+        "course_id": "course-1",
+        "lesson_id": "lesson-2",
+        "watched_ms": 180000,
+        "completion_ratio": 0.95,
+        "entry": "continue_learning"
+      }
+    }
+  ],
+  "acceptance": [
+    "发布新项目和事件后无需修改Collector、Flink基础逻辑或共享明细表。",
+    "分析面板自动提供course_id、lesson_id筛选，watched_ms聚合与completion_ratio数值过滤。",
+    "查询和缓存必须保持project/environment隔离。",
+    "字段类型改变须发布新schema版本，旧版数据与报表保留原语义。"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "journey",
+  "environment": "development",
+  "time_range": {
+    "from": "2026-11-07T11:00:00Z",
+    "to": "2026-11-07T12:00:00Z"
+  },
+  "timezone": "Asia/Shanghai",
+  "identity_filter": {
+    "uid": "user-42"
+  },
+  "subject": "resolved_person",
+  "limit": 200
+}

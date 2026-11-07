@@ -1,0 +1,143 @@
+name: Verify implemented modules
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+        env:
+          POSTGRES_USER: evia
+          POSTGRES_DB: evia_ci
+          POSTGRES_PASSWORD: synthetic-ci-database-only
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U evia -d evia_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      EVIA_TEST_DATABASE_URL: postgres://evia:synthetic-ci-database-only@127.0.0.1:55432/evia_ci?sslmode=disable
+      EVIA_DATABASE_URL: postgres://evia:synthetic-ci-database-only@127.0.0.1:55432/evia_ci?sslmode=disable
+      EVIA_LISTEN: 127.0.0.1:8080
+      EVIA_PUBLIC_ORIGIN: http://127.0.0.1:5173
+      EVIA_ALLOW_INSECURE_HTTP: 'true'
+      EVIA_BOOTSTRAP_USERNAME: ci-admin
+      EVIA_BOOTSTRAP_DISPLAY_NAME: Synthetic CI administrator
+      EVIA_E2E_USERNAME: ci-admin
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.1'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+      - name: Install required verification dependencies
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm install --frozen-lockfile
+          python -m pip install -r tooling/requirements.txt
+          pnpm exec playwright install --with-deps chromium
+      - name: Verify generated code matches contracts
+        run: make generated-check
+      - name: Verify naming, schemas, Go race tests and frontend
+        run: make check
+      - name: Verify PostgreSQL persistence in isolated schemas
+        run: make integration-test
+      - name: Build and initialize the dedicated browser database
+        run: |
+          go -C backend build -o "$RUNNER_TEMP/evia" ./cmd/evia
+          "$RUNNER_TEMP/evia" migrate
+          password="$(openssl rand -hex 24)"
+          cursor_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$password"
+          echo "::add-mask::$cursor_key"
+          echo "EVIA_E2E_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "EVIA_CURSOR_KEY=$cursor_key" >> "$GITHUB_ENV"
+          EVIA_BOOTSTRAP_PASSWORD="$password" "$RUNNER_TEMP/evia" bootstrap
+      - name: Start the real control API and wait for readiness
+        run: |
+          "$RUNNER_TEMP/evia" serve > "$RUNNER_TEMP/evia-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/evia-api.pid"
+          python - <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=1) as response:
+                      if response.status == 204:
+                          break
+              except (OSError, urllib.error.URLError):
+                  pass
+              time.sleep(0.5)
+          else:
+              raise SystemExit('Control API did not become ready; inspect runner API log.')
+          PY
+      - name: Verify browser flows against the API
+        run: make browser-test
+      - name: Stop the CI API process
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/evia-api.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/evia-api.pid")" 2>/dev/null || true
+          fi
+  dependency-integration:
+    name: ${{ matrix.module }} integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: Kafka and ClickHouse pipeline
+            services: kafka clickhouse
+            target: pipeline-test
+          - module: Redis admission budget
+            services: redis
+            target: budget-test
+          - module: ClickHouse analysis query
+            services: clickhouse
+            target: query-test
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+      - name: Start only the selected real dependencies
+        run: |
+          ./deploy/dev-env init "$RUNNER_TEMP/evia-dependencies.env"
+          ./deploy/dev-env up "$RUNNER_TEMP/evia-dependencies.env" ${{ matrix.services }}
+          ./deploy/dev-env check "$RUNNER_TEMP/evia-dependencies.env" ${{ matrix.services }}
+      - name: Verify the module against real dependencies
+        run: ./deploy/dev-env run "$RUNNER_TEMP/evia-dependencies.env" -- make "${{ matrix.target }}"
+      - name: Remove this job's dependency containers
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/evia-dependencies.env" ]; then
+            ./deploy/dev-env down "$RUNNER_TEMP/evia-dependencies.env" ${{ matrix.services }}
+          fi
