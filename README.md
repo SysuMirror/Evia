@@ -6,6 +6,12 @@
 
 冻结快照 `8d2d9d5` 已通过真实 PostgreSQL、Redis、Kafka、ClickHouse 与独立工作进程组成的公开 HTTP 链路验收：发布、就绪、激活、接收重试、查询和来源停用均通过。自定义页面事件得到计数 **3**、精确 UID 去重数 **2**、指定 UID 行为链中的来源/事件标识对 **2**；详见 [2026-11-07 验证记录](docs/verification/backend-2026-11-07.md)。完整进度见 [PROGRESS.md](PROGRESS.md)，整个平台仍未达到生产交付条件。
 
+## 架构概览
+
+![Evia 数据架构：控制台经 Go API 使用 PostgreSQL，事件经接收 API、Kafka 和写入工作进程进入 ClickHouse，Redis 提供接入预算，查询工作进程消费 PostgreSQL 任务并读取 ClickHouse。浏览器 SDK、身份处理和自定义看板为规划模块。](docs/assets/event-data-architecture.png)
+
+图 1，平台逻辑链路。实线框表示已实现模块，虚线框表示规划模块；重复出现的数据库表示同一存储职责，图中分层不代表独立部署实例。容量目标及验证边界见 [架构说明](docs/architecture.md) 和 [开发进度](PROGRESS.md)。
+
 ## 启动与验证
 
 使用 Go 1.27.3、Node 24.22.1、pnpm 11.25.0 和 PostgreSQL 17.9。按 [本地开发说明](docs/runbooks/development.md) 生成本地配置，显式执行数据库迁移及初始账号创建，再启动 API 和控制台。
@@ -29,6 +35,10 @@ make browser-test
 Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲事件，ClickHouse 支撑分析，Redis 提供分布式接入配额。有状态的身份图与 Flink 处理单独规划。后续 TypeScript 浏览器 SDK 和公开接入 skill 将支持业务方在自己的仓库维护网站专属代码。
 
 发布定义保存后先等待交付验证：带项目、环境和版本范围的探针经过真实 Kafka 写入及 ClickHouse 回读，形成有期限的就绪租约；随后通过显式版本比较和幂等键激活。`ingestion_ready` 按有效租约派生，租约过期会失去就绪资格。公开配置先验证来源与发布资格，再处理 ETag。千万用户仍是架构目标，尚未进行对应硬件、流量分布和故障条件下的容量验证。
+
+![Evia 版本化分析模型：现有事件定义经过草稿、校验、不可变发布、管道验证和显式激活；规划中的指标版本、保存分析和看板版本依赖已发布事件字段，控制台与 Agent 共用报告 API。](docs/assets/versioned-analytics-model.png)
+
+图 2，事件发布流程与规划中的分析依赖。事件发布不等于允许接收；指标、保存分析、看板及其共享 API 仍待实现，版本固定与显式升级规则见 [自定义看板方案](docs/plans/custom-dashboards.md)。两图由 ImageGen 生成并按仓库现状校对，[维护说明](docs/assets/README.md) 记录了语义来源。
 
 ## 仓库布局
 
