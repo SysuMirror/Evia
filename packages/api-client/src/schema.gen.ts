@@ -701,8 +701,9 @@ export interface components {
             environment: "development" | "staging" | "production";
             /** @enum {unknown} */
             kind: "browser" | "server";
+            /** @description 精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。 */
             allowed_origins?: string[];
-        };
+        } & (unknown & unknown);
         Source: {
             /** Format: uuid */
             id: string;
@@ -716,10 +717,12 @@ export interface components {
             status: "active" | "disabled";
             revision: number;
             /**
-             * @description 来源配置分发的实际阶段；不等于配置已保存
+             * @description 当前接收器通过共享数据库读取配置，凭据缓存最长 2 秒。变更提交后，首次读取观察到该版本才开始计时；等待缓存失效窗口后 applied。它表示旧缓存已过期，不代表每个节点逐一确认；依赖不可用时接收器关闭接入。
              * @enum {unknown}
              */
             application_state: "pending" | "applied" | "failed";
+            /** @description 精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。 */
+            allowed_origins: string[];
         };
         EventInput: {
             event_key: string;
@@ -869,6 +872,7 @@ export interface components {
         SourceUpdate: {
             /** @enum {unknown} */
             status?: "active" | "disabled";
+            /** @description 精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。 */
             allowed_origins?: string[];
         };
         CredentialRotation: {
@@ -917,10 +921,12 @@ export interface components {
             /** @description 仅服务端来源创建或轮换时返回一次；不允许进入列表或日志 */
             server_secret_once?: string;
             /**
-             * @description 来源配置分发的实际阶段；不等于配置已保存
+             * @description 当前接收器通过共享数据库读取配置，凭据缓存最长 2 秒。变更提交后，首次读取观察到该版本才开始计时；等待缓存失效窗口后 applied。它表示旧缓存已过期，不代表每个节点逐一确认；依赖不可用时接收器关闭接入。
              * @enum {unknown}
              */
             application_state: "pending" | "applied" | "failed";
+            /** @description 精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。 */
+            allowed_origins: string[];
         };
         ProjectSettings: {
             revision: number;
@@ -1260,9 +1266,13 @@ export interface components {
             rows: Record<string, never>[];
             next_cursor?: string | null;
             metadata: {
-                /** Format: date-time */
-                data_watermark: string;
-                identity_revision: number;
+                /**
+                 * Format: date-time
+                 * @description 当前查询实际观察到的最晚 received_at，空数据为 null，不代表所有分区已完整到达或统计已最终确定。
+                 */
+                data_watermark: string | null;
+                /** @description 仅在实际使用已存在的身份关系快照时返回；原始 UID 或匿名标识查询省略此字段。 */
+                identity_revision?: number;
                 /** @enum {unknown} */
                 accuracy: "exact" | "approximate" | "not_applicable";
                 sample_rate: number;

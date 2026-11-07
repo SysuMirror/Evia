@@ -377,8 +377,8 @@ type QueryResult struct {
 	Rows       []map[string]any `json:"rows"`
 	NextCursor *string          `json:"next_cursor,omitempty"`
 	Metadata   struct {
-		DataWatermark    string  `json:"data_watermark"`
-		IdentityRevision int64   `json:"identity_revision"`
+		DataWatermark    *string `json:"data_watermark"`
+		IdentityRevision *int64  `json:"identity_revision,omitempty"`
 		Accuracy         string  `json:"accuracy"`
 		SampleRate       float64 `json:"sample_rate"`
 		Coverage         struct {
@@ -478,14 +478,15 @@ type Session struct {
 }
 
 type Source struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	Environment      string `json:"environment"`
-	Kind             string `json:"kind"`
-	WriteKey         string `json:"write_key"`
-	Status           string `json:"status"`
-	Revision         int64  `json:"revision"`
-	ApplicationState string `json:"application_state"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Environment      string   `json:"environment"`
+	Kind             string   `json:"kind"`
+	WriteKey         string   `json:"write_key"`
+	Status           string   `json:"status"`
+	Revision         int64    `json:"revision"`
+	ApplicationState string   `json:"application_state"`
+	AllowedOrigins   []string `json:"allowed_origins"`
 }
 
 type SourceInput struct {
@@ -496,15 +497,16 @@ type SourceInput struct {
 }
 
 type SourceIssued struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Environment      string  `json:"environment"`
-	Kind             string  `json:"kind"`
-	WriteKey         string  `json:"write_key"`
-	Status           string  `json:"status"`
-	Revision         int64   `json:"revision"`
-	ServerSecretOnce *string `json:"server_secret_once,omitempty"`
-	ApplicationState string  `json:"application_state"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Environment      string   `json:"environment"`
+	Kind             string   `json:"kind"`
+	WriteKey         string   `json:"write_key"`
+	Status           string   `json:"status"`
+	Revision         int64    `json:"revision"`
+	ServerSecretOnce *string  `json:"server_secret_once,omitempty"`
+	ApplicationState string   `json:"application_state"`
+	AllowedOrigins   []string `json:"allowed_origins"`
 }
 
 type SourceList struct {

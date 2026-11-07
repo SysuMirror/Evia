@@ -9364,7 +9364,9 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           },
           "environment": {
             "type": "string",
@@ -9382,15 +9384,57 @@
           },
           "allowed_origins": {
             "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。"
           }
         },
         "required": [
           "name",
           "environment",
           "kind"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "browser"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "allowed_origins"
+              ],
+              "properties": {
+                "allowed_origins": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "server"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "allowed_origins": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
         ]
       },
       "Source": {
@@ -9402,7 +9446,9 @@
             "format": "uuid"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           },
           "environment": {
             "type": "string",
@@ -9437,7 +9483,18 @@
               "applied",
               "failed"
             ],
-            "description": "来源配置分发的实际阶段；不等于配置已保存"
+            "description": "当前接收器通过共享数据库读取配置，凭据缓存最长 2 秒。变更提交后，首次读取观察到该版本才开始计时；等待缓存失效窗口后 applied。它表示旧缓存已过期，不代表每个节点逐一确认；依赖不可用时接收器关闭接入。"
+          },
+          "allowed_origins": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。"
           }
         },
         "required": [
@@ -9448,7 +9505,8 @@
           "write_key",
           "status",
           "revision",
-          "application_state"
+          "application_state",
+          "allowed_origins"
         ]
       },
       "EventInput": {
@@ -10083,9 +10141,14 @@
           },
           "allowed_origins": {
             "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。"
           }
         },
         "required": [],
@@ -10268,7 +10331,9 @@
             "format": "uuid"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           },
           "environment": {
             "type": "string",
@@ -10307,7 +10372,18 @@
               "applied",
               "failed"
             ],
-            "description": "来源配置分发的实际阶段；不等于配置已保存"
+            "description": "当前接收器通过共享数据库读取配置，凭据缓存最长 2 秒。变更提交后，首次读取观察到该版本才开始计时；等待缓存失效窗口后 applied。它表示旧缓存已过期，不代表每个节点逐一确认；依赖不可用时接收器关闭接入。"
+          },
+          "allowed_origins": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "精确 http(s) origin，包括必要端口，不接受通配符、路径、查询参数或凭据。"
           }
         },
         "required": [
@@ -10318,7 +10394,8 @@
           "write_key",
           "status",
           "revision",
-          "application_state"
+          "application_state",
+          "allowed_origins"
         ]
       },
       "ProjectSettings": {
