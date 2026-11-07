@@ -3,7 +3,7 @@ GO ?= go
 GOFMT ?= gofmt
 PNPM ?= pnpm
 
-.PHONY: generate generated-check check contracts-check naming-check backend-test integration-test web-check browser-test
+.PHONY: generate generated-check check contracts-check naming-check backend-test integration-test pipeline-test budget-test query-test web-check browser-test
 
 generate:
 	$(PYTHON) tooling/codegen/generate.py
@@ -29,6 +29,18 @@ backend-test:
 integration-test:
 	@test -n "$$EVIA_TEST_DATABASE_URL" || { echo 'EVIA_TEST_DATABASE_URL is required'; exit 1; }
 	cd backend && $(GO) test -race -tags=integration ./internal/storage/postgres -count=1
+
+pipeline-test:
+	@test -n "$$EVIA_TEST_KAFKA_BROKERS" && test -n "$$EVIA_TEST_CLICKHOUSE_URL" || { echo 'EVIA_TEST_KAFKA_BROKERS and EVIA_TEST_CLICKHOUSE_URL are required'; exit 1; }
+	cd backend && $(GO) test -race -tags=integration ./internal/pipeline -count=1
+
+budget-test:
+	@test -n "$$EVIA_TEST_REDIS_URL" || { echo 'EVIA_TEST_REDIS_URL is required'; exit 1; }
+	cd backend && $(GO) test -race -tags=integration ./internal/platform/budget -count=1
+
+query-test:
+	@test -n "$$EVIA_TEST_CLICKHOUSE_URL" && test -n "$$EVIA_TEST_CLICKHOUSE_USERNAME" && test -n "$$EVIA_TEST_CLICKHOUSE_PASSWORD" || { echo 'EVIA_TEST_CLICKHOUSE_URL, EVIA_TEST_CLICKHOUSE_USERNAME and EVIA_TEST_CLICKHOUSE_PASSWORD are required'; exit 1; }
+	cd backend && $(GO) test -race -tags=integration ./internal/analysis -count=1
 
 web-check:
 	$(PNPM) format:check

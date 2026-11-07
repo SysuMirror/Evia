@@ -80,7 +80,7 @@ shell code:
 
 ```bash
 ./deploy/dev-env run /tmp/evia-pipeline.env -- go -C backend test -race -tags=integration ./internal/pipeline -count=1
-./deploy/dev-env run /tmp/evia-pipeline.env -- go -C backend test -race -tags=integration ./internal/analysis -count=1
+./deploy/dev-env run /tmp/evia-pipeline.env -- make query-test
 ./deploy/dev-env run /tmp/evia-pipeline.env -- make budget-test
 ```
 
@@ -101,6 +101,12 @@ passed; record the actual run with the module evidence.
 `make budget-test` selects `./internal/platform/budget` with the integration tag
 and race detector, and requires `EVIA_TEST_REDIS_URL`. Its independent CI matrix
 job starts only Redis and verifies the atomic budget against that real service.
+
+`make query-test` selects `./internal/analysis` with the integration tag and race
+detector, requires the ClickHouse URL/username/password and creates isolated
+databases. Its independent CI matrix job starts only ClickHouse. The tests
+exercise real query cancellation through `system.processes` as well as result
+semantics; no Kafka or PostgreSQL service is substituted for this boundary.
 
 ## Resource limits and cleanup
 
