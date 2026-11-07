@@ -3,7 +3,9 @@
 This source setup runs the standalone Go control API and React console. It covers
 sessions, project access and implemented project operations. Check PROGRESS.md
 for the current module evidence. Contracts for collection and analysis describe
-future work; this setup has no event pipeline, Kafka, Flink or ClickHouse.
+future work; this control-only setup does not start Kafka, Flink or ClickHouse.
+The separate [backend dependency profile](dependencies.md) supplies real Kafka,
+ClickHouse and Redis for module integration tests as those modules are delivered.
 
 Use Go 1.27.3 with its matching `gofmt`, Node 24.22.1, pnpm 11.25.0, Python
 3.12 or 3.13, Docker Engine with Compose v2, GNU Make and Git. Go race tests also

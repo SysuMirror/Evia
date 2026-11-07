@@ -1,21 +1,27 @@
 # Deployment boundary and operator preparation
 
-The current deliverable is a standalone control API plus a React console built
-from source. `deploy/compose.dev.yaml` runs only a local PostgreSQL dependency;
-it is not a production platform deployment. Use the [development runbook](development.md)
-to evaluate the current module and PROGRESS.md for actual verification evidence.
+The development setup runs a standalone control API and React console from
+source. By default `deploy/compose.dev.yaml` starts PostgreSQL; its optional
+pipeline profile supplies synthetic backend test dependencies. It is not a
+production platform deployment. Use the [development runbook](development.md)
+for local setup and PROGRESS.md for each backend module's actual implementation
+and verification evidence.
 
-There is no implemented collector/event pipeline, Kafka/Flink/ClickHouse topology,
-production packaging, automated upgrade/rollback procedure, disaster recovery
-proof or capacity qualification. Persisted control metadata does not confirm
-event collection or query availability. Ten million users is a design target;
-this repository has no measured production capacity result.
+A full stateful Flink topology, production packaging, automated upgrade/rollback,
+disaster recovery proof and capacity qualification remain outside this setup.
+Persisted control metadata does not confirm event collection or query
+availability. Ten million users is a design target; this repository has no
+measured production capacity result.
+
+The [disposable dependency profile](dependencies.md) supports real backend
+integration tests with Kafka, ClickHouse and Redis. It has deliberately bounded,
+ephemeral single-node services and supplies no production availability guarantee.
 
 ## Current executable behavior
 
 Build the API with the pinned Go version and build console assets with the pinned
-Node/pnpm versions documented in the development runbook. The executable provides
-exactly three commands: `evia migrate`, `evia bootstrap` and `evia serve`. Migrations
+Node/pnpm versions documented in the development runbook. The control setup uses
+`evia migrate`, `evia bootstrap` and `evia serve`. Migrations
 are embedded, ordered, transactional and recorded with checksums under an
 administrative advisory lock. Startup verifies the ledger and refuses a mismatched
 schema; it does not perform an implicit upgrade. Use one migration owner and run
