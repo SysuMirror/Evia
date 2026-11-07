@@ -1,6 +1,13 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  Navigate,
+  Route,
+  RouterProvider,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import {
   MutationCache,
   QueryCache,
@@ -16,18 +23,19 @@ import {
   Button,
   DesignProvider,
   ErrorPanel,
-  Form,
+  Field,
   Input,
   LoadingPanel,
   WorkspaceShell,
 } from '@evia/design-system';
+import { DraftNavigationProvider, useDraftNavigation } from './draft-navigation';
 const ProjectsPage = lazy(() =>
   import('./projects').then((module) => ({ default: module.ProjectsPage })),
 );
 
 const expire = (error: Error) => {
   if (error instanceof ApiError && error.status === 401) {
-    client.removeQueries({ queryKey: ['projects'] });
+    client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     client.setQueryData(['session'], null);
   }
 };
@@ -48,6 +56,9 @@ function Failure({ error, retry }: { error: Error; retry?: () => void }) {
 }
 function LoginPage() {
   const cache = useQueryClient();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const login = useMutation({
     mutationFn: api.login,
     onSuccess: (session) => {
@@ -59,36 +70,57 @@ function LoginPage() {
     <AuthLayout>
       <h1>登录</h1>
       {login.error && <Failure error={login.error} />}
-      <Form
-        layout="vertical"
-        requiredMark={false}
-        onFinish={(values) => login.mutate(values)}
-        disabled={login.isPending}
+      <form
+        className="console-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!login.isPending) login.mutate({ username, password });
+        }}
       >
-        <Form.Item
-          name="username"
-          label="账号"
-          rules={[
-            { required: true, message: '请输入账号' },
-            { pattern: /^[a-zA-Z0-9_.@-]{1,100}$/, message: '账号仅支持字母、数字和 . _ @ -' },
-          ]}
-        >
-          <Input autoComplete="username" autoFocus maxLength={100} />
-        </Form.Item>
-        <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
-          <Input.Password autoComplete="current-password" maxLength={72} />
-        </Form.Item>
-        <Button
-          type="primary"
-          htmlType="submit"
-          block
-          loading={login.isPending}
-          aria-label="登录"
-          aria-busy={login.isPending}
-        >
+        <Field label="账号" htmlFor="login-username" error={errors.username} required>
+          <Input
+            id="login-username"
+            name="username"
+            autoComplete="username"
+            autoFocus
+            maxLength={100}
+            pattern={'[a-zA-Z0-9_.@\\-]{1,100}'}
+            required
+            value={username}
+            disabled={login.isPending}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              setErrors((current) => ({ ...current, username: undefined }));
+            }}
+            onInvalid={(event) => {
+              const message = event.currentTarget.validity.valueMissing
+                ? '请输入账号'
+                : '账号仅支持字母、数字和 . _ @ -';
+              setErrors((current) => ({ ...current, username: message }));
+            }}
+          />
+        </Field>
+        <Field label="密码" htmlFor="login-password" error={errors.password} required>
+          <Input
+            id="login-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            maxLength={72}
+            required
+            value={password}
+            disabled={login.isPending}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setErrors((current) => ({ ...current, password: undefined }));
+            }}
+            onInvalid={() => setErrors((current) => ({ ...current, password: '请输入密码' }))}
+          />
+        </Field>
+        <Button variant="primary" type="submit" className="auth-submit" loading={login.isPending}>
           登录
         </Button>
-      </Form>
+      </form>
       <p className="auth-help">账号问题请联系平台管理员。</p>
     </AuthLayout>
   );
@@ -96,6 +128,8 @@ function LoginPage() {
 function Workspace({ session }: { session: Session }) {
   const cache = useQueryClient();
   const [logoutError, setLogoutError] = useState<Error>();
+  const navigation = useDraftNavigation();
+  const navigate = useNavigate();
   const logout = useMutation({
     mutationFn: () => api.logout(session.csrf_token),
     onSuccess: () => {
@@ -108,10 +142,13 @@ function Workspace({ session }: { session: Session }) {
     <WorkspaceShell
       account={session.display_name}
       busy={logout.isPending}
-      onLogout={() => {
-        setLogoutError(undefined);
-        logout.mutate();
-      }}
+      onNavigate={(href) => void navigate(href)}
+      onLogout={() =>
+        navigation.request(() => {
+          setLogoutError(undefined);
+          logout.mutate();
+        })
+      }
     >
       {logoutError && (
         <div className="inline-notice">
@@ -141,7 +178,10 @@ function Root() {
       try {
         return await api.session(signal);
       } catch (error) {
-        if (error instanceof ApiError && error.status === 401) return null;
+        if (error instanceof ApiError && error.status === 401) {
+          client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
+          return null;
+        }
         throw error;
       }
     },
@@ -160,15 +200,19 @@ function Root() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
-  return <Workspace session={session.data} />;
+  return (
+    <DraftNavigationProvider>
+      <Workspace session={session.data} />
+    </DraftNavigationProvider>
+  );
 }
+const router = createBrowserRouter([{ path: '*', element: <Root /> }]);
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <DesignProvider>
       <QueryClientProvider client={client}>
-        <BrowserRouter>
-          <Root />
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </DesignProvider>
   </React.StrictMode>,
