@@ -23,7 +23,7 @@ func (s *Store) Bootstrap(ctx context.Context, username, displayName, password s
 			return errors.New("invalid username")
 		}
 	}
-	if strings.TrimSpace(displayName) == "" || len(displayName) > 200 {
+	if strings.TrimSpace(displayName) == "" || strings.ContainsRune(displayName, 0) || len(displayName) > 200 {
 		return errors.New("display name must contain 1 to 200 bytes")
 	}
 	hash, e := access.PasswordHash(password)
@@ -60,7 +60,7 @@ func (s *Store) ReserveLogin(ctx context.Context, account, ip string) (bool, err
 	for _, b := range []struct {
 		key   string
 		limit int
-	}{{"account:" + account, 10}, {"ip:" + ip, 60}} {
+	}{{"ip:" + ip, 60}, {"account:" + account, 10}} {
 		var hits int
 		e = tx.QueryRow(ctx, `INSERT INTO login_buckets(bucket_key,window_start,attempts) VALUES($1,now(),1)
    ON CONFLICT(bucket_key) DO UPDATE SET
@@ -71,6 +71,9 @@ func (s *Store) ReserveLogin(ctx context.Context, account, ip string) (bool, err
 		}
 		if hits > b.limit {
 			allowed = false
+			// Commit the IP reservation without allocating a new account bucket
+			// after this source has exhausted its budget.
+			break
 		}
 	}
 	if e = tx.Commit(ctx); e != nil {
@@ -89,6 +92,27 @@ func (s *Store) FindUser(ctx context.Context, username string) (access.User, err
 func (s *Store) InsertSession(ctx context.Context, v access.Session) error {
 	_, e := s.Pool.Exec(ctx, `INSERT INTO sessions(secret_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,$4)`, v.SecretHash, v.UserID, v.CSRF, v.ExpiresAt)
 	return e
+}
+
+// RotateSession consumes the prior credential and installs its replacement in
+// one transaction. A concurrent logout or rotation must not revive a session.
+func (s *Store) RotateSession(ctx context.Context, priorHash string, replacement access.Session) error {
+	tx, e := s.Pool.Begin(ctx)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback(context.Background())
+	result, e := tx.Exec(ctx, `DELETE FROM sessions WHERE secret_hash=$1 AND expires_at>now()`, priorHash)
+	if e != nil {
+		return e
+	}
+	if result.RowsAffected() != 1 {
+		return access.ErrMissing
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO sessions(secret_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,$4)`, replacement.SecretHash, replacement.UserID, replacement.CSRF, replacement.ExpiresAt); e != nil {
+		return e
+	}
+	return tx.Commit(ctx)
 }
 func (s *Store) FindSession(ctx context.Context, hash string) (access.Session, error) {
 	var v access.Session

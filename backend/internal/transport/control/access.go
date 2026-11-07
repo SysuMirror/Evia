@@ -17,7 +17,7 @@ import (
 )
 
 type AccessService interface {
-	Login(context.Context, string, string, string) (access.Session, string, error)
+	Login(context.Context, string, string, string, *access.Session) (access.Session, string, error)
 	Authenticate(context.Context, string) (access.Session, error)
 	Logout(context.Context, access.Session) error
 	CreateProject(context.Context, string, string, string) (access.Project, error)
@@ -105,22 +105,28 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) error {
 	if e := a.Boundary.Decode(w, r, "LoginInput", &in); e != nil {
 		return e
 	}
+	var prior *access.Session
+	cookies := r.CookiesNamed("evia_session")
+	if len(cookies) > 1 {
+		return fault.New(fault.Unauthenticated, "SESSION_REQUIRED", "请先登录")
+	}
+	if len(cookies) == 1 {
+		session, e := a.Access.Authenticate(r.Context(), cookies[0].Value)
+		if e != nil && fault.Public(e).Kind != fault.Unauthenticated {
+			return e
+		}
+		if e == nil {
+			prior = &session
+		}
+	}
 	ip, _, e := net.SplitHostPort(r.RemoteAddr)
 	if e != nil {
 		ip = r.RemoteAddr
 	}
 	// Proxy headers are intentionally ignored until trusted proxies are configured.
-	session, secret, e := a.Access.Login(r.Context(), in.Username, in.Password, ip)
+	session, secret, e := a.Access.Login(r.Context(), in.Username, in.Password, ip, prior)
 	if e != nil {
 		return e
-	}
-	// Refreshing a valid session rotates and revokes its old credential.
-	if old, e := r.Cookie("evia_session"); e == nil {
-		if prior, e := a.Access.Authenticate(r.Context(), old.Value); e == nil {
-			if e = a.Access.Logout(r.Context(), prior); e != nil {
-				return e
-			}
-		}
 	}
 	a.cookie(w, secret, 8*60*60)
 	return a.Boundary.JSON(w, 200, "Session", sessionWire(session))

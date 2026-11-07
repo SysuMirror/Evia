@@ -32,6 +32,7 @@ type Store interface {
 	ReserveLogin(context.Context, string, string) (bool, error)
 	FindUser(context.Context, string) (User, error)
 	InsertSession(context.Context, Session) error
+	RotateSession(context.Context, string, Session) error
 	FindSession(context.Context, string) (Session, error)
 	DeleteSession(context.Context, string) error
 	CreateProject(context.Context, string, Project) error
@@ -61,7 +62,7 @@ func PasswordHash(password string) (string, error) {
 	hash, e := bcrypt.GenerateFromPassword([]byte(password), 12)
 	return string(hash), e
 }
-func (s *Service) Login(ctx context.Context, username, password, remoteIP string) (Session, string, error) {
+func (s *Service) Login(ctx context.Context, username, password, remoteIP string, prior *Session) (Session, string, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
 	denied := fault.New(fault.Unauthenticated, "INVALID_CREDENTIALS", "账号或密码不正确")
 	if !usernamePattern.MatchString(username) || len(password) == 0 || len(password) > 72 {
@@ -88,7 +89,15 @@ func (s *Service) Login(ctx context.Context, username, password, remoteIP string
 	}
 	secret := ids.Secret()
 	session := Session{UserID: user.ID, DisplayName: user.DisplayName, SecretHash: Digest(secret), CSRF: ids.Secret(), ExpiresAt: time.Now().UTC().Add(8 * time.Hour)}
-	if e := s.store.InsertSession(ctx, session); e != nil {
+	if prior == nil {
+		e = s.store.InsertSession(ctx, session)
+	} else {
+		e = s.store.RotateSession(ctx, prior.SecretHash, session)
+	}
+	if errors.Is(e, ErrMissing) {
+		return Session{}, "", fault.New(fault.Unauthenticated, "SESSION_EXPIRED", "登录已过期，请重新登录")
+	}
+	if e != nil {
 		return Session{}, "", e
 	}
 	return session, secret, nil
@@ -108,7 +117,7 @@ func (s *Service) Logout(ctx context.Context, session Session) error {
 }
 func (s *Service) CreateProject(ctx context.Context, userID, name, timezone string) (Project, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || utf8.RuneCountInString(name) > 100 {
+	if name == "" || strings.ContainsRune(name, 0) || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 100 {
 		return Project{}, fault.New(fault.Invalid, "INVALID_PROJECT_NAME", "项目名称必须为 1 到 100 个字符")
 	}
 	if timezone == "" || len(timezone) > 100 || timezone == "Local" {

@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -146,5 +148,164 @@ func TestConcurrentLoginBudget(t *testing.T) {
 	wg.Wait()
 	if allowed.Load() != 10 {
 		t.Fatalf("expected 10 reservations, got %d", allowed.Load())
+	}
+}
+
+func TestExhaustedIPCannotAllocateAccountBuckets(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	for i := 0; i < 60; i++ {
+		allowed, e := s.ReserveLogin(ctx, fmt.Sprintf("initial-%d", i), "same-ip")
+		if e != nil || !allowed {
+			t.Fatal("initial IP reservation failed", i, allowed, e)
+		}
+	}
+	var before int
+	if e := s.Pool.QueryRow(ctx, `SELECT count(*) FROM login_buckets`).Scan(&before); e != nil {
+		t.Fatal(e)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Go(func() {
+			allowed, e := s.ReserveLogin(ctx, fmt.Sprintf("denied-%d", i), "same-ip")
+			if e != nil || allowed {
+				t.Error("exhausted IP admitted login", allowed, e)
+			}
+		})
+	}
+	wg.Wait()
+	var after, ipAttempts int
+	if e := s.Pool.QueryRow(ctx, `SELECT count(*) FROM login_buckets`).Scan(&after); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Pool.QueryRow(ctx, `SELECT attempts FROM login_buckets WHERE bucket_key='ip:same-ip'`).Scan(&ipAttempts); e != nil {
+		t.Fatal(e)
+	}
+	if after != before || ipAttempts != 160 {
+		t.Fatalf("denied reservations must commit only to existing IP bucket: rows %d -> %d, attempts %d", before, after, ipAttempts)
+	}
+	allowed, e := s.ReserveLogin(ctx, "different-account", "different-ip")
+	if e != nil || !allowed {
+		t.Fatal("unrelated IP budget was affected", allowed, e)
+	}
+}
+
+func TestSessionRotationAtomicityAndConcurrentConsumption(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if e := s.Bootstrap(ctx, "review", "Reviewer", "synthetic-password-42"); e != nil {
+		t.Fatal(e)
+	}
+	u, e := s.FindUser(ctx, "review")
+	if e != nil {
+		t.Fatal(e)
+	}
+	session := func() access.Session {
+		return access.Session{UserID: u.ID, SecretHash: access.Digest(ids.Secret()), CSRF: ids.Secret(), ExpiresAt: time.Now().Add(time.Hour)}
+	}
+	prior, replacement := session(), session()
+	if e = s.InsertSession(ctx, prior); e != nil {
+		t.Fatal(e)
+	}
+	// A failure during revocation cannot persist any replacement.
+	if _, e = s.Pool.Exec(ctx, `CREATE FUNCTION deny_session_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic revocation failure'; END $$;
+	CREATE TRIGGER deny_session_delete BEFORE DELETE ON sessions FOR EACH ROW EXECUTE FUNCTION deny_session_delete()`); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.RotateSession(ctx, prior.SecretHash, replacement); e == nil {
+		t.Fatal("revocation failure accepted")
+	}
+	if _, e = s.FindSession(ctx, prior.SecretHash); e != nil {
+		t.Fatal("failed revocation lost prior session", e)
+	}
+	if _, e = s.FindSession(ctx, replacement.SecretHash); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("failed revocation persisted replacement", e)
+	}
+	if _, e = s.Pool.Exec(ctx, `DROP TRIGGER deny_session_delete ON sessions; DROP FUNCTION deny_session_delete()`); e != nil {
+		t.Fatal(e)
+	}
+	// A failure after revocation must roll back the deleted prior credential.
+	invalid := replacement
+	invalid.UserID = ids.New()
+	if e = s.RotateSession(ctx, prior.SecretHash, invalid); e == nil {
+		t.Fatal("invalid replacement accepted")
+	}
+	if _, e = s.FindSession(ctx, prior.SecretHash); e != nil {
+		t.Fatal("replacement failure lost prior session", e)
+	}
+	if _, e = s.FindSession(ctx, replacement.SecretHash); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("failed replacement left an orphan", e)
+	}
+	if e = s.RotateSession(ctx, prior.SecretHash, replacement); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.FindSession(ctx, prior.SecretHash); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("rotation retained old credential", e)
+	}
+	if _, e = s.FindSession(ctx, replacement.SecretHash); e != nil {
+		t.Fatal("replacement missing", e)
+	}
+	replayed := session()
+	if e = s.RotateSession(ctx, prior.SecretHash, replayed); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("consumed prior revived", e)
+	}
+	if _, e = s.FindSession(ctx, replayed.SecretHash); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("replayed rotation persisted credential", e)
+	}
+	expired := session()
+	expired.ExpiresAt = time.Now().Add(-time.Minute)
+	if e = s.InsertSession(ctx, expired); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.RotateSession(ctx, expired.SecretHash, replayed); !errors.Is(e, access.ErrMissing) {
+		t.Fatal("expired prior revived", e)
+	}
+
+	prior = session()
+	if e = s.InsertSession(ctx, prior); e != nil {
+		t.Fatal(e)
+	}
+	var wg sync.WaitGroup
+	var successes atomic.Int32
+	hashes := make([]string, 8)
+	for i := range hashes {
+		next := session()
+		hashes[i] = next.SecretHash
+		wg.Go(func() {
+			e := s.RotateSession(ctx, prior.SecretHash, next)
+			if e == nil {
+				successes.Add(1)
+			} else if !errors.Is(e, access.ErrMissing) {
+				t.Error(e)
+			}
+		})
+	}
+	wg.Wait()
+	var persisted int
+	if e = s.Pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE secret_hash=ANY($1::text[])`, hashes).Scan(&persisted); e != nil {
+		t.Fatal(e)
+	}
+	if successes.Load() != 1 || persisted != 1 {
+		t.Fatal("concurrent rotation must consume prior once", successes.Load(), persisted)
+	}
+}
+
+func TestCleanupDrainsExpiredBurstsWithoutRemovingLiveRows(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if _, e := s.Pool.Exec(ctx, `INSERT INTO login_buckets(bucket_key,window_start,attempts)
+	SELECT 'expired-'||i,now()-interval '2 hours',1 FROM generate_series(1,2001) i;
+	INSERT INTO login_buckets(bucket_key,window_start,attempts) VALUES('live',now(),1)`); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Cleanup(ctx); e != nil {
+		t.Fatal(e)
+	}
+	var count int
+	if e := s.Pool.QueryRow(ctx, `SELECT count(*) FROM login_buckets`).Scan(&count); e != nil || count != 1 {
+		t.Fatal("expired burst not drained or live row deleted", count, e)
+	}
+	if e := s.Pool.QueryRow(ctx, `SELECT count(*) FROM login_buckets WHERE bucket_key='live'`).Scan(&count); e != nil || count != 1 {
+		t.Fatal("live budget deleted", count, e)
 	}
 }

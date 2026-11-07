@@ -123,8 +123,16 @@ func (s *Store) Cleanup(ctx context.Context) error {
 		`DELETE FROM sessions WHERE secret_hash IN (SELECT secret_hash FROM sessions WHERE expires_at<now() LIMIT 1000)`,
 		`DELETE FROM login_buckets WHERE bucket_key IN (SELECT bucket_key FROM login_buckets WHERE window_start<now()-interval '1 hour' LIMIT 1000)`,
 	} {
-		if _, e := s.Pool.Exec(ctx, sql); e != nil {
-			return e
+		// Drain bursts beyond one batch while bounding each call to at most
+		// 10,000 rows per table and respecting the maintenance context.
+		for batch := 0; batch < 10; batch++ {
+			result, e := s.Pool.Exec(ctx, sql)
+			if e != nil {
+				return e
+			}
+			if result.RowsAffected() < 1000 {
+				break
+			}
 		}
 	}
 	return nil

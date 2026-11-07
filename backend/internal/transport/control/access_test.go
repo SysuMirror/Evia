@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,19 +23,73 @@ const projectID = "22222222-2222-4222-8222-222222222222"
 
 type fakeAccess struct {
 	AccessService
-	created   int
-	loggedOut bool
-	projects  []access.Project
+	created           int
+	loggedOut         bool
+	projects          []access.Project
+	authErr, loginErr error
+	loginCalls        int
+	prior             *access.Session
 }
 
 func (f *fakeAccess) Authenticate(_ context.Context, token string) (access.Session, error) {
+	if f.authErr != nil {
+		return access.Session{}, f.authErr
+	}
 	if token != "valid" {
 		return access.Session{}, fault.New(fault.Unauthenticated, "SESSION_EXPIRED", "请登录")
 	}
-	return access.Session{UserID: userID, DisplayName: "Example", CSRF: "csrf"}, nil
+	return access.Session{UserID: userID, DisplayName: "Example", CSRF: "csrf", SecretHash: "prior-hash"}, nil
 }
-func (f *fakeAccess) Login(context.Context, string, string, string) (access.Session, string, error) {
+func (f *fakeAccess) Login(_ context.Context, _, _, _ string, prior *access.Session) (access.Session, string, error) {
+	f.loginCalls++
+	f.prior = prior
+	if f.loginErr != nil {
+		return access.Session{}, "", f.loginErr
+	}
 	return access.Session{UserID: userID, DisplayName: "Example", CSRF: "csrf"}, "valid", nil
+}
+
+func TestLoginAuthenticatesPriorBeforeReplacement(t *testing.T) {
+	for _, tc := range []struct {
+		name, cookie       string
+		authErr, loginErr  error
+		duplicate, rotated bool
+		status, calls      int
+	}{
+		{name: "first login", status: 200, calls: 1},
+		{name: "expired prior", cookie: "expired", status: 200, calls: 1},
+		{name: "valid prior", cookie: "valid", rotated: true, status: 200, calls: 1},
+		{name: "prior storage failure", cookie: "valid", authErr: errors.New("database unavailable"), status: 500},
+		{name: "replacement failure", cookie: "valid", rotated: true, loginErr: errors.New("rotation transaction failed"), status: 500, calls: 1},
+		{name: "concurrent revocation", cookie: "valid", rotated: true, loginErr: fault.New(fault.Unauthenticated, "SESSION_EXPIRED", "请登录"), status: 401, calls: 1},
+		{name: "ambiguous cookie", cookie: "valid", duplicate: true, status: 401},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeAccess{authErr: tc.authErr, loginErr: tc.loginErr}
+			r := httptest.NewRequest("POST", "/api/v1/session/login", strings.NewReader(`{"username":"example","password":"example"}`))
+			r.Header.Set("Content-Type", "application/json")
+			if tc.cookie != "" {
+				r.AddCookie(&http.Cookie{Name: "evia_session", Value: tc.cookie})
+			}
+			if tc.duplicate {
+				r.AddCookie(&http.Cookie{Name: "evia_session", Value: "second"})
+			}
+			w := httptest.NewRecorder()
+			api(t, f).ServeHTTP(w, r)
+			if w.Code != tc.status || f.loginCalls != tc.calls {
+				t.Fatal(w.Code, f.loginCalls, w.Body.String())
+			}
+			if (f.prior != nil) != tc.rotated {
+				t.Fatal("wrong prior credential passed to login")
+			}
+			if f.prior != nil && f.prior.SecretHash != "prior-hash" {
+				t.Fatal("prior storage credential missing")
+			}
+			if tc.status >= 400 && len(w.Result().Cookies()) != 0 {
+				t.Fatal("failed login issued a cookie")
+			}
+		})
+	}
 }
 func (f *fakeAccess) Logout(context.Context, access.Session) error { f.loggedOut = true; return nil }
 func (f *fakeAccess) CreateProject(_ context.Context, id, name, zone string) (access.Project, error) {
@@ -124,7 +179,7 @@ func TestPaginationAndStructuredRoutingErrors(t *testing.T) {
 	for _, tc := range []struct {
 		method, path string
 		status       int
-	}{{"GET", "/api/v1/projects?limit=1", 200}, {"GET", "/api/v1/projects?limit=1&limit=2", 400}, {"GET", "/api/v1/projects?cursor=invalid", 400}, {"GET", "/api/v1/projects?environment=production", 400}, {"PUT", "/api/v1/projects", 405}, {"GET", "/api/v1/missing", 404}} {
+	}{{"GET", "/api/v1/projects?limit=1", 200}, {"GET", "/api/v1/projects?limit=1&limit=2", 400}, {"GET", "/api/v1/projects?limit=%zz", 400}, {"GET", "/api/v1/projects?limit=1;limit=2", 400}, {"GET", "/api/v1/projects?unexpected=%zz", 400}, {"GET", "/api/v1/projects?cursor=invalid", 400}, {"GET", "/api/v1/projects?environment=production", 400}, {"PUT", "/api/v1/projects", 405}, {"GET", "/api/v1/missing", 404}} {
 		r := httptest.NewRequest(tc.method, tc.path, nil)
 		r.AddCookie(&http.Cookie{Name: "evia_session", Value: "valid"})
 		w := httptest.NewRecorder()
