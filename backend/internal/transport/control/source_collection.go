@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,6 +22,7 @@ type CollectionAPI struct {
 	Boundary  *httpapi.Boundary
 	Collector *ingestion.Collector
 	header    *jsonschema.Schema
+	timeout   time.Duration
 }
 
 func NewCollectionAPI(boundary *httpapi.Boundary, collector *ingestion.Collector) (*CollectionAPI, error) {
@@ -44,7 +46,7 @@ func NewCollectionAPI(boundary *httpapi.Boundary, collector *ingestion.Collector
 	if e != nil {
 		return nil, e
 	}
-	return &CollectionAPI{boundary, collector, header}, nil
+	return &CollectionAPI{Boundary: boundary, Collector: collector, header: header, timeout: 5 * time.Second}, nil
 }
 func (a *CollectionAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -137,6 +139,9 @@ func (a *CollectionAPI) collect(w http.ResponseWriter, r *http.Request) error {
 		}
 		bearer = parts[1]
 	}
+	bounded, cancel := context.WithTimeout(r.Context(), a.timeout)
+	defer cancel()
+	r = r.WithContext(bounded)
 	out, status, e := a.Collector.Collect(r.Context(), ingestion.Batch{ID: in.ID, WriteKey: in.WriteKey, SentAt: in.SentAt, Events: in.Events}, ingestion.Authentication{Bearer: bearer, Origin: r.Header.Get("Origin")})
 	if e != nil {
 		return e

@@ -39,7 +39,7 @@ type collectionQueue struct {
 }
 
 func (q *collectionQueue) Publish(context.Context, []ingestion.Record) error { q.calls++; return q.err }
-func collectionHandler(t *testing.T, q *collectionQueue) http.Handler {
+func collectionAdapter(t *testing.T, q ingestion.Queue) *CollectionAPI {
 	t.Helper()
 	v, e := contract.New()
 	if e != nil {
@@ -53,7 +53,53 @@ func collectionHandler(t *testing.T, q *collectionQueue) http.Handler {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return a.Handler()
+	return a
+}
+func collectionHandler(t *testing.T, q *collectionQueue) http.Handler {
+	return collectionAdapter(t, q).Handler()
+}
+
+type blockedCollectionQueue struct {
+	deadline time.Time
+	finished chan struct{}
+}
+
+func (q *blockedCollectionQueue) Publish(ctx context.Context, _ []ingestion.Record) error {
+	q.deadline, _ = ctx.Deadline()
+	<-ctx.Done()
+	close(q.finished)
+	return ctx.Err()
+}
+func TestCollectorHTTPDependencyDeadlineCancelsPublishWithoutAcknowledgement(t *testing.T) {
+	for _, parentEarlier := range []bool{false, true} {
+		t.Run(map[bool]string{false: "collector deadline", true: "earlier caller deadline"}[parentEarlier], func(t *testing.T) {
+			q := &blockedCollectionQueue{finished: make(chan struct{})}
+			a := collectionAdapter(t, q)
+			a.timeout = 40 * time.Millisecond
+			r := httptest.NewRequest("POST", "/v1/collect", strings.NewReader(collectionBody(collectionEvent())))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Origin", "https://website.example")
+			if parentEarlier {
+				ctx, cancel := context.WithTimeout(r.Context(), 10*time.Millisecond)
+				defer cancel()
+				r = r.WithContext(ctx)
+			}
+			w := httptest.NewRecorder()
+			start := time.Now()
+			a.Handler().ServeHTTP(w, r)
+			if w.Code != 503 || strings.Contains(w.Body.String(), `"accepted"`) || strings.Contains(w.Body.String(), `"receipt_id"`) {
+				t.Fatal("unconfirmed publication was acknowledged", w.Code, w.Body.String())
+			}
+			if q.deadline.IsZero() || q.deadline.After(start.Add(a.timeout+10*time.Millisecond)) || time.Since(start) > 500*time.Millisecond {
+				t.Fatal("collection work escaped bounded dependency deadline")
+			}
+			select {
+			case <-q.finished:
+			default:
+				t.Fatal("publication context was not canceled")
+			}
+		})
+	}
 }
 func collectionEvent() map[string]any {
 	return map[string]any{"event_id": catalogReleaseID, "event_key": "page_opened", "schema_version": 1, "release_revision": 1, "occurred_at": time.Now().UTC().Format(time.RFC3339Nano), "identity": map[string]any{"uid": "website-user"}, "context": map[string]any{}, "sdk": map[string]any{"name": "test", "version": "1"}, "properties": map[string]any{}}
