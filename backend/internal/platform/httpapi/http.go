@@ -52,17 +52,28 @@ func RequestID(ctx context.Context) string { id, _ := ctx.Value(requestKey{}).(s
 func (b *Boundary) Handler(fn Endpoint) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := fn(w, r); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && r.Context().Err() != nil {
+				err = fault.New(fault.Unavailable, "REQUEST_TIMEOUT", "请求处理超时，请稍后重试")
+			}
 			b.Error(w, r, err)
 		}
 	}
 }
 
 func (b *Boundary) Middleware(next http.Handler) http.Handler {
+	// The context deadline cancels database and other cooperative dependencies.
+	// Server WriteTimeout alone bounds socket writes, not handler execution.
+	return b.middleware(next, 20*time.Second)
+}
+
+func (b *Boundary) middleware(next http.Handler, timeout time.Duration) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bounded, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
 		response := &statusWriter{ResponseWriter: w}
 		w = response
 		id := ids.New()
-		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, id))
+		r = r.WithContext(context.WithValue(bounded, requestKey{}, id))
 		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
