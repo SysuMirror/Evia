@@ -20,8 +20,9 @@
   --color-accent: #3561d8;
   --space-unit: 8px;
   --color-accent-hover: #294fb8;
+  --color-accent-active: #22439f;
   --color-error: #b42335;
-  --color-focus: #7699ed;
+  --color-focus: #3561d8;
   --radius-control: 7px;
   --radius-panel: 20px;
   --control-height: 36px;
@@ -569,6 +570,31 @@ p {
   background: #921b2c;
   border-color: #921b2c;
 }
+.evia-button-secondary:active:enabled {
+  color: var(--color-accent-active);
+  border-color: var(--color-accent-active);
+  background: #edf2ff;
+}
+.evia-button-primary:active:enabled {
+  color: white;
+  background: var(--color-accent-active);
+  border-color: var(--color-accent-active);
+}
+.evia-button-danger:active:enabled {
+  color: white;
+  background: #771625;
+  border-color: #771625;
+}
+.evia-button-ghost:active:enabled {
+  color: var(--color-accent-active);
+  border-color: transparent;
+  background: #e2e7ef;
+}
+.evia-button-link:active:enabled {
+  color: var(--color-accent-active);
+  border-color: transparent;
+  text-decoration: underline;
+}
 .evia-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -625,7 +651,7 @@ p {
   line-height: 1.5;
   transition: border-color 120ms;
 }
-.evia-input:hover:enabled {
+.evia-input:hover:enabled:not([readonly]):not(:focus):not([aria-invalid='true']) {
   border-color: #9ba9c0;
 }
 .evia-input:focus {
@@ -638,6 +664,10 @@ p {
   background: #f3f4f6;
   color: var(--color-muted);
   cursor: not-allowed;
+}
+.evia-input[readonly]:not(:disabled) {
+  background: #f7f8fa;
+  cursor: text;
 }
 .evia-input::placeholder {
   color: #8490a2;
@@ -661,6 +691,12 @@ p {
 .evia-field-error {
   color: var(--color-error);
 }
+.evia-field-error:empty {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
 .evia-checkbox {
   display: inline-flex;
   align-items: flex-start;
@@ -675,6 +711,17 @@ p {
   height: 16px;
   margin: 3px 0 0;
   accent-color: var(--color-accent);
+}
+.evia-checkbox:has(input:disabled) {
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+.evia-checkbox input:disabled {
+  cursor: not-allowed;
+}
+.evia-checkbox input[aria-invalid='true'] {
+  accent-color: var(--color-error);
+  box-shadow: 0 0 0 1px var(--color-error);
 }
 .evia-alert {
   display: flex;
@@ -830,8 +877,8 @@ p {
   overflow-y: auto;
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
-  padding: 3px;
-  margin: -3px;
+  padding: 6px;
+  margin: -6px;
 }
 .evia-modal-footer {
   display: flex;

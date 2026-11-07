@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -55,34 +56,103 @@ interface Toast {
 }
 const ToastContext = createContext<ToastAPI | null>(null);
 
+function canRestoreFocus(element: HTMLElement | null | undefined): element is HTMLElement {
+  return Boolean(
+    element &&
+    element !== document.body &&
+    element !== document.documentElement &&
+    element.isConnected &&
+    element.getClientRects().length > 0 &&
+    !element.matches(':disabled') &&
+    !element.closest('dialog:not([open]), [inert]'),
+  );
+}
+
 export function DesignProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextID = useRef(0);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const elements = useRef(new Map<number, HTMLDivElement>());
+  const origins = useRef(new Map<number, HTMLElement | null>());
+  const pendingOrigins = useRef(new Set<number>());
+  const focusedToast = useRef<number | null>(null);
   const dismiss = useCallback((id: number) => {
-    clearTimeout(timers.current.get(id));
-    timers.current.delete(id);
+    const restore = elements.current.get(id)?.contains(document.activeElement);
+    const origin = origins.current.get(id);
     setToasts((current) => current.filter((toast) => toast.id !== id));
-  }, []);
-  const add = useCallback(
-    (tone: Toast['tone'], message: string) => {
-      const id = ++nextID.current;
-      setToasts((current) => {
-        const next = [...current, { id, tone, message }];
-        for (const evicted of next.slice(0, -5)) {
-          clearTimeout(timers.current.get(evicted.id));
-          timers.current.delete(evicted.id);
-        }
-        return next.slice(-5);
+    if (restore)
+      requestAnimationFrame(() => {
+        if (
+          document.activeElement === document.body &&
+          canRestoreFocus(origin) &&
+          !document.querySelector('dialog:modal')
+        )
+          origin.focus({ preventScroll: true });
       });
-      if (tone === 'success')
-        timers.current.set(
-          id,
-          setTimeout(() => dismiss(id), 4500),
-        );
-    },
-    [dismiss],
-  );
+  }, []);
+  const add = useCallback((tone: Toast['tone'], message: string) => {
+    const id = ++nextID.current;
+    const protectedID = focusedToast.current;
+    origins.current.set(
+      id,
+      document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    );
+    pendingOrigins.current.add(id);
+    setToasts((current) => {
+      const next = [...current, { id, tone, message }];
+      while (next.length > 5) {
+        const index = next.findIndex((toast) => toast.id !== protectedID);
+        next.splice(index, 1);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    const visible = new Set(toasts.map((toast) => toast.id));
+    for (const id of origins.current.keys()) {
+      if (!visible.has(id)) {
+        origins.current.delete(id);
+        pendingOrigins.current.delete(id);
+      }
+    }
+    for (const [id, timer] of timers.current) {
+      if (!visible.has(id)) {
+        clearTimeout(timer);
+        timers.current.delete(id);
+      }
+    }
+    function schedule(id: number) {
+      timers.current.set(
+        id,
+        setTimeout(() => {
+          const element = elements.current.get(id);
+          if (element && (element.contains(document.activeElement) || element.matches(':hover'))) {
+            schedule(id);
+          } else {
+            timers.current.delete(id);
+            dismiss(id);
+          }
+        }, 4500),
+      );
+    }
+    for (const toast of toasts) {
+      if (toast.tone === 'success' && !timers.current.has(toast.id)) schedule(toast.id);
+    }
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      for (const id of pendingOrigins.current) {
+        // A success may close a dialog. Observe its restored focus before recording a return target.
+        if (
+          !canRestoreFocus(origins.current.get(id)) &&
+          canRestoreFocus(active) &&
+          !active.closest('.evia-toast-region')
+        )
+          origins.current.set(id, active);
+      }
+      pendingOrigins.current.clear();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [toasts, dismiss]);
   const api = useMemo(
     () => ({
       success: (message: string) => add('success', message),
@@ -106,6 +176,16 @@ export function DesignProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             className={`evia-toast evia-toast-${toast.tone}`}
             role={toast.tone === 'error' ? 'alert' : 'status'}
+            ref={(element) => {
+              if (element) elements.current.set(toast.id, element);
+              else elements.current.delete(toast.id);
+            }}
+            onFocusCapture={() => {
+              focusedToast.current = toast.id;
+            }}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) focusedToast.current = null;
+            }}
           >
             <span>{toast.message}</span>
             <Button
@@ -134,22 +214,37 @@ export function CopyButton({ value, label = '复制' }: { value: string; label?:
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
   const pending = useRef(false);
+  const operation = useRef(0);
+  useLayoutEffect(() => {
+    pending.current = false;
+    setBusy(false);
+    setFeedback('');
+    return () => {
+      ++operation.current;
+      pending.current = false;
+    };
+  }, [value]);
   async function copy() {
     if (pending.current) return;
     pending.current = true;
+    const attempt = ++operation.current;
     setBusy(true);
     setFeedback('');
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(value);
+      if (attempt !== operation.current) return;
       toast.success('已复制');
       setFeedback('已复制');
     } catch {
+      if (attempt !== operation.current) return;
       toast.error('复制失败，请选择内容后手动复制');
       setFeedback('复制失败，请选择内容后手动复制');
     } finally {
-      pending.current = false;
-      setBusy(false);
+      if (attempt === operation.current) {
+        pending.current = false;
+        setBusy(false);
+      }
     }
   }
   return (
