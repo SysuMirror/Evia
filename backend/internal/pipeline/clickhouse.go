@@ -58,6 +58,8 @@ type factRow struct {
 	ReleaseRevision    int64   `json:"release_revision"`
 	OccurredAt         string  `json:"occurred_at"`
 	EventTime          string  `json:"event_time"`
+	OccurredAtPrecise  string  `json:"occurred_at_precise"`
+	EventTimePrecise   string  `json:"event_time_precise"`
 	ReceivedAt         string  `json:"received_at"`
 	CanonicalHash      string  `json:"canonical_hash"`
 	UID                *string `json:"uid"`
@@ -110,10 +112,10 @@ func rowFor(record ingestion.Record) (factRow, error) {
 	if e = json.Unmarshal(r.ContextJSON, &exact); e != nil {
 		return factRow{}, e
 	}
-	occurred := r.OccurredAt.Format("2006-01-02 15:04:05.000")
+	occurred := r.OccurredAt.Format("2006-01-02 15:04:05.000000000")
 	return factRow{
 		SourceKind: r.SourceKind, ProjectID: r.ProjectID, Environment: r.Environment, SourceID: r.SourceID, EventID: r.EventID, EventKey: r.EventKey, SchemaVersion: r.SchemaVersion, ReleaseRevision: r.ReleaseRevision,
-		OccurredAt: occurred, EventTime: occurred, ReceivedAt: r.ReceivedAt.Format("2006-01-02 15:04:05.000000000"), CanonicalHash: hash,
+		OccurredAt: occurred, EventTime: occurred, OccurredAtPrecise: occurred, EventTimePrecise: occurred, ReceivedAt: r.ReceivedAt.Format("2006-01-02 15:04:05.000000000"), CanonicalHash: hash,
 		UID: present(r.UID), AnonymousID: present(r.AnonymousID), SessionID: present(r.Context.SessionID), TabID: present(r.Context.TabID), Sequence: r.Context.Sequence,
 		PageViewID: present(r.Context.PageViewID), SourcePageViewID: present(r.Context.SourcePageViewID), NavigationID: present(r.Context.NavigationID), OperationID: present(r.Context.OperationID),
 		RouteName: rawPresent(exact, "route_name"), RouteTemplate: rawPresent(exact, "route_template"), SourceModule: rawPresent(exact, "source_module"), NavigationType: present(r.Context.NavigationType), PreviousPageViewID: present(r.Context.PreviousPageViewID),
@@ -149,6 +151,9 @@ func (c *ClickHouse) Write(ctx context.Context, records []ingestion.Record) erro
 	query.Set("async_insert", "0")
 	query.Set("wait_end_of_query", "1")
 	query.Set("date_time_input_format", "best_effort")
+	// A missing operator migration must fail closed instead of silently ignoring
+	// the precision columns under a server profile that skips unknown fields.
+	query.Set("input_format_skip_unknown_fields", "0")
 	endpoint.RawQuery = query.Encode()
 	request, e := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), &body)
 	if e != nil {

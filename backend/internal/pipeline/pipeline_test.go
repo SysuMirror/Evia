@@ -62,7 +62,7 @@ func TestRecordValidationCanonicalizationAndScope(t *testing.T) {
 	if e != nil || row.CanonicalHash == conflictRow.CanonicalHash {
 		t.Fatal("different content has same identity", e)
 	}
-	if row.ReceivedAt != "2026-11-07 10:11:12.123456789" || row.EventTime != "2026-11-07 10:11:12.123" {
+	if row.ReceivedAt != "2026-11-07 10:11:12.123456789" || row.EventTime != "2026-11-07 10:11:12.123456789" {
 		t.Fatal("timestamp precision lost", row)
 	}
 	r.ContextJSON = json.RawMessage(`{"route_name":""}`)

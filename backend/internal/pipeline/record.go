@@ -67,7 +67,7 @@ func normalizeRecord(r ingestion.Record) (ingestion.Record, error) {
 	if (r.SourceKind != "browser" && r.SourceKind != "server") || !uuidPattern.MatchString(r.ProjectID) || !uuidPattern.MatchString(r.SourceID) || !uuidPattern.MatchString(r.EventID) || !eventPattern.MatchString(r.EventKey) || (r.Environment != "development" && r.Environment != "staging" && r.Environment != "production") || r.SchemaVersion < 1 || r.SchemaVersion > maxInteger || r.ReleaseRevision < 1 || r.ReleaseRevision > maxInteger {
 		return r, errInvalidRecord
 	}
-	if !validTime(r.OccurredAt) || !validTime(r.ReceivedAt) || r.ReceivedAt.Year() < 1970 || r.ReceivedAt.Year() > 2261 || utf8.RuneCountInString(r.UID) > 128 || (r.UID == "" && r.AnonymousID == "") || (r.AnonymousID != "" && !uuidPattern.MatchString(r.AnonymousID)) || r.SDKName == "" || utf8.RuneCountInString(r.SDKName) > 128 || r.SDKVersion == "" || utf8.RuneCountInString(r.SDKVersion) > 128 {
+	if !validTime(r.OccurredAt) || !validTime(r.ReceivedAt) || r.ReceivedAt.Before(time.Unix(0, 0)) || utf8.RuneCountInString(r.UID) > 128 || (r.UID == "" && r.AnonymousID == "") || (r.AnonymousID != "" && !uuidPattern.MatchString(r.AnonymousID)) || r.SDKName == "" || utf8.RuneCountInString(r.SDKName) > 128 || r.SDKVersion == "" || utf8.RuneCountInString(r.SDKVersion) > 128 {
 		return r, errInvalidRecord
 	}
 	if !utf8.ValidString(r.UID) || !utf8.ValidString(r.SDKName) || !utf8.ValidString(r.SDKVersion) || strings.ContainsRune(r.UID, 0) || strings.ContainsRune(r.SDKName, 0) || strings.ContainsRune(r.SDKVersion, 0) {
@@ -178,7 +178,13 @@ func normalizeRecord(r ingestion.Record) (ingestion.Record, error) {
 	r.ReceivedAt = r.ReceivedAt.UTC()
 	return r, nil
 }
-func validTime(t time.Time) bool { return !t.IsZero() && t.Year() >= 1900 && t.Year() <= 2299 }
+
+// DateTime64(9) stores signed nanoseconds and ClickHouse supports dates from
+// 1900-01-01 through 2262-04-11T23:47:16.854775807Z. Compare UTC instants rather
+// than local calendar years, and reject invalid queue records before sink retry.
+func validTime(t time.Time) bool {
+	return !t.IsZero() && !t.Before(time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)) && !t.After(time.Unix(0, 1<<63-1))
+}
 func canonicalHash(r ingestion.Record) (string, error) {
 	// Receipt time changes on retries; immutable event content does not.
 	r.ReceivedAt = time.Unix(0, 0).UTC()
