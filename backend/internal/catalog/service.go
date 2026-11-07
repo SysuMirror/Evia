@@ -2,17 +2,12 @@
 package catalog
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"math"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -191,63 +186,6 @@ func (s *Service) ListReleases(ctx context.Context, a, p, env, after string, lim
 	return s.store.ListReleases(ctx, a, p, env, after, limit+1)
 }
 
-// CanonicalJSON uses deterministic sorted object keys and rejects unsupported JSON
-// numbers. It is used for both request identity and immutable manifest hashes.
-func CanonicalJSON(v any) ([]byte, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	var value any
-	if err = decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	value, err = canonicalValue(value)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(value)
-}
-func canonicalValue(v any) (any, error) {
-	switch value := v.(type) {
-	case json.Number:
-		n, err := value.Float64()
-		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || math.Abs(n) > float64(MaxInteger) {
-			return nil, fmt.Errorf("number outside supported JSON range")
-		}
-		if n == 0 {
-			n = 0
-		}
-		return n, nil
-	case map[string]any:
-		for k, item := range value {
-			normalized, err := canonicalValue(item)
-			if err != nil {
-				return nil, err
-			}
-			value[k] = normalized
-		}
-		return value, nil
-	case []any:
-		for i, item := range value {
-			normalized, err := canonicalValue(item)
-			if err != nil {
-				return nil, err
-			}
-			value[i] = normalized
-		}
-		return value, nil
-	default:
-		return value, nil
-	}
-}
-func Hash(v any) (string, error) {
-	b, e := CanonicalJSON(v)
-	if e != nil {
-		return "", e
-	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
-}
+// CanonicalJSON preserves the established catalog digest representation.
+func CanonicalJSON(v any) ([]byte, error) { return canonical.JSON(v) }
+func Hash(v any) (string, error)          { return canonical.Hash(v) }
