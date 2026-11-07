@@ -40,20 +40,26 @@ func clickHouseDatabase(t *testing.T) *ClickHouse {
 	if e != nil {
 		t.Fatal(e)
 	}
-	ddl, e := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "clickhouse", "001_event_facts.sql"))
+	migrations, e := filepath.Glob(filepath.Join("..", "..", "..", "deploy", "clickhouse", "*.sql"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	lines := strings.Split(string(ddl), "\n")
-	clean := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
-			clean = append(clean, line)
+	for _, name := range migrations {
+		ddl, e := os.ReadFile(name)
+		if e != nil {
+			t.Fatal(e)
 		}
-	}
-	for _, statement := range strings.Split(strings.Join(clean, "\n"), ";") {
-		if strings.TrimSpace(statement) != "" {
-			chExec(t, client, statement)
+		lines := strings.Split(string(ddl), "\n")
+		clean := make([]string, 0, len(lines))
+		for _, line := range lines {
+			if !strings.HasPrefix(strings.TrimSpace(line), "--") {
+				clean = append(clean, line)
+			}
+		}
+		for _, statement := range strings.Split(strings.Join(clean, "\n"), ";") {
+			if strings.TrimSpace(statement) != "" {
+				chExec(t, client, statement)
+			}
 		}
 	}
 	return client
@@ -159,6 +165,7 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
 		rows[i], rows[j] = rows[j], rows[i]
 	}
+
 	seedRows(t, client, rows)
 	r := aggregateRequest(t)
 	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}, {Op: "unique", Accuracy: "exact"}, {Op: "sum", Field: property("score", "number"), Accuracy: "exact"}, {Op: "avg", Field: property("score", "number"), Accuracy: "exact"}, {Op: "min", Field: property("score", "number"), Accuracy: "exact"}, {Op: "max", Field: property("score", "number"), Accuracy: "exact"}, {Op: "p95", Field: property("score", "number"), Accuracy: "exact"}}
@@ -283,6 +290,17 @@ func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 			row["sequence"] = 100
 		}
 	}
+	preciseStart := fact("precise-start", "open", "nanosecond-subject", "device", "source-one", 30, map[string]any{"item_id": "a"})
+	preciseEnd := fact("precise-finish", "finish", "nanosecond-subject", "device", "source-one", 30, map[string]any{"item_id": "a"})
+	for index, row := range []map[string]any{preciseStart, preciseEnd} {
+		row["occurred_at_precise"] = fmt.Sprintf("2026-11-07 10:00:30.000000%d", (index+1)*100)
+		row["event_time_precise"] = row["occurred_at_precise"]
+		row["session_id"] = nil
+		row["tab_id"] = nil
+		row["sequence"] = nil
+		row["context_json"] = `{}`
+	}
+	rows = append(rows, preciseEnd, preciseStart)
 	seedRows(t, client, rows)
 	r := request(t, strings.Replace(baseRequest, `"kind":"trend"`, `"kind":"journey","subject":"uid","identity_filter":{"uid":"user-one"}`, 1))
 	timeline := execute(t, client, r)
@@ -299,7 +317,7 @@ func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 	funnel.Metrics = nil
 	funnel.Funnel = &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 30, Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, SameEntity: []EntityField{{StepIndex: 0, Field: Field{Kind: "property", Key: "item_id", EventKey: "open", SchemaVersion: 1, ResolvedType: "string"}}, {StepIndex: 1, Field: Field{Kind: "property", Key: "item_id", EventKey: "finish", SchemaVersion: 1, ResolvedType: "string"}}}}
 	result := execute(t, client, funnel)
-	if len(result.Rows) != 2 || result.Rows[0]["subjects"] != 6 || result.Rows[1]["subjects"] != 3 {
+	if len(result.Rows) != 2 || result.Rows[0]["subjects"] != 7 || result.Rows[1]["subjects"] != 4 {
 		t.Fatal("ordered/window/entity funnel mismatch", result)
 	}
 }

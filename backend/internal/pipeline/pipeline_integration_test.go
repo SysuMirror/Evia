@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +42,9 @@ func clickhouseQuery(ctx context.Context, c ClickHouseConfig, sql string) ([]byt
 	q := endpoint.Query()
 	q.Set("query", sql)
 	q.Set("wait_end_of_query", "1")
+	if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "CREATE DATABASE ") && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "DROP DATABASE ") {
+		q.Set("database", c.Database)
+	}
 	endpoint.RawQuery = q.Encode()
 	request, e := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), nil)
 	if e != nil {
@@ -101,31 +105,12 @@ func preparePipelineDependencies(t *testing.T, ctx context.Context, k KafkaConfi
 			t.Error(e)
 		}
 	})
-	migration, e := os.ReadFile("../../../deploy/clickhouse/001_event_facts.sql")
+	names, e := filepath.Glob("../../../deploy/clickhouse/*.sql")
 	if e != nil {
 		t.Fatal(e)
 	}
-	// Migration identifiers are fixed source; only a validated generated test
-	// database is qualified here. No event/user field is ever SQL text.
-	lines := strings.Split(string(migration), "\n")
-	var statements strings.Builder
-	for _, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
-			statements.WriteString(line)
-			statements.WriteByte('\n')
-		}
-	}
-	for _, statement := range strings.Split(statements.String(), ";") {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
-		}
-		statement = strings.ReplaceAll(statement, "CREATE TABLE event_facts_raw", "CREATE TABLE "+c.Database+".event_facts_raw")
-		statement = strings.ReplaceAll(statement, "CREATE VIEW event_facts AS", "CREATE VIEW "+c.Database+".event_facts AS")
-		statement = strings.ReplaceAll(statement, "FROM event_facts_raw", "FROM "+c.Database+".event_facts_raw")
-		if _, e = clickhouseQuery(ctx, c, statement); e != nil {
-			t.Fatal(e)
-		}
+	for _, name := range names {
+		applyFactMigration(t, ctx, c, name)
 	}
 	return client
 }
