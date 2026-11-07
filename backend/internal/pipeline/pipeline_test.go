@@ -243,36 +243,51 @@ func TestWorkerStopsOnMixedPollError(t *testing.T) {
 }
 
 type acknowledgedProducer struct {
-	entered, ack chan struct{}
-	enteredOnce  sync.Once
-	fail         error
-	results      kgo.ProduceResults
-	records      []*kgo.Record
-	closed       bool
+	mu          sync.Mutex
+	entered     chan struct{}
+	enteredOnce sync.Once
+	deferAcks   bool
+	fail        error
+	results     kgo.ProduceResults
+	records     []*kgo.Record
+	callbacks   []func(*kgo.Record, error)
+	closed      bool
 }
 
-func (f *acknowledgedProducer) ProduceSync(ctx context.Context, records ...*kgo.Record) kgo.ProduceResults {
-	f.records = records
+func (f *acknowledgedProducer) TryProduce(_ context.Context, record *kgo.Record, callback func(*kgo.Record, error)) {
+	f.mu.Lock()
+	index := len(f.records)
+	f.records = append(f.records, record)
+	if f.deferAcks {
+		f.callbacks = append(f.callbacks, callback)
+	}
+	deferred := f.deferAcks
+	err := f.fail
+	if index < len(f.results) {
+		err = f.results[index].Err
+	}
+	f.mu.Unlock()
 	if f.entered != nil {
 		f.enteredOnce.Do(func() { close(f.entered) })
 	}
-	if f.ack != nil {
-		select {
-		case <-f.ack:
-		case <-ctx.Done():
-			return kgo.ProduceResults{{Err: ctx.Err()}}
-		}
+	if !deferred {
+		callback(record, err)
 	}
-	if f.results != nil {
-		return f.results
+}
+func (f *acknowledgedProducer) finish(err error) {
+	f.mu.Lock()
+	callbacks := f.callbacks
+	f.callbacks = nil
+	f.mu.Unlock()
+	for _, callback := range callbacks {
+		callback(nil, err)
 	}
-	return kgo.ProduceResults{{Err: f.fail}}
 }
 func (f *acknowledgedProducer) Ping(context.Context) error  { return nil }
 func (f *acknowledgedProducer) Flush(context.Context) error { return f.fail }
 func (f *acknowledgedProducer) Close()                      { f.closed = true }
 func TestProducerWaitsForEveryDurableAcknowledgement(t *testing.T) {
-	fake := &acknowledgedProducer{entered: make(chan struct{}), ack: make(chan struct{})}
+	fake := &acknowledgedProducer{entered: make(chan struct{}), deferAcks: true}
 	producer := &KafkaProducer{client: fake, topic: "events", deadLetter: "quarantine"}
 	done := make(chan error, 1)
 	go func() { done <- producer.Publish(context.Background(), []ingestion.Record{testRecord()}) }()
@@ -282,17 +297,62 @@ func TestProducerWaitsForEveryDurableAcknowledgement(t *testing.T) {
 		t.Fatal("accepted before acknowledgement", e)
 	default:
 	}
-	close(fake.ack)
+	fake.finish(nil)
 	if e := <-done; e != nil {
 		t.Fatal(e)
 	}
 	if len(fake.records) != 1 || fake.records[0].Topic != "events" || len(fake.records[0].Key) != 32 {
 		t.Fatal("missing deterministic subject partition", fake.records)
 	}
-	fake.results = kgo.ProduceResults{{Record: fake.records[0]}, {Err: errors.New("ambiguous broker acknowledgement")}}
+	fake.deferAcks = false
+	fake.records = nil
+	fake.results = kgo.ProduceResults{{}, {Err: errors.New("ambiguous second broker acknowledgement")}}
 	if e := producer.Publish(context.Background(), []ingestion.Record{testRecord(), testRecord()}); !errors.Is(e, ErrQueueUnavailable) {
 		t.Fatal(e)
 	}
+}
+func TestProducerTimeoutRetainsBoundedOutstandingAdmission(t *testing.T) {
+	fake := &acknowledgedProducer{deferAcks: true}
+	producer := &KafkaProducer{client: fake, topic: "events", deadLetter: "quarantine", slots: make(chan struct{}, 1), publishTimeout: 5 * time.Millisecond}
+	start := time.Now()
+	if e := producer.Publish(context.Background(), []ingestion.Record{testRecord()}); !errors.Is(e, ErrQueueUnavailable) {
+		t.Fatal(e)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("caller pinned waiting for unknown broker outcome")
+	}
+	if len(producer.slots) != 1 {
+		t.Fatal("unknown pending publication released its admission slot")
+	}
+	if e := producer.Publish(context.Background(), []ingestion.Record{testRecord()}); !errors.Is(e, ErrQueueUnavailable) || len(fake.records) != 1 {
+		t.Fatal("overloaded producer admitted more work", e)
+	}
+	fake.finish(nil)
+	if len(producer.slots) != 0 {
+		t.Fatal("late acknowledgement did not free publication slot")
+	}
+	fake.deferAcks = false
+	if e := producer.Publish(context.Background(), []ingestion.Record{testRecord()}); e != nil {
+		t.Fatal("producer failed to recover after late acknowledgement", e)
+	}
+}
+func TestProducerHonorsCallerCancellationWithoutAwaitingCallbacks(t *testing.T) {
+	fake := &acknowledgedProducer{entered: make(chan struct{}), deferAcks: true}
+	producer := &KafkaProducer{client: fake, topic: "events", deadLetter: "quarantine", publishTimeout: time.Hour}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- producer.Publish(ctx, []ingestion.Record{testRecord()}) }()
+	<-fake.entered
+	cancel()
+	select {
+	case e := <-done:
+		if !errors.Is(e, ErrQueueUnavailable) {
+			t.Fatal(e)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled caller waited for unsafe idempotent record completion")
+	}
+	fake.finish(errors.New("late ambiguous error"))
 }
 func TestProducerPrevalidatesWholeBatchAndCloses(t *testing.T) {
 	fake := &acknowledgedProducer{}
