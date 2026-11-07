@@ -4,7 +4,7 @@ Evia is a self-hosted event analytics platform. Read README.md, PROGRESS.md and 
 
 ## Delivery
 
-- Complete one module vertically: contract, backend, categorized tests, frontend and integration evidence. Keep the original R1 requirements; implementation order does not reduce scope.
+- Current delivery order is backend first: contracts, domain policy, persistence, HTTP and categorized real-dependency evidence, followed by coordinated frontend delivery. Preserve the original R1 requirements; implementation order does not reduce scope.
 - Use small, cohesive commits: `type(scope): imperative description`. Explain consequential choices and actual validation in the body. Do not stage unrelated files. Never include credentials or business user data.
 - Update PROGRESS.md with evidence and remaining work. A passing unit test is not evidence of database integration, browser performance or production capacity.
 - Do not deploy to production, change repository visibility or alter account settings as part of implementation.
@@ -21,6 +21,7 @@ Evia is a self-hosted event analytics platform. Read README.md, PROGRESS.md and 
 ## Frontend
 
 - Build and reuse packages/design-system components, tokens and layouts before composing console pages. Keep state, errors, loading, empty results, keyboard access and responsive behavior complete.
+- Prefer Evia-owned React and native HTML primitives. Use a mature external UI library only for complex capabilities such as chart rendering; do not reproduce a full third-party form engine. Existing Ant Design pages remain a verified interim baseline until the planned migration.
 - Emphasize useful information, clear hierarchy and appropriate charts. Do not hide important controls or replace implemented features with decorative mock data.
 - Use the generated API client and shared error handling. Do not implement a separate wire format in each page.
 
