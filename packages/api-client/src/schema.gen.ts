@@ -734,8 +734,10 @@ export interface components {
             /** Format: date-time */
             last_seen_at?: string | null;
         };
+        /** @description schema 必须提交并整体替换；省略可选元数据保留旧值，显式空对象或数组表示清空。空字符串与省略不同。发布时必须补全触发条件、来源类型、事实类型并通过样例验证。 */
         DraftInput: {
             display_name?: string;
+            /** @description 受限的扁平属性定义：最多50个字段，仅字符串、有限安全数值、布尔值和最多20项的同类型标量数组。必须显式禁止额外属性；不支持远程引用、嵌套对象、正则和组合规则。详细限制与发布完整性由事件校验服务验证。 */
             schema: Record<string, never>;
             field_metadata?: Record<string, never>;
             trigger?: string;
@@ -765,6 +767,7 @@ export interface components {
         ReleaseInput: {
             /** @enum {string} */
             environment: "development" | "staging" | "production";
+            /** @description 比较实际已激活版本，不是最近构建版本。当前未实现激活，值为0。 */
             expected_active_revision: number;
             events: {
                 event_key: string;
@@ -777,7 +780,10 @@ export interface components {
             revision: number;
             /** @enum {string} */
             environment: "development" | "staging" | "production";
-            /** @enum {unknown} */
+            /**
+             * @description published 表示不可变定义已构建并持久保存；是否可以接收事件必须单独检查 ingestion_ready。
+             * @enum {unknown}
+             */
             state: "draft" | "validating" | "publishing" | "published" | "failed";
             ingestion_ready: boolean;
             /** @enum {unknown} */
@@ -1455,6 +1461,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -1540,6 +1555,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1636,6 +1660,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1756,6 +1789,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -1847,6 +1889,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1970,6 +2021,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -2063,6 +2123,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2183,6 +2252,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -2278,6 +2356,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2405,6 +2492,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -2521,6 +2617,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -2614,6 +2719,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2734,6 +2848,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -2829,6 +2952,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2955,6 +3087,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -3071,6 +3212,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -3165,6 +3315,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3285,6 +3444,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -3379,6 +3547,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3499,6 +3676,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -3590,6 +3776,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3690,6 +3885,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3810,6 +4014,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -3900,6 +4113,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4004,6 +4226,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -4097,6 +4328,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4220,6 +4460,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -4313,6 +4562,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4433,6 +4691,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -4522,6 +4789,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4624,6 +4900,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4747,6 +5032,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -4840,6 +5134,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4960,6 +5263,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -5049,6 +5361,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5151,6 +5472,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5274,6 +5604,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -5368,6 +5707,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5488,6 +5836,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -5578,6 +5935,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5718,6 +6084,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -5805,6 +6180,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5906,6 +6290,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6028,6 +6421,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -6122,6 +6524,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6243,6 +6654,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -6332,6 +6752,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6435,6 +6864,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6556,6 +6994,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -6652,6 +7099,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6774,6 +7230,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -6865,6 +7330,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6966,6 +7440,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7086,6 +7569,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -7183,6 +7675,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -7273,6 +7774,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7378,6 +7888,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -7472,6 +7991,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7592,6 +8120,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description 版本或幂等冲突 */
             409: {
                 headers: {
@@ -7682,6 +8219,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7782,6 +8328,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };
