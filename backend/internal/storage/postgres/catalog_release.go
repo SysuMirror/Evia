@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/jackc/pgx/v5"
@@ -17,7 +18,7 @@ type manifestEvent struct {
 	SchemaVersion      int64          `json:"schema_version"`
 	DisplayName        string         `json:"display_name"`
 	Schema             map[string]any `json:"schema"`
-	FieldMetadata      map[string]any `json:"field_metadata,omitempty"`
+	FieldMetadata      map[string]any `json:"field_metadata,omitzero"`
 	Trigger            string         `json:"trigger"`
 	AllowedSourceKinds []string       `json:"allowed_source_kinds"`
 	FactKind           string         `json:"fact_kind"`
@@ -32,7 +33,7 @@ type releaseManifest struct {
 	Events      []manifestEvent `json:"events"`
 }
 
-const releaseColumns = `r.id::text,r.revision,r.environment,r.state,d.ingestion_ready,d.acceleration_state,r.manifest_hash`
+const releaseColumns = `r.id::text,r.revision,r.environment,r.state,(d.ingestion_ready AND EXISTS (SELECT 1 FROM catalog_release_readiness rd WHERE rd.release_id=r.id AND rd.project_id=r.project_id AND rd.environment=r.environment AND rd.manifest_hash=r.manifest_hash AND rd.ready_until>clock_timestamp())),d.acceleration_state,r.manifest_hash`
 const releaseTables = `catalog_releases r JOIN catalog_release_delivery d ON d.release_id=r.id AND d.project_id=r.project_id AND d.environment=r.environment`
 
 func readRelease(ctx context.Context, tx pgx.Tx, project, id string) (catalog.Release, error) {
@@ -135,6 +136,9 @@ func (s *Store) CreateRelease(ctx context.Context, actor, project, key string, i
 	data, e := catalog.CanonicalJSON(manifest)
 	if e != nil {
 		return catalog.Release{}, e
+	}
+	if len(data) > contract.MaxReleaseBytes {
+		return catalog.Release{}, catalog.Invalid("RELEASE_MANIFEST_TOO_LARGE", "发布清单超过 16 MiB，请减少事件数量或字段说明")
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO catalog_releases(id,project_id,environment,revision,state,manifest_hash,manifest,created_by) VALUES($1,$2,$3,$4,'published',$5,$6,$7)`, r.ID, project, in.Environment, r.Revision, r.ManifestHash, data, actor); e != nil {
 		return catalog.Release{}, e
