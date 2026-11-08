@@ -2,8 +2,10 @@
 
 This source setup runs the standalone Go control API and React console. It covers
 sessions, project access and implemented project operations. Check PROGRESS.md
-for the current module evidence. Contracts for collection and analysis describe
-future work; this control-only setup does not start Kafka, Flink or ClickHouse.
+for the current module evidence. The control-only setup does not start the
+Kafka/ClickHouse pipeline, Redis admission budgets or analysis workers; use the
+[complete browser runtime](console-verification.md) to exercise the implemented
+event, release, source and analysis workspaces together. Flink remains planned.
 The separate [backend dependency profile](dependencies.md) supplies real Kafka,
 ClickHouse and Redis for module integration tests as those modules are delivered.
 
