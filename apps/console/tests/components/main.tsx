@@ -1,5 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createMemoryRouter, Link, RouterProvider, useLocation } from 'react-router-dom';
 import {
   Button,
   Checkbox,
@@ -9,8 +10,59 @@ import {
   Input,
   Select,
   Textarea,
+  Tabs,
   useToast,
 } from '@evia/design-system';
+import { DraftNavigationProvider, useDraftNavigation } from '../../src/draft-navigation';
+import { useUnsavedWork } from '../../src/use-unsaved-work';
+
+function GuardFixture() {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [leaves, setLeaves] = useState(0);
+  const navigation = useDraftNavigation();
+  const location = useLocation();
+  const { requestLeave, confirmation } = useUnsavedWork({
+    dirty: draft !== '',
+    busy,
+    onDiscard: () => setDraft(''),
+  });
+  return (
+    <>
+      <Field label="未保存内容" htmlFor="fixture-draft">
+        <Input value={draft} onChange={(event) => setDraft(event.target.value)} disabled={busy} />
+      </Field>
+      <div className="inline-actions">
+        <Button onClick={() => requestLeave(() => setLeaves((count) => count + 1))}>
+          离开编辑
+        </Button>
+        <Button onClick={() => navigation.request(() => setLeaves((count) => count + 1))}>
+          请求全局离开
+        </Button>
+        <Button onClick={() => setBusy((value) => !value)}>
+          {busy ? '完成测试操作' : '开始测试操作'}
+        </Button>
+        <Link to="/other">切换测试页面</Link>
+        <Link to="/">返回测试页面</Link>
+      </div>
+      <output aria-label="离开次数">{leaves}</output>{' '}
+      <output aria-label="测试路径">{location.pathname}</output>{' '}
+      <output aria-label="测试操作状态">{busy ? '处理中' : '空闲'}</output>
+      {confirmation}
+    </>
+  );
+}
+
+const guardRouter = createMemoryRouter([
+  {
+    path: '*',
+    element: (
+      <DraftNavigationProvider>
+        <GuardFixture />
+      </DraftNavigationProvider>
+    ),
+  },
+]);
 
 // Isolated development fixture. This HTML entry is not a product route or a build input.
 function ComponentFixture() {
@@ -25,6 +77,8 @@ function ComponentFixture() {
   const [pressed, setPressed] = useState(false);
   const [copyValue, setCopyValue] = useState('值 A');
   const [copyMounted, setCopyMounted] = useState(true);
+  const [tab, setTab] = useState('overview');
+  const [tabChanges, setTabChanges] = useState(0);
 
   return (
     <main style={{ maxWidth: 800, margin: '24px auto', padding: 24 }}>
@@ -143,6 +197,35 @@ function ComponentFixture() {
         <h2 id="toast-title">通知生命周期</h2>
         <Button onClick={() => toast.success('测试成功通知')}>显示成功通知</Button>{' '}
         <Button onClick={() => toast.error('测试错误通知')}>显示错误通知</Button>
+      </section>
+      <section aria-labelledby="tabs-title">
+        <h2 id="tabs-title">面板切换</h2>
+        <Tabs
+          label="事件内容"
+          value={tab}
+          onChange={(value) => {
+            setTab(value);
+            setTabChanges((count) => count + 1);
+          }}
+          items={[
+            { id: 'overview', label: '概览', content: <p>事件概览内容</p> },
+            { id: 'disabled', label: '停用页', content: <p>不可访问内容</p>, disabled: true },
+            {
+              id: 'properties',
+              label: '属性',
+              content: (
+                <Field label="面板备注" htmlFor="fixture-tab-note">
+                  <Input defaultValue="保留内容" />
+                </Field>
+              ),
+            },
+          ]}
+        />
+        <output aria-label="面板切换次数">{tabChanges}</output>
+      </section>
+      <section aria-labelledby="guard-title">
+        <h2 id="guard-title">未保存保护</h2>
+        <RouterProvider router={guardRouter} />
       </section>
     </main>
   );

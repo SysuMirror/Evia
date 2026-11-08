@@ -14,6 +14,7 @@ export {
 export { Alert, Badge, DesignProvider, useToast, CopyButton, type Tone } from './feedback';
 export { Modal, type ModalProps } from './modal';
 export { DataTable, type DataTableColumn, type DataTableProps } from './table';
+export { Toolbar, Panel, CodeBlock, Tabs, type TabItem } from './content';
 export {
   Brand,
   AuthLayout,
@@ -24,4 +25,5 @@ export {
   LoadingPanel,
   ErrorPanel,
   EmptyPanel,
+  type WorkspaceNavigationItem,
 } from './layouts';
