@@ -209,7 +209,7 @@ func clickHouseFailure(body []byte) error {
 	if strings.Contains(message, "TIMEOUT_EXCEEDED") || strings.Contains(message, "TOO_SLOW") {
 		return fault.New(fault.Unavailable, "QUERY_TIMEOUT", "查询超过执行时间预算")
 	}
-	if strings.Contains(message, "LIMIT_EXCEEDED") || strings.Contains(message, "TOO_MANY_ROWS_OR_BYTES") || strings.Contains(message, "MEMORY_LIMIT") {
+	if strings.Contains(message, "LIMIT_EXCEEDED") || strings.Contains(message, "TOO_MANY_ROWS_OR_BYTES") || strings.Contains(message, "TOO_MANY_BYTES") || strings.Contains(message, "TOO_MANY_ROWS") || strings.Contains(message, "MEMORY_LIMIT") {
 		return Invalid("QUERY_COST_EXCEEDED", "查询超过执行资源预算")
 	}
 	return fault.New(fault.Unavailable, "QUERY_EXECUTION_FAILED", "分析存储无法完成查询")

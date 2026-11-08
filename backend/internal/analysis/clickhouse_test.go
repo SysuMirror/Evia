@@ -7,7 +7,33 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
+
+func TestClickHouseFailureClassifiesResourceLimitsByNamedException(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, code string
+		kind             fault.Kind
+	}{
+		{"actual byte budget", "Code: 307. DB::Exception: Limit for bytes to read exceeded, max bytes: 256.00 MiB, current bytes: 256.12 MiB. (TOO_MANY_BYTES)", "QUERY_COST_EXCEEDED", fault.Invalid},
+		{"row budget", "Code: 158. DB::Exception: Limit for rows to read exceeded. (TOO_MANY_ROWS)", "QUERY_COST_EXCEEDED", fault.Invalid},
+		{"result budget", "Code: 396. DB::Exception: Result limit exceeded. (TOO_MANY_ROWS_OR_BYTES)", "QUERY_COST_EXCEEDED", fault.Invalid},
+		{"memory budget", "Code: 241. DB::Exception: Memory limit exceeded. (MEMORY_LIMIT_EXCEEDED)", "QUERY_COST_EXCEEDED", fault.Invalid},
+		{"timeout", "Code: 159. DB::Exception: Timeout exceeded. (TIMEOUT_EXCEEDED)", "QUERY_TIMEOUT", fault.Unavailable},
+		{"slow execution", "Code: 160. DB::Exception: Query is too slow. (TOO_SLOW)", "QUERY_TIMEOUT", fault.Unavailable},
+		{"unknown byte code", "Code: 307. DB::Exception: Unrecognized storage failure. (UNKNOWN_EXCEPTION)", "QUERY_EXECUTION_FAILED", fault.Unavailable},
+		{"unknown row code", "Code: 158. DB::Exception: Unrecognized storage failure. (UNKNOWN_EXCEPTION)", "QUERY_EXECUTION_FAILED", fault.Unavailable},
+		{"unknown failure", "Code: 62. DB::Exception: Invalid query. (SYNTAX_ERROR)", "QUERY_EXECUTION_FAILED", fault.Unavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problem := fault.Public(clickHouseFailure([]byte(tc.body)))
+			if problem.Code != tc.code || problem.Kind != tc.kind {
+				t.Fatal("incorrect query failure classification", problem)
+			}
+		})
+	}
+}
 
 func TestClickHouseRefusesRedirectsForDefaultAndCustomClients(t *testing.T) {
 	var disclosed atomic.Int32
