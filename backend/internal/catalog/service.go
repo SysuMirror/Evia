@@ -38,6 +38,12 @@ func text(value *string) string {
 	return *value
 }
 
+type EventVersion struct {
+	Key           string     `json:"event_key"`
+	SchemaVersion int64      `json:"schema_version"`
+	DraftRevision int64      `json:"draft_revision"`
+	Definition    DraftInput `json:"definition"`
+}
 type Draft struct {
 	Revision   int64      `json:"revision"`
 	Definition DraftInput `json:"definition"`
@@ -72,6 +78,7 @@ type Release struct {
 type Store interface {
 	CreateEvent(context.Context, string, string, EventInput) (Event, error)
 	ListEvents(context.Context, string, string, string, string, int) ([]Event, error)
+	GetEventVersion(context.Context, string, string, string, int64) (EventVersion, error)
 	GetDraft(context.Context, string, string, string) (Draft, error)
 	SaveDraft(context.Context, string, string, string, int64, DraftInput) (Draft, error)
 	ValidationDraft(context.Context, string, string, string, int64) (Draft, *DraftInput, error)
@@ -189,3 +196,13 @@ func (s *Service) ListReleases(ctx context.Context, a, p, env, after string, lim
 // CanonicalJSON preserves the established catalog digest representation.
 func CanonicalJSON(v any) ([]byte, error) { return canonical.JSON(v) }
 func Hash(v any) (string, error)          { return canonical.Hash(v) }
+
+func (s *Service) GetEventVersion(ctx context.Context, actor, project, key string, version int64) (EventVersion, error) {
+	if !keyPattern.MatchString(key) {
+		return EventVersion{}, Invalid("INVALID_EVENT_KEY", "事件标识格式不正确")
+	}
+	if version < 1 || version > MaxInteger {
+		return EventVersion{}, Invalid("INVALID_SCHEMA_VERSION", "事件版本无效")
+	}
+	return s.store.GetEventVersion(ctx, actor, project, key, version)
+}

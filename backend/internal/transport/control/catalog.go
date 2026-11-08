@@ -17,6 +17,7 @@ import (
 type CatalogService interface {
 	CreateEvent(context.Context, string, string, catalog.EventInput) (catalog.Event, error)
 	ListEvents(context.Context, string, string, string, string, int) ([]catalog.Event, error)
+	GetEventVersion(context.Context, string, string, string, int64) (catalog.EventVersion, error)
 	GetDraft(context.Context, string, string, string) (catalog.Draft, error)
 	SaveDraft(context.Context, string, string, string, int64, catalog.DraftInput) (catalog.Draft, error)
 	ValidateSample(context.Context, string, string, string, int64, map[string]any) (catalog.Validation, error)
@@ -37,6 +38,7 @@ func (a *API) registerCatalog(mux *http.ServeMux) {
 	const releases = "/api/v1/projects/{project_id}/releases"
 	mux.HandleFunc("GET "+events, a.auth(false, a.listEvents))
 	mux.HandleFunc("POST "+events, a.auth(true, a.createEvent))
+	mux.HandleFunc("GET "+events+"/{event_key}/versions/{schema_version}", a.auth(false, a.getEventVersion))
 	mux.HandleFunc("GET "+events+"/{event_key}/draft", a.auth(false, a.getDraft))
 	mux.HandleFunc("PATCH "+events+"/{event_key}/draft", a.auth(true, a.saveDraft))
 	mux.HandleFunc("POST "+events+"/{event_key}/validate", a.auth(true, a.validateSample))
@@ -308,3 +310,23 @@ func releaseWire(v catalog.Release) wire.Release {
 }
 
 var _ CatalogService = (*catalog.Service)(nil)
+
+func (a *API) getEventVersion(w http.ResponseWriter, r *http.Request, s access.Session) error {
+	project, e := a.catalogProject(r, s, false)
+	if e != nil {
+		return e
+	}
+	if _, e = catalogQuery(r, false); e != nil {
+		return e
+	}
+	value := r.PathValue("schema_version")
+	version, e := strconv.ParseInt(value, 10, 64)
+	if e != nil || version < 1 || version > catalog.MaxInteger || strconv.FormatInt(version, 10) != value {
+		return catalog.Invalid("INVALID_SCHEMA_VERSION", "事件版本必须为安全的正整数")
+	}
+	out, e := a.Catalog.GetEventVersion(r.Context(), s.UserID, project, r.PathValue("event_key"), version)
+	if e != nil {
+		return e
+	}
+	return a.Boundary.JSON(w, 200, "EventVersion", out)
+}

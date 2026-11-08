@@ -411,3 +411,46 @@ func TestCatalogDraftOptionalPresence(t *testing.T) {
 		}
 	}
 }
+
+func (f *catalogStore) GetEventVersion(_ context.Context, actor, project, key string, version int64) (catalog.EventVersion, error) {
+	return catalog.EventVersion{Key: key, SchemaVersion: version, DraftRevision: 1, Definition: catalog.DraftInput{Schema: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}}}, f.call(actor, project)
+}
+func TestGetEventVersionHTTPContractScopeAndStrictVersion(t *testing.T) {
+	const base = catalogEventsURL + "/page_opened/versions/"
+	for _, tc := range []struct {
+		name, path    string
+		err, deny     error
+		status, calls int
+	}{
+		{name: "published", path: base + "1", status: 200, calls: 1},
+		{name: "zero", path: base + "0", status: 400},
+		{name: "leading zero", path: base + "01", status: 400},
+		{name: "negative", path: base + "-1", status: 400},
+		{name: "plus", path: base + "+1", status: 400},
+		{name: "fraction", path: base + "1.5", status: 400},
+		{name: "unsafe", path: base + "9007199254740992", status: 400},
+		{name: "unknown query", path: base + "1?environment=development", status: 400},
+		{name: "missing", path: base + "1", err: fault.New(fault.NotFound, "EVENT_VERSION_NOT_FOUND", "不存在"), status: 404, calls: 1},
+		{name: "revoked", path: base + "1", err: fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "不可见"), status: 404, calls: 1},
+		{name: "forbidden", path: base + "1", deny: fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "不可见"), status: 404},
+		{name: "dependency", path: base + "1", err: errors.New("database failure"), status: 500, calls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &catalogStore{err: tc.err}
+			h, _ := catalogAPI(t, f, &catalogAccess{fakeAccess: &fakeAccess{}, deny: tc.deny})
+			out := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), tc.status)
+			if f.calls != tc.calls {
+				t.Fatal(f.calls)
+			}
+			if tc.status == 200 && (out["schema_version"] != float64(1) || out["event_key"] != "page_opened") {
+				t.Fatal(out)
+			}
+		})
+	}
+	f := &catalogStore{}
+	h, _ := catalogAPI(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	catalogStatus(t, publicConfigRequest(h, "GET", base+"1", nil), 401)
+	if f.calls != 0 {
+		t.Fatal("unauthenticated version read")
+	}
+}
