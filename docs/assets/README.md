@@ -11,7 +11,7 @@ These figures were generated with ImageGen and reviewed against the repository o
 
 - Solid module borders mean implemented, dashed borders mean planned. Text labels make status understandable without relying on color.
 - PostgreSQL owns metadata, jobs and bounded query results. Redis provides admission budgets. Kafka buffers events; the ingestion worker writes ClickHouse; the query worker reads it. Repeated database symbols represent the same storage role, not separate instances.
-- The React console currently implements login and project access pages. Existing backend APIs have broader capabilities; the figure does not imply those pages exist.
+- The control lane illustrates console access and API responsibilities. The console now also exposes event, release, source and analysis workspaces; the small access label is not an exhaustive page inventory. Consult PROGRESS.md for current feature evidence.
 - Published definitions remain immutable. Real Kafka/ClickHouse delivery verification yields a time-limited readiness lease; activation is explicit. Publishing alone does not authorize ingestion.
 - Metric versions, saved analyses, dashboard versions and the shared reporting API for users and agents are proposed. They are not implemented by adding this diagram.
 
