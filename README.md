@@ -8,7 +8,16 @@
 
 控制台进一步调整了共享组件、资源表单和分析工作台：结果前置，复杂条件独立编辑，补齐焦点、选中、错误恢复和通知交互。构建、截图和本轮复验见 [界面交互记录](docs/verification/console-experience-2026-11-08.md)。
 
-服务端新增 [分析发现基础](docs/reporting-discovery.md)：显式 `event_versions` 固定真实查询事实，提供受权能力/已发布字段目录及无执行查询校验。已通过真实 PostgreSQL/ClickHouse 与处理器测试，[本轮证据](docs/verification/reporting-foundation-2026-11-08.md) 未包含新接口的运行中 HTTP 或浏览器验收。保存分析、看板和机器令牌仍待实现。
+服务端提供 [分析发现基础](docs/reporting-discovery.md)：显式 `event_versions` 固定真实查询事实，提供受权能力/已发布字段目录及无执行查询校验。新增 [保存分析](docs/saved-analyses.md)，包含草稿、差异校验、不可变发布、历史版本与幂等运行，并接入控制台结构化编辑和多指标图表。真实 PostgreSQL/ClickHouse、公开 HTTP 验收和最终生产构建的 **32 项浏览器测试**均通过，验证范围见 [本轮记录](docs/verification/saved-analyses-2026-11-09.md)。看板布局、独立指标注册和机器令牌仍待实现。
+
+<details>
+<summary>查看保存分析界面</summary>
+
+![保存分析控制台：固定版本、执行范围、多指标分组图和完整结果表。](docs/assets/saved-analysis-desktop.png)
+
+使用合成事件，经真实 API 与查询工作进程生成结果。[移动端截图](docs/assets/saved-analysis-mobile.png) 展示相同版本和数据，表格可在自身区域横向滚动。
+
+</details>
 
 冻结快照 `8d2d9d5` 已通过真实 PostgreSQL、Redis、Kafka、ClickHouse 与独立工作进程组成的公开 HTTP 链路验收：发布、就绪、激活、接收重试、查询和来源停用均通过。自定义页面事件得到计数 **3**、精确 UID 去重数 **2**、指定 UID 行为链中的来源/事件标识对 **2**；详见 [2026-11-07 验证记录](docs/verification/backend-2026-11-07.md)。完整进度见 [PROGRESS.md](PROGRESS.md)，整个平台仍未达到生产交付条件。
 
@@ -42,9 +51,9 @@ Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲
 
 发布定义保存后先等待交付验证：带项目、环境和版本范围的探针经过真实 Kafka 写入及 ClickHouse 回读，形成有期限的就绪租约；随后通过显式版本比较和幂等键激活。`ingestion_ready` 按有效租约派生，租约过期会失去就绪资格。公开配置先验证来源与发布资格，再处理 ETag。千万用户仍是架构目标，尚未进行对应硬件、流量分布和故障条件下的容量验证。
 
-![Evia 版本化分析模型：现有事件定义经过草稿、校验、不可变发布、管道验证和显式激活；规划中的指标版本、保存分析和看板版本依赖已发布事件字段，控制台与 Agent 共用报告 API。](docs/assets/versioned-analytics-model.png)
+![Evia 版本化分析模型：事件定义经过发布、管道验证和显式激活；保存分析固定已发布事件版本，经校验和不可变发布后绑定时间与时区，使用共享查询任务执行。独立指标注册、看板布局和机器身份仍在规划中。](docs/assets/versioned-analytics-model.png)
 
-图 2，事件发布流程与规划中的分析依赖。事件发布不等于允许接收；本轮已实现查询版本选择与发现/校验接口；指标、保存分析、看板及其配置 API 仍待实现，版本固定与显式升级规则见 [自定义看板方案](docs/plans/custom-dashboards.md)。两图由 ImageGen 生成并按仓库现状校对，[维护说明](docs/assets/README.md) 记录了语义来源。
+图 2，事件与保存分析的版本流程。事件发布不等于允许接收；分析校验不执行查询，运行时显式选择不可变版本、时间范围和时区。看板与机器身份的后续设计见 [自定义看板方案](docs/plans/custom-dashboards.md)。两图由 ImageGen 生成并按仓库现状校对，[维护说明](docs/assets/README.md) 记录了语义来源。
 
 ## 仓库布局
 
@@ -60,7 +69,7 @@ Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲
 
 控制台采用 Evia 自建 React/原生 HTML 组件，Ant Design 及其依赖已移除。共享组件覆盖键盘和鼠标状态、表单校验、焦点恢复、弹窗、通知、Tab 与未保存内容保护。专业趋势和漏斗图按需加载 ECharts，并提供对应结果表；普通页面不会加载图表渲染模块。此前基础组件迁移的体积比较见 [前端验证记录](docs/verification/native-ui-2026-11-07.md)，不能将该比例当作新增业务功能后的总体体积结论。
 
-自定义指标、保存分析、看板配置及供 coding agent 使用的同一套公开 API 已形成 [设计方案](docs/plans/custom-dashboards.md)。目前实现了会话认证的发现/校验基础与真实查询版本选择，保存配置、看板协调和机器认证运行时尚未实现。浏览器 SDK、`sys.*` 内置事件运行时注册、身份关系图、成员管理、数据生命周期、报表看板导出及公开接入 skills/CLI 仍待交付。现有分析工作区不等于可保存、布局和发布的自定义看板；`sys.*` 当前保留契约样例，页面事件计数使用显式发布的自定义事件。
+自定义指标、看板配置及供 coding agent 使用的同一套公开 API 已形成 [设计方案](docs/plans/custom-dashboards.md)。目前实现会话认证的发现、校验、保存分析与版本运行，独立指标注册、看板协调和机器认证运行时尚未实现。浏览器 SDK、`sys.*` 内置事件运行时注册、身份关系图、成员管理、数据生命周期、看板导出及公开接入 skills/CLI 仍待交付。保存单个分析不等于可布局的自定义看板；`sys.*` 当前保留契约样例，页面事件计数使用显式发布的自定义事件。
 
 ## 工程规范
 
