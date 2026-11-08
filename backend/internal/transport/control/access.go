@@ -22,6 +22,7 @@ type AccessService interface {
 	Logout(context.Context, access.Session) error
 	CreateProject(context.Context, string, string, string) (access.Project, error)
 	ListProjects(context.Context, string, string, int) ([]access.Project, error)
+	GetProject(context.Context, string, string) (access.Project, error)
 	Authorize(context.Context, string, string, bool) error
 }
 type API struct {
@@ -46,6 +47,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/session", a.auth(true, a.logout))
 	mux.HandleFunc("GET /api/v1/projects", a.auth(false, a.listProjects))
 	mux.HandleFunc("POST /api/v1/projects", a.auth(true, a.createProject))
+	mux.HandleFunc("GET /api/v1/projects/{project_id}", a.auth(false, a.getProject))
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
@@ -197,3 +199,18 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request, s access.Sess
 }
 
 func NormalizeOrigin(origin string) string { return strings.TrimSuffix(origin, "/") }
+
+func (a *API) getProject(w http.ResponseWriter, r *http.Request, s access.Session) error {
+	projectID := r.PathValue("project_id")
+	if !catalogUUID.MatchString(projectID) {
+		return fault.New(fault.Invalid, "INVALID_PROJECT_ID", "项目标识格式不正确")
+	}
+	if _, e := catalogQuery(r, false); e != nil {
+		return e
+	}
+	project, e := a.Access.GetProject(r.Context(), s.UserID, projectID)
+	if e != nil {
+		return e
+	}
+	return a.Boundary.JSON(w, 200, "Project", projectWire(project))
+}

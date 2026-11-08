@@ -27,6 +27,9 @@ type fakeAccess struct {
 	loggedOut         bool
 	projects          []access.Project
 	authErr, loginErr error
+	projectErr        error
+	projectCalls      int
+	project           access.Project
 	loginCalls        int
 	prior             *access.Session
 }
@@ -198,5 +201,52 @@ func TestPaginationAndStructuredRoutingErrors(t *testing.T) {
 		} else if body["request_id"] == nil {
 			t.Fatal("unstructured failure", body)
 		}
+	}
+}
+
+func (f *fakeAccess) GetProject(_ context.Context, actor, project string) (access.Project, error) {
+	f.projectCalls++
+	if actor != userID || project != projectID {
+		return access.Project{}, errors.New("incorrect project scope")
+	}
+	return f.project, f.projectErr
+}
+func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
+	const base = "/api/v1/projects/" + projectID
+	for _, tc := range []struct {
+		name, path, role string
+		err              error
+		status, calls    int
+	}{
+		{name: "owner", path: base, role: "owner", status: 200, calls: 1},
+		{name: "viewer", path: base, role: "viewer", status: 200, calls: 1},
+		{name: "invalid id", path: "/api/v1/projects/invalid", status: 400},
+		{name: "unknown query", path: base + "?cursor=abc", status: 400},
+		{name: "malformed query", path: base + "?invalid=%zz", status: 400},
+		{name: "invisible", path: base, err: fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "不可见"), status: 404, calls: 1},
+		{name: "dependency", path: base, err: errors.New("private database failure"), status: 500, calls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeAccess{project: access.Project{ID: projectID, Name: "Example", Timezone: "UTC", Role: tc.role}, projectErr: tc.err}
+			out := catalogStatus(t, catalogRequest(api(t, f), "GET", tc.path, "", nil), tc.status)
+			if f.projectCalls != tc.calls {
+				t.Fatal("wrong read count", f.projectCalls)
+			}
+			if tc.status == 200 {
+				permissions := out["permissions"].([]any)
+				expected := 1
+				if tc.role == "owner" {
+					expected = 2
+				}
+				if len(permissions) != expected || out["id"] != projectID {
+					t.Fatal(out)
+				}
+			}
+		})
+	}
+	f := &fakeAccess{}
+	catalogStatus(t, publicConfigRequest(api(t, f), "GET", base, nil), 401)
+	if f.projectCalls != 0 {
+		t.Fatal("unauthenticated project read")
 	}
 }
