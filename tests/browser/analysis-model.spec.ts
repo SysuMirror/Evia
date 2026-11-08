@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import {
   buildRequest,
+  AnalysisValidationError,
+  validateAnalysisSection,
   initialForm,
   metricLabel,
   publishedFields,
@@ -61,6 +63,29 @@ test('analysis count and explicit page-event PV preserve event scope and UV sema
   input.subject = 'uid';
   input.accuracy = 'exact';
   expect(buildRequest(input, 'production').metrics).toEqual([{ op: 'unique', accuracy: 'exact' }]);
+});
+
+test('analysis validation identifies the editable section without unrelated errors blocking it', () => {
+  const input = form();
+  input.mode = 'journey';
+  input.subject = 'anonymous';
+  input.identity = 'not-a-uuid';
+  expect(() => validateAnalysisSection(input, 'range')).not.toThrow();
+  expect(() => buildRequest(input, 'development')).toThrow(AnalysisValidationError);
+  try {
+    buildRequest(input, 'development');
+  } catch (error) {
+    expect(error).toMatchObject({ target: 'identity' });
+  }
+  input.to = input.from;
+  expect(() => validateAnalysisSection(input, 'range')).toThrow('开始早于结束');
+  expect(() => validateAnalysisSection(input, 'settings')).not.toThrow();
+  input.limit = '501';
+  expect(() => validateAnalysisSection(input, 'settings')).toThrow('结果行数');
+  input.filters = [{ id: 1, field: 'uid', op: 'in', value: '[' }];
+  expect(() => validateAnalysisSection(input, 'filters')).toThrow('JSON 数组');
+  input.steps = [{ event: 'page_opened', version: '1' }];
+  expect(() => validateAnalysisSection(input, 'funnel')).toThrow();
 });
 
 test('analysis typed filters preserve empty strings, zero, false and JSON arrays without coercion', () => {

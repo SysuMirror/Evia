@@ -76,6 +76,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
   const origins = useRef(new Map<number, HTMLElement | null>());
   const pendingOrigins = useRef(new Set<number>());
   const focusedToast = useRef<number | null>(null);
+  const hoveredToast = useRef<number | null>(null);
   const dismiss = useCallback((id: number) => {
     const restore = elements.current.get(id)?.contains(document.activeElement);
     const origin = origins.current.get(id);
@@ -92,7 +93,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
   }, []);
   const add = useCallback((tone: Toast['tone'], message: string) => {
     const id = ++nextID.current;
-    const protectedID = focusedToast.current;
+    const protectedIDs = new Set([focusedToast.current, hoveredToast.current]);
     origins.current.set(
       id,
       document.activeElement instanceof HTMLElement ? document.activeElement : null,
@@ -101,7 +102,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
     setToasts((current) => {
       const next = [...current, { id, tone, message }];
       while (next.length > 5) {
-        const index = next.findIndex((toast) => toast.id !== protectedID);
+        const index = next.findIndex((toast) => !protectedIDs.has(toast.id));
         next.splice(index, 1);
       }
       return next;
@@ -182,6 +183,12 @@ export function DesignProvider({ children }: { children: ReactNode }) {
             }}
             onFocusCapture={() => {
               focusedToast.current = toast.id;
+            }}
+            onPointerEnter={() => {
+              hoveredToast.current = toast.id;
+            }}
+            onPointerLeave={() => {
+              if (hoveredToast.current === toast.id) hoveredToast.current = null;
             }}
             onBlurCapture={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget)) focusedToast.current = null;

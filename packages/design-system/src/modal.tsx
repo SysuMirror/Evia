@@ -5,6 +5,7 @@ const dialogs: HTMLDialogElement[] = [];
 interface ClosingDialog {
   dialog: HTMLDialogElement;
   target: HTMLElement | null;
+  fallback: HTMLElement | null;
   afterClose?: () => void;
 }
 const closing = new Map<HTMLDialogElement, ClosingDialog>();
@@ -13,19 +14,40 @@ let restorationFrame: number | undefined;
 function restoreAfterClose(entry: ClosingDialog) {
   closing.set(entry.dialog, entry);
   if (restorationFrame !== undefined) return;
+  // Closing is asynchronous in React. A new pointer/key action or window blur owns
+  // focus from this point onward, even when it leaves document.body active.
+  let interrupted = false;
+  const relinquish = () => {
+    interrupted = true;
+  };
+  document.addEventListener('pointerdown', relinquish, true);
+  document.addEventListener('keydown', relinquish, true);
+  window.addEventListener('blur', relinquish);
   restorationFrame = requestAnimationFrame(() => {
     restorationFrame = undefined;
+    document.removeEventListener('pointerdown', relinquish, true);
+    document.removeEventListener('keydown', relinquish, true);
+    window.removeEventListener('blur', relinquish);
     const entries = [...closing.values()];
     closing.clear();
     const top = dialogs.at(-1);
+    const active = document.activeElement;
+    const hasNewTarget =
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active !== document.documentElement &&
+      active.isConnected &&
+      !active.closest('dialog:not([open]), [inert]') &&
+      !entries.some((item) => item.dialog.contains(active));
     const target = entries
-      .map((item) => item.target)
+      .flatMap((item) => [item.target, item.fallback])
       .find((candidate) => {
         if (!candidate?.isConnected || candidate.closest('dialog:not([open])')) return false;
         if (top && !top.contains(candidate)) return false;
         return candidate.getClientRects().length > 0 && !candidate.matches(':disabled');
       });
-    target?.focus({ preventScroll: true });
+    if (!interrupted && !hasNewTarget && document.hasFocus())
+      target?.focus({ preventScroll: true });
     entries.forEach((item) => item.afterClose?.());
   });
 }
@@ -53,6 +75,8 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const fallbackRef = useRef<HTMLElement | null>(null);
+  const backdropPointer = useRef<number | null>(null);
   const callbacks = useRef({ onRequestClose, afterClose, busy, initialFocusRef });
   callbacks.current = { onRequestClose, afterClose, busy, initialFocusRef };
   const titleID = useId();
@@ -66,6 +90,8 @@ export function Modal({
     triggerRef.current =
       interrupted?.target ??
       (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    fallbackRef.current =
+      interrupted?.fallback ?? triggerRef.current?.closest<HTMLElement>('dialog, main') ?? null;
     dialog.showModal();
     dialogs.push(dialog);
     const initial = callbacks.current.initialFocusRef?.current;
@@ -80,6 +106,7 @@ export function Modal({
       restoreAfterClose({
         dialog,
         target: triggerRef.current,
+        fallback: fallbackRef.current,
         afterClose: callbacks.current.afterClose,
       });
     };
@@ -92,6 +119,36 @@ export function Modal({
       aria-labelledby={titleID}
       aria-busy={busy || undefined}
       tabIndex={-1}
+      onPointerDown={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        backdropPointer.current =
+          event.target === event.currentTarget &&
+          (event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom)
+            ? event.pointerId
+            : null;
+      }}
+      onPointerCancel={() => {
+        backdropPointer.current = null;
+      }}
+      onPointerUp={(event) => {
+        const beganOnBackdrop = backdropPointer.current === event.pointerId;
+        backdropPointer.current = null;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (
+          beganOnBackdrop &&
+          event.target === event.currentTarget &&
+          (event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom) &&
+          !callbacks.current.busy &&
+          dialogs.at(-1) === event.currentTarget
+        )
+          callbacks.current.onRequestClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         if (!callbacks.current.busy && dialogs.at(-1) === dialogRef.current)
