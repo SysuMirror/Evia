@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "../../.test-output/api-client"
+  },
+  "include": ["src/index.test.ts"]
+}

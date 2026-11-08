@@ -45,6 +45,7 @@ query-test:
 web-check:
 	$(PNPM) format:check
 	$(PNPM) typecheck
+	$(PNPM) test:client
 	$(PNPM) build
 
 browser-test:
