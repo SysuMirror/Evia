@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, type Project, type ProjectInput, type Session } from '@evia/api-client';
 import {
@@ -27,6 +27,7 @@ const zoneSet = new Set(zones);
 
 export function ProjectsPage({ session }: { session: Session }) {
   const cache = useQueryClient();
+  const navigate = useNavigate();
   const toast = useToast();
   const { register } = useDraftNavigation();
   const [cursors, setCursors] = useState<string[]>([]);
@@ -140,6 +141,16 @@ export function ProjectsPage({ session }: { session: Session }) {
         <Badge tone={project.permissions.includes('project.write') ? 'info' : 'neutral'}>
           {project.permissions.includes('project.write') ? '可编辑' : '只读'}
         </Badge>
+      ),
+    },
+    {
+      header: '操作',
+      key: 'actions',
+      width: 140,
+      render: (project) => (
+        <Button variant="link" onClick={() => void navigate(`/projects/${project.id}/events`)}>
+          进入项目
+        </Button>
       ),
     },
   ];
@@ -331,7 +342,19 @@ export function ProjectsPage({ session }: { session: Session }) {
         title="项目详情"
         open={!!selected}
         onRequestClose={() => setSelected(undefined)}
-        footer={<Button onClick={() => setSelected(undefined)}>完成</Button>}
+        footer={
+          <>
+            <Button onClick={() => setSelected(undefined)}>完成</Button>
+            {selected && (
+              <Button
+                variant="primary"
+                onClick={() => void navigate(`/projects/${selected.id}/events`)}
+              >
+                进入项目
+              </Button>
+            )}
+          </>
+        }
       >
         {selected && (
           <dl className="project-details">
@@ -352,12 +375,6 @@ export function ProjectsPage({ session }: { session: Session }) {
             <div>
               <dt>我的权限</dt>
               <dd>{selected.permissions.includes('project.write') ? '可编辑项目' : '只读'}</dd>
-            </div>
-            <div>
-              <dt>事件接入</dt>
-              <dd>
-                {selected.capabilities.length ? selected.capabilities.join('、') : '尚未启用'}
-              </dd>
             </div>
           </dl>
         )}
