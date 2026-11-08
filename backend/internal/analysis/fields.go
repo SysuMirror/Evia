@@ -1,6 +1,9 @@
 package analysis
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // WalkFields visits every field reference, including nested step predicates.
 func WalkFields(r *Request, visit func(*Field) error) error {
@@ -171,13 +174,24 @@ func compatibleScalar(kind string, value any) error {
 		kind = "number"
 	}
 	if kind == "datetime" {
-		if actual != "string" {
-			return Invalid("INVALID_FILTER_TYPE", "时间过滤值必须为 RFC3339 字符串")
-		}
-		return nil
+		_, e := parseDatetime(value)
+		return e
 	}
 	if kind != actual {
 		return Invalid("INVALID_FILTER_TYPE", "过滤值与字段类型不匹配")
 	}
 	return nil
+}
+
+// parseDatetime keeps resolved-field validation and parameter binding identical.
+func parseDatetime(value any) (time.Time, error) {
+	text, ok := value.(string)
+	if !ok {
+		return time.Time{}, Invalid("INVALID_FILTER_TYPE", "时间过滤值必须为 RFC3339 字符串")
+	}
+	parsed, e := time.Parse(time.RFC3339Nano, text)
+	if e != nil {
+		return time.Time{}, Invalid("INVALID_FILTER_TYPE", "时间过滤值必须为 RFC3339 字符串")
+	}
+	return parsed, nil
 }
