@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { verifySavedAnalysisWorkflow } from './saved-analysis-workflow';
 
 // Credential responses must never enter automatic trace or screenshot artifacts.
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
@@ -14,7 +15,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
     process.env.EVIA_E2E_FULL_STACK !== '1',
     'Requires EVIA_E2E_FULL_STACK=1 and real API, ingest/query workers, PostgreSQL, Kafka, ClickHouse and Redis.',
   );
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   page.setDefaultTimeout(12_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -23,7 +24,8 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await mkdir(evidence, { recursive: true });
   async function screenshot(name: string) {
     const notifications = page.getByRole('button', { name: '关闭通知', exact: true });
-    while (await notifications.count()) await notifications.first().click();
+    while ((await notifications.count()) && !(await page.getByRole('dialog').count()))
+      await notifications.first().click();
     await page.screenshot({ path: join(evidence, name), fullPage: true });
   }
   await page.goto('/projects');
@@ -267,6 +269,19 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('uv');
   await query();
   await expect(page.locator('.metric-value')).toHaveText('2');
+  await verifySavedAnalysisWorkflow(page, screenshot);
+  await page.getByRole('link', { name: '数据分析', exact: true }).click();
+  await page.getByLabel('事件（跨已发布版本）').selectOption('browser_action');
+  await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('uv');
+  await page.getByRole('button', { name: '时间范围', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '时间范围', exact: true })
+    .getByLabel('结束时间（UTC，不含）')
+    .fill(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
+  await page
+    .getByRole('dialog', { name: '时间范围', exact: true })
+    .getByRole('button', { name: '完成', exact: true })
+    .click();
   await page.getByRole('tab', { name: '趋势', exact: true }).click();
   await query();
   await expect(page.getByRole('img', { name: /UV.*完整数值/ })).toBeVisible();
