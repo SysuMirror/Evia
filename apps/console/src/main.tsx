@@ -6,7 +6,9 @@ import {
   Route,
   RouterProvider,
   Routes,
+  useMatch,
   useNavigate,
+  useSearchParams,
 } from 'react-router-dom';
 import {
   MutationCache,
@@ -17,7 +19,15 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { api, ApiError, type Session } from '@evia/api-client';
+import {
+  api,
+  ApiError,
+  subscribeUnauthorized,
+  subscribeProjectAccessDenied,
+  type Environment,
+  type Project,
+  type Session,
+} from '@evia/api-client';
 import {
   AuthLayout,
   Button,
@@ -26,12 +36,30 @@ import {
   Field,
   Input,
   LoadingPanel,
+  Select,
   WorkspaceShell,
 } from '@evia/design-system';
 import { DraftNavigationProvider, useDraftNavigation } from './draft-navigation';
 const ProjectsPage = lazy(() =>
   import('./projects').then((module) => ({ default: module.ProjectsPage })),
 );
+const CatalogPage = lazy(() =>
+  import('./catalog').then((module) => ({ default: module.CatalogPage })),
+);
+const ReleasesPage = lazy(() =>
+  import('./releases').then((module) => ({ default: module.ReleasesPage })),
+);
+const SourcesPage = lazy(() =>
+  import('./sources').then((module) => ({ default: module.SourcesPage })),
+);
+const AnalysisPage = lazy(() =>
+  import('./analysis').then((module) => ({ default: module.AnalysisPage })),
+);
+const environments = [
+  { value: 'development', label: '开发环境' },
+  { value: 'staging', label: '预发环境' },
+  { value: 'production', label: '生产环境' },
+];
 
 const expire = (error: Error) => {
   if (error instanceof ApiError && error.status === 401) {
@@ -43,6 +71,19 @@ const client = new QueryClient({
   queryCache: new QueryCache({ onError: expire }),
   mutationCache: new MutationCache({ onError: expire }),
   defaultOptions: { queries: { retry: false, staleTime: 30_000 }, mutations: { retry: false } },
+});
+subscribeUnauthorized(() => {
+  client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
+  client.setQueryData(['session'], null);
+});
+subscribeProjectAccessDenied((projectID) => {
+  client.removeQueries({
+    predicate: (query) => query.queryKey[0] !== 'project' && query.queryKey.includes(projectID),
+  });
+  // Hide the current workspace immediately. A user-initiated reload rechecks access
+  // without recursively retrying a project read that itself denied authorization.
+  client.setQueryData(['project', projectID], null);
+  void client.invalidateQueries({ queryKey: ['projects'], refetchType: 'none' });
 });
 
 function Failure({ error, retry }: { error: Error; retry?: () => void }) {
@@ -130,6 +171,30 @@ function Workspace({ session }: { session: Session }) {
   const [logoutError, setLogoutError] = useState<Error>();
   const navigation = useDraftNavigation();
   const navigate = useNavigate();
+  const match = useMatch('/projects/:projectID/*');
+  const projectID = match?.params.projectID;
+  const [parameters, setParameters] = useSearchParams();
+  const rawEnvironment = parameters.get('environment') ?? 'development';
+  const validEnvironment = environments.some((item) => item.value === rawEnvironment);
+  const environment = (validEnvironment ? rawEnvironment : 'development') as Environment;
+  const project = useQuery<Project | null>({
+    queryKey: ['project', projectID],
+    queryFn: ({ signal }) => api.getProject(projectID!, signal),
+    enabled: !!projectID,
+  });
+  const sections = [
+    { path: 'events', label: '事件管理', component: CatalogPage },
+    { path: 'releases', label: '发布管理', component: ReleasesPage },
+    { path: 'sources', label: '接入来源', component: SourcesPage },
+    { path: 'analysis', label: '数据分析', component: AnalysisPage },
+  ];
+  const navigationItems = projectID
+    ? sections.map((section) => ({
+        href: `/projects/${encodeURIComponent(projectID)}/${section.path}?environment=${environment}`,
+        label: section.label,
+        active: match?.params['*'] === section.path,
+      }))
+    : undefined;
   const logout = useMutation({
     mutationFn: () => api.logout(session.csrf_token),
     onSuccess: () => {
@@ -143,6 +208,34 @@ function Workspace({ session }: { session: Session }) {
       account={session.display_name}
       busy={logout.isPending}
       onNavigate={(href) => void navigate(href)}
+      navigation={navigationItems}
+      projectContext={
+        projectID ? (
+          <div className="console-form">
+            <Button
+              variant="link"
+              onClick={() => navigation.request(() => void navigate('/projects'))}
+            >
+              返回项目列表
+            </Button>
+            <strong style={{ overflowWrap: 'anywhere' }}>
+              {project.data?.name ?? '项目工作区'}
+            </strong>
+            <Field label="当前环境" htmlFor="workspace-environment">
+              <Select
+                id="workspace-environment"
+                value={environment}
+                options={environments}
+                disabled={logout.isPending}
+                onChange={(event) => {
+                  const nextEnvironment = event.target.value;
+                  navigation.request(() => setParameters({ environment: nextEnvironment }));
+                }}
+              />
+            </Field>
+          </div>
+        ) : undefined
+      }
       onLogout={() =>
         navigation.request(() => {
           setLogoutError(undefined);
@@ -158,6 +251,37 @@ function Workspace({ session }: { session: Session }) {
       <Suspense fallback={<LoadingPanel />}>
         <Routes>
           <Route path="/projects" element={<ProjectsPage session={session} />} />
+          {sections.map(({ path, component: Page }) => (
+            <Route
+              key={path}
+              path={`/projects/:projectID/${path}`}
+              element={
+                !validEnvironment ? (
+                  <ErrorPanel message="环境参数无效，请选择当前环境。" />
+                ) : project.isPending ? (
+                  <LoadingPanel label="正在加载项目" />
+                ) : project.isError ? (
+                  <Failure error={project.error} retry={() => void project.refetch()} />
+                ) : project.data ? (
+                  <Page
+                    key={`${projectID}:${environment}:${[...project.data.permissions].sort().join(',')}`}
+                    project={project.data}
+                    session={session}
+                    environment={environment}
+                  />
+                ) : (
+                  <ErrorPanel
+                    message="项目权限已变化，请重新加载项目。"
+                    retry={() => void project.refetch()}
+                  />
+                )
+              }
+            />
+          ))}
+          <Route
+            path="/projects/:projectID"
+            element={<Navigate to={`events?environment=${environment}`} replace />}
+          />
           <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/login" element={<Navigate to="/projects" replace />} />
           <Route
