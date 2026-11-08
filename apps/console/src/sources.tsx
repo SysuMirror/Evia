@@ -451,7 +451,6 @@ function SourcesWorkspace({
           {pollRound >= 10
             ? '自动检查已暂停，接收器可能尚未观察到配置。可手动刷新继续检查。'
             : '正在检查配置缓存状态。'}
-          {applicationHelp}
         </p>
       )}
 
