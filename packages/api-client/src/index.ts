@@ -27,8 +27,24 @@ export type CredentialRotation = components['schemas']['CredentialRotation'];
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
 export type QueryResult = components['schemas']['query-result.schema'];
+export type SavedAnalysisTemplate = components['schemas']['SavedAnalysisTemplate'];
+export type SavedAnalysisDefinition = components['schemas']['SavedAnalysisDefinition'];
+export type SavedAnalysis = components['schemas']['SavedAnalysis'];
+export type SavedAnalysisDraft = components['schemas']['SavedAnalysisDraft'];
+export type SavedAnalysisVersion = components['schemas']['SavedAnalysisVersion'];
+export type SavedAnalysisValidation = components['schemas']['SavedAnalysisValidation'];
+export type SavedAnalysisCreate = components['schemas']['SavedAnalysisCreate'];
+export type SavedAnalysisUpdate = components['schemas']['SavedAnalysisUpdate'];
+export type SavedAnalysisValidate = components['schemas']['SavedAnalysisValidate'];
+export type SavedAnalysisPublish = components['schemas']['SavedAnalysisPublish'];
+export type SavedAnalysisExecute = components['schemas']['SavedAnalysisExecute'];
+export type SavedAnalysisList = components['schemas']['SavedAnalysisList'];
+export type SavedAnalysisVersionList = components['schemas']['SavedAnalysisVersionList'];
+export type SavedAnalysisChange = components['schemas']['SavedAnalysisChange'];
 export type Environment = Release['environment'];
 export type CatalogPage = { environment?: Environment; cursor?: string; limit?: number };
+export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
+export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -133,6 +149,8 @@ async function request<T>(
 const projectPath = (projectID: string) => `/api/v1/projects/${encodeURIComponent(projectID)}`;
 const eventPath = (projectID: string, eventKey: string) =>
   `${projectPath(projectID)}/event-definitions/${encodeURIComponent(eventKey)}`;
+const savedAnalysisPath = (projectID: string, analysisID: string) =>
+  `${projectPath(projectID)}/saved-analyses/${encodeURIComponent(analysisID)}`;
 function catalogQuery(page: CatalogPage): string {
   const query = new URLSearchParams();
   if (page.environment !== undefined) query.set('environment', page.environment);
@@ -259,6 +277,110 @@ export const api = {
         method: 'POST',
         body,
         csrf,
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  listSavedAnalyses: (projectID: string, page: SavedAnalysisPage, signal?: AbortSignal) =>
+    request<SavedAnalysisList>(`${projectPath(projectID)}/saved-analyses${catalogQuery(page)}`, {
+      signal,
+    }),
+  createSavedAnalysis: (
+    projectID: string,
+    body: SavedAnalysisCreate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisDraft>(`${projectPath(projectID)}/saved-analyses`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getSavedAnalysis: (projectID: string, analysisID: string, signal?: AbortSignal) =>
+    request<SavedAnalysis>(savedAnalysisPath(projectID, analysisID), { signal }),
+  getSavedAnalysisDraft: (projectID: string, analysisID: string, signal?: AbortSignal) =>
+    request<SavedAnalysisDraft>(`${savedAnalysisPath(projectID, analysisID)}/draft`, { signal }),
+  updateSavedAnalysisDraft: (
+    projectID: string,
+    analysisID: string,
+    revision: number,
+    body: SavedAnalysisUpdate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisDraft>(`${savedAnalysisPath(projectID, analysisID)}/draft`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"` },
+    }),
+  validateSavedAnalysis: (
+    projectID: string,
+    analysisID: string,
+    body: SavedAnalysisValidate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisValidation>(`${savedAnalysisPath(projectID, analysisID)}/validations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  listSavedAnalysisVersions: (
+    projectID: string,
+    analysisID: string,
+    page: SavedAnalysisVersionPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisVersionList>(
+      `${savedAnalysisPath(projectID, analysisID)}/versions${catalogQuery(page)}`,
+      { signal },
+    ),
+  publishSavedAnalysis: (
+    projectID: string,
+    analysisID: string,
+    body: SavedAnalysisPublish,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisVersion>(`${savedAnalysisPath(projectID, analysisID)}/versions`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getSavedAnalysisVersion: (
+    projectID: string,
+    analysisID: string,
+    version: number,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysisVersion>(
+      `${savedAnalysisPath(projectID, analysisID)}/versions/${encodeURIComponent(String(version))}`,
+      { signal },
+    ),
+  executeSavedAnalysisVersion: (
+    projectID: string,
+    analysisID: string,
+    version: number,
+    body: SavedAnalysisExecute,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<QueryJob>(
+      `${savedAnalysisPath(projectID, analysisID)}/versions/${encodeURIComponent(String(version))}/queries`,
+      {
+        method: 'POST',
+        body,
+        csrf,
+        signal,
         headers: { 'Idempotency-Key': idempotencyKey },
       },
     ),

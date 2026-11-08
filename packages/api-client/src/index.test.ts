@@ -246,3 +246,165 @@ test('empty success responses do not attempt JSON decoding', async () => {
   mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }));
   assert.equal(await api.logout('csrf'), undefined);
 });
+
+test('saved analysis reads encode resource scope, cursors, versions and preserve cancellation', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listSavedAnalyses(
+    'p/q',
+    { environment: 'development', cursor: 'a+/=', limit: 3 },
+    controller.signal,
+  );
+  await api.getSavedAnalysis('p/q', 'a/b', controller.signal);
+  await api.getSavedAnalysisDraft('p/q', 'a/b', controller.signal);
+  await api.listSavedAnalysisVersions(
+    'p/q',
+    'a/b',
+    { cursor: 'v+/=', limit: 2 },
+    controller.signal,
+  );
+  await api.getSavedAnalysisVersion('p/q', 'a/b', 7, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=development&cursor=a%2B%2F%3D&limit=3',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/draft',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/versions?cursor=v%2B%2F%3D&limit=2',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/versions/7',
+    ],
+  );
+  controller.abort();
+  for (const call of fetch.mock.calls) {
+    const init = call.arguments[1] as RequestInit;
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.signal?.aborted, true);
+  }
+});
+
+const savedDefinition = {
+  title: 'Daily opens',
+  description: '',
+  query: {
+    kind: 'trend',
+    event_versions: [{ event_key: 'page_opened', schema_version: 1 }],
+    metrics: [{ op: 'count' }],
+  },
+  visualization: { kind: 'metric' },
+} as const;
+
+// Typed request fixtures exercise client transport; no mocked response proves
+// publication, durable idempotency or query execution.
+test('saved analysis writes preserve body, revisions, CSRF, idempotency and cancellation', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const definition = {
+    ...savedDefinition,
+    query: {
+      ...savedDefinition.query,
+      event_versions: [...savedDefinition.query.event_versions],
+      metrics: [...savedDefinition.query.metrics],
+    },
+  };
+  const create = { environment: 'development' as const, definition };
+  const validation = { draft_revision: 4, expected_published_version: 2 };
+  const publication = { ...validation, validation_hash: 'a'.repeat(64) };
+  const execution = {
+    time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' },
+    timezone: 'UTC',
+  };
+  await api.createSavedAnalysis('p/q', create, 'create-key', 'csrf', controller.signal);
+  await api.updateSavedAnalysisDraft('p/q', 'a/b', 4, { definition }, 'csrf', controller.signal);
+  await api.validateSavedAnalysis('p/q', 'a/b', validation, 'csrf', controller.signal);
+  await api.publishSavedAnalysis(
+    'p/q',
+    'a/b',
+    publication,
+    'publish-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.executeSavedAnalysisVersion(
+    'p/q',
+    'a/b',
+    2,
+    execution,
+    'execute-key',
+    'csrf',
+    controller.signal,
+  );
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/saved-analyses',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/draft',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/validations',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/versions',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/versions/2/queries',
+    ],
+  );
+  const bodies = [create, { definition }, validation, publication, execution];
+  const keys = ['create-key', null, null, 'publish-key', 'execute-key'];
+  controller.abort();
+  fetch.mock.calls.forEach((call, index) => {
+    const init = call.arguments[1] as RequestInit;
+    const headers = init.headers as Headers;
+    assert.equal(init.method, index === 1 ? 'PATCH' : 'POST');
+    assert.equal(headers.get('X-CSRF-Token'), 'csrf');
+    assert.equal(headers.get('Idempotency-Key'), keys[index]);
+    assert.equal(headers.get('If-Match'), index === 1 ? '"4"' : null);
+    assert.deepEqual(JSON.parse(init.body as string), bodies[index]);
+    assert.equal(init.signal?.aborted, true);
+  });
+});
+
+test('saved analysis requests reuse safe errors, project denial signals and explicit cancellation', async () => {
+  let denied = '';
+  const unsubscribe = subscribeProjectAccessDenied((projectID) => {
+    denied = projectID;
+  });
+  try {
+    respond(403, {
+      code: 'PROJECT_FORBIDDEN',
+      message: '无权访问',
+      details: { field_paths: ['/project_id'] },
+    });
+    await assert.rejects(api.getSavedAnalysisDraft('p/q', 'analysis'), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.code, 'PROJECT_FORBIDDEN');
+      assert.equal(error.requestID, 'request-1');
+      assert.deepEqual(error.details?.field_paths, ['/project_id']);
+      assert.equal(denied, 'p/q');
+      return true;
+    });
+    mock.restoreAll();
+    respond(409, { code: 'SAVED_ANALYSIS_REVISION_CONFLICT', message: '草稿已更新' });
+    await assert.rejects(
+      api.validateSavedAnalysis(
+        'p',
+        'a',
+        { draft_revision: 1, expected_published_version: 0 },
+        'csrf',
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.status, 409);
+        assert.equal(error.code, 'SAVED_ANALYSIS_REVISION_CONFLICT');
+        return true;
+      },
+    );
+    mock.restoreAll();
+    const controller = new AbortController();
+    const canceled = new DOMException('Canceled', 'AbortError');
+    controller.abort();
+    mock.method(globalThis, 'fetch', async () => {
+      throw canceled;
+    });
+    await assert.rejects(
+      api.getSavedAnalysisVersion('p', 'a', 1, controller.signal),
+      (error) => error === canceled,
+    );
+  } finally {
+    unsubscribe();
+  }
+});
