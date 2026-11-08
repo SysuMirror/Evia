@@ -149,3 +149,26 @@ func TestProjectPolicyAndAuthorization(t *testing.T) {
 	f.roleErr = errors.New("database unavailable")
 	code(t, s.Authorize(ctx, "u", p.ID, false), "INTERNAL_ERROR")
 }
+
+func (f *fakeStore) GetProject(context.Context, string, string) (Project, error) {
+	return f.project, f.roleErr
+}
+func TestGetProjectValidatesAndHidesMissingMembership(t *testing.T) {
+	const project = "22222222-2222-4222-8222-222222222222"
+	f := &fakeStore{project: Project{ID: project, Role: "viewer"}}
+	s := &Service{store: f}
+	got, e := s.GetProject(context.Background(), "actor", project)
+	if e != nil || got != f.project {
+		t.Fatal(got, e)
+	}
+	_, e = s.GetProject(context.Background(), "actor", "malformed")
+	code(t, e, "INVALID_PROJECT_ID")
+	f.roleErr = ErrMissing
+	_, e = s.GetProject(context.Background(), "actor", project)
+	code(t, e, "PROJECT_NOT_FOUND")
+	f.roleErr = errors.New("database failed")
+	_, e = s.GetProject(context.Background(), "actor", project)
+	if e != f.roleErr {
+		t.Fatal(e)
+	}
+}
