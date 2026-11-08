@@ -24,6 +24,10 @@ type fakeDelivery struct {
 	current int64
 }
 
+func (f *fakeDelivery) GetActivation(_ context.Context, _, _, environment string) (delivery.Activation, error) {
+	f.calls++
+	return delivery.Activation{Environment: environment, ActiveReleaseRevision: f.current}, f.err
+}
 func (f *fakeDelivery) Activate(context.Context, string, string, string, delivery.ActivationInput) (delivery.Activation, error) {
 	f.calls++
 	return delivery.Activation{Environment: "development", ActiveReleaseRevision: 1}, f.err
@@ -162,5 +166,45 @@ func TestPublicConfigStrictQueryHeadersAndPreflight(t *testing.T) {
 	var result map[string]any
 	if e := json.Unmarshal(w.Body.Bytes(), &result); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestGetActivationHTTPStrictQueryVisibilityAndZeroRevision(t *testing.T) {
+	const base = "/api/v1/projects/" + projectID + "/release-activations"
+	for _, tc := range []struct {
+		name, path    string
+		revision      int64
+		err           error
+		status, calls int
+	}{
+		{name: "never activated", path: base + "?environment=development", status: 200, calls: 1},
+		{name: "active", path: base + "?environment=production", revision: 9, status: 200, calls: 1},
+		{name: "missing environment", path: base, status: 400},
+		{name: "invalid environment", path: base + "?environment=test", status: 400},
+		{name: "empty environment", path: base + "?environment=", status: 400},
+		{name: "duplicate", path: base + "?environment=development&environment=production", status: 400},
+		{name: "unknown", path: base + "?environment=development&limit=1", status: 400},
+		{name: "malformed", path: base + "?environment=%zz", status: 400},
+		{name: "semicolon", path: base + "?environment=development;x=y", status: 400},
+		{name: "oversized", path: base + "?environment=" + strings.Repeat("a", 2048), status: 400},
+		{name: "invalid project", path: "/api/v1/projects/invalid/release-activations?environment=development", status: 400},
+		{name: "invisible", path: base + "?environment=development", err: fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "不可见"), status: 404, calls: 1},
+		{name: "dependency failure", path: base + "?environment=development", err: io.ErrUnexpectedEOF, status: 500, calls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeDelivery{current: tc.revision, err: tc.err}
+			out := catalogStatus(t, catalogRequest(deliveryAPI(t, f), "GET", tc.path, "", nil), tc.status)
+			if f.calls != tc.calls {
+				t.Fatal("unexpected persistence calls", f.calls)
+			}
+			if tc.status == 200 && out["active_release_revision"] != float64(tc.revision) {
+				t.Fatal(out)
+			}
+		})
+	}
+	f := &fakeDelivery{}
+	catalogStatus(t, publicConfigRequest(deliveryAPI(t, f), "GET", base+"?environment=development", nil), 401)
+	if f.calls != 0 {
+		t.Fatal("unauthenticated activation read")
 	}
 }

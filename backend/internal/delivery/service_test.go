@@ -291,3 +291,27 @@ func TestManifestValidationSingleFlightBoundsConcurrentMisses(t *testing.T) {
 		t.Fatal("duplicate validation work", v.calls.Load())
 	}
 }
+
+func (s *memoryStore) GetActivation(_ context.Context, _, _, environment string) (Activation, error) {
+	return Activation{Environment: environment, ActiveReleaseRevision: s.candidate.Revision}, s.prepareErr
+}
+func TestGetActivationValidatesScopeAndPreservesPersistenceErrors(t *testing.T) {
+	store := &memoryStore{}
+	s := newTestService(t, store, probeFunc(successfulProbe))
+	out, e := s.GetActivation(context.Background(), "actor", testProject, "development")
+	if e != nil || out.Environment != "development" || out.ActiveReleaseRevision != 0 {
+		t.Fatal(out, e)
+	}
+	for _, scope := range [][2]string{{"invalid", "development"}, {testProject, ""}, {testProject, "other"}} {
+		_, e = s.GetActivation(context.Background(), "actor", scope[0], scope[1])
+		code(t, e, "INVALID_ACTIVATION")
+	}
+	store.prepareErr = fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "不可见")
+	_, e = s.GetActivation(context.Background(), "actor", testProject, "production")
+	code(t, e, "PROJECT_NOT_FOUND")
+	store.prepareErr = errors.New("dependency failed")
+	_, e = s.GetActivation(context.Background(), "actor", testProject, "production")
+	if e != store.prepareErr {
+		t.Fatal(e)
+	}
+}
