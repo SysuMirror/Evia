@@ -70,6 +70,7 @@ type Snapshot = {
   scope: string;
   request: QueryRequest;
   name: string;
+  semanticMetric?: AnalysisForm['metric'];
   job: QueryJob;
   result?: QueryResult;
   started: number;
@@ -332,6 +333,12 @@ export function AnalysisPage({
     let request: QueryRequest;
     try {
       request = buildRequest(form, environment);
+      if (
+        (form.mode === 'metrics' || form.mode === 'trend') &&
+        form.metric === 'pv' &&
+        !events.some((event) => event.event_key === form.event)
+      )
+        throw new Error('请选择代表页面访问的已发布事件，再统计 PV。');
     } catch (failure) {
       reportFailure(failure);
       formRef.current?.querySelector<HTMLElement>('input:invalid,select:invalid')?.focus();
@@ -350,6 +357,7 @@ export function AnalysisPage({
       if (controller.signal.aborted || generation.current !== epoch) return;
       setSnapshot({
         scope,
+        semanticMetric: form.mode === 'metrics' || form.mode === 'trend' ? form.metric : undefined,
         request,
         name: modes.find((mode) => mode.id === form.mode)!.label,
         job,
@@ -430,7 +438,7 @@ export function AnalysisPage({
       key: column.key,
       header:
         column.key === 'metric_0'
-          ? metricLabel(snapshot!.request)
+          ? metricLabel(snapshot!.request, snapshot!.semanticMetric)
           : ({
               bucket: '时间',
               event_key: '事件',
@@ -528,25 +536,13 @@ export function AnalysisPage({
                     <div className="field-grid">
                       <Field label="事件（跨已发布版本）">
                         <Select
-                          value={
-                            form.metric === 'pv' &&
-                            (form.mode === 'metrics' || form.mode === 'trend')
-                              ? 'sys.page_view'
-                              : form.event
-                          }
-                          disabled={
+                          value={form.event}
+                          required={
                             (form.mode === 'metrics' || form.mode === 'trend') &&
                             form.metric === 'pv'
                           }
                           onChange={(event) => patch('event', event.target.value)}
-                          options={
-                            eventOptions.some((item) => item.value === 'sys.page_view')
-                              ? eventOptions
-                              : [
-                                  ...eventOptions,
-                                  { value: 'sys.page_view', label: '页面访问 (sys.page_view)' },
-                                ]
-                          }
+                          options={eventOptions}
                         />
                       </Field>
                       {(form.mode === 'metrics' || form.mode === 'trend') && (
@@ -558,7 +554,7 @@ export function AnalysisPage({
                             }
                             options={[
                               { value: 'count', label: '事件数' },
-                              { value: 'pv', label: 'PV（sys.page_view 事件数）' },
+                              { value: 'pv', label: 'PV（所选页面访问事件数）' },
                               { value: 'uv', label: 'UV（去重主体数）' },
                             ]}
                           />
@@ -580,6 +576,11 @@ export function AnalysisPage({
                         </Field>
                       )}
                     </div>
+                  )}
+                  {(form.mode === 'metrics' || form.mode === 'trend') && form.metric === 'pv' && (
+                    <p className="field-help">
+                      选择代表页面访问的已发布事件，按该事件的发生次数统计 PV。
+                    </p>
                   )}
                   {(form.mode === 'journey' ||
                     form.mode === 'funnel' ||
@@ -775,227 +776,234 @@ export function AnalysisPage({
                   )}
                 </>
               )}
-              <Panel
-                title="过滤条件"
-                action={
-                  <Button
-                    disabled={form.filters.length >= 20}
-                    onClick={() => {
-                      patch('filters', [
-                        ...form.filters,
-                        { id: filterID, field: 'event_key', op: 'eq', value: '' },
-                      ]);
-                      setFilterID((id) => id + 1);
-                    }}
-                  >
-                    添加条件
-                  </Button>
-                }
-              >
-                <div className="field-grid">
-                  <Field label="添加属性字段的事件">
-                    <Select
-                      value={propertyEvent}
-                      onChange={(event) => {
-                        const key = event.target.value;
-                        setPropertyEvent(key);
-                        setPropertyVersion(
-                          String(
-                            events
-                              .find((item) => item.event_key === key)
-                              ?.published_versions.at(-1) ?? '',
-                          ),
-                        );
-                      }}
-                      options={[{ value: '', label: '仅系统字段' }, ...eventOptions.slice(1)]}
-                    />
-                  </Field>
-                  {propertyEvent && (
-                    <Field label="属性所属已发布版本">
+              <details>
+                <summary>过滤条件（{form.filters.length}）</summary>
+                <div className="section-stack">
+                  <Toolbar
+                    actions={
+                      <Button
+                        disabled={form.filters.length >= 20}
+                        onClick={() => {
+                          patch('filters', [
+                            ...form.filters,
+                            { id: filterID, field: 'event_key', op: 'eq', value: '' },
+                          ]);
+                          setFilterID((id) => id + 1);
+                        }}
+                      >
+                        添加条件
+                      </Button>
+                    }
+                  />
+                  <div className="field-grid">
+                    <Field label="添加属性字段的事件">
                       <Select
-                        value={propertyVersion}
-                        onChange={(event) => setPropertyVersion(event.target.value)}
+                        value={propertyEvent}
+                        onChange={(event) => {
+                          const key = event.target.value;
+                          setPropertyEvent(key);
+                          setPropertyVersion(
+                            String(
+                              events
+                                .find((item) => item.event_key === key)
+                                ?.published_versions.at(-1) ?? '',
+                            ),
+                          );
+                        }}
+                        options={[{ value: '', label: '仅系统字段' }, ...eventOptions.slice(1)]}
+                      />
+                    </Field>
+                    {propertyEvent && (
+                      <Field label="属性所属已发布版本">
+                        <Select
+                          value={propertyVersion}
+                          onChange={(event) => setPropertyVersion(event.target.value)}
+                          options={[
+                            { value: '', label: '选择版本' },
+                            ...(
+                              events.find((item) => item.event_key === propertyEvent)
+                                ?.published_versions ?? []
+                            ).map((value) => ({ value: String(value), label: `v${value}` })),
+                          ]}
+                        />
+                      </Field>
+                    )}
+                  </div>
+                  {propertyEvent && version.isFetching && (
+                    <LoadingPanel label="正在读取已发布属性类型" />
+                  )}
+                  {propertyEvent && version.isError && (
+                    <ErrorPanel
+                      message={version.error.message}
+                      retry={() => void version.refetch()}
+                    />
+                  )}
+                  {propertyEvent && version.data && !propertyFields.length && (
+                    <p className="field-help">此版本没有可查询的属性字段。</p>
+                  )}
+                  <p className="field-help">
+                    属性类型来自所选不可变版本，字段只匹配该事件及版本。存在包含显式
+                    null，缺失不包含 null。
+                  </p>
+                  {form.filters.length > 1 && (
+                    <Field label="条件关系">
+                      <Select
+                        value={form.filterJoin}
+                        onChange={(event) =>
+                          patch('filterJoin', event.target.value as 'and' | 'or')
+                        }
                         options={[
-                          { value: '', label: '选择版本' },
-                          ...(
-                            events.find((item) => item.event_key === propertyEvent)
-                              ?.published_versions ?? []
-                          ).map((value) => ({ value: String(value), label: `v${value}` })),
+                          { value: 'and', label: '全部满足' },
+                          { value: 'or', label: '任一满足' },
                         ]}
                       />
                     </Field>
                   )}
-                </div>
-                {propertyEvent && version.isFetching && (
-                  <LoadingPanel label="正在读取已发布属性类型" />
-                )}
-                {propertyEvent && version.isError && (
-                  <ErrorPanel
-                    message={version.error.message}
-                    retry={() => void version.refetch()}
-                  />
-                )}
-                {propertyEvent && version.data && !propertyFields.length && (
-                  <p className="field-help">此版本没有可查询的属性字段。</p>
-                )}
-                <p className="field-help">
-                  属性类型来自所选不可变版本，字段只匹配该事件及版本。存在包含显式 null，缺失不包含
-                  null。
-                </p>
-                {form.filters.length > 1 && (
-                  <Field label="条件关系">
-                    <Select
-                      value={form.filterJoin}
-                      onChange={(event) => patch('filterJoin', event.target.value as 'and' | 'or')}
-                      options={[
-                        { value: 'and', label: '全部满足' },
-                        { value: 'or', label: '任一满足' },
-                      ]}
-                    />
-                  </Field>
-                )}
-                {!form.filters.length && <p className="field-help">未添加过滤条件。</p>}
-                <div className="editor-list">
-                  {form.filters.map((filter, index) => (
-                    <div className="editor-row" key={filter.id}>
-                      <Field label={`条件 ${index + 1} 字段`}>
-                        <Select
-                          value={filter.field}
-                          onChange={(event) =>
-                            patch(
-                              'filters',
-                              form.filters.map((item) =>
-                                item.id === filter.id
-                                  ? {
-                                      ...item,
-                                      field: event.target.value,
-                                      property: filterFields.find(
-                                        (field) => field.id === event.target.value,
-                                      ),
-                                      op: 'eq',
-                                      value: '',
-                                    }
-                                  : item,
-                              ),
-                            )
-                          }
-                          options={[
-                            ...systemFields.map((field) => ({
-                              value: field.key,
-                              label: `${field.label} (${field.type})`,
-                            })),
-                            ...filterFields.map((field) => ({
-                              value: field.id,
-                              label: field.label,
-                            })),
-                          ]}
-                        />
-                      </Field>
-                      <Field label={`条件 ${index + 1} 运算`}>
-                        <Select
-                          value={filter.op}
-                          onChange={(event) =>
-                            patch(
-                              'filters',
-                              form.filters.map((item) =>
-                                item.id === filter.id ? { ...item, op: event.target.value } : item,
-                              ),
-                            )
-                          }
-                          options={fieldOperators(filter.field, filter.property?.type).map(
-                            (op) => ({ value: op, label: operators[op] ?? op }),
-                          )}
-                        />
-                      </Field>
-                      {filter.op !== 'is_missing' && filter.op !== 'is_present' && (
-                        <Field
-                          label={`条件 ${index + 1} 值${filter.op === 'in' || (filter.property?.type.startsWith('array:') && filter.op !== 'contains') ? '（JSON 数组，最多 20 项）' : filter.field === 'event_time' ? '（RFC3339，含时区）' : ''}`}
-                        >
-                          {filter.op === 'in' ||
-                          (filter.property?.type.startsWith('array:') &&
-                            filter.op !== 'contains') ? (
-                            <Textarea
-                              placeholder='例如 []、["value"]、[1, 2]'
-                              value={filter.value}
-                              onChange={(event) =>
-                                patch(
-                                  'filters',
-                                  form.filters.map((item) =>
-                                    item.id === filter.id
-                                      ? { ...item, value: event.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                            />
-                          ) : filter.property?.type === 'boolean' ||
-                            filter.property?.type === 'array:boolean' ? (
-                            <Select
-                              required
-                              value={filter.value}
-                              onChange={(event) =>
-                                patch(
-                                  'filters',
-                                  form.filters.map((item) =>
-                                    item.id === filter.id
-                                      ? { ...item, value: event.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              options={[
-                                { value: '', label: '选择布尔值' },
-                                { value: 'true', label: 'true' },
-                                { value: 'false', label: 'false' },
-                              ]}
-                            />
-                          ) : (
-                            <Input
-                              required={
-                                filter.field === 'event_time' ||
-                                (!!filter.property && !filter.property.type.endsWith('string'))
-                              }
-                              type={
-                                filter.property?.type === 'number' ||
-                                filter.property?.type === 'integer' ||
-                                filter.property?.type === 'array:number' ||
-                                filter.property?.type === 'array:integer'
-                                  ? 'number'
-                                  : 'text'
-                              }
-                              step={filter.property?.type.includes('integer') ? '1' : 'any'}
-                              maxLength={1024}
-                              value={filter.value}
-                              onChange={(event) =>
-                                patch(
-                                  'filters',
-                                  form.filters.map((item) =>
-                                    item.id === filter.id
-                                      ? { ...item, value: event.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                            />
-                          )}
+                  {!form.filters.length && <p className="field-help">未添加过滤条件。</p>}
+                  <div className="editor-list">
+                    {form.filters.map((filter, index) => (
+                      <div className="editor-row" key={filter.id}>
+                        <Field label={`条件 ${index + 1} 字段`}>
+                          <Select
+                            value={filter.field}
+                            onChange={(event) =>
+                              patch(
+                                'filters',
+                                form.filters.map((item) =>
+                                  item.id === filter.id
+                                    ? {
+                                        ...item,
+                                        field: event.target.value,
+                                        property: filterFields.find(
+                                          (field) => field.id === event.target.value,
+                                        ),
+                                        op: 'eq',
+                                        value: '',
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            options={[
+                              ...systemFields.map((field) => ({
+                                value: field.key,
+                                label: `${field.label} (${field.type})`,
+                              })),
+                              ...filterFields.map((field) => ({
+                                value: field.id,
+                                label: field.label,
+                              })),
+                            ]}
+                          />
                         </Field>
-                      )}
-                      <Button
-                        size="small"
-                        aria-label={`删除条件 ${index + 1}`}
-                        onClick={() =>
-                          patch(
-                            'filters',
-                            form.filters.filter((item) => item.id !== filter.id),
-                          )
-                        }
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  ))}
+                        <Field label={`条件 ${index + 1} 运算`}>
+                          <Select
+                            value={filter.op}
+                            onChange={(event) =>
+                              patch(
+                                'filters',
+                                form.filters.map((item) =>
+                                  item.id === filter.id
+                                    ? { ...item, op: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            options={fieldOperators(filter.field, filter.property?.type).map(
+                              (op) => ({ value: op, label: operators[op] ?? op }),
+                            )}
+                          />
+                        </Field>
+                        {filter.op !== 'is_missing' && filter.op !== 'is_present' && (
+                          <Field
+                            label={`条件 ${index + 1} 值${filter.op === 'in' || (filter.property?.type.startsWith('array:') && filter.op !== 'contains') ? '（JSON 数组，最多 20 项）' : filter.field === 'event_time' ? '（RFC3339，含时区）' : ''}`}
+                          >
+                            {filter.op === 'in' ||
+                            (filter.property?.type.startsWith('array:') &&
+                              filter.op !== 'contains') ? (
+                              <Textarea
+                                placeholder='例如 []、["value"]、[1, 2]'
+                                value={filter.value}
+                                onChange={(event) =>
+                                  patch(
+                                    'filters',
+                                    form.filters.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, value: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            ) : filter.property?.type === 'boolean' ||
+                              filter.property?.type === 'array:boolean' ? (
+                              <Select
+                                required
+                                value={filter.value}
+                                onChange={(event) =>
+                                  patch(
+                                    'filters',
+                                    form.filters.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, value: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                options={[
+                                  { value: '', label: '选择布尔值' },
+                                  { value: 'true', label: 'true' },
+                                  { value: 'false', label: 'false' },
+                                ]}
+                              />
+                            ) : (
+                              <Input
+                                required={
+                                  filter.field === 'event_time' ||
+                                  (!!filter.property && !filter.property.type.endsWith('string'))
+                                }
+                                type={
+                                  filter.property?.type === 'number' ||
+                                  filter.property?.type === 'integer' ||
+                                  filter.property?.type === 'array:number' ||
+                                  filter.property?.type === 'array:integer'
+                                    ? 'number'
+                                    : 'text'
+                                }
+                                step={filter.property?.type.includes('integer') ? '1' : 'any'}
+                                maxLength={1024}
+                                value={filter.value}
+                                onChange={(event) =>
+                                  patch(
+                                    'filters',
+                                    form.filters.map((item) =>
+                                      item.id === filter.id
+                                        ? { ...item, value: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            )}
+                          </Field>
+                        )}
+                        <Button
+                          size="small"
+                          aria-label={`删除条件 ${index + 1}`}
+                          onClick={() =>
+                            patch(
+                              'filters',
+                              form.filters.filter((item) => item.id !== filter.id),
+                            )
+                          }
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </Panel>
+              </details>
               {blockedDetails && (
                 <p role="status">
                   事件明细和用户旅程需要项目编辑权限，当前可使用指标、趋势和漏斗。
@@ -1066,7 +1074,9 @@ export function AnalysisPage({
                 <div className="query-summary">
                   <strong>
                     {snapshot.name}
-                    {snapshot.request.kind === 'trend' ? `，${metricLabel(snapshot.request)}` : ''}
+                    {snapshot.request.kind === 'trend'
+                      ? `，${metricLabel(snapshot.request, snapshot.semanticMetric)}`
+                      : ''}
                   </strong>
                   <span>
                     {formatTime(snapshot.request.time_range.from, snapshot.request.timezone)} 至{' '}
@@ -1081,6 +1091,28 @@ export function AnalysisPage({
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
                   </span>
+                  {result && (
+                    <div className="inline-actions">
+                      <Badge
+                        tone={result.metadata.accuracy === 'approximate' ? 'warning' : 'neutral'}
+                      >
+                        {result.metadata.accuracy === 'exact'
+                          ? '精确'
+                          : result.metadata.accuracy === 'approximate'
+                            ? '近似'
+                            : '明细'}
+                      </Badge>
+                      <Badge
+                        tone={result.metadata.coverage.state === 'settled' ? 'success' : 'neutral'}
+                      >
+                        {
+                          { provisional: '覆盖暂定', settled: '覆盖已稳定', partial: '部分覆盖' }[
+                            result.metadata.coverage.state
+                          ]
+                        }
+                      </Badge>
+                    </div>
+                  )}
                   {dirty && <span>上方条件已修改，下方仍对应这次提交的查询。</span>}
                 </div>
                 <details>
@@ -1090,14 +1122,14 @@ export function AnalysisPage({
                     {JSON.stringify(snapshot.request, null, 2)}
                   </CodeBlock>
                 </details>
-                <div role="status" aria-live="polite">
-                  {notice ||
-                    (observing
-                      ? snapshot.job.state === 'succeeded'
+                {(notice || observing) && (
+                  <div role="status" aria-live="polite">
+                    {notice ||
+                      (snapshot.job.state === 'succeeded'
                         ? '正在获取结果。'
-                        : '按服务端间隔检查查询状态。'
-                      : '')}
-                </div>
+                        : '按服务端间隔检查查询状态。')}
+                  </div>
+                )}
                 {activeJob(snapshot.job) && !observing && (
                   <Button
                     onClick={() => {
@@ -1126,60 +1158,12 @@ export function AnalysisPage({
                 )}
                 {result && (
                   <>
-                    <dl className="detail-list">
-                      <dt>精度</dt>
-                      <dd>
-                        {result.metadata.accuracy === 'exact'
-                          ? '精确'
-                          : result.metadata.accuracy === 'approximate'
-                            ? '近似'
-                            : '不适用'}
-                        ，采样率 {(result.metadata.sample_rate * 100).toLocaleString('zh-CN')}%
-                      </dd>
-                      <dt>覆盖状态</dt>
-                      <dd>
-                        {
-                          { provisional: '暂定', settled: '已稳定', partial: '部分覆盖' }[
-                            result.metadata.coverage.state
-                          ]
-                        }
-                        ，
-                        {formatTime(
-                          result.metadata.coverage.time_range.from,
-                          snapshot.request.timezone,
-                        )}{' '}
-                        至{' '}
-                        {formatTime(
-                          result.metadata.coverage.time_range.to,
-                          snapshot.request.timezone,
-                        )}
-                        （不含）
-                      </dd>
-                      <dt>已知缺口</dt>
-                      <dd>
-                        {result.metadata.coverage.known_gaps.length
-                          ? result.metadata.coverage.known_gaps.join('、')
-                          : '未报告'}
-                      </dd>
-                      <dt>实际观察到的最晚接收时间</dt>
-                      <dd>
-                        {result.metadata.data_watermark
-                          ? formatTime(result.metadata.data_watermark, snapshot.request.timezone)
-                          : '无观测数据'}
-                        ，不代表数据已完整到达
-                      </dd>
-                      <dt>生成时间</dt>
-                      <dd>
-                        {formatTime(result.metadata.generated_at, snapshot.request.timezone)}，
-                        {result.metadata.cache_hit ? '命中缓存' : '未命中缓存'}
-                      </dd>
-                    </dl>
                     {snapshot.request.kind === 'trend' &&
                       !snapshot.request.interval &&
                       rows.length > 0 && (
                         <div className="metric-grid">
                           <div>
-                            <span>{metricLabel(snapshot.request)}</span>
+                            <span>{metricLabel(snapshot.request, snapshot.semanticMetric)}</span>
                             <div className="metric-value">
                               {cell(rows[0]!.metric_0, 'number', snapshot.request.timezone)}
                             </div>
@@ -1195,7 +1179,7 @@ export function AnalysisPage({
                           label={
                             snapshot.request.kind === 'funnel'
                               ? '到达主体数'
-                              : metricLabel(snapshot.request)
+                              : metricLabel(snapshot.request, snapshot.semanticMetric)
                           }
                           timezone={snapshot.request.timezone}
                           steps={snapshot.request.funnel?.steps.map(
@@ -1222,6 +1206,79 @@ export function AnalysisPage({
                       返回 {rows.length} 行，上限 {snapshot.request.limit}{' '}
                       行。超出预算会明确失败，此版本不支持结果翻页。
                     </p>
+                    <details>
+                      <summary>精度与覆盖详情</summary>
+                      <dl className="detail-list">
+                        <div>
+                          <dt>精度</dt>
+                          <dd>
+                            {result.metadata.accuracy === 'exact'
+                              ? '精确'
+                              : result.metadata.accuracy === 'approximate'
+                                ? '近似'
+                                : '不适用'}
+                            ，采样率 {(result.metadata.sample_rate * 100).toLocaleString('zh-CN')}%
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>覆盖状态</dt>
+                          <dd>
+                            {
+                              { provisional: '暂定', settled: '已稳定', partial: '部分覆盖' }[
+                                result.metadata.coverage.state
+                              ]
+                            }
+                            ，
+                            {formatTime(
+                              result.metadata.coverage.time_range.from,
+                              snapshot.request.timezone,
+                            )}{' '}
+                            至{' '}
+                            {formatTime(
+                              result.metadata.coverage.time_range.to,
+                              snapshot.request.timezone,
+                            )}
+                            （不含）
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>已知缺口</dt>
+                          <dd>
+                            {result.metadata.coverage.known_gaps.length
+                              ? result.metadata.coverage.known_gaps
+                                  .map(
+                                    (gap) =>
+                                      ({
+                                        pipeline_completeness_not_established:
+                                          '尚未确认接入链路完整性',
+                                        identity_resolution_not_applied: '未应用身份关联',
+                                      })[gap] ?? `未识别的覆盖提示（${gap}）`,
+                                  )
+                                  .join('、')
+                              : '未报告'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>实际观察到的最晚接收时间</dt>
+                          <dd>
+                            {result.metadata.data_watermark
+                              ? formatTime(
+                                  result.metadata.data_watermark,
+                                  snapshot.request.timezone,
+                                )
+                              : '无观测数据'}
+                            ，不代表数据已完整到达
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>生成时间</dt>
+                          <dd>
+                            {formatTime(result.metadata.generated_at, snapshot.request.timezone)}，
+                            {result.metadata.cache_hit ? '命中缓存' : '未命中缓存'}
+                          </dd>
+                        </div>
+                      </dl>
+                    </details>
                   </>
                 )}
               </div>
