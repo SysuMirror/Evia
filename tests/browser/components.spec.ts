@@ -147,17 +147,16 @@ test('buttons forward native events and show keyboard focus and held press feedb
     await page.mouse.up();
   }
   const toggle = page.getByRole('button', { name: '切换选择' });
+  const toggleBackground = () => toggle.evaluate((node) => getComputedStyle(node).backgroundColor);
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  const unselectedAppearance = await toggleBackground();
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  const selectedAppearance = await toggle.evaluate(
-    (node) => getComputedStyle(node).backgroundColor,
-  );
+  // Even reduced motion has a nonzero transition; observe the rendered state.
+  await expect.poll(toggleBackground).not.toBe(unselectedAppearance);
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(await toggle.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
-    selectedAppearance,
-  );
+  await expect.poll(toggleBackground).toBe(unselectedAppearance);
 });
 
 declare global {
@@ -487,4 +486,113 @@ test('notification overflow preserves a hovered or focused message', async ({ pa
   await expect(notice.getByRole('button', { name: '关闭通知' })).toBeFocused();
   await expect(notice).toBeVisible();
   await expect(page.locator('.evia-toast')).toHaveCount(5);
+});
+
+test('saved charts retain every metric, distinguish categories, and render gaps, time bounds and actual bars', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const fixture = page.getByRole('region', { name: '保存分析图表组件' });
+  const chart = fixture.getByRole('img');
+  const read = async () => {
+    await fixture.getByRole('button', { name: '读取图表状态' }).click();
+    await expect(fixture.getByLabel('图表实际配置')).not.toHaveText('');
+    return JSON.parse((await fixture.getByLabel('图表实际配置').textContent()) || '{}') as {
+      series: {
+        type: string;
+        name: string;
+        data: unknown[];
+        connectNulls: boolean;
+        yAxisIndex?: number;
+      }[];
+      xAxis: { type: string; min?: number; max?: number; data?: string[] }[];
+      yAxis: { name?: string; min?: number; data?: string[]; inverse?: boolean }[];
+      legend: { data: string[] }[];
+    };
+  };
+  await expect(chart.locator('svg')).toHaveCount(1);
+  await expect(chart).toHaveAccessibleName(
+    /折线图，事件数，渠道缺失（次），平均金额，渠道 null，Asia\/Shanghai/,
+  );
+  const from = Date.UTC(2026, 10, 9),
+    hour = 3600000;
+  const line = await read();
+  expect(line.series.map((series) => series.type)).toEqual(['line', 'line']);
+  expect(line.legend[0]?.data).toEqual(['事件数，渠道缺失（次）', '平均金额，渠道 null']);
+  expect(line.xAxis[0]).toMatchObject({ type: 'time', min: from, max: from + 5 * hour });
+  expect(line.series[0]?.data).toEqual([
+    [from + hour, 2],
+    [from + 2 * hour, 4],
+    [from + 3 * hour, null],
+    [from + 4 * hour, 6],
+  ]);
+  expect(line.series[1]?.data).toEqual([
+    [from + hour, 1],
+    [from + 2 * hour, null],
+    [from + 3 * hour, null],
+    [from + 4 * hour, null],
+  ]);
+  expect(line.series.every((series) => series.connectNulls === false)).toBe(true);
+  expect(line.series.map((series) => series.yAxisIndex)).toEqual([0, 1]);
+
+  await fixture.getByRole('button', { name: '显示分组柱状图' }).click();
+  await expect(chart).toHaveAccessibleName(/柱状图/);
+  const bar = await read();
+  expect(bar.series.map((series) => series.type)).toEqual(['bar', 'bar']);
+  expect(bar.xAxis[0]).toMatchObject({
+    type: 'category',
+    data: ['渠道缺失', '渠道 null', '渠道为空字符串'],
+  });
+  expect(bar.series.map((series) => series.data)).toEqual([
+    [2, null, 4],
+    [-1, 0, 3],
+  ]);
+  expect(bar.yAxis[1]?.min).toBeUndefined();
+  await page.setViewportSize({ width: 360, height: 800 });
+  // Assert actual SVG captions after resize, not just configured category values.
+  await expect
+    .poll(
+      async () =>
+        new Set(
+          (await chart.locator('svg text').allTextContents()).filter((text) =>
+            text.startsWith('渠道'),
+          ),
+        ).size,
+    )
+    .toBeGreaterThanOrEqual(2);
+  await chart.screenshot({ path: test.info().outputPath('saved-chart-mobile-categories.png') });
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  await fixture.getByRole('button', { name: '显示局部首桶' }).click();
+  const partial = await read();
+  expect(partial.xAxis[0]).toMatchObject({
+    type: 'time',
+    min: from + 11 * hour,
+    max: from + 12 * hour,
+  });
+  expect(partial.series[0]?.data).toEqual([[from + 11 * hour, 3]]);
+  await expect(chart).toHaveAccessibleDescription(/首个时间桶按本次范围起点绘制/);
+  await expect(
+    fixture.getByRole('cell', { name: new Date(from).toISOString(), exact: true }),
+  ).toBeVisible();
+  await chart.screenshot({ path: test.info().outputPath('saved-chart-partial-bucket.png') });
+
+  await fixture.getByRole('button', { name: '显示漏斗图' }).click();
+  const funnel = await read();
+  expect(funnel.series.map((series) => series.type)).toEqual(['bar', 'bar']);
+  expect(funnel.yAxis[0]).toMatchObject({
+    inverse: true,
+    data: ['渠道缺失', '渠道 null', '渠道为空字符串'],
+  });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await expect(chart.locator('svg')).toHaveCount(1);
+  expect(await chart.evaluate((node) => node.getBoundingClientRect().right)).toBeLessThanOrEqual(
+    360,
+  );
+  await chart.screenshot({ path: test.info().outputPath('saved-chart-mobile.png') });
+  await fixture.getByRole('button', { name: '卸载图表' }).click();
+  await expect(chart).toHaveCount(0);
+  await fixture.getByRole('button', { name: '挂载图表' }).click();
+  await expect(chart.locator('svg')).toHaveCount(1);
 });

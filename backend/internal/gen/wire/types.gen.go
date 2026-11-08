@@ -594,6 +594,124 @@ type RetentionInput struct {
 	AggregateDays int64 `json:"aggregate_days"`
 }
 
+type SavedAnalysis struct {
+	AnalysisID       string `json:"analysis_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	Kind             string `json:"kind"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type SavedAnalysisChange struct {
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
+}
+
+type SavedAnalysisCreate struct {
+	Environment string                  `json:"environment"`
+	Definition  SavedAnalysisDefinition `json:"definition"`
+}
+
+type SavedAnalysisDefinition struct {
+	Title         string                     `json:"title"`
+	Description   *string                    `json:"description,omitempty"`
+	Query         SavedAnalysisTemplate      `json:"query"`
+	Visualization SavedAnalysisVisualization `json:"visualization"`
+}
+
+type SavedAnalysisDraft struct {
+	AnalysisID       string                  `json:"analysis_id"`
+	ProjectID        string                  `json:"project_id"`
+	Environment      string                  `json:"environment"`
+	Title            string                  `json:"title"`
+	Kind             string                  `json:"kind"`
+	DraftRevision    int64                   `json:"draft_revision"`
+	PublishedVersion int64                   `json:"published_version"`
+	CreatedAt        string                  `json:"created_at"`
+	UpdatedAt        string                  `json:"updated_at"`
+	Definition       SavedAnalysisDefinition `json:"definition"`
+}
+
+type SavedAnalysisExecute struct {
+	TimeRange json.RawMessage `json:"time_range"`
+	Timezone  json.RawMessage `json:"timezone"`
+}
+
+type SavedAnalysisList struct {
+	Items      []SavedAnalysis `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+}
+
+type SavedAnalysisPublish struct {
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
+}
+
+type SavedAnalysisTemplate struct {
+	Kind          string          `json:"kind"`
+	EventVersions json.RawMessage `json:"event_versions,omitempty"`
+	Filter        json.RawMessage `json:"filter,omitempty"`
+	Subject       json.RawMessage `json:"subject,omitempty"`
+	GroupBy       json.RawMessage `json:"group_by,omitempty"`
+	Metrics       json.RawMessage `json:"metrics,omitempty"`
+	Interval      json.RawMessage `json:"interval,omitempty"`
+	Funnel        json.RawMessage `json:"funnel,omitempty"`
+	Limit         json.RawMessage `json:"limit,omitempty"`
+}
+
+type SavedAnalysisUpdate struct {
+	Definition SavedAnalysisDefinition `json:"definition"`
+}
+
+type SavedAnalysisValidate struct {
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
+}
+
+type SavedAnalysisValidation struct {
+	Valid                bool                    `json:"valid"`
+	ExecutionPerformed   bool                    `json:"execution_performed"`
+	DraftRevision        int64                   `json:"draft_revision"`
+	PublishedVersion     int64                   `json:"published_version"`
+	NormalizedDefinition SavedAnalysisDefinition `json:"normalized_definition"`
+	Dependencies         QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash       string                  `json:"definition_hash"`
+	DependencyHash       string                  `json:"dependency_hash"`
+	Diff                 []SavedAnalysisChange   `json:"diff"`
+	ValidationHash       string                  `json:"validation_hash"`
+}
+
+type SavedAnalysisVersion struct {
+	AnalysisID     string                  `json:"analysis_id"`
+	ProjectID      string                  `json:"project_id"`
+	Environment    string                  `json:"environment"`
+	Version        int64                   `json:"version"`
+	DraftRevision  int64                   `json:"draft_revision"`
+	Definition     SavedAnalysisDefinition `json:"definition"`
+	Dependencies   QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash string                  `json:"definition_hash"`
+	DependencyHash string                  `json:"dependency_hash"`
+	ValidationHash string                  `json:"validation_hash"`
+	CreatedAt      string                  `json:"created_at"`
+	CreatedBy      string                  `json:"created_by"`
+}
+
+type SavedAnalysisVersionList struct {
+	Items      []SavedAnalysisVersion `json:"items"`
+	NextCursor *string                `json:"next_cursor"`
+}
+
+type SavedAnalysisVisualization struct {
+	Kind string `json:"kind"`
+}
+
 type Session struct {
 	UserID      string `json:"user_id"`
 	DisplayName string `json:"display_name"`

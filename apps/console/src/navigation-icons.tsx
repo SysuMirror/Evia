@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type WorkspaceSection = 'events' | 'releases' | 'sources' | 'analysis';
+export type WorkspaceSection = 'events' | 'releases' | 'sources' | 'analysis' | 'saved-analyses';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
   events: (
@@ -23,6 +23,12 @@ const paths: Record<WorkspaceSection, ReactNode> = {
   analysis: (
     <>
       <path d="M4 4v16h16M8 15l4-5 4 2 4-7" />
+    </>
+  ),
+  'saved-analyses': (
+    <>
+      <path d="M6 3h12a2 2 0 0 1 2 2v16l-8-4-8 4V5a2 2 0 0 1 2-2Z" />
+      <path d="M8 12V9m4 3V6m4 6v-2" />
     </>
   ),
 };

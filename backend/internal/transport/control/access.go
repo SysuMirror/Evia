@@ -33,6 +33,7 @@ type API struct {
 	Sources       SourceService
 	Analysis      AnalysisService
 	Discovery     reporting.DiscoveryService
+	SavedAnalyses reporting.SavedAnalysisService
 	Delivery      DeliveryService
 	Cursor        *cursor.Codec
 	Origin        string
@@ -54,6 +55,7 @@ func (a *API) Handler() http.Handler {
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
 	(&DiscoveryAPI{API: a, Service: a.Discovery}).Register(mux)
+	(&SavedAnalysesAPI{API: a, Service: a.SavedAnalyses}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.

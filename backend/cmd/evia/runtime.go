@@ -158,11 +158,13 @@ func closeProducer(producer *pipeline.KafkaProducer, result *error) {
 type analysisServicesStore interface {
 	analysis.Store
 	reporting.DiscoveryStore
+	reporting.SavedAnalysisStore
 }
 
 // Discovery can resolve published definitions without a fact execution engine.
 func configureAnalysis(api *control.API, store analysisServicesStore, validator analysis.Validator, engine analysis.Engine) {
 	api.Discovery = reporting.NewDiscovery(store, validator, engine != nil)
+	api.SavedAnalyses = reporting.NewSavedAnalyses(store, validator, engine != nil)
 	if engine != nil {
 		api.Analysis = analysis.New(store, engine, validator)
 	}
