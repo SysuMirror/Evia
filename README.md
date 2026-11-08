@@ -8,6 +8,8 @@
 
 控制台进一步调整了共享组件、资源表单和分析工作台：结果前置，复杂条件独立编辑，补齐焦点、选中、错误恢复和通知交互。构建、截图和本轮复验见 [界面交互记录](docs/verification/console-experience-2026-11-08.md)。
 
+服务端新增 [分析发现基础](docs/reporting-discovery.md)：显式 `event_versions` 固定真实查询事实，提供受权能力/已发布字段目录及无执行查询校验。已通过真实 PostgreSQL/ClickHouse 与处理器测试，[本轮证据](docs/verification/reporting-foundation-2026-11-08.md) 未包含新接口的运行中 HTTP 或浏览器验收。保存分析、看板和机器令牌仍待实现。
+
 冻结快照 `8d2d9d5` 已通过真实 PostgreSQL、Redis、Kafka、ClickHouse 与独立工作进程组成的公开 HTTP 链路验收：发布、就绪、激活、接收重试、查询和来源停用均通过。自定义页面事件得到计数 **3**、精确 UID 去重数 **2**、指定 UID 行为链中的来源/事件标识对 **2**；详见 [2026-11-07 验证记录](docs/verification/backend-2026-11-07.md)。完整进度见 [PROGRESS.md](PROGRESS.md)，整个平台仍未达到生产交付条件。
 
 ## 架构概览
@@ -42,7 +44,7 @@ Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲
 
 ![Evia 版本化分析模型：现有事件定义经过草稿、校验、不可变发布、管道验证和显式激活；规划中的指标版本、保存分析和看板版本依赖已发布事件字段，控制台与 Agent 共用报告 API。](docs/assets/versioned-analytics-model.png)
 
-图 2，事件发布流程与规划中的分析依赖。事件发布不等于允许接收；指标、保存分析、看板及其共享 API 仍待实现，版本固定与显式升级规则见 [自定义看板方案](docs/plans/custom-dashboards.md)。两图由 ImageGen 生成并按仓库现状校对，[维护说明](docs/assets/README.md) 记录了语义来源。
+图 2，事件发布流程与规划中的分析依赖。事件发布不等于允许接收；本轮已实现查询版本选择与发现/校验接口；指标、保存分析、看板及其配置 API 仍待实现，版本固定与显式升级规则见 [自定义看板方案](docs/plans/custom-dashboards.md)。两图由 ImageGen 生成并按仓库现状校对，[维护说明](docs/assets/README.md) 记录了语义来源。
 
 ## 仓库布局
 
@@ -58,7 +60,7 @@ Go 服务端、React 管理控制台；PostgreSQL 管理元数据，Kafka 缓冲
 
 控制台采用 Evia 自建 React/原生 HTML 组件，Ant Design 及其依赖已移除。共享组件覆盖键盘和鼠标状态、表单校验、焦点恢复、弹窗、通知、Tab 与未保存内容保护。专业趋势和漏斗图按需加载 ECharts，并提供对应结果表；普通页面不会加载图表渲染模块。此前基础组件迁移的体积比较见 [前端验证记录](docs/verification/native-ui-2026-11-07.md)，不能将该比例当作新增业务功能后的总体体积结论。
 
-自定义指标、保存分析、看板配置及供 coding agent 使用的同一套公开 API 已形成 [设计方案](docs/plans/custom-dashboards.md)，相关运行时尚未实现。浏览器 SDK、`sys.*` 内置事件运行时注册、身份关系图、成员管理、数据生命周期、报表看板导出及公开接入 skills/CLI 仍待交付。现有分析工作区不等于可保存、布局和发布的自定义看板；`sys.*` 当前保留契约样例，页面事件计数使用显式发布的自定义事件。
+自定义指标、保存分析、看板配置及供 coding agent 使用的同一套公开 API 已形成 [设计方案](docs/plans/custom-dashboards.md)。目前实现了会话认证的发现/校验基础与真实查询版本选择，保存配置、看板协调和机器认证运行时尚未实现。浏览器 SDK、`sys.*` 内置事件运行时注册、身份关系图、成员管理、数据生命周期、报表看板导出及公开接入 skills/CLI 仍待交付。现有分析工作区不等于可保存、布局和发布的自定义看板；`sys.*` 当前保留契约样例，页面事件计数使用显式发布的自定义事件。
 
 ## 工程规范
 
