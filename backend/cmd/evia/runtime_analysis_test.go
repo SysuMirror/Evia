@@ -38,6 +38,7 @@ func (runtimeAnalysisAccess) Authorize(_ context.Context, actor, project string,
 
 type runtimeAnalysisStore struct {
 	analysis.Store
+	reporting.SavedAnalysisStore
 	jobs int
 }
 
