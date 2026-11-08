@@ -11,6 +11,7 @@
     "dev": "pnpm --filter @evia/console dev",
     "build": "pnpm --filter @evia/console build",
     "test:browser": "playwright test",
+    "test:client": "tsc -p packages/api-client/tsconfig.test.json && node --test .test-output/api-client/index.test.js",
     "format:check": "prettier --check apps packages tests/browser playwright.config.ts package.json tsconfig.json pnpm-workspace.yaml"
   },
   "devDependencies": {
