@@ -81,6 +81,22 @@ func Validate(r *Request) error {
 	if _, e := time.LoadLocation(r.Timezone); e != nil {
 		return Invalid("INVALID_TIMEZONE", "时区无效", "/timezone")
 	}
+	return ValidateConfiguration(r)
+}
+
+// ValidateConfiguration validates structural policy and normalizes defaults and
+// system field types. It does not validate environment, time range or timezone;
+// execution callers must use Validate with the actual execution context.
+func ValidateConfiguration(r *Request) error {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" {
+		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
+	}
+	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
+		return Invalid("IDENTITY_RESOLUTION_UNAVAILABLE", "尚无可查询的身份关联版本", "/subject")
+	}
+	if r.Subject != "" && r.Subject != "uid" && r.Subject != "anonymous" {
+		return Invalid("INVALID_SUBJECT", "统计主体无效", "/subject")
+	}
 	if r.Limit == 0 {
 		r.Limit = 200
 	}
