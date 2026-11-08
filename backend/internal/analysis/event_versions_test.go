@@ -3,6 +3,7 @@ package analysis
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -87,11 +88,12 @@ func TestEventVersionSelectionBindsExactPairsInFactPredicate(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	want := "AND ((event_key={p4:String} AND schema_version={p5:UInt64}) OR (event_key={p6:String} AND schema_version={p7:UInt64}))"
-	if !strings.Contains(plan.SQL, want) || strings.Contains(plan.SQL, "opened") || strings.Contains(plan.SQL, "closed") || strings.Contains(plan.SQL, "9007199254740991") {
+	pairs := regexp.MustCompile(`AND \(\(event_key=\{(p[0-9]+):String\} AND schema_version=\{(p[0-9]+):UInt64\}\) OR \(event_key=\{(p[0-9]+):String\} AND schema_version=\{(p[0-9]+):UInt64\}\)\)`).FindStringSubmatch(plan.SQL)
+	if len(pairs) != 5 || strings.Contains(plan.SQL, "opened") || strings.Contains(plan.SQL, "closed") || strings.Contains(plan.SQL, "9007199254740991") {
 		t.Fatal("exact version pairs missing or values interpolated", plan.SQL)
 	}
-	for key, value := range map[string]string{"p4": "opened", "p5": "2", "p6": "closed", "p7": "9007199254740991"} {
+	for index, value := range []string{"opened", "2", "closed", "9007199254740991"} {
+		key := pairs[index+1]
 		if plan.Parameters[key] != value {
 			t.Fatal("missing bound selector", key, plan.Parameters)
 		}

@@ -219,7 +219,15 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 		return Plan{}, e
 	}
 	p := planner{params: map[string]string{}}
-	base := " FROM `" + database + "`.`" + table + "` WHERE project_id=" + p.bind("String", scope.ProjectID) + " AND environment=" + p.bind("String", scope.Environment) + " AND event_time>=" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.From.UTC().Format("2006-01-02 15:04:05.000000000")) + " AND event_time<" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.To.UTC().Format("2006-01-02 15:04:05.000000000"))
+	source := "`" + database + "`.`" + table + "`"
+	if r.Kind == "trend" && table == "event_facts" {
+		var e error
+		source, e = p.trendFactsSource(database, scope, r)
+		if e != nil {
+			return Plan{}, e
+		}
+	}
+	base := " FROM " + source + " WHERE project_id=" + p.bind("String", scope.ProjectID) + " AND environment=" + p.bind("String", scope.Environment) + " AND event_time>=" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.From.UTC().Format("2006-01-02 15:04:05.000000000")) + " AND event_time<" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.To.UTC().Format("2006-01-02 15:04:05.000000000"))
 	if len(r.EventKeys) > 0 {
 		events := make([]string, 0, len(r.EventKeys))
 		for _, key := range r.EventKeys {
