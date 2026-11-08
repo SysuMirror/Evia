@@ -55,17 +55,31 @@ func (s *Store) EnqueueQuery(ctx context.Context, actor, project string, request
 		return analysis.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
-	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
+	job, e := enqueueQueryTx(ctx, tx, actor, project, request)
+	if e != nil {
+		return analysis.Job{}, e
+	}
+	if e = tx.Commit(ctx); e != nil {
+		return analysis.Job{}, e
+	}
+	return job, nil
+}
+
+// enqueueQueryTx admits direct and saved queries under the same project lock,
+// queue budget, field resolver and audit boundary. The caller owns authorization
+// and commits the complete transaction, including any execution provenance.
+func enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project string, request analysis.Request) (analysis.Job, error) {
+	if _, e := tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return analysis.Job{}, e
 	}
 	var queued int
-	if e = tx.QueryRow(ctx, `SELECT count(*) FROM analysis_query_jobs WHERE project_id=$1 AND state='queued' AND expires_at>clock_timestamp() AND queued_deadline>clock_timestamp()`, project).Scan(&queued); e != nil {
+	if e := tx.QueryRow(ctx, `SELECT count(*) FROM analysis_query_jobs WHERE project_id=$1 AND state='queued' AND expires_at>clock_timestamp() AND queued_deadline>clock_timestamp()`, project).Scan(&queued); e != nil {
 		return analysis.Job{}, e
 	}
 	if queued >= 32 {
 		return analysis.Job{}, fault.New(fault.Limited, "QUERY_CONCURRENCY_LIMIT", "项目查询队列已满，请稍后重试")
 	}
-	if e = resolveQueryFields(ctx, tx, project, &request); e != nil {
+	if e := resolveQueryFields(ctx, tx, project, &request); e != nil {
 		return analysis.Job{}, e
 	}
 	data, e := json.Marshal(request)
@@ -78,9 +92,6 @@ func (s *Store) EnqueueQuery(ctx context.Context, actor, project string, request
 		return analysis.Job{}, e
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'analysis.query_created',$3)`, project, actor, id); e != nil {
-		return analysis.Job{}, e
-	}
-	if e = tx.Commit(ctx); e != nil {
 		return analysis.Job{}, e
 	}
 	return job, nil
