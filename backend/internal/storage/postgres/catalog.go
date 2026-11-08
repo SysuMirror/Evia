@@ -215,3 +215,24 @@ func (s *Store) ValidationDraft(ctx context.Context, actor, project, key string,
 	}
 	return draft, previous, tx.Commit(ctx)
 }
+
+func (s *Store) GetEventVersion(ctx context.Context, actor, project, key string, version int64) (catalog.EventVersion, error) {
+	tx, e := s.catalogTx(ctx, actor, project, false)
+	if e != nil {
+		return catalog.EventVersion{}, e
+	}
+	defer tx.Rollback(context.Background())
+	out := catalog.EventVersion{Key: key, SchemaVersion: version}
+	var raw []byte
+	e = tx.QueryRow(ctx, `SELECT draft_revision,definition FROM catalog_versions WHERE project_id=$1 AND event_key=$2 AND schema_version=$3`, project, key, version).Scan(&out.DraftRevision, &raw)
+	if errors.Is(e, pgx.ErrNoRows) {
+		e = fault.New(fault.NotFound, "EVENT_VERSION_NOT_FOUND", "已发布事件版本不存在或不可见")
+	}
+	if e != nil {
+		return catalog.EventVersion{}, e
+	}
+	if e = json.Unmarshal(raw, &out.Definition); e != nil {
+		return catalog.EventVersion{}, e
+	}
+	return out, tx.Commit(ctx)
+}
