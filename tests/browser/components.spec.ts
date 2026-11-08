@@ -549,6 +549,20 @@ test('saved charts retain every metric, distinguish categories, and render gaps,
     [-1, 0, 3],
   ]);
   expect(bar.yAxis[1]?.min).toBeUndefined();
+  await page.setViewportSize({ width: 360, height: 800 });
+  // Assert actual SVG captions after resize, not just configured category values.
+  await expect
+    .poll(
+      async () =>
+        new Set(
+          (await chart.locator('svg text').allTextContents()).filter((text) =>
+            text.startsWith('渠道'),
+          ),
+        ).size,
+    )
+    .toBeGreaterThanOrEqual(2);
+  await chart.screenshot({ path: test.info().outputPath('saved-chart-mobile-categories.png') });
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await fixture.getByRole('button', { name: '显示局部首桶' }).click();
   const partial = await read();

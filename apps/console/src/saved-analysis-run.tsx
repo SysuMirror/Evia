@@ -163,15 +163,18 @@ export function savedAnalysisResultChart(
       const field = definition.query.group_by?.[Number(column.key.slice(6))];
       return {
         key: [column.key, present === false ? 'missing' : 'present', typeof value, value],
+        valueLabel: label,
         label: `${field ? savedFieldLabel(field) : (column.label ?? column.key)}=${label}`,
       };
     });
   const groupKey = (row: Record<string, unknown>) =>
     JSON.stringify(group(row).map((item) => item.key));
-  const groupLabel = (row: Record<string, unknown>) =>
-    group(row)
-      .map((item) => item.label)
-      .join('，');
+  const groupLabel = (row: Record<string, unknown>) => {
+    const fields = group(row);
+    return fields.length === 1
+      ? fields[0]!.valueLabel
+      : fields.map((item) => item.label).join('，');
+  };
   if (definition.query.interval) {
     const times = [...new Set(result.rows.map((row) => String(row.bucket)))].sort(
       (left, right) => Date.parse(left) - Date.parse(right),
