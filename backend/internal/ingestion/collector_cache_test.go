@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 func expirePlan(t *testing.T, c *Collector, revision int64) {
@@ -269,6 +270,77 @@ func TestBatchCannotSubmitAfterKnownEligibilityExpires(t *testing.T) {
 	out, _, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent()), eventJSON(validEvent())), browserAuth())
 	if e == nil || fault.Public(e).Code != "EVENT_PLAN_NOT_READY" || q.calls != 0 || len(out.Results) != 0 || p.calls < 2 {
 		t.Fatal("slow batch submitted an expired earlier item", e, q.calls, out, p.calls)
+	}
+}
+
+func TestPropertyValidationCrossingPlanCacheDeadlineRechecksEligibility(t *testing.T) {
+	for _, outcome := range []string{"ready", "unready", "unavailable", "changed manifest"} {
+		t.Run(outcome, func(t *testing.T) {
+			c, _, plans, queue, _ := collectorFixture(t)
+			ctx := context.Background()
+			compiled, e := c.plan(ctx, testProject, "development", 1)
+			if e != nil {
+				t.Fatal(e)
+			}
+			key := fmt.Sprintf("%s:development:1", testProject)
+			c.mu.Lock()
+			entry := c.cache[key]
+			entry.expires = time.Now().Add(20 * time.Millisecond)
+			c.cache[key] = entry
+			c.mu.Unlock()
+			validations := 0
+			// Delay inside property validation, after Collect has selected a valid
+			// compiled plan. Read its actual deadline so even a slow test machine
+			// that refreshed the cache before validation exercises the same race.
+			compiled.schemas["lesson_opened"].Format = &jsonschema.Format{
+				Name: "test-cache-expiry-boundary",
+				Validate: func(any) error {
+					validations++
+					if validations != 1 {
+						return nil
+					}
+					c.mu.Lock()
+					deadline := c.cache[key].expires
+					c.mu.Unlock()
+					timer := time.NewTimer(time.Until(deadline.Add(time.Millisecond)))
+					defer timer.Stop()
+					<-timer.C
+					switch outcome {
+					case "unready":
+						plans.value.Ready = false
+					case "unavailable":
+						plans.err = errors.New("metadata unavailable")
+					case "changed manifest":
+						plans.value.Events = map[string]EventRule{}
+					}
+					return nil
+				},
+			}
+			out, status, e := c.Collect(ctx, batchOf(eventJSON(validEvent()), eventJSON(validEvent())), browserAuth())
+			if plans.calls < 2 {
+				t.Fatal("expired eligibility was not refreshed", plans.calls)
+			}
+			if outcome != "ready" {
+				if e == nil || fault.Public(e).Code != "EVENT_PLAN_NOT_READY" || queue.calls != 0 {
+					t.Fatal("failed eligibility refresh admitted records", status, out, e, queue.calls)
+				}
+				return
+			}
+			if e != nil || status != 202 || len(out.Results) != 2 || queue.calls != 1 || len(queue.records) != 2 {
+				t.Fatal("cache deadline rejected an eligible item", status, out, e, queue.calls, len(queue.records))
+			}
+			for _, item := range out.Results {
+				if item.Status != "accepted" || item.Error != nil {
+					t.Fatal("same revision received a partial cache-expiry rejection", out)
+				}
+			}
+			c.mu.Lock()
+			retained := c.cache[key].schemas["lesson_opened"]
+			c.mu.Unlock()
+			if retained != compiled.schemas["lesson_opened"] {
+				t.Fatal("eligibility refresh recompiled immutable schema")
+			}
+		})
 	}
 }
 

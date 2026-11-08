@@ -371,11 +371,9 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			out.Results[i] = result
 			continue
 		}
-		if !plan.expires.After(time.Now()) {
-			reject("SCHEMA_NOT_READY", true, "release_revision")
-			out.Results[i] = result
-			continue
-		}
+		// A cache refresh deadline can pass during item validation without the
+		// release becoming ineligible. Keep this item provisional: the final
+		// revision-level check refreshes eligibility before queue admission.
 		records = append(records, Record{ProjectID: source.Source.ProjectID, SourceID: source.Source.ID, SourceKind: source.Source.Kind, Environment: source.Source.Environment, ReceivedAt: now, EventID: event.ID, EventKey: event.Key, SchemaVersion: event.Version, ReleaseRevision: event.Revision, OccurredAt: event.Occurred.UTC(), UID: event.Identity.UID, AnonymousID: event.Identity.AnonymousID, Context: eventContext, ContextJSON: event.Context, PropertiesJSON: event.Properties, SDKName: event.SDK.Name, SDKVersion: event.SDK.Version})
 		itemIndices = append(itemIndices, i)
 		result.Status = "accepted"
@@ -388,14 +386,22 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			fresh, e := c.plan(ctx, source.Source.ProjectID, source.Source.Environment, revision)
 			if e != nil {
 				delete(batchPlans, revision)
-			} else {
-				batchPlans[revision] = fresh
+				continue
 			}
+			batchPlans[revision] = fresh
 		}
+	}
+	// Make one admission decision after all potentially slow refreshes. Do not
+	// allow an eligibility deadline to split identical items while assembling
+	// the batch, or retain a decision made before another revision's lookup.
+	admissionTime := time.Now()
+	admittedRevisions := make(map[int64]bool, len(batchPlans))
+	for revision, plan := range batchPlans {
+		admittedRevisions[revision] = plan.expires.After(admissionTime)
 	}
 	admitted := records[:0]
 	for j, record := range records {
-		if plan, ok := batchPlans[record.ReleaseRevision]; !ok || !plan.expires.After(time.Now()) {
+		if !admittedRevisions[record.ReleaseRevision] {
 			item := &out.Results[itemIndices[j]]
 			item.Status = "rejected"
 			item.Error = &ItemError{Code: "SCHEMA_NOT_READY", Retryable: true, FieldPaths: []string{"release_revision"}}
