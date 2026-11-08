@@ -128,6 +128,7 @@ export function Field({
   hint,
   required,
   children,
+  className = '',
 }: {
   label: ReactNode;
   htmlFor: string;
@@ -135,6 +136,7 @@ export function Field({
   hint?: ReactNode;
   required?: boolean;
   children: ReactNode;
+  className?: string;
 }) {
   const uniqueID = useId();
   const hintID = `${uniqueID}-hint`;
@@ -143,7 +145,7 @@ export function Field({
     [hint ? hintID : '', error ? errorID : ''].filter(Boolean).join(' ') || undefined;
   return (
     <FieldContext.Provider value={{ id: htmlFor, describedBy, invalid: Boolean(error), required }}>
-      <div className="evia-field">
+      <div className={`evia-field ${className}`}>
         <label className="evia-label" htmlFor={htmlFor}>
           {label}
           {required && (
