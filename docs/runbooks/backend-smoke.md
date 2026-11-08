@@ -15,6 +15,11 @@ processes. The
 their limits. Creating containers does not establish that the application chain
 works, and this script does not prove production replication or capacity.
 
+The current executable requires the PostgreSQL migration ledger through `008`.
+Apply migrations explicitly before starting it. Migrations `007` and `008` add
+saved analysis versions and bounded execution retry metadata; they preserve
+existing event facts, catalog releases and query jobs.
+
 The API must enable collection and analysis, use the matching source-secret key,
 and share the real dependencies with all workers. The development environment
 uses `evia.dev.events`, `evia.dev.quarantine`, the reserved
@@ -65,10 +70,16 @@ instrumentation or identity resolution. The script:
    source-scoped events and two exact raw UIDs. The total query-job budget is 32.
 6. Reads a raw UID journey and requires the two source/event-ID pairs, their
    ordering and preserved context link. An exact retry must not add a third row.
-7. Disables both sources, waits for their application state and at least the
+7. Creates a saved analysis with exact event-version pins and count/UID metrics,
+   validates without execution, publishes two versions, and checks stale writes,
+   original-response retries, immutable old versions and paginated history.
+8. Executes version one after version two is published. The result must remain
+   three events and two UIDs. The same execution key must reuse its job, report
+   its current completion state and reject reuse against another version.
+9. Disables both sources, waits for their application state and at least the
    two-second cache window, then requires `SOURCE_DISABLED` for new submissions.
    A final real query must still return count three and UID unique two.
-8. Revokes its management session.
+10. Revokes its management session.
 
 Readiness, queue visibility and query jobs use bounded polling. Unexpected HTTP
 errors, failed jobs, excessive counts, missing rows or exhausted budgets fail the

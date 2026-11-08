@@ -202,6 +202,9 @@ class Smoke:
         }
         path = self.base + ("/journeys/query" if kind == "journey" else "/queries")
         job = self.management("POST", path, body, expected=(202,))
+        return self.query_result(job)
+
+    def query_result(self, job):
         query_id = resource_id(job.get("query_id"))
 
         def ready(value):
@@ -231,6 +234,70 @@ class Smoke:
         if counts[0] == 3:
             require(counts[1] == 2, "Fully visible events have the wrong exact UID count")
         return counts
+
+    def saved_analysis(self, event_version):
+        self.stage = "saved_analysis_versions"
+        collection = self.base + "/saved-analyses"
+        configuration = {
+            "title": "Synthetic event totals", "description": "",
+            "query": {"kind": "trend", "subject": "uid", "limit": 20,
+                      "event_versions": [{"event_key": EVENT_KEY, "schema_version": event_version}],
+                      "metrics": [{"op": "count", "accuracy": "exact"}, {"op": "unique", "accuracy": "exact"}]},
+            "visualization": {"kind": "table"},
+        }
+        create_body = {"environment": "development", "definition": configuration}
+        create_headers = {"Idempotency-Key": identifier()}
+        original = self.management("POST", collection, create_body, create_headers, (201,))
+        analysis_id = resource_id(original.get("analysis_id"))
+        path = collection + "/" + analysis_id
+        require(original.get("draft_revision") == 1 and original.get("published_version") == 0, "Saved analysis initial counters changed")
+        check_body = {"draft_revision": 1, "expected_published_version": 0}
+        checked = self.management("POST", path + "/validations", check_body)
+        require(checked.get("valid") is True and checked.get("execution_performed") is False, "Saved validation unexpectedly executed")
+        publish_body = {**check_body, "validation_hash": checked["validation_hash"]}
+        publish_headers = {"Idempotency-Key": identifier()}
+        first = self.management("POST", path + "/versions", publish_body, publish_headers, (201,))
+        require(first.get("version") == 1 and first.get("draft_revision") == 1, "Saved publication did not create version 1")
+        updated_definition = {**configuration, "title": "Synthetic event totals revised"}
+        updated = self.management("PATCH", path + "/draft", {"definition": updated_definition}, {"If-Match": '"1"'})
+        require(updated.get("draft_revision") == 2 and updated.get("published_version") == 1, "Draft update changed the published version")
+        self.control.request("PATCH", path + "/draft", {"definition": configuration}, {"If-Match": '"1"'}, (409,))
+        self.control.request("POST", path + "/versions", publish_body, {"Idempotency-Key": identifier()}, (409,))
+        second_check = self.management("POST", path + "/validations", {"draft_revision": 2, "expected_published_version": 1})
+        require(bool(second_check.get("diff")), "Changed title omitted publication diff")
+        second = self.management("POST", path + "/versions", {
+            "draft_revision": 2, "expected_published_version": 1, "validation_hash": second_check["validation_hash"],
+        }, {"Idempotency-Key": identifier()}, (201,))
+        require(second.get("version") == 2, "Second publication did not advance version")
+        require(self.management("POST", collection, create_body, create_headers, (201,)) == original, "Create retry returned mutable current state")
+        require(self.management("POST", path + "/versions", publish_body, publish_headers, (201,)) == first, "Publication retry lost original immutable response")
+        require(self.management("GET", path + "/versions/1") == first, "Old published version changed after publication")
+        require(self.management("GET", path).get("published_version") == 2, "Retry moved the published pointer backwards")
+        first_page = self.management("GET", path + "/versions?limit=1")
+        require([item["version"] for item in first_page["items"]] == [1] and bool(first_page.get("next_cursor")), "Version pagination omitted its first result or cursor")
+        second_page = self.management("GET", path + "/versions?limit=1&cursor=" + urllib.parse.quote(first_page["next_cursor"], safe=""))
+        require([item["version"] for item in second_page["items"]] == [2], "Version pagination skipped or repeated a version")
+        other_environment = self.management("GET", collection + "?environment=staging")
+        require(not other_environment["items"], "Saved analysis leaked into another environment list")
+        self.evidence(self.stage, analysis_id=analysis_id, published_versions=2, original_retry_snapshots=True)
+        self.stage = "saved_analysis_execution"
+        execution = {"timezone": "UTC", "time_range": {
+            "from": timestamp(self.started - timedelta(minutes=1)), "to": timestamp(self.started + timedelta(minutes=5)),
+        }}
+        run_headers = {"Idempotency-Key": identifier()}
+        run_path = path + "/versions/1/queries"
+        job = self.management("POST", run_path, execution, run_headers, (202,))
+        self.query_jobs += 1
+        require(self.query_jobs <= MAX_QUERY_JOBS, "Smoke query-job budget of 32 was exhausted")
+        retry = self.management("POST", run_path, execution, run_headers, (202,))
+        require(retry.get("query_id") == job.get("query_id"), "Execution retry queued another job")
+        self.control.request("POST", path + "/versions/2/queries", execution, run_headers, (409,))
+        result = self.query_result(job)
+        rows = result.get("rows", [])
+        require(len(rows) == 1 and rows[0].get("metric_0") == 3 and rows[0].get("metric_1") == 2, "Saved version did not retain exact count/UID semantics")
+        completed_retry = self.management("POST", run_path, execution, run_headers, (202,))
+        require(completed_retry.get("query_id") == job["query_id"] and completed_retry.get("state") == "succeeded", "Execution replay omitted current job state")
+        self.evidence(self.stage, executed_version=1, published_version=2, selected_page_event_count=3, exact_uid_unique=2, query_jobs=self.query_jobs)
 
     def publish(self):
         self.stage = "project_and_draft"
@@ -318,6 +385,7 @@ class Smoke:
         require([row.get("source_kind") for row in rows] == ["browser", "server"], "Journey ordering or source kinds changed")
         require(rows[1].get("context", {}).get("source_page_view_id") == self.page_id, "Journey dropped a context link")
         self.evidence(self.stage, journey_rows=len(rows), distinct_source_pairs=len(expected))
+        self.saved_analysis(version)
         self.stage = "disable_after_cache_expiry"
         disabled_at = time.monotonic()
         for kind in ("browser", "server"):
