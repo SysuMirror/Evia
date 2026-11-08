@@ -7,6 +7,7 @@ import {
   Checkbox,
   CopyButton,
   DesignProvider,
+  DataTable,
   Field,
   Input,
   Modal,
@@ -17,6 +18,155 @@ import {
 } from '@evia/design-system';
 import { DraftNavigationProvider, useDraftNavigation } from '../../src/draft-navigation';
 import { useUnsavedWork } from '../../src/use-unsaved-work';
+import { SavedAnalysisChart, type SavedAnalysisChartProps } from '@evia/design-system/charts';
+
+const chartFrom = Date.UTC(2026, 10, 9);
+const chartHour = 3600000;
+const chartTimeRange = { from: chartFrom, to: chartFrom + 5 * chartHour };
+const partialChartTimeRange = { from: chartFrom + 11 * chartHour, to: chartFrom + 12 * chartHour };
+const partialChartCategories = [
+  { key: 'day', label: new Date(chartFrom).toISOString(), timestamp: chartFrom },
+];
+const partialChartSeries = [{ id: 'count', label: '事件数', unit: '次', values: [3] }];
+const chartCategories = [1, 2, 4].map((hour) => ({
+  key: String(hour),
+  label: new Date(chartFrom + hour * chartHour).toISOString(),
+  timestamp: chartFrom + hour * chartHour,
+}));
+const chartSeries = [
+  { id: 'count-missing', label: '事件数，渠道缺失', unit: '次', values: [2, 4, 6] },
+  { id: 'average-null', label: '平均金额，渠道 null', values: [1, Infinity, null] },
+];
+const groupedChartCategories = [
+  { key: 'missing', label: '渠道缺失' },
+  { key: 'null', label: '渠道 null' },
+  { key: 'empty', label: '渠道为空字符串' },
+];
+const groupedChartSeries = [
+  { id: 'count', label: '事件数', unit: '次', values: [2, null, 4] },
+  { id: 'sum', label: '金额总和', values: [-1, 0, 3] },
+];
+
+function SavedChartFixture() {
+  const [kind, setKind] = useState<SavedAnalysisChartProps['kind']>('line');
+  const [mounted, setMounted] = useState(true);
+  const [snapshot, setSnapshot] = useState('');
+  const [partial, setPartial] = useState(false);
+  const grouped = kind !== 'line';
+  const categories = partial
+    ? partialChartCategories
+    : grouped
+      ? groupedChartCategories
+      : chartCategories;
+  const series = partial ? partialChartSeries : grouped ? groupedChartSeries : chartSeries;
+  return (
+    <section aria-label="保存分析图表组件" className="section-stack" id="saved-chart-fixture">
+      <h2>保存分析图表</h2>
+      <div className="inline-actions">
+        <Button
+          onClick={() => {
+            setPartial(false);
+            setKind('line');
+          }}
+        >
+          显示时间折线图
+        </Button>
+        <Button
+          onClick={() => {
+            setPartial(false);
+            setKind('bar');
+          }}
+        >
+          显示分组柱状图
+        </Button>
+        <Button
+          onClick={() => {
+            setPartial(false);
+            setKind('funnel');
+          }}
+        >
+          显示漏斗图
+        </Button>
+        <Button
+          onClick={() => {
+            setPartial(true);
+            setKind('line');
+          }}
+        >
+          显示局部首桶
+        </Button>
+        <Button onClick={() => setMounted((value) => !value)}>
+          {mounted ? '卸载图表' : '挂载图表'}
+        </Button>
+        <Button
+          onClick={async () => {
+            setSnapshot('');
+            const element = document.querySelector<HTMLElement>(
+              '#saved-chart-fixture .saved-analysis-chart',
+            );
+            // Inspect the renderer module actually loaded by Vite. Importing a
+            // second copy by filesystem path creates a separate instance registry.
+            const coreURL = performance
+              .getEntriesByType('resource')
+              .find((entry) => /\/echarts_core\.js(?:\?|$)/.test(entry.name))?.name;
+            if (!coreURL || !element) return;
+            const core = (await import(/* @vite-ignore */ coreURL)) as {
+              getInstanceByDom: (node: HTMLElement) => { getOption: () => unknown } | undefined;
+            };
+            const chart = core.getInstanceByDom(element);
+            if (chart) setSnapshot(JSON.stringify(chart.getOption()));
+          }}
+        >
+          读取图表状态
+        </Button>
+      </div>
+      {mounted && (
+        <SavedAnalysisChart
+          kind={kind}
+          label="合成图表测试"
+          timezone="Asia/Shanghai"
+          categories={categories}
+          series={series}
+          timeRange={partial ? partialChartTimeRange : chartTimeRange}
+          intervalMs={partial ? 24 * chartHour : chartHour}
+        />
+      )}
+      <DataTable
+        caption="合成图表完整结果"
+        rows={categories.map((category, index) => ({
+          key: category.key,
+          label: category.label,
+          values: series.map((item) => item.values[index]),
+        }))}
+        rowKey={(row) => row.key}
+        minWidth={400}
+        columns={[
+          { key: 'category', header: '时间或分组', render: (row) => row.label },
+          ...series.map((item, index) => ({
+            key: item.id,
+            header: item.label,
+            render: (row: { values: readonly (number | null | undefined)[] }) =>
+              row.values[index] === null || row.values[index] === undefined
+                ? '缺失'
+                : Number.isFinite(row.values[index])
+                  ? String(row.values[index])
+                  : '非有限值（未绘制）',
+          })),
+        ]}
+      />
+      <output
+        className="code-block"
+        aria-label="图表实际配置"
+        style={{ display: 'block', maxHeight: 180 }}
+      >
+        {snapshot}
+      </output>
+      <p className="field-help">
+        本隔离组件使用合成数据，测试两个指标、缺失分组、null、零值、非有限数值与缺失时间桶。
+      </p>
+    </section>
+  );
+}
 
 function GuardFixture() {
   const [draft, setDraft] = useState('');
@@ -333,6 +483,7 @@ function ComponentFixture() {
         <RouterProvider router={guardRouter} />
       </section>
       <LifecycleFixture />
+      <SavedChartFixture />
     </main>
   );
 }
