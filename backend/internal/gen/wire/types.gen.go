@@ -14,6 +14,77 @@ type ActivationInput struct {
 	ExpectedActiveRevision int64  `json:"expected_active_revision"`
 }
 
+type AnalysisCapabilities struct {
+	ExecutionAvailable      bool                      `json:"execution_available"`
+	QueryKinds              []string                  `json:"query_kinds"`
+	Aggregations            []string                  `json:"aggregations"`
+	ApproximateAggregations []string                  `json:"approximate_aggregations"`
+	Subjects                []string                  `json:"subjects"`
+	Intervals               []string                  `json:"intervals"`
+	FunnelModes             []string                  `json:"funnel_modes"`
+	FieldTypes              []AnalysisFieldCapability `json:"field_types"`
+	Budgets                 struct {
+		TrendWindowSeconds    int64 `json:"trend_window_seconds"`
+		OtherWindowSeconds    int64 `json:"other_window_seconds"`
+		EventSelections       int64 `json:"event_selections"`
+		GroupFields           int64 `json:"group_fields"`
+		Metrics               int64 `json:"metrics"`
+		ResultRows            int64 `json:"result_rows"`
+		FilterDepth           int64 `json:"filter_depth"`
+		FilterNodes           int64 `json:"filter_nodes"`
+		FilterArguments       int64 `json:"filter_arguments"`
+		FilterValues          int64 `json:"filter_values"`
+		FunnelSteps           int64 `json:"funnel_steps"`
+		FunnelWindowSeconds   int64 `json:"funnel_window_seconds"`
+		ProjectRunningQueries int64 `json:"project_running_queries"`
+		ProjectQueuedQueries  int64 `json:"project_queued_queries"`
+	} `json:"budgets"`
+}
+
+type AnalysisCatalog struct {
+	Environment     string                 `json:"environment"`
+	CatalogRevision int64                  `json:"catalog_revision"`
+	Items           []AnalysisCatalogEvent `json:"items"`
+	NextCursor      *string                `json:"next_cursor"`
+}
+
+type AnalysisCatalogEvent struct {
+	EventKey       string                 `json:"event_key"`
+	SchemaVersion  int64                  `json:"schema_version"`
+	DisplayName    string                 `json:"display_name"`
+	DefinitionHash string                 `json:"definition_hash"`
+	CreatedAt      string                 `json:"created_at"`
+	Published      bool                   `json:"published"`
+	Active         bool                   `json:"active"`
+	IngestionReady bool                   `json:"ingestion_ready"`
+	Fields         []AnalysisCatalogField `json:"fields"`
+}
+
+type AnalysisCatalogField struct {
+	Field struct {
+		Kind          string `json:"kind"`
+		EventKey      string `json:"event_key"`
+		SchemaVersion int64  `json:"schema_version"`
+		Key           string `json:"key"`
+	} `json:"field"`
+	Type             string         `json:"type"`
+	Required         bool           `json:"required"`
+	Nullable         bool           `json:"nullable"`
+	MissingSemantics string         `json:"missing_semantics"`
+	NullSemantics    string         `json:"null_semantics"`
+	FilterOperators  []string       `json:"filter_operators"`
+	Groupable        bool           `json:"groupable"`
+	MetricOperations []string       `json:"metric_operations"`
+	Metadata         map[string]any `json:"metadata"`
+}
+
+type AnalysisFieldCapability struct {
+	Type             string   `json:"type"`
+	FilterOperators  []string `json:"filter_operators"`
+	Groupable        bool     `json:"groupable"`
+	MetricOperations []string `json:"metric_operations"`
+}
+
 type ArchiveManifest struct {
 	ID              string          `json:"id"`
 	Environment     string          `json:"environment"`
@@ -336,6 +407,20 @@ type PublicConfig struct {
 	} `json:"events"`
 }
 
+type QueryDependency struct {
+	EventKey       string `json:"event_key"`
+	SchemaVersion  int64  `json:"schema_version"`
+	DefinitionHash string `json:"definition_hash"`
+}
+
+type QueryDependencyManifest struct {
+	ProjectID        string            `json:"project_id"`
+	Environment      string            `json:"environment"`
+	SelectionMode    string            `json:"selection_mode"`
+	UnfixedEventKeys []string          `json:"unfixed_event_keys"`
+	EventVersions    []QueryDependency `json:"event_versions"`
+}
+
 type QueryJob struct {
 	QueryID     string  `json:"query_id"`
 	State       string  `json:"state"`
@@ -386,8 +471,12 @@ type QueryRequest struct {
 			Field     json.RawMessage `json:"field"`
 		} `json:"same_entity,omitzero"`
 	} `json:"funnel,omitempty"`
-	Limit  *int64  `json:"limit,omitempty"`
-	Cursor *string `json:"cursor,omitempty"`
+	Limit         *int64  `json:"limit,omitempty"`
+	Cursor        *string `json:"cursor,omitempty"`
+	EventVersions []struct {
+		EventKey      string `json:"event_key"`
+		SchemaVersion int64  `json:"schema_version"`
+	} `json:"event_versions,omitzero"`
 }
 
 type QueryResult struct {
@@ -415,6 +504,17 @@ type QueryResult struct {
 		CacheHit    bool   `json:"cache_hit"`
 		GeneratedAt string `json:"generated_at"`
 	} `json:"metadata"`
+}
+
+type QueryValidation struct {
+	Valid              bool                    `json:"valid"`
+	ExecutionPerformed bool                    `json:"execution_performed"`
+	ExecutionAvailable bool                    `json:"execution_available"`
+	CatalogRevision    int64                   `json:"catalog_revision"`
+	NormalizedRequest  QueryRequest            `json:"normalized_request"`
+	QueryHash          string                  `json:"query_hash"`
+	Dependencies       QueryDependencyManifest `json:"dependencies"`
+	DependencyHash     string                  `json:"dependency_hash"`
 }
 
 type Quota struct {
