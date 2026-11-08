@@ -4,13 +4,19 @@ export function Toolbar({
   children,
   actions,
   label,
+  className = '',
 }: {
   children?: ReactNode;
   actions?: ReactNode;
   label?: string;
+  className?: string;
 }) {
   return (
-    <div className="evia-toolbar" role={label ? 'group' : undefined} aria-label={label}>
+    <div
+      className={`evia-toolbar ${className}`}
+      role={label ? 'group' : undefined}
+      aria-label={label}
+    >
       <div className="evia-toolbar-controls">{children}</div>
       {actions && <div className="inline-actions">{actions}</div>}
     </div>
@@ -22,16 +28,20 @@ export function Panel({
   title,
   action,
   label,
+  className = '',
+  variant = 'default',
 }: {
   children: ReactNode;
   title?: ReactNode;
   action?: ReactNode;
   label?: string;
+  className?: string;
+  variant?: 'default' | 'subtle';
 }) {
   const titleID = useId();
   return (
     <section
-      className="evia-panel"
+      className={`evia-panel evia-panel-${variant} ${className}`}
       aria-label={label}
       aria-labelledby={title ? titleID : undefined}
     >
@@ -43,6 +53,26 @@ export function Panel({
       )}
       {children}
     </section>
+  );
+}
+
+export function ResultHeader({
+  title,
+  summary,
+  action,
+}: {
+  title: ReactNode;
+  summary?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <header className="result-header">
+      <div className="result-heading">
+        <h2>{title}</h2>
+        {summary && <div className="result-summary">{summary}</div>}
+      </div>
+      {action && <div className="inline-actions">{action}</div>}
+    </header>
   );
 }
 

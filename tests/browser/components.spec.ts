@@ -150,8 +150,14 @@ test('buttons forward native events and show keyboard focus and held press feedb
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  const selectedAppearance = await toggle.evaluate(
+    (node) => getComputedStyle(node).backgroundColor,
+  );
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  expect(await toggle.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
+    selectedAppearance,
+  );
 });
 
 declare global {
@@ -347,4 +353,138 @@ test('unsaved guard keeps edits recoverable and rejects navigation during pendin
   await page.getByRole('button', { name: '完成测试操作' }).click();
   await page.getByRole('link', { name: '返回测试页面' }).click();
   await expect(page.getByLabel('测试路径')).toHaveText('/');
+});
+
+test('required fields announce recoverable errors and keep focus and error styling while hovered', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const field = page.getByRole('textbox', { name: '必填名称' });
+  await page.getByRole('button', { name: '提交必填表单' }).click();
+  await expect(page.getByLabel('校验成功次数')).toHaveText('0');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(field).toHaveAccessibleDescription('名称用于区分查询。 请填写名称');
+  await field.hover();
+  expect(
+    await field.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [style.borderTopColor, style.outlineColor, style.outlineStyle];
+    }),
+  ).toEqual(['rgb(180, 35, 53)', 'rgb(180, 35, 53)', 'solid']);
+  await field.fill('可恢复的查询');
+  await expect(field).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(field).toHaveAccessibleDescription('名称用于区分查询。');
+  await field.press('Enter');
+  await expect(page.getByLabel('校验成功次数')).toHaveText('1');
+});
+
+test('async buttons restore their own focus without taking a newer editing target', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  const begin = page.getByRole('button', { name: '执行异步操作', exact: true });
+  const finish = page.getByRole('button', { name: '完成异步操作', exact: true });
+  await begin.click();
+  await expect(begin).toBeDisabled();
+  await expect(begin).toHaveAttribute('aria-busy', 'true');
+  await expect(begin).toHaveAccessibleName('执行异步操作');
+  await finish.evaluate((node) => (node as HTMLButtonElement).click());
+  await expect(begin).toBeEnabled();
+  await expect(begin).toBeFocused();
+  await begin.press('Space');
+  await expect(begin).toBeDisabled();
+  const next = page.getByRole('textbox', { name: '完成后继续编辑' });
+  await next.fill('继续编辑中的值');
+  await finish.evaluate((node) => (node as HTMLButtonElement).click());
+  await expect(begin).toBeEnabled();
+  await expect(next).toBeFocused();
+  await expect(next).toHaveValue('继续编辑中的值');
+});
+
+test('dialogs isolate nested Escape, reject busy dismissal, and preserve newer or fallback focus', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  const trigger = page.getByRole('button', { name: '打开测试对话框', exact: true });
+  const dialog = page.getByRole('dialog', { name: '测试对话框', exact: true });
+  await trigger.click();
+  await expect(dialog.getByRole('button', { name: '安全返回' })).toBeFocused();
+  const titleBounds = await dialog.getByRole('heading', { name: '测试对话框' }).boundingBox();
+  await page.mouse.move(titleBounds!.x + 5, titleBounds!.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(2, 2);
+  await page.mouse.up();
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '完成后继续编辑' })).not.toBeFocused();
+  const nestedTrigger = dialog.getByRole('button', { name: '打开嵌套确认' });
+  await nestedTrigger.click();
+  const nested = page.getByRole('dialog', { name: '嵌套确认', exact: true });
+  await expect(nested.getByRole('button', { name: '取消嵌套确认' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(nested).not.toBeVisible();
+  await expect(dialog).toBeVisible();
+  await expect(nestedTrigger).toBeFocused();
+  await dialog.getByRole('button', { name: '开始对话框操作' }).click();
+  await expect(dialog).toHaveAttribute('aria-busy', 'true');
+  await expect(dialog.getByRole('button', { name: '关闭', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.mouse.click(2, 2);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: '结束对话框操作' }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await dialog.getByRole('button', { name: '关闭并继续编辑' }).click();
+  await expect(page.getByRole('textbox', { name: '完成后继续编辑' })).toBeFocused();
+  await trigger.click();
+  await page.mouse.click(2, 2);
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.setViewportSize({ width: 360, height: 760 });
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(360);
+  for (let index = 0; index < 9; index++) {
+    await page.keyboard.press('Tab');
+    expect(
+      await dialog.evaluate(
+        (node) => node.contains(document.activeElement) || document.activeElement === document.body,
+      ),
+    ).toBe(true);
+  }
+  await page.keyboard.press('Shift+Tab');
+  expect(
+    await dialog.evaluate(
+      (node) => node.contains(document.activeElement) || document.activeElement === document.body,
+    ),
+  ).toBe(true);
+  await dialog.screenshot({ path: test.info().outputPath('native-dialog-mobile.png') });
+  await dialog.getByRole('button', { name: '关闭并移除入口' }).click();
+  await expect(trigger).toHaveCount(0);
+  await expect(page.getByRole('main')).toBeFocused();
+});
+
+test('notification overflow preserves a hovered or focused message', async ({ page }) => {
+  await page.goto(fixtureURL);
+  await page.getByRole('button', { name: '显示成功通知', exact: true }).click();
+  const notice = page.getByRole('status').filter({ hasText: '测试成功通知' });
+  await notice.hover();
+  await page
+    .getByRole('button', { name: '批量显示通知' })
+    .evaluate((node) => (node as HTMLButtonElement).click());
+  await expect(notice).toBeVisible();
+  await expect(page.locator('.evia-toast')).toHaveCount(5);
+  await notice.getByRole('button', { name: '关闭通知' }).focus();
+  await page.mouse.move(0, 0);
+  await page
+    .getByRole('button', { name: '批量显示通知' })
+    .evaluate((node) => (node as HTMLButtonElement).click());
+  await expect(notice.getByRole('button', { name: '关闭通知' })).toBeFocused();
+  await expect(notice).toBeVisible();
+  await expect(page.locator('.evia-toast')).toHaveCount(5);
 });

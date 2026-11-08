@@ -40,6 +40,7 @@ import {
   WorkspaceShell,
 } from '@evia/design-system';
 import { DraftNavigationProvider, useDraftNavigation } from './draft-navigation';
+import { NavigationIcon, type WorkspaceSection } from './navigation-icons';
 const ProjectsPage = lazy(() =>
   import('./projects').then((module) => ({ default: module.ProjectsPage })),
 );
@@ -182,7 +183,7 @@ function Workspace({ session }: { session: Session }) {
     queryFn: ({ signal }) => api.getProject(projectID!, signal),
     enabled: !!projectID,
   });
-  const sections = [
+  const sections: { path: WorkspaceSection; label: string; component: typeof CatalogPage }[] = [
     { path: 'events', label: '事件管理', component: CatalogPage },
     { path: 'releases', label: '发布管理', component: ReleasesPage },
     { path: 'sources', label: '接入来源', component: SourcesPage },
@@ -192,6 +193,7 @@ function Workspace({ session }: { session: Session }) {
     ? sections.map((section) => ({
         href: `/projects/${encodeURIComponent(projectID)}/${section.path}?environment=${environment}`,
         label: section.label,
+        icon: <NavigationIcon section={section.path} />,
         active: match?.params['*'] === section.path,
       }))
     : undefined;
@@ -211,17 +213,23 @@ function Workspace({ session }: { session: Session }) {
       navigation={navigationItems}
       projectContext={
         projectID ? (
-          <div className="console-form">
+          <div className="workspace-project-context">
             <Button
               variant="link"
+              className="workspace-project-back"
               onClick={() => navigation.request(() => void navigate('/projects'))}
             >
+              <span aria-hidden="true">←</span>
               返回项目列表
             </Button>
-            <strong style={{ overflowWrap: 'anywhere' }}>
+            <strong className="workspace-project-name" title={project.data?.name}>
               {project.data?.name ?? '项目工作区'}
             </strong>
-            <Field label="当前环境" htmlFor="workspace-environment">
+            <Field
+              className="workspace-project-environment"
+              label="当前环境"
+              htmlFor="workspace-environment"
+            >
               <Select
                 id="workspace-environment"
                 value={environment}

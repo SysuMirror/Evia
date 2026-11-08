@@ -26,6 +26,7 @@ import {
   LoadingPanel,
   Modal,
   PageHeading,
+  Panel,
   PaginationBar,
   Select,
   Textarea,
@@ -46,7 +47,7 @@ const applicationLabels = {
   failed: '应用失败',
 };
 const applicationHelp =
-  '配置已保存后，接收器首次观察到版本才开始等待最长 2 秒的缓存窗口。窗口已过不表示每个节点逐一确认；依赖不可用时接入关闭。';
+  '接收器首次观察到新配置后，等待最长 2 秒的缓存窗口；此状态不代表全部节点已确认。';
 
 function Failure({ error, retry }: { error: Error; retry?: () => void }) {
   return (
@@ -368,7 +369,7 @@ function SourcesWorkspace({
         item.kind === 'server' ? (
           '不适用'
         ) : (
-          <span style={{ overflowWrap: 'anywhere' }}>{item.allowed_origins.join('，')}</span>
+          <span className="resource-origin-list">{item.allowed_origins.join('，')}</span>
         ),
     },
   ];
@@ -554,24 +555,26 @@ function SourcesWorkspace({
               }
             />
           </Field>
-          <Field label="环境" htmlFor="source-environment">
-            <Input id="source-environment" value={environments[environment]} readOnly />
-          </Field>
-          <Field label="来源类型" htmlFor="source-kind" required>
-            <Select
-              id="source-kind"
-              value={kind}
-              disabled={!!busy || uncertain(createError)}
-              options={[
-                { value: 'browser', label: '浏览器' },
-                { value: 'server', label: '服务端' },
-              ]}
-              onChange={(event) => {
-                setKind(event.target.value as SourceInput['kind']);
-                setCreateErrors((current) => ({ ...current, origins: undefined }));
-              }}
-            />
-          </Field>
+          <div className="resource-grid">
+            <Field label="环境" htmlFor="source-environment">
+              <Input id="source-environment" value={environments[environment]} readOnly />
+            </Field>
+            <Field label="来源类型" htmlFor="source-kind" required>
+              <Select
+                id="source-kind"
+                value={kind}
+                disabled={!!busy || uncertain(createError)}
+                options={[
+                  { value: 'browser', label: '浏览器' },
+                  { value: 'server', label: '服务端' },
+                ]}
+                onChange={(event) => {
+                  setKind(event.target.value as SourceInput['kind']);
+                  setCreateErrors((current) => ({ ...current, origins: undefined }));
+                }}
+              />
+            </Field>
+          </div>
           {kind === 'browser' ? (
             <Field
               label="允许的 Origin"
@@ -614,9 +617,79 @@ function SourcesWorkspace({
         busy={!!busy}
         initialFocusRef={editBase ? editRef : undefined}
         footer={
-          <Button onClick={closeDetail} disabled={!!busy}>
-            完成
-          </Button>
+          <>
+            {source &&
+              !inaccessible(detail.error) &&
+              (editBase ? (
+                <div className="inline-actions">
+                  <Button
+                    onClick={() =>
+                      guard.requestLeave(() => {
+                        setEditBase(undefined);
+                        setEditOrigins('');
+                        setEditError(undefined);
+                        setOriginError(undefined);
+                      })
+                    }
+                    disabled={!!busy}
+                  >
+                    取消编辑
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    form="source-edit"
+                    loading={busy === 'edit'}
+                    disabled={!canWrite || !editDirty || conflict}
+                  >
+                    保存 Origin
+                  </Button>
+                </div>
+              ) : canWrite ? (
+                <div className="inline-actions">
+                  {source.kind === 'browser' && (
+                    <Button
+                      disabled={!!busy || detail.isFetching}
+                      onClick={() => {
+                        setEditBase(source);
+                        setEditOrigins(source.allowed_origins.join('\n'));
+                        setEditError(undefined);
+                        setOriginError(undefined);
+                      }}
+                    >
+                      编辑 Origin
+                    </Button>
+                  )}
+                  <Button
+                    disabled={!!busy || detail.isFetching}
+                    variant={source.status === 'active' ? 'danger' : 'secondary'}
+                    onClick={() => {
+                      setStatusTarget(source);
+                      setStatusError(undefined);
+                    }}
+                  >
+                    {source.status === 'active' ? '停用来源' : '启用来源'}
+                  </Button>
+                  <Button
+                    disabled={!!busy || detail.isFetching}
+                    onClick={() => {
+                      setRotationTarget(source);
+                      setOverlap('3600');
+                      setRotationAttempt(undefined);
+                      setRotationError(undefined);
+                      setOverlapError(undefined);
+                    }}
+                  >
+                    轮换凭据
+                  </Button>
+                </div>
+              ) : null)}
+            {!editBase && (
+              <Button onClick={closeDetail} disabled={!!busy}>
+                完成
+              </Button>
+            )}
+          </>
         }
       >
         {detail.isError && (
@@ -632,70 +705,75 @@ function SourcesWorkspace({
           <LoadingPanel label="正在加载来源详情" />
         ) : source && !inaccessible(detail.error) ? (
           <>
-            <dl className="project-details">
-              <div>
-                <dt>来源名称</dt>
-                <dd>{source.name}</dd>
-              </div>
-              <div>
-                <dt>来源 ID</dt>
-                <dd>
-                  <code>{source.id}</code> <CopyButton value={source.id} />
-                </dd>
-              </div>
-              <div>
-                <dt>环境和类型</dt>
-                <dd>
+            <div className="resource-summary">
+              <div className="resource-summary-title">{source.name}</div>
+              <div className="resource-statuses">
+                <Badge tone={source.status === 'active' ? 'success' : 'neutral'}>
+                  {source.status === 'active' ? '启用' : '停用'}
+                </Badge>
+                <ApplicationState source={source} />
+                <span className="resource-muted">
                   {environments[source.environment]}，
-                  {source.kind === 'browser' ? '浏览器' : '服务端'}
-                </dd>
+                  {source.kind === 'browser' ? '浏览器' : '服务端'}，r{source.revision}
+                </span>
               </div>
-              <div>
-                <dt>写入键</dt>
-                <dd>
-                  <code>{source.write_key}</code>{' '}
-                  <CopyButton value={source.write_key} label="复制写入键" />
-                </dd>
-              </div>
-              <div>
-                <dt>接入状态</dt>
-                <dd>{source.status === 'active' ? '启用' : '停用'}</dd>
-              </div>
-              <div>
-                <dt>配置应用</dt>
-                <dd>
-                  <ApplicationState source={source} />
-                  <p className="evia-field-hint">{applicationHelp}</p>
-                </dd>
-              </div>
-              <div>
-                <dt>修订版本</dt>
-                <dd>{source.revision}</dd>
-              </div>
-              <div>
-                <dt>允许的 Origin</dt>
-                <dd>
-                  {source.kind === 'server'
-                    ? '服务端来源不使用浏览器 Origin'
-                    : source.allowed_origins.map((origin) => (
-                        <div key={origin} style={{ overflowWrap: 'anywhere' }}>
-                          <code>{origin}</code> <CopyButton value={origin} />
-                        </div>
-                      ))}
-                </dd>
-              </div>
-            </dl>
-            {source.kind === 'browser' ? (
-              <p className="evia-field-hint">
-                浏览器写入键用于标识来源，不是服务端密钥。接收请求必须携带允许列表中的精确 Origin。
-              </p>
-            ) : (
-              <p className="evia-field-hint">
-                已有服务端密钥不会再次显示。遗失时请轮换凭据，写入键和密钥需一起更新。
-              </p>
-            )}
+            </div>
+            <Panel title="接入配置" className="resource-section">
+              <dl className="project-details">
+                <div>
+                  <dt>来源 ID</dt>
+                  <dd>
+                    <code>{source.id}</code> <CopyButton value={source.id} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>环境和类型</dt>
+                  <dd>
+                    {environments[source.environment]}，
+                    {source.kind === 'browser' ? '浏览器' : '服务端'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>写入键</dt>
+                  <dd>
+                    <code>{source.write_key}</code>{' '}
+                    <CopyButton value={source.write_key} label="复制写入键" />
+                  </dd>
+                </div>
+
+                <div>
+                  <dt>配置应用</dt>
+                  <dd>
+                    <span className="evia-field-hint">{applicationHelp}</span>
+                  </dd>
+                </div>
+
+                <div>
+                  <dt>允许的 Origin</dt>
+                  <dd>
+                    {source.kind === 'server'
+                      ? '服务端来源不使用浏览器 Origin'
+                      : source.allowed_origins.map((origin) => (
+                          <div key={origin} className="resource-origin-list">
+                            <code>{origin}</code> <CopyButton value={origin} />
+                          </div>
+                        ))}
+                  </dd>
+                </div>
+              </dl>
+              {source.kind === 'browser' ? (
+                <p className="evia-field-hint">
+                  浏览器写入键用于标识来源，不是服务端密钥。接收请求必须携带允许列表中的精确
+                  Origin。
+                </p>
+              ) : (
+                <p className="evia-field-hint">
+                  已有服务端密钥不会再次显示。遗失时请轮换凭据，写入键和密钥需一起更新。
+                </p>
+              )}
+            </Panel>
             {editBase ? (
-              <>
+              <Panel title="编辑 Origin" className="resource-section">
                 {editError && <Failure error={editError} />}
                 {conflict && (
                   <Alert tone="warning" title="修订版本冲突">
@@ -775,72 +853,9 @@ function SourcesWorkspace({
                       onInvalid={() => setOriginError('至少填写一个 Origin')}
                     />
                   </Field>
-                  <div className="inline-actions">
-                    <Button
-                      onClick={() =>
-                        guard.requestLeave(() => {
-                          setEditBase(undefined);
-                          setEditOrigins('');
-                          setEditError(undefined);
-                          setOriginError(undefined);
-                        })
-                      }
-                      disabled={!!busy}
-                    >
-                      取消编辑
-                    </Button>
-                    <Button
-                      variant="primary"
-                      type="submit"
-                      loading={busy === 'edit'}
-                      disabled={!canWrite || !editDirty || conflict}
-                    >
-                      保存 Origin
-                    </Button>
-                  </div>
                 </form>
-              </>
-            ) : (
-              canWrite && (
-                <div className="inline-actions">
-                  {source.kind === 'browser' && (
-                    <Button
-                      disabled={!!busy || detail.isFetching}
-                      onClick={() => {
-                        setEditBase(source);
-                        setEditOrigins(source.allowed_origins.join('\n'));
-                        setEditError(undefined);
-                        setOriginError(undefined);
-                      }}
-                    >
-                      编辑 Origin
-                    </Button>
-                  )}
-                  <Button
-                    disabled={!!busy || detail.isFetching}
-                    variant={source.status === 'active' ? 'danger' : 'secondary'}
-                    onClick={() => {
-                      setStatusTarget(source);
-                      setStatusError(undefined);
-                    }}
-                  >
-                    {source.status === 'active' ? '停用来源' : '启用来源'}
-                  </Button>
-                  <Button
-                    disabled={!!busy || detail.isFetching}
-                    onClick={() => {
-                      setRotationTarget(source);
-                      setOverlap('3600');
-                      setRotationAttempt(undefined);
-                      setRotationError(undefined);
-                      setOverlapError(undefined);
-                    }}
-                  >
-                    轮换凭据
-                  </Button>
-                </div>
-              )
-            )}
+              </Panel>
+            ) : null}
           </>
         ) : null}
       </Modal>

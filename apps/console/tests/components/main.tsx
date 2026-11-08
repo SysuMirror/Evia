@@ -1,4 +1,5 @@
-import { StrictMode, useState } from 'react';
+import { StrictMode, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { createMemoryRouter, Link, RouterProvider, useLocation } from 'react-router-dom';
 import {
@@ -8,6 +9,7 @@ import {
   DesignProvider,
   Field,
   Input,
+  Modal,
   Select,
   Textarea,
   Tabs,
@@ -64,6 +66,102 @@ const guardRouter = createMemoryRouter([
   },
 ]);
 
+function LifecycleFixture() {
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [nested, setNested] = useState(false);
+  const [modalBusy, setModalBusy] = useState(false);
+  const [triggerVisible, setTriggerVisible] = useState(true);
+  const [invalid, setInvalid] = useState(false);
+  const [validSubmissions, setValidSubmissions] = useState(0);
+  const nextFocus = useRef<HTMLInputElement>(null);
+  const safeFocus = useRef<HTMLButtonElement>(null);
+  return (
+    <section aria-label="控件生命周期" className="section-stack">
+      <div className="inline-actions">
+        <Button loading={busy} onClick={() => setBusy(true)}>
+          执行异步操作
+        </Button>
+        <Button onClick={() => setBusy(false)}>完成异步操作</Button>
+        {triggerVisible && <Button onClick={() => setOpen(true)}>打开测试对话框</Button>}
+      </div>
+      <Field label="完成后继续编辑" htmlFor="fixture-next-focus">
+        <Input ref={nextFocus} />
+      </Field>
+      <form
+        aria-label="必填校验表单"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setValidSubmissions((value) => value + 1);
+        }}
+      >
+        <Field
+          label="必填名称"
+          htmlFor="fixture-required"
+          required
+          hint="名称用于区分查询。"
+          error={invalid ? '请填写名称' : undefined}
+        >
+          <Input
+            onInvalid={() => setInvalid(true)}
+            onChange={(event) => setInvalid(!event.currentTarget.validity.valid)}
+          />
+        </Field>
+        <Button type="submit">提交必填表单</Button>
+      </form>
+      <output aria-label="校验成功次数">{validSubmissions}</output>
+      <Modal
+        open={open}
+        title="测试对话框"
+        onRequestClose={() => setOpen(false)}
+        busy={modalBusy}
+        initialFocusRef={safeFocus}
+        footer={
+          <Button ref={safeFocus} onClick={() => setOpen(false)} disabled={modalBusy}>
+            安全返回
+          </Button>
+        }
+      >
+        <div className="section-stack">
+          <Field label="对话框内容" htmlFor="fixture-modal-input">
+            <Input />
+          </Field>
+          <div className="inline-actions">
+            <Button onClick={() => setNested(true)}>打开嵌套确认</Button>
+            <Button onClick={() => setModalBusy((value) => !value)}>
+              {modalBusy ? '结束对话框操作' : '开始对话框操作'}
+            </Button>
+            <Button
+              onClick={() => {
+                flushSync(() => setOpen(false));
+                nextFocus.current?.focus();
+              }}
+            >
+              关闭并继续编辑
+            </Button>
+            <Button
+              onClick={() => {
+                setTriggerVisible(false);
+                setOpen(false);
+              }}
+            >
+              关闭并移除入口
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={nested}
+        title="嵌套确认"
+        onRequestClose={() => setNested(false)}
+        footer={<Button onClick={() => setNested(false)}>取消嵌套确认</Button>}
+      >
+        <p>仅关闭当前确认。</p>
+      </Modal>
+    </section>
+  );
+}
+
 // Isolated development fixture. This HTML entry is not a product route or a build input.
 function ComponentFixture() {
   const toast = useToast();
@@ -81,7 +179,7 @@ function ComponentFixture() {
   const [tabChanges, setTabChanges] = useState(0);
 
   return (
-    <main style={{ maxWidth: 800, margin: '24px auto', padding: 24 }}>
+    <main tabIndex={-1} style={{ maxWidth: 800, margin: '24px auto', padding: 24 }}>
       <h1>组件交互测试</h1>
       <section aria-labelledby="native-title">
         <h2 id="native-title">原生控件</h2>
@@ -197,6 +295,13 @@ function ComponentFixture() {
         <h2 id="toast-title">通知生命周期</h2>
         <Button onClick={() => toast.success('测试成功通知')}>显示成功通知</Button>{' '}
         <Button onClick={() => toast.error('测试错误通知')}>显示错误通知</Button>
+        <Button
+          onClick={() => {
+            for (let index = 1; index <= 6; index++) toast.success(`新增通知 ${index}`);
+          }}
+        >
+          批量显示通知
+        </Button>
       </section>
       <section aria-labelledby="tabs-title">
         <h2 id="tabs-title">面板切换</h2>
@@ -227,6 +332,7 @@ function ComponentFixture() {
         <h2 id="guard-title">未保存保护</h2>
         <RouterProvider router={guardRouter} />
       </section>
+      <LifecycleFixture />
     </main>
   );
 }

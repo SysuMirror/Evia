@@ -20,6 +20,8 @@ Evia is a self-hosted event analytics platform. Read README.md, PROGRESS.md and 
 
 ## Frontend
 
+- Document Evia design decisions in its own terms. Do not record names, screenshots or branding from externally supplied interface references in source, documentation, fixtures, assets or commit messages. This does not remove required dependency attribution or license notices.
+
 - Build and reuse packages/design-system components, tokens and layouts before composing console pages. Keep state, errors, loading, empty results, keyboard access and responsive behavior complete.
 - Use Evia-owned React and native HTML primitives for ordinary controls. Use a mature external UI library only for complex capabilities such as chart rendering; do not reproduce a full third-party form engine. Existing access pages use the native foundation; new pages must share it.
 - Treat components as behavior contracts: pointer and keyboard activation, event cancellation, combined hover/focus/invalid states, disabled/busy/read-only behavior, asynchronous completion and focus restoration require explicit verification. Keep test-only component fixtures out of production entries.
