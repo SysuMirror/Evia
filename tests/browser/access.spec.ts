@@ -42,6 +42,21 @@ async function login(page: Page) {
   await expect(page.getByRole('heading', { name: '项目管理' })).toBeVisible();
 }
 
+async function findProjectOnPages(page: Page, name: string) {
+  const table = page.getByRole('table', { name: '项目列表', exact: true });
+  const region = page.locator('.evia-table-region').filter({ has: table });
+  for (let number = 1; number <= 20; number++) {
+    await expect(region).toHaveAttribute('aria-busy', 'false');
+    const project = page.getByRole('button', { name, exact: true });
+    if (await project.count()) return project;
+    const next = page.getByRole('button', { name: '下一页', exact: true });
+    await expect(next, 'persisted project remains reachable through real pagination').toBeEnabled();
+    await next.click();
+    await expect(page.getByText(`第 ${number + 1} 页，本页`, { exact: false })).toBeVisible();
+  }
+  throw new Error('Synthetic project was not found within twenty real project pages.');
+}
+
 test('recover from failed login and project requests, persist details and revoke the session', async ({
   page,
 }, testInfo) => {
@@ -73,7 +88,7 @@ test('recover from failed login and project requests, persist details and revoke
   await page.unroute('**/api/v1/projects');
   await dialog.getByRole('button', { name: '创建', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await page.getByRole('button', { name, exact: true }).click();
+  await (await findProjectOnPages(page, name)).click();
   await expect(
     page.getByRole('dialog', { name: '项目详情' }).getByText('Asia/Shanghai'),
   ).toBeVisible();
@@ -88,7 +103,7 @@ test('recover from failed login and project requests, persist details and revoke
     .getByRole('button', { name: '完成', exact: true })
     .click();
   await page.reload();
-  await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  await expect(await findProjectOnPages(page, name)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('desktop-projects.png'), fullPage: true });
   await page.getByRole('button', { name: '退出登录' }).click();
   await expect(page).toHaveURL(/\/login$/);
