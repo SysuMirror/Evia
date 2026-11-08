@@ -93,12 +93,8 @@ func Validate(r *Request) error {
 	if len(r.EventKeys) > 20 || len(r.GroupBy) > 3 || len(r.Metrics) > 10 {
 		return Invalid("QUERY_COST_EXCEEDED", "事件、分组或指标数量超过预算")
 	}
-	seen := map[string]bool{}
-	for _, k := range r.EventKeys {
-		if !eventKey.MatchString(k) || seen[k] {
-			return Invalid("INVALID_EVENT_KEYS", "事件标识必须有效且不能重复", "/event_keys")
-		}
-		seen[k] = true
+	if e := validateEventSelection(*r); e != nil {
+		return e
 	}
 	nodes := 0
 	if e := validateFilter(r.Filter, 0, &nodes); e != nil {
@@ -312,4 +308,44 @@ func scalarType(v any) (string, error) {
 		}
 	}
 	return "", Invalid("INVALID_FILTER_VALUE", fmt.Sprintf("过滤值必须为有界标量"))
+}
+
+// validateEventSelection also protects direct compilation of normalized requests.
+func validateEventSelection(r Request) error {
+	if r.EventKeys != nil && r.EventVersions != nil {
+		return Invalid("INVALID_EVENT_SELECTION", "事件标识与固定事件版本不能同时指定", "/event_keys", "/event_versions")
+	}
+	if len(r.EventKeys) > 20 || len(r.EventVersions) > 20 {
+		return Invalid("QUERY_COST_EXCEEDED", "事件数量超过预算")
+	}
+	seen := map[string]bool{}
+	for _, key := range r.EventKeys {
+		if !eventKey.MatchString(key) || seen[key] {
+			return Invalid("INVALID_EVENT_KEYS", "事件标识必须有效且不能重复", "/event_keys")
+		}
+		seen[key] = true
+	}
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel") {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗查询", "/event_versions")
+	}
+	for _, version := range r.EventVersions {
+		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {
+			return Invalid("INVALID_EVENT_VERSIONS", "固定事件版本必须有效且每个事件只能选择一个版本", "/event_versions")
+		}
+		seen[version.EventKey] = true
+	}
+	if len(r.EventVersions) > 0 {
+		return WalkFields(&r, func(field *Field) error {
+			if field.Kind != "property" {
+				return nil
+			}
+			for _, version := range r.EventVersions {
+				if field.EventKey == version.EventKey && field.SchemaVersion == version.SchemaVersion {
+					return nil
+				}
+			}
+			return Invalid("QUERY_FIELD_VERSION_NOT_SELECTED", "属性必须属于固定选择的事件版本", "/event_versions")
+		})
+	}
+	return nil
 }
