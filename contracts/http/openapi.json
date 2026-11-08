@@ -9673,6 +9673,367 @@
           }
         ]
       }
+    },
+    "/api/v1/projects/{project_id}/analysis-capabilities": {
+      "get": {
+        "operationId": "getAnalysisCapabilities",
+        "summary": "getAnalysisCapabilities",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisCapabilities"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/analysis-catalog": {
+      "get": {
+        "operationId": "getAnalysisCatalog",
+        "summary": "getAnalysisCatalog",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisCatalog"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/query-validations": {
+      "post": {
+        "operationId": "validateQuery",
+        "summary": "validateQuery",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryValidation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "../query/query-request.schema.json"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11612,6 +11973,476 @@
           "draft_revision",
           "definition"
         ]
+      },
+      "AnalysisFieldCapability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "filter_operators",
+          "groupable",
+          "metric_operations"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "filter_operators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupable": {
+            "type": "boolean"
+          },
+          "metric_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AnalysisCapabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_available",
+          "query_kinds",
+          "aggregations",
+        "approximate_aggregations",
+          "subjects",
+          "intervals",
+          "funnel_modes",
+          "field_types",
+          "budgets"
+        ],
+        "properties": {
+          "execution_available": {
+            "type": "boolean"
+          },
+          "query_kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aggregations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "approximate_aggregations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Only unique and p95 accept explicit approximate accuracy; all aggregations default to exact."
+        },
+        "subjects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "intervals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "funnel_modes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "field_types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisFieldCapability"
+            }
+          },
+          "budgets": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "trend_window_seconds",
+              "other_window_seconds",
+              "event_selections",
+              "group_fields",
+              "metrics",
+              "result_rows",
+              "filter_depth",
+              "filter_nodes",
+              "filter_arguments",
+              "filter_values",
+              "funnel_steps",
+              "funnel_window_seconds",
+              "project_running_queries",
+              "project_queued_queries"
+            ],
+            "properties": {
+              "trend_window_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "other_window_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "event_selections": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "group_fields": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "metrics": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "result_rows": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "filter_depth": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "filter_nodes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "filter_arguments": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "filter_values": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "funnel_steps": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "funnel_window_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "project_running_queries": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "project_queued_queries": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      },
+      "AnalysisCatalogField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "type",
+          "required",
+          "nullable",
+          "missing_semantics",
+          "null_semantics",
+          "filter_operators",
+          "groupable",
+          "metric_operations",
+          "metadata"
+        ],
+        "properties": {
+          "field": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "event_key",
+              "schema_version",
+              "key"
+            ],
+            "properties": {
+              "kind": {
+                "const": "property"
+              },
+              "event_key": {
+                "type": "string"
+              },
+              "schema_version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              }
+            }
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "nullable": {
+            "type": "boolean"
+          },
+          "missing_semantics": {
+            "type": "string",
+            "enum": [
+              "absent_key"
+            ]
+          },
+          "null_semantics": {
+            "type": "string",
+            "enum": [
+              "present_but_not_a_typed_value"
+            ]
+          },
+          "filter_operators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupable": {
+            "type": "boolean"
+          },
+          "metric_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "description": "Property operators use the existing engine: is_present tests key existence, including explicit null; is_missing tests absent keys within the referenced event/version. Typed comparisons exclude null and absent values. Nullable schema unions and unsupported nested/object fields are omitted."
+      },
+      "AnalysisCatalogEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_key",
+          "schema_version",
+          "display_name",
+          "definition_hash",
+          "created_at",
+          "published",
+          "active",
+          "ingestion_ready",
+          "fields"
+        ],
+        "properties": {
+          "event_key": {
+            "type": "string"
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "ingestion_ready": {
+            "type": "boolean"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisCatalogField"
+            },
+            "maxItems": 50
+          }
+        },
+        "description": "Read-only immutable version metadata published in this environment. active means included in the current default active release; ingestion_ready additionally requires that active release to have a current verified readiness lease. Neither flag proves source eligibility or query capacity. fields includes only supported top-level typed properties."
+      },
+      "AnalysisCatalog": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environment",
+          "catalog_revision",
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "catalog_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisCatalogEvent"
+            },
+            "maxItems": 200
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "QueryDependency": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_key",
+          "schema_version",
+          "definition_hash"
+        ],
+        "properties": {
+          "event_key": {
+            "type": "string"
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "QueryDependencyManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "project_id",
+          "environment",
+          "selection_mode",
+          "unfixed_event_keys",
+          "event_versions"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "selection_mode": {
+            "type": "string",
+            "enum": [
+              "event_versions",
+              "funnel_steps",
+              "event_keys",
+              "all_events"
+            ]
+          },
+          "unfixed_event_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "event_versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QueryDependency"
+            }
+          }
+        }
+      },
+      "QueryValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valid",
+          "execution_performed",
+          "execution_available",
+          "catalog_revision",
+          "normalized_request",
+          "query_hash",
+          "dependencies",
+          "dependency_hash"
+        ],
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "execution_performed": {
+            "type": "boolean",
+            "const": false
+          },
+          "execution_available": {
+            "type": "boolean"
+          },
+          "catalog_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "normalized_request": {
+            "$ref": "../query/query-request.schema.json"
+          },
+          "query_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/QueryDependencyManifest"
+          },
+          "dependency_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "description": "Read-only dry validation; no query job, scan or result is created. execution_available reports runtime configuration, not proven capacity or execution success. Unfixed event_keys/all_events remain unfixed; only manifest event_versions are immutable dependencies. Execution reauthorizes and revalidates."
       }
     }
   }
