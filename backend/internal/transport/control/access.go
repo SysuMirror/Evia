@@ -14,6 +14,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
+	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
 type AccessService interface {
@@ -31,6 +32,7 @@ type API struct {
 	Catalog       CatalogService
 	Sources       SourceService
 	Analysis      AnalysisService
+	Discovery     reporting.DiscoveryService
 	Delivery      DeliveryService
 	Cursor        *cursor.Codec
 	Origin        string
@@ -51,6 +53,7 @@ func (a *API) Handler() http.Handler {
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
+	(&DiscoveryAPI{API: a, Service: a.Discovery}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.
