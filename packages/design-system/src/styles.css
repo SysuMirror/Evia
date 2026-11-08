@@ -1353,6 +1353,60 @@ p {
 .saved-analysis-workspace > .page-heading {
   margin-bottom: 0;
 }
+.saved-analysis-tabs.evia-panel,
+.saved-analysis-version-picker.evia-panel,
+.saved-analysis-run-controls.evia-panel {
+  padding: 0;
+}
+.saved-analysis-tabs .evia-tab-panel {
+  padding-top: 12px;
+}
+.saved-analysis-published.section-stack,
+.saved-analysis-run.section-stack {
+  gap: 12px;
+}
+.saved-analysis-run-form {
+  display: grid;
+  gap: 8px;
+}
+.saved-analysis-run-controls .analysis-query-footer {
+  padding: 8px 0;
+  background: transparent;
+  border-radius: 0;
+}
+.saved-analysis-run-context {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.saved-analysis-run-context > strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.saved-analysis-run-context .analysis-query-summary {
+  padding: 0;
+}
+.saved-analysis-version-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  min-width: 0;
+  max-width: 100%;
+}
+.saved-analysis-version-metadata > details {
+  max-width: 100%;
+}
+.saved-analysis-version-metadata > details > summary {
+  padding: 0;
+  font-size: 12px;
+}
+.saved-analysis-version-metadata > details[open] > summary {
+  margin-bottom: 4px;
+}
 .saved-analysis-list .project-link {
   font-weight: 600;
 }
@@ -1430,7 +1484,20 @@ p {
   overflow-wrap: anywhere;
 }
 .saved-analysis-result {
+  padding: 20px;
   background: var(--color-surface-subtle);
+}
+.saved-analysis-result > .result-header {
+  margin-bottom: 12px;
+}
+.saved-analysis-result > .section-stack {
+  gap: 12px;
+}
+.saved-analysis-result .analysis-query-context {
+  padding: 0;
+}
+.saved-analysis-result .data-surface {
+  padding: 0;
 }
 .saved-analysis-result .evia-table-region {
   border-radius: 12px;
