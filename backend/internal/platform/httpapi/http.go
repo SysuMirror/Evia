@@ -164,7 +164,7 @@ func (b *Boundary) Error(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	problem := wire.Problem{Code: f.Code, Message: f.Message, RequestID: RequestID(r.Context())}
 	if len(f.Fields) > 0 {
-		problem.Details = map[string]any{"field_paths": f.Fields}
+		problem.Details = &wire.ProblemDetails{FieldPaths: f.Fields}
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

@@ -205,7 +205,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** getActivation */
+        get: operations["getActivation"];
         put?: never;
         /** activateRelease */
         post: operations["activateRelease"];
@@ -676,6 +677,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getProject */
+        get: operations["getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/event-definitions/{event_key}/versions/{schema_version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getEventVersion */
+        get: operations["getEventVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -684,7 +719,7 @@ export interface components {
             code: string;
             message: string;
             request_id: string;
-            details?: Record<string, never>;
+            details?: components["schemas"]["ProblemDetails"];
         };
         ProjectInput: {
             name: string;
@@ -744,13 +779,19 @@ export interface components {
         DraftInput: {
             display_name?: string;
             /** @description 受限的扁平属性定义：最多50个字段，仅字符串、有限安全数值、布尔值和最多20项的同类型标量数组。必须显式禁止额外属性；不支持远程引用、嵌套对象、正则和组合规则。详细限制与发布完整性由事件校验服务验证。 */
-            schema: Record<string, never>;
-            field_metadata?: Record<string, never>;
+            schema: {
+                [key: string]: unknown;
+            };
+            field_metadata?: {
+                [key: string]: unknown;
+            };
             trigger?: string;
             allowed_source_kinds?: ("browser" | "server")[];
             /** @enum {unknown} */
             fact_kind?: "user_intent" | "client_observed" | "server_confirmed";
-            example_properties?: Record<string, never>;
+            example_properties?: {
+                [key: string]: unknown;
+            };
         };
         Draft: {
             revision: number;
@@ -758,7 +799,9 @@ export interface components {
         };
         ValidationInput: {
             draft_revision: number;
-            sample_properties: Record<string, never>;
+            sample_properties: {
+                [key: string]: unknown;
+            };
         };
         ValidationResult: {
             valid: boolean;
@@ -773,7 +816,7 @@ export interface components {
         ReleaseInput: {
             /** @enum {string} */
             environment: "development" | "staging" | "production";
-            /** @description 比较实际已激活版本，不是最近构建版本。当前未实现激活，值为0。 */
+            /** @description 比较实际已激活版本，不是最近构建版本。通过激活查询读取；尚未激活时为 0。 */
             expected_active_revision: number;
             events: {
                 event_key: string;
@@ -807,6 +850,7 @@ export interface components {
         Activation: {
             /** @enum {string} */
             environment: "development" | "staging" | "production";
+            /** @description 当前已激活版本；尚未激活时为 0。 */
             active_release_revision: number;
         };
         Diagnostic: {
@@ -825,7 +869,9 @@ export interface components {
         DashboardInput: {
             name: string;
             report_ids: string[];
-            layout: Record<string, never>[];
+            layout: {
+                [key: string]: unknown;
+            }[];
         };
         Dashboard: {
             /** Format: uuid */
@@ -833,7 +879,9 @@ export interface components {
             revision: number;
             name: string;
             report_ids: string[];
-            layout: Record<string, never>[];
+            layout: {
+                [key: string]: unknown;
+            }[];
         };
         ReportInput: {
             name: string;
@@ -1098,8 +1146,19 @@ export interface components {
                 event_key: string;
                 schema_version: number;
                 /** @description 仅保留客户端校验所需关键词，移除示例、描述、默认值及内部元数据。 */
-                schema: Record<string, never>;
+                schema: {
+                    [key: string]: unknown;
+                };
             }[];
+        };
+        ProblemDetails: {
+            field_paths?: string[];
+        };
+        EventVersion: {
+            event_key: string;
+            schema_version: number;
+            draft_revision: number;
+            definition: components["schemas"]["DraftInput"];
         };
         filter: {
             /** @enum {unknown} */
@@ -1282,7 +1341,9 @@ export interface components {
                 type: string;
                 label?: string;
             }[];
-            rows: Record<string, never>[];
+            rows: {
+                [key: string]: unknown;
+            }[];
             next_cursor?: string | null;
             metadata: {
                 /**
@@ -3401,6 +3462,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getActivation: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activation"];
                 };
             };
             /** @description 请求不合法 */
@@ -8349,6 +8515,214 @@ export interface operations {
                 };
             };
             /** @description 预算限制 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEventVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                event_key: string;
+                schema_version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventVersion"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
             429: {
                 headers: {
                     [name: string]: unknown;
