@@ -40,6 +40,7 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
   const [eventKey, setEventKey] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [errors, setErrors] = useState<{ key?: string; name?: string }>({});
   const [editorDirty, setEditorDirty] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const keyInput = useRef<HTMLInputElement>(null);
@@ -86,12 +87,13 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
       render: (event) => (
         <Button
           variant="link"
+          className="project-link"
           onClick={() => {
             setEditorDirty(false);
             setSelected(event);
           }}
         >
-          {event.display_name}
+          <span className="project-name">{event.display_name}</span>
         </Button>
       ),
     },
@@ -101,7 +103,13 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
       header: '发布版本',
       render: (event) =>
         event.published_versions.length ? (
-          event.published_versions.map((version) => `v${version}`).join('、')
+          <div className="resource-statuses">
+            {event.published_versions.map((version) => (
+              <Badge key={version} tone="info">
+                v{version}
+              </Badge>
+            ))}
+          </div>
         ) : (
           <Badge tone="neutral">未发布</Badge>
         ),
@@ -110,7 +118,13 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
       key: 'seen',
       header: '最近收到',
       render: (event) =>
-        event.last_seen_at ? new Date(event.last_seen_at).toLocaleString() : '尚无记录',
+        event.last_seen_at ? (
+          <time dateTime={event.last_seen_at} title={event.last_seen_at}>
+            {new Date(event.last_seen_at).toLocaleString()}
+          </time>
+        ) : (
+          <span className="resource-muted">尚无记录</span>
+        ),
     },
   ];
   return (
@@ -127,6 +141,7 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
               disabled={!canWrite || denied}
               onClick={() => {
                 create.reset();
+                setErrors({});
                 setCreating(true);
               }}
             >
@@ -230,6 +245,7 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
             <Field
               label="事件标识"
               htmlFor="event-key"
+              error={errors.key}
               required
               hint="创建后保持稳定，以小写字母开头，仅含小写字母、数字和下划线，最多 64 个字符。"
             >
@@ -241,10 +257,19 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
                 maxLength={64}
                 required
                 disabled={create.isPending}
-                onChange={(event) => setEventKey(event.target.value)}
+                onChange={(event) => {
+                  setEventKey(event.target.value);
+                  setErrors((current) => ({ ...current, key: undefined }));
+                }}
+                onInvalid={() =>
+                  setErrors((current) => ({
+                    ...current,
+                    key: '以小写字母开头，仅含小写字母、数字和下划线，最多 64 个字符',
+                  }))
+                }
               />
             </Field>
-            <Field label="显示名称" htmlFor="event-name" required>
+            <Field label="显示名称" htmlFor="event-name" error={errors.name} required>
               <Input
                 id="event-name"
                 value={name}
@@ -253,10 +278,12 @@ export function CatalogPage({ project, session, environment }: CatalogPageProps)
                 disabled={create.isPending}
                 onChange={(event) => {
                   setName(event.target.value);
+                  setErrors((current) => ({ ...current, name: undefined }));
                   event.currentTarget.setCustomValidity(
                     event.target.value.trim() ? '' : '请输入显示名称',
                   );
                 }}
+                onInvalid={() => setErrors((current) => ({ ...current, name: '请输入显示名称' }))}
               />
             </Field>
             <Field label="描述" htmlFor="event-description">

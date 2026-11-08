@@ -20,6 +20,7 @@ import {
   Input,
   LoadingPanel,
   Modal,
+  Panel,
   Select,
   Textarea,
   useToast,
@@ -108,8 +109,8 @@ export function EventEditor(props: Props) {
     >
       <CatalogError error={draft.error} retry={() => void draft.refetch()} />
       {!denied && props.event.published_versions.length > 0 && (
-        <section aria-label="不可变事件版本">
-          <p>查看已发布版本</p>
+        <details className="resource-selection">
+          <summary>查看已发布版本（{props.event.published_versions.length}）</summary>
           <div className="heading-actions">
             {props.event.published_versions.map((value) => (
               <Button key={value} size="small" onClick={() => setVersion(value)}>
@@ -117,7 +118,7 @@ export function EventEditor(props: Props) {
               </Button>
             ))}
           </div>
-        </section>
+        </details>
       )}
       <Modal
         open={version !== undefined && !denied}
@@ -172,19 +173,41 @@ function EventDraftForm({
   const [validation, setValidation] = useState<{ revision: number; result: ValidationResult }>();
   const [fieldName, setFieldName] = useState('');
   const [fieldType, setFieldType] = useState('string');
+  const [fieldNameError, setFieldNameError] = useState<string>();
+  const [inputErrors, setInputErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [removing, setRemoving] = useState<string>();
   const nameRef = useRef<HTMLInputElement>(null);
+  const newFieldRef = useRef<HTMLInputElement>(null);
+  const schemaDetailsRef = useRef<HTMLDetailsElement>(null);
+  const metadataDetailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    // Reveal errors without controlling the user's disclosure state while typing.
+    if (inputErrors.schema && schemaDetailsRef.current) schemaDetailsRef.current.open = true;
+    if (inputErrors.metadata && metadataDetailsRef.current) metadataDetailsRef.current.open = true;
+  }, [inputErrors.schema, inputErrors.metadata]);
   const dirty = JSON.stringify(form) !== baseline;
   const canWrite = project.permissions.includes('project.write');
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
     setLocalError(null);
+    setInputErrors((current) => ({ ...current, [key]: undefined }));
     setValidation(undefined);
   };
   const body = (): DraftInput => {
-    const schema = parseObject(form.schema, 'Schema');
-    const metadata = parseObject(form.metadata, '字段元数据');
-    const sample = parseObject(form.sample, '样例属性');
+    const errors: Partial<Record<keyof FormState, string>> = {};
+    const parse = (key: 'schema' | 'metadata' | 'sample', label: string) => {
+      try {
+        return parseObject(form[key], label);
+      } catch (error) {
+        errors[key] = (error as Error).message;
+        return {};
+      }
+    };
+    const schema = parse('schema', 'Schema');
+    const metadata = parse('metadata', '字段元数据');
+    const sample = parse('sample', '样例属性');
+    setInputErrors(errors);
+    if (Object.keys(errors).length) throw new Error('请修正标出的 JSON 格式后保存草稿');
     if (!form.name.trim()) throw new Error('请输入显示名称');
     return {
       ...base.definition,
@@ -295,13 +318,20 @@ function EventDraftForm({
   if (deniedError) return <CatalogError error={deniedError} />;
   return (
     <>
-      <p>
-        <code>{event.event_key}</code>，草稿 r{base.revision}，
-        {event.published_versions.length
-          ? `已发布 ${event.published_versions.map((value) => `v${value}`).join('、')}`
-          : '尚未发布'}
-        {dirty ? '，有未保存修改' : ''}
-      </p>
+      <div className="resource-summary">
+        <div className="resource-summary-title">
+          <code>{event.event_key}</code>
+        </div>
+        <div className="resource-statuses">
+          <Badge tone="info">草稿 r{base.revision}</Badge>
+          <Badge tone={dirty ? 'warning' : 'neutral'}>{dirty ? '有未保存修改' : '已保存'}</Badge>
+          <span className="resource-muted">
+            {event.published_versions.length
+              ? `已发布 ${event.published_versions.map((value) => `v${value}`).join('、')}`
+              : '尚未发布'}
+          </span>
+        </div>
+      </div>
       {!canWrite && <Alert title="当前权限为只读" />}
       <CatalogError error={localError ?? save.error ?? validate.error ?? fetchLatest.error} />
       {hasConflict && (
@@ -373,83 +403,103 @@ function EventDraftForm({
           }
         }}
       >
-        <Field label="显示名称" htmlFor="draft-name" required>
-          <Input
-            id="draft-name"
-            ref={nameRef}
-            value={form.name}
-            maxLength={128}
-            disabled={locked}
-            required
-            onChange={(input) => {
-              set('name', input.target.value);
-              input.currentTarget.setCustomValidity(
-                input.target.value.trim() ? '' : '请输入显示名称',
-              );
-            }}
-          />
-        </Field>
-        <Field
-          label="触发条件"
-          htmlFor="draft-trigger"
-          hint="说明业务代码在何时产生此事件，发布前必须填写。"
-        >
-          <Textarea
-            id="draft-trigger"
-            value={form.trigger}
-            maxLength={2000}
-            rows={3}
-            disabled={locked}
-            onChange={(input) => set('trigger', input.target.value)}
-          />
-        </Field>
-        <Field label="事实类型" htmlFor="draft-fact">
-          <Select
-            id="draft-fact"
-            value={form.fact}
-            disabled={locked}
-            options={[
-              {
-                value: '',
-                label: '请选择，发布前必填',
-                disabled: base.definition.fact_kind !== undefined,
-              },
-              { value: 'user_intent', label: '用户意图' },
-              { value: 'client_observed', label: '客户端观察' },
-              { value: 'server_confirmed', label: '服务端确认' },
-            ]}
-            onChange={(input) => set('fact', input.target.value)}
-          />
-        </Field>
-        <fieldset disabled={locked}>
-          <legend>允许的来源</legend>
-          {['browser', 'server'].map((source) => (
-            <Checkbox
-              key={source}
-              checked={form.sources.includes(source)}
-              onChange={(input) =>
-                set(
-                  'sources',
-                  input.target.checked
-                    ? [...form.sources, source]
-                    : form.sources.filter((item) => item !== source),
-                )
+        <Panel title="基本定义" className="resource-section">
+          <Field label="显示名称" htmlFor="draft-name" error={inputErrors.name} required>
+            <Input
+              id="draft-name"
+              ref={nameRef}
+              value={form.name}
+              maxLength={128}
+              disabled={busy}
+              readOnly={!canWrite}
+              required
+              onChange={(input) => {
+                set('name', input.target.value);
+                input.currentTarget.setCustomValidity(
+                  input.target.value.trim() ? '' : '请输入显示名称',
+                );
+              }}
+              onInvalid={() =>
+                setInputErrors((current) => ({ ...current, name: '请输入显示名称' }))
               }
-            >
-              {source === 'browser' ? '浏览器' : '服务端'}
-            </Checkbox>
-          ))}
-          {form.fact === 'server_confirmed' && form.sources.includes('browser') && (
-            <p role="alert">服务端确认事件不能允许浏览器来源。</p>
-          )}
-        </fieldset>
-        <section aria-labelledby="event-properties-heading">
-          <h3 id="event-properties-heading">事件字段</h3>
-          <p>
+            />
+          </Field>
+          <Field
+            label="触发条件"
+            htmlFor="draft-trigger"
+            hint="说明业务代码在何时产生此事件，发布前必须填写。"
+          >
+            <Textarea
+              id="draft-trigger"
+              value={form.trigger}
+              maxLength={2000}
+              rows={3}
+              disabled={busy}
+              readOnly={!canWrite}
+              onChange={(input) => set('trigger', input.target.value)}
+            />
+          </Field>
+          <div className="resource-grid">
+            <Field label="事实类型" htmlFor="draft-fact">
+              <Select
+                id="draft-fact"
+                value={form.fact}
+                disabled={locked}
+                options={[
+                  {
+                    value: '',
+                    label: '请选择，发布前必填',
+                    disabled: base.definition.fact_kind !== undefined,
+                  },
+                  { value: 'user_intent', label: '用户意图' },
+                  { value: 'client_observed', label: '客户端观察' },
+                  { value: 'server_confirmed', label: '服务端确认' },
+                ]}
+                onChange={(input) => set('fact', input.target.value)}
+              />
+            </Field>
+            <fieldset disabled={locked}>
+              <legend>允许的来源</legend>
+              {['browser', 'server'].map((source) => (
+                <Checkbox
+                  key={source}
+                  checked={form.sources.includes(source)}
+                  onChange={(input) =>
+                    set(
+                      'sources',
+                      input.target.checked
+                        ? [...form.sources, source]
+                        : form.sources.filter((item) => item !== source),
+                    )
+                  }
+                >
+                  {source === 'browser' ? '浏览器' : '服务端'}
+                </Checkbox>
+              ))}
+              {form.fact === 'server_confirmed' && form.sources.includes('browser') && (
+                <p role="alert">服务端确认事件不能允许浏览器来源。</p>
+              )}
+            </fieldset>
+          </div>
+        </Panel>
+        <Panel
+          title={
+            <>
+              事件字段 <Badge tone="neutral">{Object.keys(properties).length} / 50</Badge>
+            </>
+          }
+          className="resource-section"
+        >
+          <p className="evia-field-hint">
             最多 50 个平面字段，数组最多 20 项。已有约束会保留，枚举、边界和数组项规则可在高级
             Schema 编辑。
           </p>
           {!schema && <Alert tone="warning" title="请先修复高级 Schema 的 JSON 格式" />}
+          {schema && Object.keys(properties).length === 0 && (
+            <div className="resource-empty-inline">
+              尚未定义业务字段。添加字段后可设置类型、说明与必填要求。
+            </div>
+          )}
           {Object.entries(properties).map(([key, value]) => {
             const property = objectValue(value);
             const type =
@@ -457,7 +507,7 @@ function EventDraftForm({
                 ? `array:${String(objectValue(property.items).type)}`
                 : String(property.type);
             return (
-              <fieldset key={key} disabled={locked || !schema}>
+              <fieldset key={key} disabled={locked || !schema} className="resource-field-row">
                 <legend>
                   <code>{key}</code>
                 </legend>
@@ -506,20 +556,29 @@ function EventDraftForm({
                     }
                   />
                 </Field>
-                <Button variant="danger" size="small" onClick={() => setRemoving(key)}>
-                  删除字段 {key}
+                <Button
+                  variant="danger"
+                  size="small"
+                  aria-label={`删除字段 ${key}`}
+                  onClick={() => setRemoving(key)}
+                >
+                  删除
                 </Button>
               </fieldset>
             );
           })}
-          <div className="console-form">
-            <Field label="新增字段名" htmlFor="new-property-name">
+          <div className="resource-add-field">
+            <Field label="新增字段名" htmlFor="new-property-name" error={fieldNameError}>
               <Input
                 id="new-property-name"
+                ref={newFieldRef}
                 value={fieldName}
                 maxLength={64}
                 disabled={locked || !schema || Object.keys(properties).length >= 50}
-                onChange={(input) => setFieldName(input.target.value)}
+                onChange={(input) => {
+                  setFieldName(input.target.value);
+                  setFieldNameError(undefined);
+                }}
               />
             </Field>
             <Field label="新增字段类型" htmlFor="new-property-type">
@@ -536,13 +595,13 @@ function EventDraftForm({
               onClick={() => {
                 if (!schema) return;
                 if (!/^[a-z][a-z0-9_]{0,63}$/.test(fieldName)) {
-                  setLocalError(
-                    new Error('字段名须以小写字母开头，仅含小写字母、数字和下划线，最多 64 个字符'),
-                  );
+                  setFieldNameError('以小写字母开头，仅含小写字母、数字和下划线，最多 64 个字符');
+                  newFieldRef.current?.focus();
                   return;
                 }
                 if (Object.hasOwn(properties, fieldName)) {
-                  setLocalError(new Error('该字段名已存在'));
+                  setFieldNameError('该字段名已存在');
+                  newFieldRef.current?.focus();
                   return;
                 }
                 updateProperty(
@@ -552,86 +611,97 @@ function EventDraftForm({
                     : { type: fieldType },
                 );
                 setFieldName('');
+                setFieldNameError(undefined);
               }}
             >
               添加字段
             </Button>
           </div>
-        </section>
-        <details>
-          <summary>高级 Schema</summary>
+        </Panel>
+        <Panel title="校验样例" className="resource-section">
           <Field
-            label="完整 JSON Schema"
-            htmlFor="draft-schema"
-            hint="完整保留已有规则，修改字段类型后请核对关联约束。仅支持本地扁平标量或同类型标量数组，禁止额外属性。"
+            label="样例属性 JSON"
+            htmlFor="draft-sample"
+            error={inputErrors.sample}
+            hint="只填写事件业务属性。保存后可显式验证该草稿版本的样例。"
           >
             <Textarea
-              id="draft-schema"
-              rows={14}
+              id="draft-sample"
+              value={form.sample}
+              rows={7}
               spellCheck={false}
-              value={form.schema}
-              disabled={locked}
-              onChange={(input) => set('schema', input.target.value)}
+              disabled={busy}
+              readOnly={!canWrite}
+              onChange={(input) => set('sample', input.target.value)}
             />
           </Field>
-        </details>
-        <details>
-          <summary>字段元数据</summary>
-          <Field
-            label="字段元数据 JSON"
-            htmlFor="draft-metadata"
-            hint="契约允许开放 JSON 元数据，未规定敏感性或单位的固定枚举。请保留团队既有字段键及其语义，元数据变更可能影响兼容性。"
-          >
-            <Textarea
-              id="draft-metadata"
-              rows={8}
-              spellCheck={false}
-              value={form.metadata}
-              disabled={locked}
-              onChange={(input) => set('metadata', input.target.value)}
-            />
-          </Field>
-        </details>
-        <Field
-          label="样例属性 JSON"
-          htmlFor="draft-sample"
-          hint="只填写事件业务属性。保存后可显式验证该草稿版本的样例。"
-        >
-          <Textarea
-            id="draft-sample"
-            value={form.sample}
-            rows={8}
-            spellCheck={false}
-            disabled={locked}
-            onChange={(input) => set('sample', input.target.value)}
-          />
-        </Field>
-        {validation && (
-          <Alert
-            tone={validation.result.valid ? 'success' : 'error'}
-            title={`草稿 r${validation.revision} 的样例${validation.result.valid ? '验证通过' : '验证失败'}`}
-          >
-            <p>
-              兼容性：
-              {
-                { initial: '首次发布', compatible: '兼容', breaking: '不兼容' }[
-                  validation.result.compatibility
-                ]
-              }
-              。样例通过不代表发布完整性或管道就绪。
-            </p>
-            {validation.result.issues.length > 0 && (
-              <ul>
-                {validation.result.issues.map((issue, index) => (
-                  <li key={index}>
-                    <code>{issue.path || '/'}</code>：{issue.message}（{issue.code}）
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Alert>
-        )}
-        <div className="heading-actions">
+          {validation && (
+            <Alert
+              tone={validation.result.valid ? 'success' : 'error'}
+              title={`草稿 r${validation.revision} 的样例${validation.result.valid ? '验证通过' : '验证失败'}`}
+            >
+              <p>
+                兼容性：
+                {
+                  { initial: '首次发布', compatible: '兼容', breaking: '不兼容' }[
+                    validation.result.compatibility
+                  ]
+                }
+                。样例通过不代表发布完整性或管道就绪。
+              </p>
+              {validation.result.issues.length > 0 && (
+                <ul>
+                  {validation.result.issues.map((issue, index) => (
+                    <li key={index}>
+                      <code>{issue.path || '/'}</code>：{issue.message}（{issue.code}）
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Alert>
+          )}
+        </Panel>
+        <Panel title="高级配置" className="resource-section">
+          <details ref={schemaDetailsRef}>
+            <summary>高级 Schema</summary>
+            <Field
+              label="完整 JSON Schema"
+              htmlFor="draft-schema"
+              error={inputErrors.schema}
+              hint="完整保留已有规则，修改字段类型后请核对关联约束。仅支持本地扁平标量或同类型标量数组，禁止额外属性。"
+            >
+              <Textarea
+                id="draft-schema"
+                rows={14}
+                spellCheck={false}
+                value={form.schema}
+                disabled={busy}
+                readOnly={!canWrite}
+                onChange={(input) => set('schema', input.target.value)}
+              />
+            </Field>
+          </details>
+          <details ref={metadataDetailsRef}>
+            <summary>字段元数据</summary>
+            <Field
+              label="字段元数据 JSON"
+              htmlFor="draft-metadata"
+              error={inputErrors.metadata}
+              hint="契约允许开放 JSON 元数据，未规定敏感性或单位的固定枚举。请保留团队既有字段键及其语义，元数据变更可能影响兼容性。"
+            >
+              <Textarea
+                id="draft-metadata"
+                rows={8}
+                spellCheck={false}
+                value={form.metadata}
+                disabled={busy}
+                readOnly={!canWrite}
+                onChange={(input) => set('metadata', input.target.value)}
+              />
+            </Field>
+          </details>
+        </Panel>
+        <div className="resource-form-footer">
           <Button disabled={busy} onClick={() => requestLeave(onClose)}>
             关闭
           </Button>
@@ -643,6 +713,7 @@ function EventDraftForm({
                 parseObject(form.sample, '样例属性');
                 validate.mutate();
               } catch (error) {
+                setInputErrors((current) => ({ ...current, sample: (error as Error).message }));
                 setLocalError(error as Error);
               }
             }}
