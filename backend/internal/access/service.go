@@ -17,6 +17,7 @@ import (
 )
 
 var ErrMissing = errors.New("access record not found")
+var projectIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_.@-]{1,100}$`)
 
 type User struct {
@@ -37,6 +38,7 @@ type Store interface {
 	DeleteSession(context.Context, string) error
 	CreateProject(context.Context, string, Project) error
 	ListProjects(context.Context, string, string, int) ([]Project, error)
+	GetProject(context.Context, string, string) (Project, error)
 	ProjectRole(context.Context, string, string) (string, error)
 }
 type Service struct {
@@ -150,4 +152,17 @@ func (s *Service) Authorize(ctx context.Context, userID, projectID string, write
 		return fault.New(fault.Forbidden, "PROJECT_FORBIDDEN", "当前角色不能修改此项目")
 	}
 	return nil
+}
+
+// GetProject reads the resource and membership together; listing projects is not
+// an authorization lookup and would introduce pagination-dependent visibility.
+func (s *Service) GetProject(ctx context.Context, userID, projectID string) (Project, error) {
+	if !projectIDPattern.MatchString(projectID) {
+		return Project{}, fault.New(fault.Invalid, "INVALID_PROJECT_ID", "项目标识格式不正确")
+	}
+	project, e := s.store.GetProject(ctx, userID, projectID)
+	if errors.Is(e, ErrMissing) {
+		return Project{}, fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "项目不存在或不可见")
+	}
+	return project, e
 }

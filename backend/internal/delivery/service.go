@@ -247,3 +247,10 @@ func (s *Service) Renew(ctx context.Context, candidate Candidate) error {
 	}
 	return s.store.RenewReadiness(ctx, candidate, proof, s.options.LeaseDuration)
 }
+
+func (s *Service) GetActivation(ctx context.Context, actor, project, environment string) (Activation, error) {
+	if !uuid.MatchString(project) || !validEnvironment(environment) {
+		return Activation{}, Invalid("INVALID_ACTIVATION", "激活范围或环境无效")
+	}
+	return s.store.GetActivation(ctx, actor, project, environment)
+}

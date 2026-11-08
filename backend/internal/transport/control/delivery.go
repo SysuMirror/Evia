@@ -14,6 +14,7 @@ import (
 )
 
 type DeliveryService interface {
+	GetActivation(context.Context, string, string, string) (delivery.Activation, error)
 	Activate(context.Context, string, string, string, delivery.ActivationInput) (delivery.Activation, error)
 	PublicConfig(context.Context, string, delivery.Authentication, int64) (delivery.ConfigResult, error)
 	AuthorizeConfig(context.Context, string, delivery.Authentication) (string, error)
@@ -23,6 +24,7 @@ func (a *API) registerDelivery(mux *http.ServeMux) {
 	if a.Delivery == nil {
 		return
 	}
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/release-activations", a.auth(false, a.getActivation))
 	mux.HandleFunc("POST /api/v1/projects/{project_id}/release-activations", a.auth(true, a.activateRelease))
 	mux.HandleFunc("GET /v1/config", a.Boundary.Handler(a.publicConfig))
 	mux.HandleFunc("OPTIONS /v1/config", a.Boundary.Handler(a.preflightConfig))
@@ -179,4 +181,32 @@ func (a *API) preflightConfig(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Access-Control-Max-Age", "60")
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+func (a *API) getActivation(w http.ResponseWriter, r *http.Request, s access.Session) error {
+	project := r.PathValue("project_id")
+	if !catalogUUID.MatchString(project) {
+		return delivery.Invalid("INVALID_PROJECT_ID", "项目标识格式不正确")
+	}
+	if len(r.URL.RawQuery) > 2048 {
+		return delivery.Invalid("INVALID_QUERY", "查询参数过长")
+	}
+	q, e := url.ParseQuery(r.URL.RawQuery)
+	if e != nil {
+		return delivery.Invalid("INVALID_QUERY", "查询参数编码无效")
+	}
+	for key, values := range q {
+		if key != "environment" || len(values) != 1 {
+			return delivery.Invalid("INVALID_QUERY", "查询参数不符合接口定义")
+		}
+	}
+	environment := q.Get("environment")
+	if environment != "development" && environment != "staging" && environment != "production" {
+		return delivery.Invalid("INVALID_ENVIRONMENT", "请提供有效环境")
+	}
+	out, e := a.Delivery.GetActivation(r.Context(), s.UserID, project, environment)
+	if e != nil {
+		return e
+	}
+	return a.Boundary.JSON(w, 200, "Activation", wire.Activation{Environment: out.Environment, ActiveReleaseRevision: out.ActiveReleaseRevision})
 }

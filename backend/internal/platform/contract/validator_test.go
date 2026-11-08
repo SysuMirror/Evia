@@ -83,3 +83,34 @@ func TestContractRejectsUnknownFieldsAndUnsafeValues(t *testing.T) {
 		t.Fatal("accepted invalid response")
 	}
 }
+
+func TestConsoleReadRevisionAndDetailsContracts(t *testing.T) {
+	v, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, schema, raw string
+		valid             bool
+	}{
+		{"no activation", "Activation", `{"environment":"development","active_release_revision":0}`, true},
+		{"safe maximum", "Activation", `{"environment":"production","active_release_revision":9007199254740991}`, true},
+		{"negative", "Activation", `{"environment":"development","active_release_revision":-1}`, false},
+		{"unsafe", "Activation", `{"environment":"development","active_release_revision":9007199254740992}`, false},
+		{"fraction", "Activation", `{"environment":"development","active_release_revision":0.5}`, false},
+		{"published version", "EventVersion", `{"event_key":"opened","schema_version":1,"draft_revision":2,"definition":{"schema":{"type":"object","properties":{"title":{"type":"string"}}},"field_metadata":{"title":{"label":"Title"}}}}`, true},
+		{"unpublished version", "EventVersion", `{"event_key":"opened","schema_version":0,"draft_revision":2,"definition":{"schema":{}}}`, false},
+		{"field paths", "Problem", `{"code":"INVALID_EVENT_DEFINITION","message":"无效","request_id":"request-1","details":{"field_paths":["/schema"]}}`, true},
+		{"invalid field path type", "Problem", `{"code":"INVALID_EVENT_DEFINITION","message":"无效","request_id":"request-1","details":{"field_paths":[1]}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value, err := Decode([]byte(tc.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = v.Validate(tc.schema, value); (err == nil) != tc.valid {
+				t.Fatalf("expected valid=%v, got %v", tc.valid, err)
+			}
+		})
+	}
+}

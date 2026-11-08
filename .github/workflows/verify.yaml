@@ -14,7 +14,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
@@ -62,26 +62,40 @@ jobs:
         run: make check
       - name: Verify PostgreSQL persistence in isolated schemas
         run: make integration-test
+      - name: Prepare the real browser dependency chain
+        run: |
+          ./deploy/dev-env init "$RUNNER_TEMP/evia-dependencies.env"
+          ./deploy/dev-env up "$RUNNER_TEMP/evia-dependencies.env" kafka clickhouse redis
+          ./deploy/dev-env check "$RUNNER_TEMP/evia-dependencies.env" kafka clickhouse redis
+          python tooling/verification/browser_runtime.py init "$RUNNER_TEMP/evia-dependencies.env" "$RUNNER_TEMP/evia-browser.env"
+          python tooling/verification/browser_runtime.py prepare "$RUNNER_TEMP/evia-dependencies.env" "$RUNNER_TEMP/evia-browser.env"
       - name: Build and initialize the dedicated browser database
         run: |
           go -C backend build -o "$RUNNER_TEMP/evia" ./cmd/evia
-          "$RUNNER_TEMP/evia" migrate
-          password="$(openssl rand -hex 24)"
-          cursor_key="$(openssl rand -hex 32)"
-          echo "::add-mask::$password"
-          echo "::add-mask::$cursor_key"
-          echo "EVIA_E2E_PASSWORD=$password" >> "$GITHUB_ENV"
-          echo "EVIA_CURSOR_KEY=$cursor_key" >> "$GITHUB_ENV"
-          EVIA_BOOTSTRAP_PASSWORD="$password" "$RUNNER_TEMP/evia" bootstrap
-      - name: Start the real control API and wait for readiness
+          python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- "$RUNNER_TEMP/evia" migrate
+          python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- "$RUNNER_TEMP/evia" bootstrap
+      - name: Start the API and real ingest, query and delivery workers
         run: |
-          "$RUNNER_TEMP/evia" serve > "$RUNNER_TEMP/evia-api.log" 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/evia-api.pid"
+          python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- bash -eu -c '
+            umask 077
+            for command in serve ingest-worker query-worker; do
+              "$RUNNER_TEMP/evia" "$command" > "$RUNNER_TEMP/evia-$command.log" 2>&1 &
+              echo "$!" > "$RUNNER_TEMP/evia-$command.pid"
+            done
+          '
           python - <<'PY'
+          import os
+          from pathlib import Path
           import time
           import urllib.error
           import urllib.request
-          for attempt in range(60):
+          for attempt in range(120):
+              for command in ('serve', 'ingest-worker', 'query-worker'):
+                  pid = int((Path(os.environ['RUNNER_TEMP']) / f'evia-{command}.pid').read_text())
+                  try:
+                      os.kill(pid, 0)
+                  except ProcessLookupError:
+                      raise SystemExit(f'{command} stopped; inspect private runner logs.') from None
               try:
                   with urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=1) as response:
                       if response.status == 204:
@@ -90,15 +104,20 @@ jobs:
                   pass
               time.sleep(0.5)
           else:
-              raise SystemExit('Control API did not become ready; inspect runner API log.')
+              raise SystemExit('Control API did not become ready; inspect private runner logs.')
           PY
-      - name: Verify browser flows against the API
-        run: make browser-test
-      - name: Stop the CI API process
+      - name: Verify browser flows against the complete real chain
+        run: python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- make browser-test
+      - name: Stop CI runtime processes and remove dependency containers
         if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/evia-api.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/evia-api.pid")" 2>/dev/null || true
+          for command in serve ingest-worker query-worker; do
+            if [ -f "$RUNNER_TEMP/evia-$command.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/evia-$command.pid")" 2>/dev/null || true
+            fi
+          done
+          if [ -f "$RUNNER_TEMP/evia-dependencies.env" ]; then
+            ./deploy/dev-env down "$RUNNER_TEMP/evia-dependencies.env" kafka clickhouse redis
           fi
   dependency-integration:
     name: ${{ matrix.module }} integration

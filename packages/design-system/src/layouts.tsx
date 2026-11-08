@@ -72,12 +72,16 @@ export function WorkspaceShell({
   onLogout,
   busy,
   onNavigate,
+  navigation,
+  projectContext,
 }: {
   children: ReactNode;
   account: string;
   onLogout: () => void;
   busy: boolean;
   onNavigate?: (href: string) => void;
+  navigation?: readonly WorkspaceNavigationItem[];
+  projectContext?: ReactNode;
 }) {
   return (
     <div className="workspace">
@@ -100,27 +104,23 @@ export function WorkspaceShell({
       </header>
       <div className="workspace-body">
         <aside className="workspace-nav">
+          {projectContext && <div className="workspace-context">{projectContext}</div>}
           <nav aria-label="主导航">
-            <a
-              href="/projects"
-              aria-current="page"
-              onClick={(event) => navigate(event, '/projects', onNavigate)}
-            >
-              <svg
-                className="nav-icon"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                aria-hidden="true"
+            {(navigation ?? [defaultNavigation]).map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                aria-current={item.active ? 'page' : undefined}
+                onClick={(event) => navigate(event, item.href, onNavigate)}
               >
-                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
-                <path d="M3.5 9h17M9 9v11.5" />
-              </svg>
-              项目管理
-            </a>
+                {item.icon && (
+                  <span className="nav-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                )}
+                <span>{item.label}</span>
+              </a>
+            ))}
           </nav>
         </aside>
         <main id="main-content" tabIndex={-1}>
@@ -130,6 +130,34 @@ export function WorkspaceShell({
     </div>
   );
 }
+
+export interface WorkspaceNavigationItem {
+  href: string;
+  label: string;
+  active?: boolean;
+  icon?: ReactNode;
+}
+
+const defaultNavigation: WorkspaceNavigationItem = {
+  href: '/projects',
+  label: '项目管理',
+  active: true,
+  icon: (
+    <svg
+      className="nav-icon"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+      <path d="M3.5 9h17M9 9v11.5" />
+    </svg>
+  ),
+};
 
 export function PageHeading({ title, action }: { title: string; action?: ReactNode }) {
   return (

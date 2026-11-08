@@ -211,3 +211,15 @@ func (s *Store) RenewReadiness(ctx context.Context, c delivery.Candidate, p deli
 	}
 	return tx.Commit(ctx)
 }
+
+// GetActivation reads authorization and active revision from one snapshot. An
+// environment row is created lazily when building a release; its absence means
+// revision zero only after a live project membership has been established.
+func (s *Store) GetActivation(ctx context.Context, actor, project, environment string) (delivery.Activation, error) {
+	out := delivery.Activation{Environment: environment}
+	e := s.Pool.QueryRow(ctx, `SELECT COALESCE(env.active_revision,0) FROM projects p JOIN project_members m ON m.project_id=p.id JOIN accounts a ON a.id=m.user_id LEFT JOIN catalog_environments env ON env.project_id=p.id AND env.environment=$3 WHERE p.id=$1 AND m.user_id=$2 AND NOT a.disabled`, project, actor, environment).Scan(&out.ActiveReleaseRevision)
+	if errors.Is(e, pgx.ErrNoRows) {
+		e = fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "项目不存在或不可见")
+	}
+	return out, e
+}

@@ -167,3 +167,14 @@ func (s *Store) ProjectRole(ctx context.Context, userID, projectID string) (stri
 	}
 	return role, e
 }
+
+// GetProject joins membership and the enabled account in the same statement so
+// an unauthorized caller cannot observe a resource between separate lookups.
+func (s *Store) GetProject(ctx context.Context, userID, projectID string) (access.Project, error) {
+	var p access.Project
+	e := s.Pool.QueryRow(ctx, `SELECT p.id::text,p.name,p.timezone,m.role FROM projects p JOIN project_members m ON m.project_id=p.id JOIN accounts a ON a.id=m.user_id WHERE m.user_id=$1 AND p.id=$2 AND NOT a.disabled`, userID, projectID).Scan(&p.ID, &p.Name, &p.Timezone, &p.Role)
+	if errors.Is(e, pgx.ErrNoRows) {
+		e = access.ErrMissing
+	}
+	return p, e
+}
