@@ -71,7 +71,15 @@ The workflow creates a project and event in the UI, preserves input after a real
 request failure, publishes a saved revision, waits for an actual pipeline probe,
 activates explicitly, creates a source and sends synthetic data without management
 cookies. It verifies actual metric, trend, journey and ordered-funnel queries,
-empty results and environment switching. It never replaces successful API replies
+empty results and environment switching. The same authenticated project also
+creates a saved analysis with explicit event-version pins, publishes two versions,
+runs count/UID metrics, and checks immutable history, invalid advanced JSON,
+unsaved-work focus and a committed publication whose response was lost. Its retry
+must reuse the original request key and create no extra version. No extra login
+is needed for this extension. Apply the current PostgreSQL chain through `008`
+before starting the executable.
+
+The workflow never replaces successful API replies
 with fabricated results. A second case verifies masked one-time server credentials,
 acknowledgement before closing, committed rotation with a lost response and an
 idempotent retry, and actual source disablement. Automatic trace, video and failure

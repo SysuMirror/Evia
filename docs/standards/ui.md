@@ -49,6 +49,14 @@ State CSS needs deliberate precedence, including combinations such as invalid + 
 
 Use isolated browser fixtures to exercise shared controls and lifecycle cases absent from business pages. Fixture counters, deferred browser APIs and state toggles are test inputs, never product routes or substitute service responses. Verify current pages separately against real APIs. Passing a CSS selector assertion alone does not establish interaction correctness.
 
+### Versioned analysis editing
+
+Keep the authoritative definition as editor state. Editing a title, chart or simple filter must preserve unrelated nested conditions, ordered steps, multiple metrics and typed values, including false, zero and empty strings. Advanced JSON is an atomic alternative for expressions the structured editor cannot represent. Block incompatible edits with field-specific feedback; replacing an analysis kind requires confirmation. Removing an indexed step must update every dependent reference correctly or require an explicit advanced edit.
+
+Section dialogs apply local configuration without saving the parent resource or executing a query. Avoid nested forms and stop section submit propagation. Unapplied section changes participate in unsaved-work protection. Keep creation, publication and execution retry keys with their original payloads after an uncertain response; the recovery action must remain reachable when a dialog is closed.
+
+Render results from the submitted immutable version and execution context. Selecting another version or editing a draft must not relabel an existing result. Show every returned metric and group, distinguish missing values from null and zero, and retain full numeric values in the accessible result table. A distinct field count is not automatically a user count. When an aggregate bucket starts before the selected range, keep the selected bounds and explicitly explain any plotted partial-bucket position; preserve its original timestamp in the table.
+
 ## Performance evidence
 
 Use shared static CSS and theme variables. Split business routes and load chart code on demand. Keep server pagination and bounded query results; introduce list virtualization only when measured row counts and interaction costs justify it. Keep form input state local and profile render work before adding memoization.
