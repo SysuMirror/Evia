@@ -1,0 +1,53 @@
+# Explicit opt-in overlay; use a separate --project-name and private --env-file.
+# Requires Docker Compose >= 2.24.4 for !override; normal dev services are untouched.
+# docker compose -f deploy/compose.dev.yaml -f deploy/compose.benchmark.yaml ...
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:55433:5432"
+    cpus: 0.75
+    mem_limit: 512m
+    memswap_limit: 512m
+  kafka:
+    environment:
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:19093,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:19093
+      KAFKA_LOG_RETENTION_BYTES: 2147483648
+      KAFKA_LOG_SEGMENT_BYTES: 67108864
+      KAFKA_LOG_RETENTION_HOURS: 24
+    ports: !override
+      - "127.0.0.1:19093:19093"
+    tmpfs: !reset []
+    volumes:
+      - benchmark-kafka-data:/var/lib/kafka/data
+  clickhouse:
+    mem_limit: 4096m
+    memswap_limit: 4096m
+    ports: !override
+      - "127.0.0.1:18124:8123"
+      - "127.0.0.1:19001:9000"
+    tmpfs: !override
+      - /var/log/clickhouse-server:size=64m,uid=101,gid=101,mode=0700
+    volumes:
+      - benchmark-clickhouse-data:/var/lib/clickhouse
+    configs:
+      - source: clickhouse-benchmark
+        target: /etc/clickhouse-server/config.d/evia-zbenchmark.xml
+  redis:
+    ports: !override
+      - "127.0.0.1:16380:6379"
+    cpus: 0.25
+volumes:
+  benchmark-kafka-data:
+  benchmark-clickhouse-data:
+configs:
+  clickhouse-benchmark:
+    content: |
+      <clickhouse>
+        <max_server_memory_usage>3221225472</max_server_memory_usage>
+        <storage_configuration>
+          <disks>
+            <default><keep_free_space_bytes>2147483648</keep_free_space_bytes></default>
+          </disks>
+        </storage_configuration>
+      </clickhouse>
