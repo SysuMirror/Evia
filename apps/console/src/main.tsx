@@ -56,6 +56,9 @@ const SourcesPage = lazy(() =>
 const AnalysisPage = lazy(() =>
   import('./analysis').then((module) => ({ default: module.AnalysisPage })),
 );
+const SavedAnalysesPage = lazy(() =>
+  import('./saved-analyses').then((module) => ({ default: module.SavedAnalysesPage })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
@@ -188,6 +191,7 @@ function Workspace({ session }: { session: Session }) {
     { path: 'releases', label: '发布管理', component: ReleasesPage },
     { path: 'sources', label: '接入来源', component: SourcesPage },
     { path: 'analysis', label: '数据分析', component: AnalysisPage },
+    { path: 'saved-analyses', label: '保存的分析', component: SavedAnalysesPage },
   ];
   const navigationItems = projectID
     ? sections.map((section) => ({
