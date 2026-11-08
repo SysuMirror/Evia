@@ -232,6 +232,13 @@ type EventPlan struct {
 	Acceptance          []string `json:"acceptance,omitzero"`
 }
 
+type EventVersion struct {
+	EventKey      string     `json:"event_key"`
+	SchemaVersion int64      `json:"schema_version"`
+	DraftRevision int64      `json:"draft_revision"`
+	Definition    DraftInput `json:"definition"`
+}
+
 type ExportInput struct {
 	Query   QueryRequest `json:"query"`
 	Format  string       `json:"format"`
@@ -278,10 +285,14 @@ type MemberList struct {
 }
 
 type Problem struct {
-	Code      string         `json:"code"`
-	Message   string         `json:"message"`
-	RequestID string         `json:"request_id"`
-	Details   map[string]any `json:"details,omitzero"`
+	Code      string          `json:"code"`
+	Message   string          `json:"message"`
+	RequestID string          `json:"request_id"`
+	Details   *ProblemDetails `json:"details,omitempty"`
+}
+
+type ProblemDetails struct {
+	FieldPaths []string `json:"field_paths,omitzero"`
 }
 
 type Project struct {
