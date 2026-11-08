@@ -248,7 +248,8 @@ export function SavedAnalysisChart({
                 type: 'category',
                 data: entries.map(({ category }) => category.label),
                 axisLabel: {
-                  hideOverlap: true,
+                  interval: 0,
+                  hideOverlap: false,
                   width: 100,
                   overflow: 'truncate',
                   color: '#6b7280',
@@ -266,10 +267,36 @@ export function SavedAnalysisChart({
           : axes,
       series: plotSeries,
     });
+    const fitCategoryLabels = () => {
+      if (kind === 'funnel' || timeAxis || entries.length === 0) return;
+      const first = chart.convertToPixel({ xAxisIndex: 0 }, 0);
+      const second = entries.length > 1 ? chart.convertToPixel({ xAxisIndex: 0 }, 1) : undefined;
+      const slot =
+        typeof first === 'number' && typeof second === 'number'
+          ? Math.abs(second - first)
+          : Math.max(32, chart.getWidth() - 144);
+      if (!Number.isFinite(slot) || slot <= 0) return;
+      const stride = Math.max(1, Math.ceil(48 / slot));
+      chart.setOption({
+        xAxis: {
+          axisLabel: {
+            interval: stride - 1,
+            width: Math.max(28, Math.min(110, slot * stride - 8)),
+            hideOverlap: false,
+            showMinLabel: true,
+            showMaxLabel: stride === 1,
+          },
+        },
+      });
+    };
+    fitCategoryLabels();
     // The surrounding image has the chart's complete accessible name; avoid a
     // second anonymous image announcement from the SVG renderer.
     target.current.querySelector('svg')?.setAttribute('aria-hidden', 'true');
-    const observer = new ResizeObserver(() => chart.resize());
+    const observer = new ResizeObserver(() => {
+      chart.resize();
+      fitCategoryLabels();
+    });
     observer.observe(target.current);
     return () => {
       observer.disconnect();
