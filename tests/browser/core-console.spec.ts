@@ -18,6 +18,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   page.setDefaultTimeout(12_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
   const evidence = process.env.EVIA_E2E_ARTIFACT_DIR ?? testInfo.outputPath('evidence');
   await mkdir(evidence, { recursive: true });
   async function screenshot(name: string) {
@@ -66,6 +67,29 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await editor.getByLabel('新增字段名').fill('page');
   await editor.getByRole('button', { name: '添加字段', exact: true }).click();
   await editor.getByLabel('样例属性 JSON', { exact: false }).fill('{"page":"synthetic"}');
+  for (const [summary, label] of [
+    ['高级 Schema', '完整 JSON Schema'],
+    ['字段元数据', '字段元数据 JSON'],
+  ] as const) {
+    const disclosure = editor
+      .locator('details')
+      .filter({ has: page.getByText(summary, { exact: true }) });
+    await disclosure.locator('summary').click();
+    const input = editor.getByLabel(label, { exact: true });
+    const original = await input.inputValue();
+    await input.fill('{');
+    await disclosure.locator('summary').click();
+    await editor.getByRole('button', { name: '保存草稿', exact: true }).click();
+    await expect(input).toBeVisible();
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await input.press('End');
+    await input.press('Space');
+    await expect(input).toBeVisible();
+    await expect(input).toBeFocused();
+    await input.fill(original);
+    await disclosure.locator('summary').click();
+    await expect(input).not.toBeVisible();
+  }
   await editor.getByRole('button', { name: '关闭', exact: true }).last().click();
   const discard = page.getByRole('dialog', { name: '放弃未保存的修改？' });
   await expect(discard.getByRole('button', { name: '继续编辑' })).toBeFocused();
@@ -98,7 +122,9 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await publish.getByRole('button', { name: '发布所选草稿' }).click();
   const release = page.getByRole('dialog', { name: '发布详情', exact: true });
   await expect(release.getByText('管道就绪', { exact: true })).toBeVisible({ timeout: 65_000 });
-  await expect(page.getByText('开发环境，尚未激活版本。', { exact: false })).toBeVisible();
+  await expect(
+    page.locator('.resource-summary').getByText('尚未激活版本', { exact: true }),
+  ).toBeVisible();
   await release.getByRole('button', { name: '激活此版本' }).click();
   const activation = page.getByRole('dialog', { name: '确认激活发布' });
   await expect(activation.getByRole('button', { name: '暂不激活' })).toBeFocused();
@@ -178,9 +204,23 @@ test('real console creates, publishes, activates, collects and queries scoped ev
     await publicHTTP.dispose();
   }
   await page.getByRole('link', { name: '数据分析', exact: true }).click();
-  await page
-    .getByLabel('结束时间（UTC，不含）')
-    .fill(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
+  const rangeTrigger = page.getByRole('button', { name: '时间范围', exact: true });
+  await rangeTrigger.focus();
+  await page.keyboard.press('Enter');
+  const range = page.getByRole('dialog', { name: '时间范围', exact: true });
+  const start = range.getByLabel('开始时间（UTC）');
+  const end = range.getByLabel('结束时间（UTC，不含）');
+  await end.fill(await start.inputValue());
+  await range.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(range).toBeVisible();
+  await expect(range.getByRole('alert')).toContainText('开始早于结束');
+  await end.fill(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
+  await range.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(range).not.toBeVisible();
+  await expect(rangeTrigger).toBeFocused();
+  const metricTab = page.getByRole('tab', { name: '指标', exact: true });
+  const activePanel = page.locator(`[id="${await metricTab.getAttribute('aria-controls')}"]`);
+  await expect(activePanel.getByRole('button', { name: '运行查询', exact: true })).toBeVisible();
   await page.getByLabel('事件（跨已发布版本）').selectOption('browser_action');
   async function query() {
     const submitted = page.waitForResponse(
@@ -199,6 +239,11 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   }
   await query();
   await expect(page.locator('.metric-value')).toHaveText('3');
+  const metricBox = await page.locator('.metric-value').boundingBox();
+  expect(
+    metricBox && metricBox.y + metricBox.height < 900,
+    'metric visible in first viewport',
+  ).toBe(true);
   await screenshot('desktop-metrics.png');
   await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('pv');
   await expect(page.getByLabel('事件（跨已发布版本）')).toHaveValue('browser_action');
@@ -206,14 +251,19 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await query();
   await expect(page.locator('.metric-value')).toHaveText('3');
   await page.getByText('过滤条件（0）', { exact: true }).click();
+  const filters = page.getByRole('dialog', { name: '过滤条件', exact: true });
   await page.getByLabel('添加属性字段的事件').selectOption('browser_action');
   await page.getByRole('button', { name: '添加条件', exact: true }).click();
   await page.getByLabel('条件 1 字段', { exact: true }).selectOption('browser_action:1:page');
   await page.getByLabel('条件 1 值', { exact: true }).fill('synthetic');
+  await filters.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(filters).not.toBeVisible();
+  await expect(page.getByRole('button', { name: '过滤条件（1）', exact: true })).toBeFocused();
   await query();
   await expect(page.locator('.metric-value')).toHaveText('3');
+  await page.getByRole('button', { name: '过滤条件（1）', exact: true }).click();
   await page.getByRole('button', { name: '删除条件 1', exact: true }).click();
-  await page.getByText('过滤条件（0）', { exact: true }).click();
+  await filters.getByRole('button', { name: '完成', exact: true }).click();
   await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('uv');
   await query();
   await expect(page.locator('.metric-value')).toHaveText('2');
@@ -229,15 +279,23 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await screenshot('mobile-journey.png');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('tab', { name: '有序漏斗', exact: true }).click();
+  await page.getByRole('button', { name: '配置漏斗（2 步）', exact: true }).click();
+  const funnel = page.getByRole('dialog', { name: '配置有序漏斗', exact: true });
   for (const step of [1, 2])
     await page.getByLabel(`步骤 ${step} 事件`, { exact: true }).selectOption('browser_action');
+  await funnel.getByRole('button', { name: '完成', exact: true }).click();
   await query();
   await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).toHaveCount(2);
   await page.getByRole('tab', { name: '用户旅程', exact: true }).click();
   await page.getByLabel('原始 UID', { exact: true }).fill('synthetic-absent');
   await query();
   await expect(page.getByText('该范围内无匹配结果，不等同于数值零。')).toBeVisible();
+  await page.getByRole('button', { name: '查询设置', exact: true }).click();
   await page.getByLabel('最多结果行').fill('99');
+  await page
+    .getByRole('dialog', { name: '查询设置', exact: true })
+    .getByRole('button', { name: '完成', exact: true })
+    .click();
   await page.getByLabel('当前环境').selectOption('staging');
   const leaveAnalysis = page.getByRole('dialog', { name: '离开分析查询？' });
   await expect(leaveAnalysis.getByRole('button', { name: '继续编辑' })).toBeFocused();
@@ -360,7 +418,9 @@ test.describe('real server-source credential lifecycle', () => {
     await expect(disable.getByRole('button', { name: '取消', exact: true })).toBeFocused();
     await disable.getByRole('button', { name: '确认停用', exact: true }).click();
     await expect(disable).not.toBeVisible();
-    await expect(details.locator('dd').filter({ hasText: /^停用$/ })).toBeVisible();
+    await expect(
+      details.locator('.resource-statuses').getByText('停用', { exact: true }),
+    ).toBeVisible();
     const disabled = await (
       await page.request.get(`/api/v1/projects/${projectID}/sources/${created.id}`)
     ).json();
