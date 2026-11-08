@@ -108,12 +108,12 @@ export async function verifySavedAnalysisWorkflow(
   await publish(true);
   await page.getByRole('combobox', { name: '已发布版本', exact: true }).selectOption('1');
   await expect(page.getByText('不可变版本 v1', { exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: '执行已发布分析', exact: true })).toContainText(
-    title,
-  );
-  await expect(page.getByRole('region', { name: '执行已发布分析', exact: true })).not.toContainText(
-    '修订',
-  );
+  const fixedDefinition = page.locator('details').filter({
+    has: page.getByText('查看该版本的固定配置与依赖', { exact: true }),
+  });
+  await fixedDefinition.locator('summary').click();
+  await expect(fixedDefinition).toContainText(`"title": "${title}"`);
+  await expect(fixedDefinition).not.toContainText(`${title} 修订`);
   await page.getByRole('tab', { name: '草稿', exact: true }).click();
   const advancedTrigger = page.getByRole('button', { name: '高级 JSON', exact: true });
   await advancedTrigger.click();
