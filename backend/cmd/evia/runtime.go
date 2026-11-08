@@ -26,6 +26,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
 	"github.com/howtomakeaname/Evia/backend/internal/transport/control"
 )
@@ -154,6 +155,19 @@ func closeProducer(producer *pipeline.KafkaProducer, result *error) {
 	}
 }
 
+type analysisServicesStore interface {
+	analysis.Store
+	reporting.DiscoveryStore
+}
+
+// Discovery can resolve published definitions without a fact execution engine.
+func configureAnalysis(api *control.API, store analysisServicesStore, validator analysis.Validator, engine analysis.Engine) {
+	api.Discovery = reporting.NewDiscovery(store, validator, engine != nil)
+	if engine != nil {
+		api.Analysis = analysis.New(store, engine, validator)
+	}
+}
+
 func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) (result error) {
 	validator, err := contract.New()
 	if err != nil {
@@ -210,14 +224,16 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		mux.Handle("/v1/collect", collectionAPI.Handler())
 		probes = append(probes, limiter.Ping, producer.Ping)
 	}
+	var engine analysis.Engine
 	if c.AnalysisEnabled {
-		engine, err := queryEngine(c, client)
+		configuredEngine, err := queryEngine(c, client)
 		if err != nil {
 			return err
 		}
-		api.Analysis = analysis.New(store, engine, validator)
+		engine = configuredEngine
 		probes = append(probes, func(ctx context.Context) error { return clickHouseProbe(ctx, c, client) })
 	}
+	configureAnalysis(api, store, validator, engine)
 	if c.DeliveryEnabled {
 		service, probe, err := newDelivery(c, store, validator, client, "readiness-api")
 		if err != nil {

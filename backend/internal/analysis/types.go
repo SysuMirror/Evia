@@ -48,12 +48,19 @@ type Funnel struct {
 	Mode          string        `json:"mode"`
 	SameEntity    []EntityField `json:"same_entity,omitempty"`
 }
+
+// EventVersion selects facts from one immutable event schema version.
+type EventVersion struct {
+	EventKey      string `json:"event_key"`
+	SchemaVersion int64  `json:"schema_version"`
+}
 type Request struct {
 	Kind             string          `json:"kind"`
 	Environment      string          `json:"environment"`
 	TimeRange        TimeRange       `json:"time_range"`
 	Timezone         string          `json:"timezone"`
 	EventKeys        []string        `json:"event_keys,omitempty"`
+	EventVersions    []EventVersion  `json:"event_versions,omitempty"`
 	Filter           *Filter         `json:"filter,omitempty"`
 	Subject          string          `json:"subject,omitempty"`
 	IdentityRevision *int64          `json:"identity_revision,omitempty"`

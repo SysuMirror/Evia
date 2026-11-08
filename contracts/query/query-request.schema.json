@@ -370,6 +370,32 @@
     "cursor": {
       "type": "string",
       "maxLength": 4096
+    },
+    "event_versions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_key": {
+            "type": "string",
+            "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+            "maxLength": 68
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "event_key",
+          "schema_version"
+        ]
+      }
     }
   },
   "required": [
@@ -629,6 +655,19 @@
         "required": [
           "funnel",
           "subject"
+        ],
+        "not": {
+          "required": [
+            "event_versions"
+          ]
+        }
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "event_keys",
+          "event_versions"
         ]
       }
     }

@@ -711,6 +711,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/analysis-capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getAnalysisCapabilities */
+        get: operations["getAnalysisCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/analysis-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getAnalysisCatalog */
+        get: operations["getAnalysisCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/query-validations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** validateQuery */
+        post: operations["validateQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1160,6 +1211,108 @@ export interface components {
             draft_revision: number;
             definition: components["schemas"]["DraftInput"];
         };
+        AnalysisFieldCapability: {
+            type: string;
+            filter_operators: string[];
+            groupable: boolean;
+            metric_operations: string[];
+        };
+        AnalysisCapabilities: {
+            execution_available: boolean;
+            query_kinds: string[];
+            aggregations: string[];
+            /** @description Only unique and p95 accept explicit approximate accuracy; all aggregations default to exact. */
+            approximate_aggregations: string[];
+            subjects: string[];
+            intervals: string[];
+            funnel_modes: string[];
+            field_types: components["schemas"]["AnalysisFieldCapability"][];
+            budgets: {
+                trend_window_seconds: number;
+                other_window_seconds: number;
+                event_selections: number;
+                group_fields: number;
+                metrics: number;
+                result_rows: number;
+                filter_depth: number;
+                filter_nodes: number;
+                filter_arguments: number;
+                filter_values: number;
+                funnel_steps: number;
+                funnel_window_seconds: number;
+                project_running_queries: number;
+                project_queued_queries: number;
+            };
+        };
+        /** @description Property operators use the existing engine: is_present tests key existence, including explicit null; is_missing tests absent keys within the referenced event/version. Typed comparisons exclude null and absent values. Nullable schema unions and unsupported nested/object fields are omitted. */
+        AnalysisCatalogField: {
+            field: {
+                /** @constant */
+                kind: "property";
+                event_key: string;
+                schema_version: number;
+                key: string;
+            };
+            type: string;
+            required: boolean;
+            nullable: boolean;
+            /** @enum {string} */
+            missing_semantics: "absent_key";
+            /** @enum {string} */
+            null_semantics: "present_but_not_a_typed_value";
+            filter_operators: string[];
+            groupable: boolean;
+            metric_operations: string[];
+            metadata: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Read-only immutable version metadata published in this environment. active means included in the current default active release; ingestion_ready additionally requires that active release to have a current verified readiness lease. Neither flag proves source eligibility or query capacity. fields includes only supported top-level typed properties. */
+        AnalysisCatalogEvent: {
+            event_key: string;
+            schema_version: number;
+            display_name: string;
+            definition_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            published: boolean;
+            active: boolean;
+            ingestion_ready: boolean;
+            fields: components["schemas"]["AnalysisCatalogField"][];
+        };
+        AnalysisCatalog: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            catalog_revision: number;
+            items: components["schemas"]["AnalysisCatalogEvent"][];
+            next_cursor: string | null;
+        };
+        QueryDependency: {
+            event_key: string;
+            schema_version: number;
+            definition_hash: string;
+        };
+        QueryDependencyManifest: {
+            project_id: string;
+            environment: string;
+            /** @enum {string} */
+            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events";
+            unfixed_event_keys: string[];
+            event_versions: components["schemas"]["QueryDependency"][];
+        };
+        /** @description Read-only dry validation; no query job, scan or result is created. execution_available reports runtime configuration, not proven capacity or execution success. Unfixed event_keys/all_events remain unfixed; only manifest event_versions are immutable dependencies. Execution reauthorizes and revalidates. */
+        QueryValidation: {
+            /** @constant */
+            valid: true;
+            /** @constant */
+            execution_performed: false;
+            execution_available: boolean;
+            catalog_revision: number;
+            normalized_request: components["schemas"]["query-request.schema"];
+            query_hash: string;
+            dependencies: components["schemas"]["QueryDependencyManifest"];
+            dependency_hash: string;
+        };
         filter: {
             /** @enum {unknown} */
             op: "and" | "or";
@@ -1277,6 +1430,10 @@ export interface components {
             };
             limit?: number;
             cursor?: string;
+            event_versions?: {
+                event_key: string;
+                schema_version: number;
+            }[];
             $defs: {
                 filter: {
                     /** @enum {unknown} */
@@ -1315,7 +1472,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown);
+        } & (unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;
@@ -8741,6 +8898,271 @@ export interface operations {
                 };
             };
             /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAnalysisCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisCapabilities"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAnalysisCatalog: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisCatalog"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    validateQuery: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["query-request.schema"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryValidation"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
             503: {
                 headers: {
                     [name: string]: unknown;

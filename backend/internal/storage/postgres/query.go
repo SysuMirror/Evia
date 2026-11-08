@@ -107,6 +107,11 @@ func resolveQueryFields(ctx context.Context, tx pgx.Tx, project string, request 
 		cache[key] = schema
 		return schema, nil
 	}
+	for _, version := range request.EventVersions {
+		if _, e := load(version.EventKey, version.SchemaVersion); e != nil {
+			return e
+		}
+	}
 	if request.Funnel != nil {
 		for _, step := range request.Funnel.Steps {
 			if _, e := load(step.EventKey, step.SchemaVersion); e != nil {
