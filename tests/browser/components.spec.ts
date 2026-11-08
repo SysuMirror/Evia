@@ -147,17 +147,16 @@ test('buttons forward native events and show keyboard focus and held press feedb
     await page.mouse.up();
   }
   const toggle = page.getByRole('button', { name: '切换选择' });
+  const toggleBackground = () => toggle.evaluate((node) => getComputedStyle(node).backgroundColor);
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  const unselectedAppearance = await toggleBackground();
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  const selectedAppearance = await toggle.evaluate(
-    (node) => getComputedStyle(node).backgroundColor,
-  );
+  // Even reduced motion has a nonzero transition; observe the rendered state.
+  await expect.poll(toggleBackground).not.toBe(unselectedAppearance);
   await toggle.press('Space');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(await toggle.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
-    selectedAppearance,
-  );
+  await expect.poll(toggleBackground).toBe(unselectedAppearance);
 });
 
 declare global {
