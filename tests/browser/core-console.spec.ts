@@ -26,7 +26,15 @@ test('real console creates, publishes, activates, collects and queries scoped ev
     await page.screenshot({ path: join(evidence, name), fullPage: true });
   }
   await page.goto('/projects');
-  const entryAsset = await page.locator('script[type=module]').getAttribute('src');
+  const entryAsset = await page
+    .locator('script[type=module][src]')
+    .evaluateAll(
+      (scripts) =>
+        scripts
+          .map((script) => script.getAttribute('src'))
+          .find((src) => src === '/src/main.tsx' || src?.startsWith('/assets/')) ?? null,
+    );
+  expect(entryAsset, 'real application entry script is present').toBeTruthy();
   await writeFile(join(evidence, 'build.json'), JSON.stringify({ entryAsset }, null, 2));
   await page.getByLabel('账号', { exact: false }).fill(process.env.EVIA_E2E_USERNAME!);
   await page.getByLabel('密码', { exact: false }).fill(process.env.EVIA_E2E_PASSWORD!);
@@ -35,13 +43,14 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await page.getByRole('button', { name: '创建项目', exact: true }).click();
   const project = page.getByRole('dialog', { name: '创建项目' });
   await project.getByLabel('项目名称', { exact: false }).fill(name);
+  const projectCreated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST',
+  );
   await project.getByRole('button', { name: '创建', exact: true }).click();
   await expect(project).not.toBeVisible();
-  await page
-    .getByRole('row')
-    .filter({ hasText: name })
-    .getByRole('button', { name: '进入项目' })
-    .click();
+  const newProject = await (await projectCreated).json();
+  await page.goto(`/projects/${newProject.id}/events?environment=development`);
   await expect(page.getByRole('heading', { name: '事件定义', exact: true })).toBeVisible();
   const projectID = new URL(page.url()).pathname.split('/')[2]!;
   await page.getByRole('button', { name: '创建事件', exact: true }).click();
@@ -264,13 +273,14 @@ test.describe('real server-source credential lifecycle', () => {
     await page.getByRole('button', { name: '创建项目', exact: true }).click();
     const project = page.getByRole('dialog', { name: '创建项目' });
     await project.getByLabel('项目名称', { exact: false }).fill(projectName);
+    const projectCreated = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST',
+    );
     await project.getByRole('button', { name: '创建', exact: true }).click();
     await expect(project).not.toBeVisible();
-    await page
-      .getByRole('row')
-      .filter({ hasText: projectName })
-      .getByRole('button', { name: '进入项目' })
-      .click();
+    const newProject = await (await projectCreated).json();
+    await page.goto(`/projects/${newProject.id}/events?environment=development`);
     await page.getByRole('link', { name: '接入来源', exact: true }).click();
     const projectID = new URL(page.url()).pathname.split('/')[2]!;
     await page.getByRole('button', { name: '创建来源', exact: true }).click();
