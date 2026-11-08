@@ -5,9 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
+    "./charts": "./src/charts.tsx",
     "./styles.css": "./src/styles.css"
   },
   "dependencies": {
+    "echarts": "6.1.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   }
