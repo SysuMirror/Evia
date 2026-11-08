@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.evia.invalid/v1/saved-analysis-template.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "trend",
+        "funnel"
+      ]
+    },
+    "event_versions": {
+      "$ref": "../query/query-request.schema.json#/properties/event_versions"
+    },
+    "filter": {
+      "$ref": "../query/query-request.schema.json#/properties/filter"
+    },
+    "subject": {
+      "$ref": "../query/query-request.schema.json#/properties/subject"
+    },
+    "group_by": {
+      "$ref": "../query/query-request.schema.json#/properties/group_by"
+    },
+    "metrics": {
+      "$ref": "../query/query-request.schema.json#/properties/metrics"
+    },
+    "interval": {
+      "$ref": "../query/query-request.schema.json#/properties/interval"
+    },
+    "funnel": {
+      "$ref": "../query/query-request.schema.json#/properties/funnel"
+    },
+    "limit": {
+      "$ref": "../query/query-request.schema.json#/properties/limit"
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "trend"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "event_versions"
+        ],
+        "not": {
+          "required": [
+            "funnel"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "funnel"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "funnel",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "description": "Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference."
+}
