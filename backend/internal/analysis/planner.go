@@ -212,6 +212,9 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 	if scope.ProjectID == "" || scope.Environment != r.Environment {
 		return Plan{}, Invalid("INVALID_QUERY_SCOPE", "查询范围无效")
 	}
+	if e := validateEventSelection(r); e != nil {
+		return Plan{}, e
+	}
 	if e := CheckResolved(r); e != nil {
 		return Plan{}, e
 	}
@@ -223,6 +226,13 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 			events = append(events, p.bind("String", key))
 		}
 		base += " AND event_key IN (" + strings.Join(events, ",") + ")"
+	}
+	if len(r.EventVersions) > 0 {
+		versions := make([]string, 0, len(r.EventVersions))
+		for _, version := range r.EventVersions {
+			versions = append(versions, "(event_key="+p.bind("String", version.EventKey)+" AND schema_version="+p.bind("UInt64", strconv.FormatInt(version.SchemaVersion, 10))+")")
+		}
+		base += " AND (" + strings.Join(versions, " OR ") + ")"
 	}
 	if r.IdentityFilter != nil {
 		if r.IdentityFilter.UID != nil {
