@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
@@ -420,16 +421,25 @@ func TestClickHouseRejectsFailureLateErrorAndRedirect(t *testing.T) {
 }
 
 func TestWorkerBatchBudgetReleasesOwnershipWithoutCommit(t *testing.T) {
-	events := []string{}
-	reader := &memoryReader{events: &events, messages: []Message{testMessage(t)}}
-	sink := &memorySink{events: &events, failAlways: true}
-	worker := Worker{Reader: reader, Sink: sink, Quarantine: &memoryQuarantine{events: &events}, BatchTimeout: 5 * time.Millisecond, RetryInitial: time.Millisecond, RetryMax: time.Millisecond}
-	if e := worker.Run(context.Background()); !errors.Is(e, context.DeadlineExceeded) {
-		t.Fatal(e)
-	}
-	if reader.commits != 0 || reader.polls != 1 || sink.calls < 2 || events[len(events)-1] != "close" {
-		t.Fatal("unfinished work advanced or did not release consumer", events)
-	}
+	// Virtual time advances at the blocked retry timers, so scheduler pauses
+	// cannot consume the batch budget before a second persistence attempt.
+	synctest.Test(t, func(t *testing.T) {
+		events := []string{}
+		reader := &memoryReader{events: &events, messages: []Message{testMessage(t)}}
+		sink := &memorySink{events: &events, failAlways: true}
+		worker := Worker{Reader: reader, Sink: sink, Quarantine: &memoryQuarantine{events: &events}, BatchTimeout: 5 * time.Millisecond, RetryInitial: time.Millisecond, RetryMax: time.Millisecond}
+		if e := worker.Run(context.Background()); !errors.Is(e, context.DeadlineExceeded) {
+			t.Fatal(e)
+		}
+		want := []string{"poll"}
+		for range sink.calls {
+			want = append(want, "sink")
+		}
+		want = append(want, "rebalance", "close")
+		if reader.commits != 0 || reader.polls != 1 || sink.calls < 2 || !reflect.DeepEqual(events, want) {
+			t.Fatal("unfinished work advanced or did not release consumer in order", events)
+		}
+	})
 }
 func TestKafkaAdapterConfigurationKeepsIdempotentProducer(t *testing.T) {
 	config := KafkaConfig{Brokers: []string{"127.0.0.1:1"}, Topic: "events", DeadLetterTopic: "quarantine", Group: "synthetic-test"}
