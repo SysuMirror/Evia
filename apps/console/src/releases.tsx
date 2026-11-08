@@ -20,6 +20,7 @@ import {
   LoadingPanel,
   Modal,
   PageHeading,
+  Panel,
   PaginationBar,
   useToast,
   type DataTableColumn,
@@ -167,7 +168,7 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
     return () => window.clearTimeout(timer);
   }, [detailID, detail.data, detail.isError, detail.dataUpdatedAt, pollCount, pollGeneration]);
   const status = (release: Release) => (
-    <>
+    <div className="resource-statuses">
       <Badge
         tone={
           release.state === 'failed' ? 'error' : release.state === 'published' ? 'success' : 'info'
@@ -184,7 +185,7 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
           <Badge tone="info">当前激活</Badge>
         </>
       )}
-    </>
+    </div>
   );
   const releaseColumns: DataTableColumn<Release>[] = [
     {
@@ -307,15 +308,21 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
           </>
         }
       />
-      <p>
-        {environmentLabel[environment]}，
-        {activeRevision === undefined
-          ? '正在读取激活版本'
-          : activeRevision === 0
-            ? '尚未激活版本'
-            : `当前激活 v${activeRevision}`}
-        。发布保存不可变定义，管道就绪后仍需显式激活。
-      </p>
+      <div className="resource-summary">
+        <div>
+          <div className="resource-muted">{environmentLabel[environment]}，当前激活版本</div>
+          <div className="resource-summary-title">
+            {activation.isError
+              ? '读取失败'
+              : activeRevision === undefined
+                ? '正在读取'
+                : activeRevision === 0
+                  ? '尚未激活版本'
+                  : `v${activeRevision}`}
+          </div>
+        </div>
+        <span className="evia-field-hint">发布后先检查管道就绪状态，再激活版本以接收事件。</span>
+      </div>
       {!canWrite && <p>当前权限为只读，可查看发布及激活状态。</p>}
       <CatalogError error={activation.error} retry={() => void activation.refetch()} />
       <CatalogError
@@ -400,12 +407,14 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
           }
         >
           {!eventsDenied && (
-            <p>
-              {environmentLabel[environment]}，比较当前激活版本{' '}
-              {expected === 0 ? '0（未激活）' : `v${expected ?? '—'}`}。包含{' '}
-              {Object.keys(selected).length} 个事件，发布内容以选定的精确草稿版本为准，最多选择 200
-              个事件。
-            </p>
+            <div className="resource-summary">
+              <p>
+                {environmentLabel[environment]}，比较当前激活版本{' '}
+                {expected === 0 ? '0（未激活）' : `v${expected ?? '—'}`}。包含{' '}
+                {Object.keys(selected).length} 个事件，发布内容以选定的精确草稿版本为准，最多选择
+                200 个事件。
+              </p>
+            </div>
           )}
           <CatalogError
             error={publish.error ?? selectionError ?? events.error}
@@ -449,8 +458,8 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
             </Alert>
           )}
           {!eventsDenied && Object.keys(selected).length > 0 && (
-            <details open>
-              <summary>已选草稿</summary>
+            <details open className="resource-selection">
+              <summary>已选草稿（{Object.keys(selected).length}）</summary>
               <ul>
                 {Object.entries(selected).map(([key, revision]) => (
                   <li key={key}>
@@ -553,42 +562,56 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
             !detailDenied &&
             detail.data && (
               <>
-                <p>
-                  v{detail.data.revision}，{environmentLabel[detail.data.environment]}
-                </p>
-                <p>{status(detail.data)}</p>
-                <dl className="project-details">
-                  <div>
-                    <dt>发布 ID</dt>
-                    <dd>
-                      <code>{detail.data.release_id}</code>{' '}
-                      <CopyButton value={detail.data.release_id} />
-                    </dd>
+                <div className="resource-summary">
+                  <div className="resource-summary-title">
+                    v{detail.data.revision}{' '}
+                    <span className="resource-muted">
+                      {environmentLabel[detail.data.environment]}
+                    </span>
                   </div>
-                  <div>
-                    <dt>清单摘要</dt>
-                    <dd style={{ overflowWrap: 'anywhere' }}>
-                      {detail.data.manifest_hash ?? '尚无摘要'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>加速状态</dt>
-                    <dd>
-                      {
+                  {status(detail.data)}
+                </div>
+                <Panel title="发布记录" className="resource-section">
+                  <dl className="project-details">
+                    <div>
+                      <dt>发布 ID</dt>
+                      <dd>
+                        <code>{detail.data.release_id}</code>{' '}
+                        <CopyButton value={detail.data.release_id} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>清单摘要</dt>
+                      <dd className="resource-origin-list">
+                        {detail.data.manifest_hash ?? '尚无摘要'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>加速状态</dt>
+                      <dd>
                         {
-                          not_requested: '未请求',
-                          building: '构建中',
-                          ready: '已就绪',
-                          failed: '失败',
-                        }[detail.data.acceleration_state]
-                      }
-                    </dd>
-                  </div>
-                </dl>
+                          {
+                            not_requested: '未请求',
+                            building: '构建中',
+                            ready: '已就绪',
+                            failed: '失败',
+                          }[detail.data.acceleration_state]
+                        }
+                      </dd>
+                    </div>
+                  </dl>
+                </Panel>
                 {detail.data.error && (
                   <Alert tone="error" title={detail.data.error.message}>
                     {detail.data.error.code}
                   </Alert>
+                )}
+                {activeRevision !== undefined && detail.data.revision <= activeRevision && (
+                  <p className="evia-field-hint">
+                    {detail.data.revision === activeRevision
+                      ? '此版本已激活。'
+                      : `当前已激活 v${activeRevision}，只可激活更新版本。`}
+                  </p>
                 )}
                 {!detail.data.ingestion_ready && (
                   <Alert
@@ -601,8 +624,7 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
                           : '尚未获得有效的管道就绪租约'
                     }
                   >
-                    发布成功不代表可以接收事件。请等待真实管道验证，或检查交付服务。自动检查最多 20
-                    次，每次间隔 3 秒。
+                    管道验证通过后才可激活。等待交付服务完成验证，也可手动刷新状态。
                   </Alert>
                 )}
               </>
