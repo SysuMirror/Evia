@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Plan struct {
@@ -39,13 +38,9 @@ func (p *planner) scalar(kind string, value any) (string, error) {
 		}
 		return p.bind("String", s), nil
 	case "datetime":
-		s, ok := value.(string)
-		if !ok {
-			return "", Invalid("INVALID_FILTER_TYPE", "时间值无效")
-		}
-		parsed, e := time.Parse(time.RFC3339Nano, s)
+		parsed, e := parseDatetime(value)
 		if e != nil {
-			return "", Invalid("INVALID_FILTER_TYPE", "时间值必须为 RFC3339")
+			return "", e
 		}
 		return p.bind("DateTime64(9, 'UTC')", parsed.UTC().Format("2006-01-02 15:04:05.000000000")), nil
 	case "boolean":
