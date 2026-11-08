@@ -78,6 +78,7 @@ type Options struct{ CompatibilityWindow, LeaseDuration, ProbeTimeout time.Durat
 // Store rechecks authorization and scope within every activation transaction.
 // ReadConfig and ConfigSource always read live credential/revocation state.
 type Store interface {
+	GetActivation(context.Context, string, string, string) (Activation, error)
 	PrepareActivation(context.Context, string, string, string, string, ActivationInput) (Candidate, *Activation, error)
 	CommitActivation(context.Context, string, string, string, string, ActivationInput, Candidate, Proof, time.Duration, time.Duration) (Activation, error)
 	ReadConfig(context.Context, string, int64) (ConfigSnapshot, error)
