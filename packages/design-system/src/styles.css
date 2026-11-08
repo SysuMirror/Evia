@@ -1340,6 +1340,137 @@ p {
   width: 100%;
   height: 320px;
 }
+.saved-analysis-workspace,
+.saved-analysis-detail,
+.saved-analysis-run,
+.saved-analysis-editor {
+  min-width: 0;
+}
+.saved-analysis-workspace {
+  display: grid;
+  gap: 20px;
+}
+.saved-analysis-workspace > .page-heading {
+  margin-bottom: 0;
+}
+.saved-analysis-list .project-link {
+  font-weight: 600;
+}
+.saved-analysis-editor-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.saved-analysis-version-picker {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.saved-analysis-version-picker > .evia-toolbar {
+  margin-bottom: 0;
+}
+.saved-analysis-version-picker .evia-toolbar-controls > .evia-select {
+  flex: 1 1 220px;
+}
+.saved-analysis-editor-rows {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.saved-analysis-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+}
+.saved-analysis-editor-row > .evia-field {
+  flex: 1 1 150px;
+  margin: 0;
+}
+.saved-analysis-editor-row > .evia-button {
+  flex-shrink: 0;
+}
+.saved-analysis-editor-json {
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  tab-size: 2;
+}
+.saved-analysis-editor-help {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.saved-analysis-editor-errors {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.saved-analysis-validation {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.saved-analysis-validation .code-block {
+  max-height: 320px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.saved-analysis-result {
+  background: var(--color-surface-subtle);
+}
+.saved-analysis-result .evia-table-region {
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+.saved-analysis-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.saved-analysis-facts > * {
+  min-width: 0;
+  margin: 0;
+}
+.saved-analysis-chart {
+  overflow: hidden;
+}
+.saved-analysis-chart-wrap {
+  min-width: 0;
+}
+.saved-analysis-chart-note {
+  margin-top: 12px;
+}
+@media (max-width: 640px) {
+  .saved-analysis-editor-row {
+    padding: 12px;
+  }
+  .saved-analysis-editor-row > .evia-field {
+    flex-basis: 100%;
+  }
+  .saved-analysis-editor-row > .evia-button {
+    margin-left: auto;
+  }
+}
 @media (max-width: 640px) {
   .evia-panel {
     padding: 20px 16px;
@@ -1548,7 +1679,8 @@ p {
 .resource-selection[open] > summary {
   margin-bottom: 12px;
 }
-.analysis-stat > div > span {
+.analysis-stat > div > span,
+.analysis-stat > span {
   color: var(--color-muted);
   font-size: 13px;
   font-weight: 500;
