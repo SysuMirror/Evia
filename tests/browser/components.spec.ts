@@ -247,3 +247,104 @@ test('success toast expiry pauses for focus and hover, and dismissal restores fo
   await expect(error).toHaveCount(0);
   await expect(errorTrigger).toBeFocused();
 });
+
+test('tabs expose actual panels and preserve native keyboard activation and focus', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  const tabs = page.getByRole('tablist', { name: '事件内容' });
+  const overview = tabs.getByRole('tab', { name: '概览' });
+  const properties = tabs.getByRole('tab', { name: '属性' });
+  const disabled = tabs.getByRole('tab', { name: '停用页' });
+  await expect(overview).toHaveAttribute('aria-selected', 'true');
+  await expect(disabled).toBeDisabled();
+  await expect(page.getByRole('tabpanel')).toHaveCount(1);
+  await expect(page.getByRole('tabpanel', { name: '概览' })).toHaveText('事件概览内容');
+  await overview.focus();
+  await overview.press('ArrowRight');
+  await expect(properties).toBeFocused();
+  await expect(properties).toHaveAttribute('aria-selected', 'true');
+  await expect(overview).toHaveAttribute('tabindex', '-1');
+  await expect(page.getByRole('tabpanel', { name: '属性' })).toHaveAttribute(
+    'id',
+    (await properties.getAttribute('aria-controls')) as string,
+  );
+  await expect(page.getByLabel('面板切换次数')).toHaveText('1');
+  await properties.press('ArrowLeft');
+  await expect(overview).toBeFocused();
+  await overview.press('End');
+  await expect(properties).toBeFocused();
+  await properties.press('Home');
+  await expect(overview).toBeFocused();
+  await overview.press('ArrowLeft');
+  await expect(properties).toBeFocused();
+  await expect(page.getByLabel('面板切换次数')).toHaveText('5');
+  await properties.press('Enter');
+  await expect(page.getByLabel('面板切换次数')).toHaveText('6');
+  await properties.press('Space');
+  await expect(page.getByLabel('面板切换次数')).toHaveText('7');
+  await page.getByRole('textbox', { name: '面板备注' }).fill('保留编辑');
+  await overview.click();
+  await properties.click();
+  await expect(page.getByRole('textbox', { name: '面板备注' })).toHaveValue('保留编辑');
+  await page.setViewportSize({ width: 360, height: 800 });
+  await expect(tabs).toBeVisible();
+  expect(await tabs.evaluate((node) => node.getBoundingClientRect().right)).toBeLessThanOrEqual(
+    360,
+  );
+});
+
+test('unsaved guard keeps edits recoverable and rejects navigation during pending work', async ({
+  page,
+}) => {
+  await page.goto(fixtureURL);
+  const input = page.getByRole('textbox', { name: '未保存内容' });
+  const leave = page.getByRole('button', { name: '离开编辑', exact: true });
+  const dialog = page.getByRole('dialog', { name: '放弃未保存的修改？' });
+  await input.fill('保留草稿');
+  expect(
+    await page.evaluate(
+      () => !window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
+    ),
+  ).toBe(true);
+  await leave.click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '继续编辑' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(leave).toBeFocused();
+  await expect(input).toHaveValue('保留草稿');
+  await expect(page.getByLabel('离开次数')).toHaveText('0');
+  await page.getByRole('button', { name: '请求全局离开' }).click();
+  await dialog.getByRole('button', { name: '放弃修改' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByLabel('离开次数')).toHaveText('1');
+  await expect(input).toHaveValue('');
+  expect(
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
+    ),
+  ).toBe(true);
+  await input.fill('路由草稿');
+  const next = page.getByRole('link', { name: '切换测试页面' });
+  await next.click();
+  await expect(dialog).toBeVisible();
+  await expect(page.getByLabel('测试路径')).toHaveText('/');
+  await dialog.getByRole('button', { name: '继续编辑' }).click();
+  await expect(next).toBeFocused();
+  await expect(input).toHaveValue('路由草稿');
+  await next.click();
+  await dialog.getByRole('button', { name: '放弃修改' }).click();
+  await expect(page.getByLabel('测试路径')).toHaveText('/other');
+  await expect(input).toHaveValue('');
+  await page.getByRole('button', { name: '开始测试操作' }).click();
+  await page.getByRole('link', { name: '返回测试页面' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByLabel('测试路径')).toHaveText('/other');
+  await leave.click();
+  await page.getByRole('button', { name: '请求全局离开' }).click();
+  await expect(page.getByLabel('离开次数')).toHaveText('1');
+  await page.getByRole('button', { name: '完成测试操作' }).click();
+  await page.getByRole('link', { name: '返回测试页面' }).click();
+  await expect(page.getByLabel('测试路径')).toHaveText('/');
+});
