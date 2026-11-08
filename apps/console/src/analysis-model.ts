@@ -158,7 +158,8 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   };
   if (form.mode !== 'funnel' && form.event) request.event_keys = [form.event];
   if (form.mode === 'metrics' || form.mode === 'trend') {
-    if (form.metric === 'pv') request.event_keys = ['sys.page_view'];
+    if (form.metric === 'pv' && !form.event)
+      throw new Error('请选择代表页面访问的已发布事件，再统计 PV。');
     request.metrics = [
       {
         op: form.metric === 'uv' ? 'unique' : 'count',
@@ -268,13 +269,11 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   }
   return request;
 }
-export function metricLabel(request: QueryRequest) {
+export function metricLabel(request: QueryRequest, semanticMetric?: AnalysisForm['metric']) {
   const metric = request.metrics?.[0];
   if (metric?.op === 'unique')
     return `${request.subject === 'anonymous' ? '匿名标识' : '原始 UID'} UV`;
-  return request.event_keys?.length === 1 && request.event_keys[0] === 'sys.page_view'
-    ? 'PV'
-    : '事件数';
+  return semanticMetric === 'pv' ? 'PV' : '事件数';
 }
 export function formatTime(value: unknown, timezone: string) {
   if (typeof value !== 'string') return '—';

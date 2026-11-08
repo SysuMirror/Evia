@@ -1106,6 +1106,26 @@ p {
   gap: 20px;
   min-width: 0;
 }
+.field-help {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.evia-panel details > summary {
+  cursor: pointer;
+  padding: 4px 0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.evia-panel details > summary:focus-visible {
+  outline: 2px solid #3561d8;
+  outline-offset: 3px;
+}
+.evia-panel details[open] > summary {
+  margin-bottom: 12px;
+}
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
