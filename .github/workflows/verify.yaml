@@ -108,6 +108,8 @@ jobs:
           PY
       - name: Verify governance through the real operator and HTTP interfaces
         run: python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- python tooling/verification/governance_smoke.py --binary "$RUNNER_TEMP/evia"
+      - name: Verify independent metrics through real ingestion and query workers
+        run: python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- python tooling/verification/metrics_smoke.py --binary "$RUNNER_TEMP/evia"
       - name: Verify browser flows against the complete real chain
         run: python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- make browser-test
       - name: Stop CI runtime processes and remove dependency containers
