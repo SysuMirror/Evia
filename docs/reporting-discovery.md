@@ -1,6 +1,6 @@
 # Analysis discovery and validation
 
-The reporting foundation implements three session-authenticated endpoints under `P = /api/v1/projects/{project_id}`. OpenAPI and the query JSON Schema remain authoritative. Saved analyses, metrics, dashboards, publications, dashboard runs and machine principals are not implemented by this foundation.
+The reporting foundation implements three endpoints under `P = /api/v1/projects/{project_id}`, accepting management sessions or scoped machine credentials. OpenAPI and the query JSON Schema remain authoritative. [Saved analyses](saved-analyses.md), [dashboards](dashboards.md) and [machine access](machine-access.md) are delivered as separate modules; independent metrics remain planned.
 
 | Endpoint | Implemented behavior |
 | --- | --- |
@@ -12,9 +12,9 @@ The runtime registers discovery even when no execution engine is configured. `ex
 
 ## Authorization and boundaries
 
-All three operations require the existing management session and current project membership. POST validation also requires the existing Origin/CSRF protection, despite being free of persistent writes. Owners and editors may validate event details and journeys; viewers may validate aggregate trend/funnel requests. Source write credentials do not authorize discovery or queries. Environment selects release membership inside the authorized project; this is not a new environment ACL or machine-token scope model.
+All three operations require current project authority. Human callers use a management session and current membership; session POST validation also requires Origin/CSRF protection despite being free of persistent writes. Owners and editors may validate raw details and identity-bearing requests; viewers are restricted to aggregate requests without raw identity access. Machine callers need `queries.read`, their fixed project/environment, and `queries.raw.read` when the full request requires raw access. Human sessions and machine Bearer authentication cannot be mixed. Source write credentials do not authorize discovery or queries. Environment selects release membership and must match the machine grant; [machine access](machine-access.md) defines the complete policy.
 
-The reporting service owns discovery policy and projection through a narrow store interface. The PostgreSQL adapter reads catalog facts and reuses the analysis field resolver in a transaction, keeping membership and project share locks until completion. Validation does not change catalog, query-job, outbox or audit tables. It is not a PostgreSQL `READ ONLY` transaction: its shared row locks coordinate current authorization and publication. There is no new definition store or database migration.
+The reporting service owns discovery policy and projection through a narrow store interface. The PostgreSQL adapter reads catalog facts and reuses the analysis field resolver in a transaction, keeping current actor authorization and project share locks until completion. Validation does not change catalog, query-job, outbox or audit tables. It is not a PostgreSQL `READ ONLY` transaction: its shared row locks coordinate current authorization and publication. There is no new definition store or database migration.
 
 ## Catalog projection
 
@@ -45,6 +45,6 @@ A successful response contains `valid=true`, `execution_performed=false`, `execu
 | `event_keys` | All schema versions of each selected key; `unfixed_event_keys` names those keys. |
 | `all_events` | No fixed event selection; project/environment facts remain unrestricted by event version. |
 
-`dependencies.event_versions` records explicitly referenced immutable definitions and hashes, including property references. In `event_keys` or `all_events` mode those entries are not a complete fixed fact selection. A property reference never pins count/UV facts by itself. A future saved-analysis publisher must require actual fixed selection rather than treating any dependency hash as proof of pinning.
+`dependencies.event_versions` records explicitly referenced immutable definitions and hashes, including property references. In `event_keys` or `all_events` mode those entries are not a complete fixed fact selection. A property reference never pins count/UV facts by itself. The saved-analysis publisher requires actual fixed selection rather than treating any dependency hash as proof of pinning.
 
 Submit `normalized_request` through the normal asynchronous query API to execute. Submission reauthorizes and resolves definitions again; worker claim, result publication and result reads keep their existing authorization checks. Validation output is not a token, reservation, saved configuration or permission to bypass those checks. See [analysis semantics](analysis.md) and [foundation evidence](verification/reporting-foundation-2026-11-08.md).

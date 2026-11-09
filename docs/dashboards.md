@@ -2,13 +2,13 @@
 
 Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. The console now provides editing, version publication/history and per-widget execution using these same APIs. Actual browser evidence is recorded in the [delivery verification](verification/dashboards-sdk-2026-11-09.md).
 
-The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, archive/delete operations, independently versioned metrics, generic parameter bindings, machine authentication and cross-request result caching remain planned.
+The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, archive/delete operations, independently versioned metrics, generic parameter bindings and cross-request result caching remain planned. Scoped machine authentication is implemented.
 
 ## Authentication and scope
 
-Set `P = /api/v1/projects/{project_id}`. Routes use the management session cookie. POST, PATCH and DELETE require the configured management `Origin` and `X-CSRF-Token`; validation requires them despite making no persistent changes. Send JSON bodies with `Content-Type: application/json`. Source write credentials cannot authorize these operations.
+Set `P = /api/v1/projects/{project_id}`. Routes accept either a management session or explicitly scoped machine Bearer authentication, never both. Session POST, PATCH and DELETE requests require the configured management `Origin` and `X-CSRF-Token`; validation requires them despite making no persistent changes. Send JSON bodies with `Content-Type: application/json`. Source write credentials cannot authorize these operations.
 
-Current project members can read configurations, validate drafts, submit runs and read aggregate query results. Owner/editor roles can create, save and publish dashboards. A run's creator or a current owner/editor can cancel it. Both the HTTP boundary and PostgreSQL check current authorization; old hashes, idempotency keys and result URLs do not preserve revoked access.
+Current project members can read configurations, validate drafts, submit runs and read aggregate query results. Owner/editor roles can create, save and publish dashboards. A run's creator or a current owner/editor can cancel it. Machines require the corresponding `dashboards.*` grant and can cancel only their own runs; execution also requires `queries.run` for every child. Identity-bearing widget requests additionally need `queries.raw.read`, including when inspecting a stored run after child-job cleanup. See [machine access](machine-access.md). Both the HTTP boundary and PostgreSQL check current authorization; old hashes, idempotency keys and result URLs do not preserve revoked access.
 
 Creation fixes the dashboard's environment to `development`, `staging` or `production`. Item routes derive it from storage and reject client environment overrides. Published widgets must reference saved-analysis versions from the same project and environment. Saved analyses currently support aggregate trends and ordered funnels; dashboards do not introduce raw event or journey widgets.
 
@@ -27,7 +27,7 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 | `GET P/dashboards/{dashboard_id}/versions/{version}`       | Explicit positive version                                  | Immutable publication                                       |
 | `POST P/dashboards/{dashboard_id}/versions/{version}/runs` | `{time_range,timezone,widget_filters?}`; `Idempotency-Key` | 202 dashboard run with child query jobs                     |
 | `GET P/dashboard-runs/{run_id}`                            | No query parameters                                        | Current run and per-widget states                           |
-| `DELETE P/dashboard-runs/{run_id}`                         | CSRF headers                                               | Cancels active children and returns current run             |
+| `DELETE P/dashboard-runs/{run_id}`                         | CSRF headers for session callers                           | Cancels active children and returns current run             |
 
 Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope; they are not cross-page snapshots. Unknown/repeated query parameters, unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
 
