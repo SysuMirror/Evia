@@ -668,6 +668,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -818,6 +821,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -954,10 +960,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -979,6 +986,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1123,10 +1133,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           },
           {
             "name": "If-Match",
@@ -1156,6 +1167,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1291,6 +1305,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1446,10 +1463,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -1471,6 +1489,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1621,6 +1642,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1757,10 +1781,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -1782,6 +1807,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -1911,6 +1939,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2063,10 +2094,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -2088,6 +2120,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2232,10 +2267,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -2257,6 +2293,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2407,6 +2446,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2554,10 +2596,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -2579,6 +2622,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2710,6 +2756,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -2857,10 +2906,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -2880,6 +2930,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3017,6 +3070,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3153,10 +3209,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -3178,6 +3235,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3307,6 +3367,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3431,10 +3494,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ]
       }
@@ -3446,6 +3510,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3584,6 +3651,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -3720,10 +3790,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "requestBody": {
@@ -3745,6 +3816,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -3909,6 +3983,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -3935,12 +4012,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -4411,6 +4489,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -4535,6 +4616,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "responses": {
@@ -4678,6 +4762,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -4782,6 +4869,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -4917,6 +5007,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -4932,10 +5025,11 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -5039,6 +5133,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5203,6 +5300,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5229,12 +5329,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -5386,6 +5487,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5527,6 +5631,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5666,6 +5773,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5701,12 +5811,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -5858,6 +5969,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -5882,12 +5996,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -6039,6 +6154,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -6199,6 +6317,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -6234,12 +6355,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -6391,6 +6513,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -6542,6 +6667,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -6587,12 +6715,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -6744,6 +6873,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -6885,6 +7017,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7031,6 +7166,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7066,12 +7204,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -7230,6 +7369,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7254,12 +7396,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -7411,6 +7554,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7571,6 +7717,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7606,12 +7755,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -7763,6 +7913,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7914,6 +8067,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -7959,12 +8115,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -8116,6 +8273,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -8255,6 +8415,9 @@
         "security": [
           {
             "consoleSession": []
+          },
+          {
+            "machineCredential": []
           }
         ],
         "parameters": [
@@ -8279,12 +8442,13 @@
           {
             "name": "X-CSRF-Token",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256
-            }
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
           }
         ],
         "responses": {
@@ -8398,6 +8562,1166 @@
         },
         "description": "Cancel all active child jobs atomically. Creator or current project editor/owner only; terminal child outcomes remain visible."
       }
+    },
+    "/api/v1/machine-identity": {
+      "get": {
+        "operationId": "getMachineIdentity",
+        "summary": "getMachineIdentity",
+        "security": [
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineIdentity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/machine-principals": {
+      "get": {
+        "operationId": "listMachinePrincipals",
+        "summary": "listMachinePrincipals",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePrincipalList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMachinePrincipal",
+        "summary": "createMachinePrincipal",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineIssued"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachinePrincipalInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}": {
+      "get": {
+        "operationId": "getMachinePrincipal",
+        "summary": "getMachinePrincipal",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePrincipalDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "revokeMachinePrincipal",
+        "summary": "revokeMachinePrincipal",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]{0,15}\"$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePrincipal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}/credential-rotations": {
+      "post": {
+        "operationId": "rotateMachineCredential",
+        "summary": "rotateMachineCredential",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]{0,15}\"$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineIssued"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineCredentialRotation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}/credentials/{credential_id}": {
+      "delete": {
+        "operationId": "revokeMachineCredential",
+        "summary": "revokeMachineCredential",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "credential_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]{0,15}\"$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本或幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求正文超过限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求媒体类型不支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求方法不被此接口支持",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePrincipal"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8405,11 +9729,16 @@
       "consoleSession": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "activity_session"
+        "name": "evia_session"
       },
       "serverCredential": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "machineCredential": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "独立机器管理凭据，仅可调用显式支持的项目 API。与来源采集凭据分开，不可与会话 Cookie 混用。"
       }
     },
     "schemas": {
@@ -12177,6 +13506,331 @@
         "required": [
           "items",
           "next_cursor"
+        ]
+      },
+      "MachinePermission": {
+        "type": "string",
+        "enum": [
+          "project.read",
+          "catalog.drafts.read",
+          "catalog.drafts.write",
+          "catalog.releases.read",
+          "catalog.releases.publish",
+          "catalog.releases.activate",
+          "sources.read",
+          "sources.write",
+          "sources.rotate",
+          "queries.read",
+          "queries.run",
+          "queries.raw.read",
+          "analyses.read",
+          "analyses.write",
+          "analyses.publish",
+          "analyses.run",
+          "dashboards.read",
+          "dashboards.write",
+          "dashboards.publish",
+          "dashboards.run"
+        ]
+      },
+      "MachinePrincipal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/MachinePermission"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "environment",
+          "name",
+          "permissions",
+          "revision",
+          "created_at",
+          "revoked_at"
+        ]
+      },
+      "MachineCredential": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "principal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "principal_id",
+          "created_at",
+          "expires_at",
+          "revoked_at"
+        ]
+      },
+      "MachinePrincipalDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "$ref": "#/components/schemas/MachinePrincipal"
+          },
+          "credentials": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "$ref": "#/components/schemas/MachineCredential"
+            }
+          }
+        },
+        "required": [
+          "principal",
+          "credentials"
+        ]
+      },
+      "MachinePrincipalList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/MachinePrincipal"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "MachinePrincipalInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/MachinePermission"
+            }
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "name",
+          "environment",
+          "permissions",
+          "expires_at"
+        ]
+      },
+      "MachineCredentialRotation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "overlap_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 300
+          }
+        },
+        "required": [
+          "expires_at",
+          "overlap_seconds"
+        ]
+      },
+      "MachineIssued": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "$ref": "#/components/schemas/MachinePrincipal"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/MachineCredential"
+          },
+          "secret_available": {
+            "type": "boolean"
+          },
+          "secret_once": {
+            "type": "string",
+            "minLength": 40,
+            "maxLength": 160,
+            "pattern": "^evia_m_[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "principal",
+          "credential",
+          "secret_available"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "secret_available": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "secret_once"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "secret_once"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "MachineIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "credential_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/MachinePermission"
+            }
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "principal_id",
+          "credential_id",
+          "project_id",
+          "environment",
+          "name",
+          "permissions",
+          "expires_at"
         ]
       }
     }

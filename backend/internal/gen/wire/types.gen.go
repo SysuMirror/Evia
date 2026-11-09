@@ -484,6 +484,66 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+type MachineCredential struct {
+	ID          string  `json:"id"`
+	PrincipalID string  `json:"principal_id"`
+	CreatedAt   string  `json:"created_at"`
+	ExpiresAt   string  `json:"expires_at"`
+	RevokedAt   *string `json:"revoked_at"`
+}
+
+type MachineCredentialRotation struct {
+	ExpiresAt      string `json:"expires_at"`
+	OverlapSeconds int64  `json:"overlap_seconds"`
+}
+
+type MachineIdentity struct {
+	PrincipalID  string              `json:"principal_id"`
+	CredentialID string              `json:"credential_id"`
+	ProjectID    string              `json:"project_id"`
+	Environment  string              `json:"environment"`
+	Name         string              `json:"name"`
+	Permissions  []MachinePermission `json:"permissions"`
+	ExpiresAt    string              `json:"expires_at"`
+}
+
+type MachineIssued struct {
+	Principal       MachinePrincipal  `json:"principal"`
+	Credential      MachineCredential `json:"credential"`
+	SecretAvailable bool              `json:"secret_available"`
+	SecretOnce      *string           `json:"secret_once,omitempty"`
+}
+
+type MachinePermission string
+
+type MachinePrincipal struct {
+	ID          string              `json:"id"`
+	ProjectID   string              `json:"project_id"`
+	Environment string              `json:"environment"`
+	Name        string              `json:"name"`
+	Permissions []MachinePermission `json:"permissions"`
+	Revision    int64               `json:"revision"`
+	CreatedAt   string              `json:"created_at"`
+	RevokedAt   *string             `json:"revoked_at"`
+}
+
+type MachinePrincipalDetail struct {
+	Principal   MachinePrincipal    `json:"principal"`
+	Credentials []MachineCredential `json:"credentials"`
+}
+
+type MachinePrincipalInput struct {
+	Name        string              `json:"name"`
+	Environment string              `json:"environment"`
+	Permissions []MachinePermission `json:"permissions"`
+	ExpiresAt   string              `json:"expires_at"`
+}
+
+type MachinePrincipalList struct {
+	Items      []MachinePrincipal `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
 type Member struct {
 	UserID       string   `json:"user_id"`
 	Role         string   `json:"role"`

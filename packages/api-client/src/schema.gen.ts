@@ -738,6 +738,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/machine-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getMachineIdentity */
+        get: operations["getMachineIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/machine-principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** listMachinePrincipals */
+        get: operations["listMachinePrincipals"];
+        put?: never;
+        /** createMachinePrincipal */
+        post: operations["createMachinePrincipal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getMachinePrincipal */
+        get: operations["getMachinePrincipal"];
+        put?: never;
+        post?: never;
+        /** revokeMachinePrincipal */
+        delete: operations["revokeMachinePrincipal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}/credential-rotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** rotateMachineCredential */
+        post: operations["rotateMachineCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/machine-principals/{principal_id}/credentials/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** revokeMachineCredential */
+        delete: operations["revokeMachineCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1572,6 +1659,76 @@ export interface components {
         DashboardVersionList: {
             items: components["schemas"]["DashboardVersion"][];
             next_cursor: string | null;
+        };
+        /** @enum {string} */
+        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run";
+        MachinePrincipal: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            name: string;
+            permissions: components["schemas"]["MachinePermission"][];
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            revoked_at: string | null;
+        };
+        MachineCredential: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            principal_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            revoked_at: string | null;
+        };
+        MachinePrincipalDetail: {
+            principal: components["schemas"]["MachinePrincipal"];
+            credentials: components["schemas"]["MachineCredential"][];
+        };
+        MachinePrincipalList: {
+            items: components["schemas"]["MachinePrincipal"][];
+            next_cursor: string | null;
+        };
+        MachinePrincipalInput: {
+            name: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            permissions: components["schemas"]["MachinePermission"][];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        MachineCredentialRotation: {
+            /** Format: date-time */
+            expires_at: string;
+            overlap_seconds: number;
+        };
+        MachineIssued: {
+            principal: components["schemas"]["MachinePrincipal"];
+            credential: components["schemas"]["MachineCredential"];
+            secret_available: boolean;
+            secret_once?: string;
+        } & unknown;
+        MachineIdentity: {
+            /** Format: uuid */
+            principal_id: string;
+            /** Format: uuid */
+            credential_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            name: string;
+            permissions: components["schemas"]["MachinePermission"][];
+            /** Format: date-time */
+            expires_at: string;
         };
         filter: {
             /** @enum {unknown} */
@@ -2622,8 +2779,9 @@ export interface operations {
     createSource: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -2854,7 +3012,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
                 "If-Match": string;
             };
             path: {
@@ -2984,7 +3143,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -3218,8 +3378,9 @@ export interface operations {
     createEventDefinition: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -3451,7 +3612,8 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -3578,8 +3740,9 @@ export interface operations {
     validateEventDraft: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -3815,7 +3978,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -4152,7 +4316,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -4278,8 +4443,9 @@ export interface operations {
     createQuery: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -4509,8 +4675,9 @@ export interface operations {
     cancelQuery: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -4721,8 +4888,9 @@ export interface operations {
     createJourneyQuery: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -4958,7 +5126,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -5717,8 +5886,9 @@ export interface operations {
     validateQuery: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -5918,7 +6088,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -6257,7 +6428,8 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -6385,8 +6557,9 @@ export interface operations {
     validateSavedAnalysis: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -6624,7 +6797,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -6860,7 +7034,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -7203,7 +7378,8 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -7333,8 +7509,9 @@ export interface operations {
     validateDashboard: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -7572,7 +7749,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -7808,7 +7986,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
-                "X-CSRF-Token": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -8042,8 +8221,9 @@ export interface operations {
     cancelDashboardRun: {
         parameters: {
             query?: never;
-            header: {
-                "X-CSRF-Token": string;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
             };
             path: {
                 project_id: string;
@@ -8136,6 +8316,880 @@ export interface operations {
                 };
             };
             /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMachineIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineIdentity"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMachinePrincipals: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachinePrincipalList"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createMachinePrincipal: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachinePrincipalInput"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineIssued"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMachinePrincipal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachinePrincipalDetail"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeMachinePrincipal: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "If-Match": string;
+            };
+            path: {
+                project_id: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachinePrincipal"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateMachineCredential: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                project_id: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineCredentialRotation"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineIssued"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeMachineCredential: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "If-Match": string;
+            };
+            path: {
+                project_id: string;
+                principal_id: string;
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachinePrincipal"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或幂等冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求正文超过限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求媒体类型不支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
             503: {
                 headers: {
                     [name: string]: unknown;
