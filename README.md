@@ -9,7 +9,7 @@
 - [浏览器 SDK](docs/browser-sdk.md)：零运行时依赖，读取已发布事件配置，显式上报自定义事件，保留用户/页面/导航上下文，支持有界队列与不可变重试。当前提供工作区源码和本地打包，尚未发布 npm。
 - [版本化看板](docs/dashboards.md)：服务端支持 1–12 个分析组件、布局、固定版本、统一时间范围、逐图筛选、原子入队与取消；控制台支持键盘布局、版本切换、冲突恢复和真实多图结果。
 
-[机器访问](docs/machine-access.md)已支持独立主体、项目/环境权限、一次性凭据、轮换与撤销，查询工作进程检查原始凭据。[公开接入 skills](integrations/README.md)提供事件梳理、发布和 SDK 验证流程，与内部维护规范分开打包。[项目治理服务端](docs/project-governance.md)已支持成员角色、项目设置和审计查询，并提供运维账号创建命令；对应控制台待交付。跨身份合并、独立指标注册、导出和数据生命周期仍未完整交付。[功能覆盖清单](docs/feature-coverage.md)逐项列出已实现、部分实现和缺口，[PROGRESS.md](PROGRESS.md)保存实际验证记录。正式 OpenAPI 中的早期未实现占位操作已移至待办。
+[机器访问](docs/machine-access.md)已支持独立主体、项目/环境权限、一次性凭据、轮换与撤销，查询工作进程检查原始凭据。[公开接入 skills](integrations/README.md)提供事件梳理、发布和 SDK 验证流程，与内部维护规范分开打包。[项目治理服务端](docs/project-governance.md)已支持成员角色、项目设置和审计查询，并提供运维账号创建命令；对应控制台待交付。[独立指标服务端](docs/metrics.md)支持统计口径注册、差异校验、不可变发布与整段/趋势运行。跨身份合并、指标公式与看板引用、导出和数据生命周期仍未交付。[功能覆盖清单](docs/feature-coverage.md)逐项列出已实现、部分实现和缺口，[PROGRESS.md](PROGRESS.md)保存实际验证记录。正式 OpenAPI 中的早期未实现占位操作已移至待办。
 
 百万事件上报和存储核对已有真实压测证据。指定 UID 筛选、行为链和有序漏斗 **273 / 273 通过**，默认双工作任务的完整矩阵仍只有 **514 / 728 成功**；属性读取和共享内存预算仍有失败，详见[百万查询报告](docs/verification/query-capacity-2026-11-09.md)。当前结果不构成千万用户容量或生产就绪声明。
 
@@ -52,7 +52,7 @@ Owner 可创建独立机器身份、轮换和撤销凭据。[移动端截图](do
 
 使用 Go 1.27.3、Node 24.22.1、pnpm 11.25.0 和 PostgreSQL 17.9。按 [本地开发说明](docs/runbooks/development.md) 生成本地配置，显式执行数据库迁移及初始账号创建，再启动 API 和控制台。
 
-本轮升级需用新二进制显式迁移至 `011`，再启动 API 与工作进程；治理与账号准备见[项目治理说明](docs/project-governance.md)，机器凭据边界见[机器访问说明](docs/machine-access.md)。
+本轮升级需用新二进制显式迁移至 `012`，再启动 API 与工作进程；治理与账号准备见[项目治理说明](docs/project-governance.md)，机器凭据边界见[机器访问说明](docs/machine-access.md)。
 
 服务端链路测试另外使用 Kafka 4.4.0、ClickHouse 26.8.36.3 和 Redis 8.10.3，安装与私有配置见 [依赖说明](docs/runbooks/dependencies.md)。
 
