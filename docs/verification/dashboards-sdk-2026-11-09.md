@@ -51,6 +51,16 @@ Root and the browser agent inspected the fresh [desktop](../assets/dashboard-des
 
 The final complete browser suite passed **42 / 42 in 1.2 minutes**, one worker, zero retries, on the same `/assets/index-C_5Zmr32.js` build. This includes the previous console/component cases, the four dashboard model cases, the combined real dashboard/SDK workflow and credential lifecycle.
 
+### Hosted CI responsive-layout follow-up
+
+The first hosted run for `15d2981`, [run 42571965194](https://github.com/howtomakeaname/Evia/actions/runs/42571965194), passed the Kafka/ClickHouse pipeline, ClickHouse analysis and Redis jobs, plus the main job's Go, generated-contract, frontend and PostgreSQL steps. Its browser suite passed 41 cases and failed the immediate document-width assertion after switching the dashboard to 390 × 844. That run did not record the overflowing element or its duration, so it does not establish a transient failure or a specific cause.
+
+The hosted browser job uses the Vite development server. A local focused run using that same serving mode passed in 44.5 seconds. A separate diagnostic run performed 30 desktop/mobile resize cycles at 6× CPU slowdown and recorded no overflow samples; that focused run passed in 1.0 minute. These unsuccessful reproduction attempts do not invalidate the hosted failure.
+
+The browser assertion now waits at most five seconds for the requested responsive layout: the document must fit the viewport, chart roots must fit their cards, and rendered SVG widths must agree with chart client widths within one pixel of integer rounding. The existing card-position and chart-width limits remain unchanged. Persistent failure reports bounded neutral element geometry without page text, URLs or credentials. The temporary CPU probe was removed. This change makes chart resize completion an explicit test boundary; it does not establish the cause of the earlier failure.
+
+The focused real console/dashboard/SDK chain passed with this permanent assertion in **48.9 seconds**, one worker, zero retries, against the development entry `/src/main.tsx`. No transition geometry diagnostic or page error was emitted. The browser agent inspected the fresh mobile capture and confirmed contained charts/controls with table-internal scrolling. Application code and the production screenshot build did not change during this follow-up. Hosted verification remains separately visible in [GitHub Actions](https://github.com/howtomakeaname/Evia/actions/workflows/verify.yaml); a local pass does not substitute for it.
+
 ## Production asset sizes
 
 Same local toolchain, actual frozen assets; gzip uses Python `gzip.compress(..., mtime=0)` at its default level. These measurements establish transfer size, not runtime latency or production capacity.
