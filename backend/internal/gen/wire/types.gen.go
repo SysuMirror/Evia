@@ -581,6 +581,22 @@ type Project struct {
 	Permissions  []string `json:"permissions"`
 }
 
+type ProjectAuditEntry struct {
+	ID           string  `json:"id"`
+	ProjectID    string  `json:"project_id"`
+	ActorID      string  `json:"actor_id"`
+	ActorKind    string  `json:"actor_kind"`
+	CredentialID *string `json:"credential_id"`
+	Action       string  `json:"action"`
+	ResourceKey  string  `json:"resource_key"`
+	OccurredAt   string  `json:"occurred_at"`
+}
+
+type ProjectAuditList struct {
+	Items      []ProjectAuditEntry `json:"items"`
+	NextCursor *string             `json:"next_cursor"`
+}
+
 type ProjectInput struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
@@ -591,8 +607,42 @@ type ProjectList struct {
 	NextCursor *string   `json:"next_cursor"`
 }
 
+type ProjectMember struct {
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Disabled    bool   `json:"disabled"`
+}
+
+type ProjectMemberAdd struct {
+	Username string `json:"username"`
+	Role     string `json:"role"`
+}
+
+type ProjectMemberList struct {
+	Items      []ProjectMember `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+	Revision   int64           `json:"revision"`
+}
+
+type ProjectMemberResult struct {
+	Member   ProjectMember `json:"member"`
+	Revision int64         `json:"revision"`
+}
+
+type ProjectMemberUpdate struct {
+	Role string `json:"role"`
+}
+
 type ProjectSettings struct {
-	Revision int64  `json:"revision"`
+	ProjectID string `json:"project_id"`
+	Name      string `json:"name"`
+	Timezone  string `json:"timezone"`
+	Revision  int64  `json:"revision"`
+}
+
+type ProjectSettingsUpdate struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
 }
