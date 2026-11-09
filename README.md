@@ -22,6 +22,15 @@
 
 </details>
 
+<details>
+<summary>查看机器访问管理</summary>
+
+![机器访问详情，包含环境、授权范围和凭据状态，不展示密钥。](docs/assets/machine-access-desktop.png)
+
+Owner 可创建独立机器身份、轮换和撤销凭据。[移动端截图](docs/assets/machine-access-mobile.png)与[验证记录](docs/verification/machine-access-2026-11-09.md)包含会话隔离、一次性密钥恢复和真实接入链的检查。
+
+</details>
+
 历次真实依赖、公开 HTTP 和浏览器验证保存在[开发进度](PROGRESS.md)及其关联记录中。当前结果不构成千万用户容量或生产就绪声明。
 
 <details>
