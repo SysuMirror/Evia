@@ -1,8 +1,17 @@
 import type { ReactNode } from 'react';
 
-export type WorkspaceSection = 'events' | 'releases' | 'sources' | 'analysis' | 'saved-analyses';
+export type WorkspaceSection =
+  'events' | 'releases' | 'sources' | 'analysis' | 'saved-analyses' | 'dashboards';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  dashboards: (
+    <>
+      <rect x="3" y="3" width="11" height="8" rx="2" />
+      <rect x="16" y="3" width="5" height="8" rx="2" />
+      <rect x="3" y="13" width="7" height="8" rx="2" />
+      <rect x="12" y="13" width="9" height="8" rx="2" />
+    </>
+  ),
   events: (
     <>
       <rect x="4" y="3.5" width="16" height="17" rx="3" />

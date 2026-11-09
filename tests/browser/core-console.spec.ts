@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { verifySavedAnalysisWorkflow } from './saved-analysis-workflow';
 import { verifyBrowserSDKWorkflow } from './browser-sdk-workflow';
+import { verifyDashboardWorkflow } from './dashboard-workflow';
 
 // Credential responses must never enter automatic trace or screenshot artifacts.
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
@@ -271,6 +272,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await query();
   await expect(page.locator('.metric-value')).toHaveText('2');
   await verifySavedAnalysisWorkflow(page, screenshot);
+  await verifyDashboardWorkflow(page, screenshot);
   await page.getByRole('link', { name: '数据分析', exact: true }).click();
   await page.getByLabel('事件（跨已发布版本）').selectOption('browser_action');
   await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('uv');

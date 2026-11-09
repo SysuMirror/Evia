@@ -1,0 +1,100 @@
+.dashboard-metadata {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(240px, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+.dashboard-section-actions,
+.dashboard-run-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.dashboard-empty,
+.dashboard-widget-preview {
+  padding: 24px;
+  color: var(--color-text-secondary, #667085);
+  background: var(--color-surface-subtle, #f6f7fa);
+  border-radius: 16px;
+}
+.dashboard-empty h3 {
+  color: var(--color-text, #202635);
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.dashboard-widget-preview {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+}
+.dashboard-widget-preview dl {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+.dashboard-widget-preview dt {
+  font-size: 12px;
+}
+.dashboard-widget-preview dd {
+  margin: 4px 0 0;
+  color: var(--color-text, #202635);
+}
+.dashboard-widget-preview p {
+  margin: 0;
+  font-size: 13px;
+}
+.dashboard-layout-controls {
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dashboard-layout-controls legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.dashboard-filter-row {
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 12px;
+  padding: 16px;
+}
+.dashboard-run-status {
+  justify-content: flex-start;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.dashboard-run .saved-analysis-result {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  min-width: 0;
+}
+.dashboard-run .saved-analysis-result .chart-surface {
+  min-width: 0;
+}
+.dashboard-run .saved-analysis-result .analysis-query-context {
+  font-size: 12px;
+}
+.dashboard-run .saved-analysis-result .field-help {
+  font-size: 12px;
+}
+@media (max-width: 800px) {
+  .dashboard-metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard-widget-preview {
+    min-height: 120px;
+  }
+  .dashboard-run .evia-toolbar-controls {
+    width: 100%;
+  }
+}
