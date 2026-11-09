@@ -5,6 +5,8 @@ import { expect, test } from '@playwright/test';
 import { verifySavedAnalysisWorkflow } from './saved-analysis-workflow';
 import { verifyBrowserSDKWorkflow } from './browser-sdk-workflow';
 import { verifyDashboardWorkflow } from './dashboard-workflow';
+import { verifyMachineAccessWorkflow } from './machine-access-workflow';
+import { verifyMachineIntegrationWorkflow } from './machine-integration-workflow';
 
 // Credential responses must never enter automatic trace or screenshot artifacts.
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
@@ -325,6 +327,8 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await page.getByRole('link', { name: '接入来源', exact: true }).click();
   await expect(page.getByText('合成浏览器来源', { exact: true })).not.toBeVisible();
   await verifyBrowserSDKWorkflow(page, projectID);
+  await verifyMachineAccessWorkflow(page, screenshot);
+  await verifyMachineIntegrationWorkflow(page);
   expect(errors, 'no uncaught browser exceptions').toEqual([]);
 });
 
