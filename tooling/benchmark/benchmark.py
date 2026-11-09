@@ -66,10 +66,11 @@ def main():
                 report = run_queries(bench, config, args)
             except SmokeFailure as error:
                 report = getattr(bench, "report", {"report_version": 1, "stage": "query"})
-                report.update(success=False, failure=str(error), query_jobs=bench.query_jobs,
+                report.update(success=False, failure=str(error), finished_at=timestamp(), query_jobs=bench.query_jobs,
                               http_status_counts=dict(bench.http.statuses))
                 Path(args.report).write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
                 raise
+            report["finished_at"] = timestamp()
             Path(args.report).write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(json.dumps({"stage": "queries_complete", "success": report["success"], "query_jobs": bench.query_jobs, "report": args.report}))
             return 0 if report["success"] else 1

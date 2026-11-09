@@ -10,7 +10,8 @@ from benchmark_workloads import workloads, request_base, validate_result
 def run_queries(bench, config, args):
     bench.project = config["project_id"]
     cases = workloads(config)
-    report = {"report_version": 1, "stage": "query", "project_id": bench.project, "run_id": config["run_id"],
+    report = {"report_version": 1, "stage": "query", "started_at": timestamp(),
+              "project_id": bench.project, "run_id": config["run_id"],
               "events_expected": args.events, "exact_uid_expected": min(args.events, config["uid_cardinality"]),
               "fixture": {"uid_cardinality": config["uid_cardinality"], "section_cardinality": 10,
                           "post_cardinality": 10000, "page_cardinality": 1000, "lookback_seconds": 1800},
