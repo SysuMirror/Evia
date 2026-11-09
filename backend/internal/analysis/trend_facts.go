@@ -77,13 +77,18 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 			projection = append(projection, fmt.Sprintf("winner.%d AS %s", len(arguments), column.name))
 		}
 	}
-	// Only grouping keys may be filtered before winner selection. In particular,
-	// event, time, UID and property predicates must remain outside this source:
-	// a losing conflicting replay may otherwise replace an excluded winner.
+	// Restrict by grouping keys before selecting winners. A necessary identity
+	// equality may first identify candidate keys, but every version of those
+	// keys remains eligible. Event, time, UID and property predicates still apply
+	// to the winner; a matching losing replay cannot replace an excluded winner.
+	predicate := "project_id=" + p.bind("String", scope.ProjectID) +
+		" AND environment=" + p.bind("String", scope.Environment)
+	if candidates := p.identityCandidatePredicate(database, scope, request); candidates != "" {
+		predicate += " AND " + candidates
+	}
 	return "(SELECT " + strings.Join(projection, ",") +
 		" FROM (SELECT project_id,environment,source_id,event_id,argMin(tuple(" + strings.Join(arguments, ",") +
 		")," + trendWinnerWeight + ") AS winner FROM `" + database + "`.`event_facts_raw`" +
-		" WHERE project_id=" + p.bind("String", scope.ProjectID) +
-		" AND environment=" + p.bind("String", scope.Environment) +
+		" WHERE " + predicate +
 		" GROUP BY project_id,environment,source_id,event_id))", nil
 }

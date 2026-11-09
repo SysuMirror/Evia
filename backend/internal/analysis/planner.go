@@ -226,6 +226,8 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 		if e != nil {
 			return Plan{}, e
 		}
+	} else if table == "event_facts" {
+		source = p.identityFactsSource(database, scope, r)
 	}
 	base := " FROM " + source + " WHERE project_id=" + p.bind("String", scope.ProjectID) + " AND environment=" + p.bind("String", scope.Environment) + " AND event_time>=" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.From.UTC().Format("2006-01-02 15:04:05.000000000")) + " AND event_time<" + p.bind("DateTime64(9, 'UTC')", r.TimeRange.To.UTC().Format("2006-01-02 15:04:05.000000000"))
 	if len(r.EventKeys) > 0 {
