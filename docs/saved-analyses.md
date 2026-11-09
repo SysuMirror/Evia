@@ -1,6 +1,6 @@
 # Saved analyses
 
-Saved analyses persist named aggregate trend or ordered funnel configurations in one project and environment. A mutable draft becomes an immutable published version after validation; executing an explicit version creates a normal durable query job. This backend slice includes contracts, generated API types/client methods, domain policy, PostgreSQL persistence and HTTP routes. The dedicated saved-analysis console editor, dashboards, independently versioned metrics/formulas, machine authentication and exports remain planned.
+Saved analyses persist named aggregate trend or ordered funnel configurations in one project and environment. A mutable draft becomes an immutable published version after validation; executing an explicit version creates a normal durable query job. Contracts, generated API types/client methods, domain policy, PostgreSQL persistence and HTTP routes are implemented. The console includes structured editing, publication review, version history and execution results. Multi-chart dashboards are in development; independently versioned metrics/formulas, machine authentication and exports remain planned. See the [feature coverage audit](feature-coverage.md) for the broader delivery boundary.
 
 The authoritative saved-analysis schemas, including `SavedAnalysisTemplate` and `SavedAnalysisDefinition`, are in `contracts/http/openapi.json`; executable query contracts remain under `contracts/query/`. See [analysis semantics](analysis.md), [catalog discovery](reporting-discovery.md) and [verification evidence](verification/saved-analyses-2026-11-09.md). Real integration package times of PostgreSQL **40.548s** and ClickHouse analysis **7.365s** are test durations, not endpoint latency or capacity measurements.
 
@@ -10,18 +10,18 @@ Set `P = /api/v1/projects/{project_id}`. All routes use the existing management 
 
 Current project members can read aggregate configurations, validate them and execute versions. Owner/editor roles can create, edit and publish. The HTTP boundary authorizes the project; PostgreSQL repeats current membership/account checks inside each operation. Item routes derive the immutable environment from the stored resource and reject environment overrides.
 
-| Method and path | Required input | Result |
-| --- | --- | --- |
-| `GET P/saved-analyses` | `environment`; optional `limit`, `cursor` | `{items,next_cursor}`; UUID order, default 20, maximum 100 |
-| `POST P/saved-analyses` | `{environment,definition}`; `Idempotency-Key` | 201 draft with `ETag` |
-| `GET P/saved-analyses/{analysis_id}` | No query parameters | Resource summary |
-| `GET P/saved-analyses/{analysis_id}/draft` | No query parameters | Draft with `ETag` |
-| `PATCH P/saved-analyses/{analysis_id}/draft` | Full `{definition}`; `If-Match` | Updated draft and `ETag` |
-| `POST P/saved-analyses/{analysis_id}/validations` | `{draft_revision,expected_published_version}` | Validation, immutable dependencies, semantic diff and hashes |
-| `GET P/saved-analyses/{analysis_id}/versions` | Optional `limit`, `cursor` | Full immutable versions, numeric order, default 20, maximum 50 |
-| `POST P/saved-analyses/{analysis_id}/versions` | Counters plus `validation_hash`; `Idempotency-Key` | 201 immutable version |
-| `GET P/saved-analyses/{analysis_id}/versions/{version}` | Positive safe integer version | Immutable version |
-| `POST P/saved-analyses/{analysis_id}/versions/{version}/queries` | `{time_range,timezone}`; `Idempotency-Key` | 202 existing `QueryJob` |
+| Method and path                                                  | Required input                                     | Result                                                         |
+| ---------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `GET P/saved-analyses`                                           | `environment`; optional `limit`, `cursor`          | `{items,next_cursor}`; UUID order, default 20, maximum 100     |
+| `POST P/saved-analyses`                                          | `{environment,definition}`; `Idempotency-Key`      | 201 draft with `ETag`                                          |
+| `GET P/saved-analyses/{analysis_id}`                             | No query parameters                                | Resource summary                                               |
+| `GET P/saved-analyses/{analysis_id}/draft`                       | No query parameters                                | Draft with `ETag`                                              |
+| `PATCH P/saved-analyses/{analysis_id}/draft`                     | Full `{definition}`; `If-Match`                    | Updated draft and `ETag`                                       |
+| `POST P/saved-analyses/{analysis_id}/validations`                | `{draft_revision,expected_published_version}`      | Validation, immutable dependencies, semantic diff and hashes   |
+| `GET P/saved-analyses/{analysis_id}/versions`                    | Optional `limit`, `cursor`                         | Full immutable versions, numeric order, default 20, maximum 50 |
+| `POST P/saved-analyses/{analysis_id}/versions`                   | Counters plus `validation_hash`; `Idempotency-Key` | 201 immutable version                                          |
+| `GET P/saved-analyses/{analysis_id}/versions/{version}`          | Positive safe integer version                      | Immutable version                                              |
+| `POST P/saved-analyses/{analysis_id}/versions/{version}/queries` | `{time_range,timezone}`; `Idempotency-Key`         | 202 existing `QueryJob`                                        |
 
 Lists return a null `next_cursor` at the end. Cursors are signed and scoped to actor/project plus environment for resources, or analysis ID for version lists. They are not cross-page snapshots. Unknown or repeated query parameters, duplicate JSON keys, unknown JSON properties and trailing JSON values reject. IDs are UUID strings. Revisions/versions stay within JavaScript's safe integer range. Idempotency keys must be a single header containing 1–128 visible ASCII characters. Errors use the shared `{code,message,request_id,details?}` contract and `X-Request-ID` response header.
 
@@ -37,13 +37,13 @@ Existing aggregates, scalar/array filters, exact/explicit approximate precision 
 
 `visualization` accepts only a `kind`, with no executable options:
 
-| Kind | Compatible query |
-| --- | --- |
+| Kind     | Compatible query                                   |
+| -------- | -------------------------------------------------- |
 | `metric` | Trend, exactly one metric, no interval or grouping |
-| `line` | Trend with an interval |
-| `bar` | Trend with an interval or grouping |
-| `table` | Trend or funnel |
-| `funnel` | Funnel |
+| `line`   | Trend with an interval                             |
+| `bar`    | Trend with an interval or grouping                 |
+| `table`  | Trend or funnel                                    |
+| `funnel` | Funnel                                             |
 
 Creation starts `draft_revision=1` and `published_version=0` (no publication). Every accepted PATCH replaces the full definition and increments only the draft revision. `If-Match` must be one quoted current revision, such as `"1"`; missing/malformed headers return 400 `REVISION_REQUIRED`, and stale revisions return 409 `SAVED_ANALYSIS_REVISION_CONFLICT`. Resource summary `title`/`kind` describe the current draft. Historical versions retain their own immutable names/content.
 

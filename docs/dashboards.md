@@ -1,6 +1,6 @@
 # Dashboards
 
-Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. Console delivery and its browser verification are separate work; this document describes the backend API.
+Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. The console now provides editing, version publication/history and per-widget execution using these same APIs. Actual browser evidence is recorded in the [delivery verification](verification/dashboards-sdk-2026-11-09.md).
 
 The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, archive/delete operations, independently versioned metrics, generic parameter bindings, machine authentication and cross-request result caching remain planned.
 
@@ -14,20 +14,20 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 
 ## Routes
 
-| Method and path | Input | Result |
-| --- | --- | --- |
-| `GET P/dashboards` | Required `environment`; optional `limit`, `cursor` | `{items,next_cursor}`, UUID order; default 20, maximum 100 |
-| `POST P/dashboards` | `{environment,definition}`; `Idempotency-Key` | 201 draft with `ETag` |
-| `GET P/dashboards/{dashboard_id}` | No query parameters | Current resource summary |
-| `GET P/dashboards/{dashboard_id}/draft` | No query parameters | Draft with `ETag` |
-| `PATCH P/dashboards/{dashboard_id}/draft` | Full `{definition}`; `If-Match` | Updated draft and `ETag` |
-| `POST P/dashboards/{dashboard_id}/validations` | `{draft_revision,expected_published_version}` | Normalized definition, pinned dependencies, diff and hashes |
-| `GET P/dashboards/{dashboard_id}/versions` | Optional `limit`, `cursor` | Immutable versions in numeric order; default 20, maximum 50 |
-| `POST P/dashboards/{dashboard_id}/versions` | Counters plus `validation_hash`; `Idempotency-Key` | 201 immutable publication |
-| `GET P/dashboards/{dashboard_id}/versions/{version}` | Explicit positive version | Immutable publication |
-| `POST P/dashboards/{dashboard_id}/versions/{version}/runs` | `{time_range,timezone,widget_filters?}`; `Idempotency-Key` | 202 dashboard run with child query jobs |
-| `GET P/dashboard-runs/{run_id}` | No query parameters | Current run and per-widget states |
-| `DELETE P/dashboard-runs/{run_id}` | CSRF headers | Cancels active children and returns current run |
+| Method and path                                            | Input                                                      | Result                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| `GET P/dashboards`                                         | Required `environment`; optional `limit`, `cursor`         | `{items,next_cursor}`, UUID order; default 20, maximum 100  |
+| `POST P/dashboards`                                        | `{environment,definition}`; `Idempotency-Key`              | 201 draft with `ETag`                                       |
+| `GET P/dashboards/{dashboard_id}`                          | No query parameters                                        | Current resource summary                                    |
+| `GET P/dashboards/{dashboard_id}/draft`                    | No query parameters                                        | Draft with `ETag`                                           |
+| `PATCH P/dashboards/{dashboard_id}/draft`                  | Full `{definition}`; `If-Match`                            | Updated draft and `ETag`                                    |
+| `POST P/dashboards/{dashboard_id}/validations`             | `{draft_revision,expected_published_version}`              | Normalized definition, pinned dependencies, diff and hashes |
+| `GET P/dashboards/{dashboard_id}/versions`                 | Optional `limit`, `cursor`                                 | Immutable versions in numeric order; default 20, maximum 50 |
+| `POST P/dashboards/{dashboard_id}/versions`                | Counters plus `validation_hash`; `Idempotency-Key`         | 201 immutable publication                                   |
+| `GET P/dashboards/{dashboard_id}/versions/{version}`       | Explicit positive version                                  | Immutable publication                                       |
+| `POST P/dashboards/{dashboard_id}/versions/{version}/runs` | `{time_range,timezone,widget_filters?}`; `Idempotency-Key` | 202 dashboard run with child query jobs                     |
+| `GET P/dashboard-runs/{run_id}`                            | No query parameters                                        | Current run and per-widget states                           |
+| `DELETE P/dashboard-runs/{run_id}`                         | CSRF headers                                               | Cancels active children and returns current run             |
 
 Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope; they are not cross-page snapshots. Unknown/repeated query parameters, unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
 
@@ -54,7 +54,7 @@ This create body uses synthetic IDs. First publish two real saved analyses in th
         "analysis_version": 1,
         "title": "Page visits",
         "reading_order": 0,
-        "layout": {"x": 0, "y": 0, "width": 6, "height": 4}
+        "layout": { "x": 0, "y": 0, "width": 6, "height": 4 }
       },
       {
         "widget_id": "22222222-2222-4222-8222-222222222222",
@@ -62,7 +62,7 @@ This create body uses synthetic IDs. First publish two real saved analyses in th
         "analysis_version": 2,
         "title": "Readers",
         "reading_order": 1,
-        "layout": {"x": 6, "y": 0, "width": 6, "height": 4}
+        "layout": { "x": 6, "y": 0, "width": 6, "height": 4 }
       }
     ]
   }
@@ -78,7 +78,7 @@ For editing, read the draft and PATCH the complete replacement definition with i
 Validate the exact draft revision against the current published pointer, using zero before the first publication:
 
 ```json
-{"draft_revision": 1, "expected_published_version": 0}
+{ "draft_revision": 1, "expected_published_version": 0 }
 ```
 
 `POST .../{dashboard_id}/validations` returns `valid=true`, `execution_performed=false`, the normalized definition and a dependency manifest with each widget's saved-analysis ID/version and definition/dependency/validation hashes. It checks the authorized scope and pinned versions without creating query jobs, reserving admission capacity or scanning event facts. Successful validation does not predict actual query cost or execution success.
@@ -115,7 +115,7 @@ Submit to `POST .../{dashboard_id}/versions/{version}/runs`. Global absolute tim
       "widget_id": "11111111-1111-4111-8111-111111111111",
       "filter": {
         "op": "eq",
-        "field": {"kind": "system", "key": "uid"},
+        "field": { "kind": "system", "key": "uid" },
         "value": "synthetic-reader-one"
       }
     }
@@ -139,15 +139,15 @@ Poll `GET P/dashboard-runs/{run_id}` using `poll_after_ms` while supplied. Each 
 
 Admission is one transaction; results do not share an atomic data snapshot. One widget may finish or fail while others continue. Coverage remains provisional, and separate watermarks do not establish complete or identical data arrival across cards. Preserve the individual result metadata and errors.
 
-| Run state | Meaning |
-| --- | --- |
-| `queued` | All children remain queued |
-| `running` | At least one child is queued/running and the run is no longer entirely queued |
-| `succeeded` | Every child succeeded |
-| `partial` | All children are terminal, with both successful and unsuccessful widgets |
-| `canceled` | Every child is canceled |
-| `expired` | Every child is expired, including cleaned-up query references |
-| `failed` | No child succeeded and terminal outcomes do not meet the all-canceled/all-expired cases |
+| Run state   | Meaning                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `queued`    | All children remain queued                                                              |
+| `running`   | At least one child is queued/running and the run is no longer entirely queued           |
+| `succeeded` | Every child succeeded                                                                   |
+| `partial`   | All children are terminal, with both successful and unsuccessful widgets                |
+| `canceled`  | Every child is canceled                                                                 |
+| `expired`   | Every child is expired, including cleaned-up query references                           |
+| `failed`    | No child succeeded and terminal outcomes do not meet the all-canceled/all-expired cases |
 
 DELETE on the run cancels all currently queued/running children in one transaction. It preserves run history and already finished outcomes/results. Existing worker cancellation and lease behavior apply to remote execution. Cancellation can therefore leave a terminal `partial` run if some widgets already succeeded. An unauthorized cancellation returns `DASHBOARD_RUN_CANCEL_FORBIDDEN`.
 
@@ -177,3 +177,11 @@ go -C backend build -o "$PWD/bin/evia" ./cmd/evia
 Restart the API and query workers with that same configuration and binary. For separate local terminals, the existing commands remain `./bin/evia serve` and `./bin/evia query-worker`. `serve` verifies the ledger/checksums and does not migrate automatically. Bootstrap is for a new account store, not an upgrade step. Dashboards add no separate worker process or ClickHouse migration; fact/query prerequisites still follow the deployment's existing pipeline setup.
 
 Use the [development runbook](runbooks/development.md) for configuration and PostgreSQL startup, and the [complete local runtime](runbooks/console-verification.md) for ClickHouse and query workers. Apply upgrades through the intended installation's operational backup/recovery procedure; real integration tests do not establish production recovery or capacity.
+
+## Console workflow
+
+Open a project and choose 自定义看板. Create a dashboard, add published saved analyses with explicit versions, then edit widget positions, dimensions and reading order using labeled keyboard-operable controls. Saving a draft does not publish it; review its validated dependency/difference summary and acknowledge before publication.
+
+The published-version view binds a time range/timezone and optional typed field filters to explicit widgets. Changing the selected version resets editable filters while preserving the identity of the earlier result snapshot. Each result has its own state, chart, complete table and coverage/accuracy details. Unknown publication/run responses retain their original idempotency key and payload. Concurrent draft changes can be read and compared without discarding local input.
+
+Desktop and mobile layouts use the shared dashboard grid. Charts fit the available card width; wide tables scroll within their own container. The console uses session authorization, not machine credentials.
