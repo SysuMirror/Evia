@@ -63,6 +63,15 @@ export async function verifyMachineAccessWorkflow(
   await creation.getByLabel('授权环境', { exact: true }).selectOption('staging');
   await creation.getByRole('checkbox', { name: '读取项目', exact: true }).check();
   await creation.getByRole('checkbox', { name: '读取事件草稿', exact: true }).check();
+  for (const label of ['读取指标', '编辑指标草稿', '发布指标版本', '运行指标']) {
+    const choice = creation.getByRole('checkbox', { name: label, exact: true });
+    await expect(choice).not.toBeChecked();
+    await choice.focus();
+    await page.keyboard.press('Space');
+    await expect(choice).toBeChecked();
+  }
+  await creation.getByRole('checkbox', { name: '执行查询', exact: true }).check();
+  await screenshot('desktop-metric-grants.png');
   await creation.getByRole('button', { name: '稍后继续', exact: true }).click();
   await page.getByRole('link', { name: '事件管理', exact: true }).click();
   const discard = page.getByRole('dialog', { name: '放弃未保存的修改？', exact: true });
@@ -102,6 +111,17 @@ export async function verifyMachineAccessWorkflow(
   const listed = await listResponse.json();
   const principal = listed.items.find((item: { name: string }) => item.name === name);
   expect(principal.environment).toBe('staging');
+  expect([...principal.permissions].sort()).toEqual(
+    [
+      'project.read',
+      'catalog.drafts.read',
+      'metrics.read',
+      'metrics.write',
+      'metrics.publish',
+      'metrics.run',
+      'queries.run',
+    ].sort(),
+  );
   const detailURL = `${base}/${principal.id}`;
   const detail = page.getByRole('dialog', { name: `机器：${name}`, exact: true });
   const rotation = page.getByRole('dialog', { name: '轮换机器凭据', exact: true });

@@ -54,6 +54,16 @@ export const permissionGroups: {
     ],
   },
   {
+    name: '指标',
+    help: '运行指标还需授予执行查询权限。现有机器主体的授权范围不会自动增加。',
+    items: [
+      { value: 'metrics.read', label: '读取指标' },
+      { value: 'metrics.write', label: '编辑指标草稿' },
+      { value: 'metrics.publish', label: '发布指标版本' },
+      { value: 'metrics.run', label: '运行指标' },
+    ],
+  },
+  {
     name: '看板',
     items: [
       { value: 'dashboards.read', label: '读取看板' },
