@@ -9,7 +9,7 @@
 | `apps/console` | React、生成的 API 客户端、共享设计组件、本应用业务模块 | 测试夹具作为生产功能 |
 | `packages/design-system` | React、主题与原生控件、独立图表能力 | `apps`、API 客户端中的业务类型与请求 |
 | `packages/api-client` | 生成契约、浏览器 HTTP 能力 | React、设计组件、`apps` |
-| `packages/sdk`，当其存在时 | 框架无关的 SDK 能力 | React、设计组件、`apps` |
+| `packages/browser-sdk` | 框架无关的公开配置与事件接收能力 | React、设计组件、管理 API 客户端、`apps` |
 
 这些方向也约束类型依赖。设计组件接收展示所需的数据，而不是导入项目、会话或查询契约。API 客户端不拥有组件、焦点或页面状态。图表使用 `@evia/design-system/charts` 独立入口，业务页面按需加载；普通控件继续使用自建组件。
 

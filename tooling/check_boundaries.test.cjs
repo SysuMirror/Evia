@@ -65,6 +65,31 @@ test('SDK rejects relative application imports when the SDK directory exists', (
   assert.match(result.diagnostics.join('\n'), /sdk must remain independent/);
 });
 
+test('browser SDK rejects management-client dependencies resolved through an alias', (t) => {
+  const result = fixture(t, {
+    'packages/api-client/index.ts': 'export const login = () => 1;',
+    'packages/browser-sdk/src/index.ts': 'import { login } from "@business"; export const initialize = login;',
+  });
+  assert.match(result.diagnostics.join('\n'), /sdk must remain independent.*management api-client/);
+});
+
+test('browser SDK rejects React types and shared UI dependencies', (t) => {
+  const result = fixture(t, {
+    'packages/design-system/index.ts': 'export const Button = 1;',
+    'packages/browser-sdk/src/index.ts': 'export type { ReactNode } from "react"; export { Button } from "@evia/design-system";',
+  });
+  assert.equal(result.diagnostics.filter((message) => /sdk must remain independent/.test(message)).length, 2);
+});
+
+test('browser SDK may depend on its own framework-neutral modules', (t) => {
+  const result = fixture(t, {
+    'packages/browser-sdk/src/index.ts': 'export { emit } from "./queue";',
+    'packages/browser-sdk/src/queue.ts': 'export const emit = () => 1;',
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.runtimeEdges, 1);
+});
+
 test('a mixed import retains its value dependency but not a type-only return edge', (t) => {
   const result = fixture(t, {
     'apps/console/src/a.ts': 'import { type Label, value } from "./b"; export const a = value; export type A = Label;',

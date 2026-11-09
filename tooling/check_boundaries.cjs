@@ -48,8 +48,9 @@ function forbiddenDependency(importer, specifier, target) {
     return 'design-system cannot depend on application or api-client business code';
   if (importer.startsWith('packages/api-client/') && (react || design || application))
     return 'api-client cannot depend on React, design-system or applications';
-  if (importer.startsWith('packages/sdk/') && (react || design || application))
-    return 'sdk must remain independent of React, design-system and applications';
+  const sdk = importer.startsWith('packages/sdk/') || importer.startsWith('packages/browser-sdk/');
+  if (sdk && (react || design || client || application))
+    return 'sdk must remain independent of React, design-system, management api-client and applications';
 }
 
 /** Check configured source roots and their resolved local dependencies, without emitting files. */
