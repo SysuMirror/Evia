@@ -935,6 +935,9 @@ p {
   display: flex;
   flex-direction: column;
 }
+.evia-modal-wide {
+  width: min(960px, calc(100vw - 32px));
+}
 .evia-modal::backdrop {
   background: rgb(15 23 42 / 32%);
 }

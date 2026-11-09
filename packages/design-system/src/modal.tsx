@@ -60,6 +60,7 @@ export interface ModalProps {
   footer?: ReactNode;
   initialFocusRef?: RefObject<HTMLElement | null>;
   busy?: boolean;
+  size?: 'default' | 'wide';
   afterClose?: () => void;
 }
 
@@ -71,6 +72,7 @@ export function Modal({
   footer,
   initialFocusRef,
   busy = false,
+  size = 'default',
   afterClose,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -115,7 +117,7 @@ export function Modal({
   return (
     <dialog
       ref={dialogRef}
-      className="evia-modal"
+      className={`evia-modal evia-modal-${size}`}
       aria-labelledby={titleID}
       aria-busy={busy || undefined}
       tabIndex={-1}
