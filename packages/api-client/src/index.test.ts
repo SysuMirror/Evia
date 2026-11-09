@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
-import { api, ApiError, subscribeUnauthorized, subscribeProjectAccessDenied } from './index.js';
+import {
+  api,
+  ApiError,
+  subscribeUnauthorized,
+  subscribeProjectAccessDenied,
+  type MachineIssued,
+  type MachinePrincipalInput,
+} from './index.js';
 
 afterEach(() => mock.restoreAll());
 
@@ -499,4 +506,131 @@ test('dashboard transport pins versions, targets filters, and preserves recovery
   controller.abort();
   for (const call of fetch.mock.calls)
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
+
+test('machine administration reads encode scope and allow only cursor and limit', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  // Project machine lists span environments; shared catalog scope must not leak in.
+  const page = { environment: 'production' as const, cursor: 'a+/=', limit: 5 };
+  await api.listMachinePrincipals('p/q', page, controller.signal);
+  await api.listMachinePrincipals('p/q');
+  await api.getMachinePrincipal('p/q', 'm/n', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/machine-principals?cursor=a%2B%2F%3D&limit=5',
+      '/api/v1/projects/p%2Fq/machine-principals',
+      '/api/v1/projects/p%2Fq/machine-principals/m%2Fn',
+    ],
+  );
+  controller.abort();
+  for (const index of [0, 2]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.signal?.aborted, true);
+    assert.equal((init.headers as Headers).has('Authorization'), false);
+  }
+});
+
+test('machine writes preserve request bodies, retry keys, principal revisions and session CSRF', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const create: MachinePrincipalInput = {
+    name: 'Build agent',
+    environment: 'staging',
+    permissions: ['project.read', 'catalog.drafts.read', 'dashboards.run'],
+    expires_at: '2026-11-10T12:00:00Z',
+  };
+  const rotation = { expires_at: '2026-11-11T12:00:00Z', overlap_seconds: 300 };
+  await api.createMachinePrincipal('p/q', create, 'create-key', 'csrf', controller.signal);
+  await api.rotateMachineCredential(
+    'p/q',
+    'm/n',
+    7,
+    rotation,
+    'rotate-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.revokeMachinePrincipal('p/q', 'm/n', 8, 'csrf', controller.signal);
+  await api.revokeMachineCredential('p/q', 'm/n', 'c/d', 9, 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/machine-principals',
+      '/api/v1/projects/p%2Fq/machine-principals/m%2Fn/credential-rotations',
+      '/api/v1/projects/p%2Fq/machine-principals/m%2Fn',
+      '/api/v1/projects/p%2Fq/machine-principals/m%2Fn/credentials/c%2Fd',
+    ],
+  );
+  const bodies = [create, rotation, undefined, undefined];
+  const keys = ['create-key', 'rotate-key', null, null];
+  const revisions = [null, '"7"', '"8"', '"9"'];
+  controller.abort();
+  fetch.mock.calls.forEach((call, index) => {
+    const init = call.arguments[1] as RequestInit;
+    const headers = init.headers as Headers;
+    assert.equal(init.method, index < 2 ? 'POST' : 'DELETE');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(headers.get('X-CSRF-Token'), 'csrf');
+    assert.equal(headers.get('Idempotency-Key'), keys[index]);
+    assert.equal(headers.get('If-Match'), revisions[index]);
+    assert.equal(headers.has('Authorization'), false);
+    assert.deepEqual(
+      init.body === undefined ? undefined : JSON.parse(init.body as string),
+      bodies[index],
+    );
+    assert.equal(init.signal?.aborted, true);
+  });
+});
+
+test('machine creation can retry an uncertain response with its original request and receive metadata only', async () => {
+  const create: MachinePrincipalInput = {
+    name: 'Build agent',
+    environment: 'development',
+    permissions: ['project.read'],
+    expires_at: '2026-11-10T12:00:00Z',
+  };
+  const principal = {
+    id: 'machine',
+    project_id: 'project',
+    environment: create.environment,
+    name: create.name,
+    permissions: create.permissions,
+    revision: 1,
+    created_at: '2026-11-09T12:00:00Z',
+    revoked_at: null,
+  };
+  const replay: MachineIssued = {
+    principal,
+    credential: {
+      id: 'credential',
+      principal_id: principal.id,
+      created_at: principal.created_at,
+      expires_at: create.expires_at,
+      revoked_at: null,
+    },
+    secret_available: false,
+  };
+  let attempt = 0;
+  const fetch = mock.method(globalThis, 'fetch', async () => {
+    attempt++;
+    return new Response(attempt === 1 ? '{"principal":' : JSON.stringify(replay), { status: 201 });
+  });
+  await assert.rejects(
+    api.createMachinePrincipal('project', create, 'same-key', 'csrf'),
+    (error: unknown) => error instanceof ApiError && error.code === 'INVALID_RESPONSE',
+  );
+  const result = await api.createMachinePrincipal('project', create, 'same-key', 'csrf');
+  assert.deepEqual(result, replay);
+  assert.equal(result.secret_available, false);
+  assert.equal(result.secret_once, undefined);
+  const first = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  const retry = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(retry.body, first.body);
+  assert.equal(
+    (retry.headers as Headers).get('Idempotency-Key'),
+    (first.headers as Headers).get('Idempotency-Key'),
+  );
 });

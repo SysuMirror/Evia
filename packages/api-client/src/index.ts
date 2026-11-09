@@ -23,6 +23,14 @@ export type SourceUpdate = components['schemas']['SourceUpdate'];
 export type SourceList = components['schemas']['SourceList'];
 export type SourceIssued = components['schemas']['SourceIssued'];
 export type CredentialRotation = components['schemas']['CredentialRotation'];
+export type MachinePermission = components['schemas']['MachinePermission'];
+export type MachinePrincipal = components['schemas']['MachinePrincipal'];
+export type MachineCredential = components['schemas']['MachineCredential'];
+export type MachinePrincipalDetail = components['schemas']['MachinePrincipalDetail'];
+export type MachinePrincipalList = components['schemas']['MachinePrincipalList'];
+export type MachinePrincipalInput = components['schemas']['MachinePrincipalInput'];
+export type MachineCredentialRotation = components['schemas']['MachineCredentialRotation'];
+export type MachineIssued = components['schemas']['MachineIssued'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -65,6 +73,7 @@ export type Environment = Release['environment'];
 export type CatalogPage = { environment?: Environment; cursor?: string; limit?: number };
 export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
+export type MachinePrincipalPage = { cursor?: string; limit?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -173,6 +182,8 @@ const dashboardPath = (projectID: string, dashboardID: string) =>
   `${projectPath(projectID)}/dashboards/${encodeURIComponent(dashboardID)}`;
 const savedAnalysisPath = (projectID: string, analysisID: string) =>
   `${projectPath(projectID)}/saved-analyses/${encodeURIComponent(analysisID)}`;
+const machinePrincipalPath = (projectID: string, principalID: string) =>
+  `${projectPath(projectID)}/machine-principals/${encodeURIComponent(principalID)}`;
 function catalogQuery(page: CatalogPage): string {
   const query = new URLSearchParams();
   if (page.environment !== undefined) query.set('environment', page.environment);
@@ -300,6 +311,77 @@ export const api = {
         body,
         csrf,
         headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  listMachinePrincipals: (
+    projectID: string,
+    page: MachinePrincipalPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<MachinePrincipalList>(
+      `${projectPath(projectID)}/machine-principals${catalogQuery({ cursor: page.cursor, limit: page.limit })}`,
+      { signal },
+    ),
+  getMachinePrincipal: (projectID: string, principalID: string, signal?: AbortSignal) =>
+    request<MachinePrincipalDetail>(machinePrincipalPath(projectID, principalID), { signal }),
+  createMachinePrincipal: (
+    projectID: string,
+    body: MachinePrincipalInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MachineIssued>(`${projectPath(projectID)}/machine-principals`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  rotateMachineCredential: (
+    projectID: string,
+    principalID: string,
+    revision: number,
+    body: MachineCredentialRotation,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MachineIssued>(`${machinePrincipalPath(projectID, principalID)}/credential-rotations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+    }),
+  revokeMachinePrincipal: (
+    projectID: string,
+    principalID: string,
+    revision: number,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MachinePrincipal>(machinePrincipalPath(projectID, principalID), {
+      method: 'DELETE',
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"` },
+    }),
+  revokeMachineCredential: (
+    projectID: string,
+    principalID: string,
+    credentialID: string,
+    revision: number,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MachinePrincipal>(
+      `${machinePrincipalPath(projectID, principalID)}/credentials/${encodeURIComponent(credentialID)}`,
+      {
+        method: 'DELETE',
+        csrf,
+        signal,
+        headers: { 'If-Match': `"${revision}"` },
       },
     ),
   listSavedAnalyses: (projectID: string, page: SavedAnalysisPage, signal?: AbortSignal) =>
