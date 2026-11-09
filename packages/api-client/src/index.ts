@@ -41,6 +41,26 @@ export type SavedAnalysisExecute = components['schemas']['SavedAnalysisExecute']
 export type SavedAnalysisList = components['schemas']['SavedAnalysisList'];
 export type SavedAnalysisVersionList = components['schemas']['SavedAnalysisVersionList'];
 export type SavedAnalysisChange = components['schemas']['SavedAnalysisChange'];
+export type Dashboard = components['schemas']['Dashboard'];
+export type DashboardDefinition = components['schemas']['DashboardDefinition'];
+export type DashboardWidget = components['schemas']['DashboardWidget'];
+export type DashboardLayout = components['schemas']['DashboardLayout'];
+export type DashboardDraft = components['schemas']['DashboardDraft'];
+export type DashboardDependency = components['schemas']['DashboardDependency'];
+export type DashboardDependencies = components['schemas']['DashboardDependencies'];
+export type DashboardVersion = components['schemas']['DashboardVersion'];
+export type DashboardChange = components['schemas']['DashboardChange'];
+export type DashboardValidation = components['schemas']['DashboardValidation'];
+export type DashboardCreate = components['schemas']['DashboardCreate'];
+export type DashboardUpdate = components['schemas']['DashboardUpdate'];
+export type DashboardValidate = components['schemas']['DashboardValidate'];
+export type DashboardPublish = components['schemas']['DashboardPublish'];
+export type DashboardWidgetFilter = components['schemas']['DashboardWidgetFilter'];
+export type DashboardExecute = components['schemas']['DashboardExecute'];
+export type DashboardWidgetRun = components['schemas']['DashboardWidgetRun'];
+export type DashboardRun = components['schemas']['DashboardRun'];
+export type DashboardVersionList = components['schemas']['DashboardVersionList'];
+export type DashboardList = components['schemas']['DashboardList'];
 export type Environment = Release['environment'];
 export type CatalogPage = { environment?: Environment; cursor?: string; limit?: number };
 export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
@@ -149,6 +169,8 @@ async function request<T>(
 const projectPath = (projectID: string) => `/api/v1/projects/${encodeURIComponent(projectID)}`;
 const eventPath = (projectID: string, eventKey: string) =>
   `${projectPath(projectID)}/event-definitions/${encodeURIComponent(eventKey)}`;
+const dashboardPath = (projectID: string, dashboardID: string) =>
+  `${projectPath(projectID)}/dashboards/${encodeURIComponent(dashboardID)}`;
 const savedAnalysisPath = (projectID: string, analysisID: string) =>
   `${projectPath(projectID)}/saved-analyses/${encodeURIComponent(analysisID)}`;
 function catalogQuery(page: CatalogPage): string {
@@ -384,6 +406,120 @@ export const api = {
         headers: { 'Idempotency-Key': idempotencyKey },
       },
     ),
+  listDashboards: (projectID: string, page: SavedAnalysisPage, signal?: AbortSignal) =>
+    request<DashboardList>(`${projectPath(projectID)}/dashboards${catalogQuery(page)}`, {
+      signal,
+    }),
+  createDashboard: (
+    projectID: string,
+    body: DashboardCreate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardDraft>(`${projectPath(projectID)}/dashboards`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getDashboard: (projectID: string, dashboardID: string, signal?: AbortSignal) =>
+    request<Dashboard>(dashboardPath(projectID, dashboardID), { signal }),
+  getDashboardDraft: (projectID: string, dashboardID: string, signal?: AbortSignal) =>
+    request<DashboardDraft>(`${dashboardPath(projectID, dashboardID)}/draft`, { signal }),
+  updateDashboardDraft: (
+    projectID: string,
+    dashboardID: string,
+    revision: number,
+    body: DashboardUpdate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardDraft>(`${dashboardPath(projectID, dashboardID)}/draft`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"` },
+    }),
+  validateDashboard: (
+    projectID: string,
+    dashboardID: string,
+    body: DashboardValidate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardValidation>(`${dashboardPath(projectID, dashboardID)}/validations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  listDashboardVersions: (
+    projectID: string,
+    dashboardID: string,
+    page: SavedAnalysisVersionPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardVersionList>(
+      `${dashboardPath(projectID, dashboardID)}/versions${catalogQuery(page)}`,
+      { signal },
+    ),
+  publishDashboard: (
+    projectID: string,
+    dashboardID: string,
+    body: DashboardPublish,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardVersion>(`${dashboardPath(projectID, dashboardID)}/versions`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getDashboardVersion: (
+    projectID: string,
+    dashboardID: string,
+    version: number,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardVersion>(
+      `${dashboardPath(projectID, dashboardID)}/versions/${encodeURIComponent(String(version))}`,
+      { signal },
+    ),
+  executeDashboardVersion: (
+    projectID: string,
+    dashboardID: string,
+    version: number,
+    body: DashboardExecute,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardRun>(
+      `${dashboardPath(projectID, dashboardID)}/versions/${encodeURIComponent(String(version))}/runs`,
+      {
+        method: 'POST',
+        body,
+        csrf,
+        signal,
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  getDashboardRun: (projectID: string, runID: string, signal?: AbortSignal) =>
+    request<DashboardRun>(`${projectPath(projectID)}/dashboard-runs/${encodeURIComponent(runID)}`, {
+      signal,
+    }),
+  cancelDashboardRun: (projectID: string, runID: string, csrf: string, signal?: AbortSignal) =>
+    request<DashboardRun>(`${projectPath(projectID)}/dashboard-runs/${encodeURIComponent(runID)}`, {
+      method: 'DELETE',
+      csrf,
+      signal,
+    }),
   createQuery: (projectID: string, body: QueryRequest, csrf: string, signal?: AbortSignal) =>
     request<QueryJob>(`${projectPath(projectID)}/queries`, { method: 'POST', body, csrf, signal }),
   getQuery: (projectID: string, queryID: string, signal?: AbortSignal) =>

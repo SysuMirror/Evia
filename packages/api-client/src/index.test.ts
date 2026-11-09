@@ -408,3 +408,95 @@ test('saved analysis requests reuse safe errors, project denial signals and expl
     unsubscribe();
   }
 });
+
+test('dashboard transport pins versions, targets filters, and preserves recovery headers', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const definition = {
+    title: 'Dashboard',
+    widgets: [
+      {
+        widget_id: 'widget',
+        analysis_id: 'analysis',
+        analysis_version: 2,
+        title: 'Chart',
+        reading_order: 0,
+        layout: { x: 0, y: 0, width: 6, height: 4 },
+      },
+    ],
+  };
+  const counters = { draft_revision: 3, expected_published_version: 1 };
+  const execute = {
+    time_range: { from: '2026-11-01T00:00:00.123456789Z', to: '2026-11-02T00:00:00.123456789Z' },
+    timezone: 'UTC',
+    widget_filters: [
+      {
+        widget_id: 'widget',
+        filter: {
+          op: 'eq' as const,
+          field: { kind: 'system' as const, key: 'event_key' as const },
+          value: 'opened',
+        },
+      },
+    ],
+  };
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', cursor: 'a b', limit: 7 },
+    controller.signal,
+  );
+  await api.getDashboardDraft('p/q', 'd/r', controller.signal);
+  await api.createDashboard(
+    'p/q',
+    { environment: 'production', definition },
+    'create-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.updateDashboardDraft('p/q', 'd/r', 3, { definition }, 'csrf', controller.signal);
+  await api.validateDashboard('p/q', 'd/r', counters, 'csrf', controller.signal);
+  await api.publishDashboard(
+    'p/q',
+    'd/r',
+    { ...counters, validation_hash: 'hash' },
+    'publish-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.executeDashboardVersion('p/q', 'd/r', 2, execute, 'run-key', 'csrf', controller.signal);
+  await api.getDashboardRun('p/q', 'r/s', controller.signal);
+  await api.cancelDashboardRun('p/q', 'r/s', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&cursor=a+b&limit=7',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/draft',
+      '/api/v1/projects/p%2Fq/dashboards',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/draft',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/validations',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/versions',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/versions/2/runs',
+      '/api/v1/projects/p%2Fq/dashboard-runs/r%2Fs',
+      '/api/v1/projects/p%2Fq/dashboard-runs/r%2Fs',
+    ],
+  );
+  const update = fetch.mock.calls[3]!.arguments[1] as RequestInit;
+  assert.equal((update.headers as Headers).get('If-Match'), '"3"');
+  for (const [index, key] of [
+    [2, 'create-key'],
+    [5, 'publish-key'],
+    [6, 'run-key'],
+  ] as const) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal((init.headers as Headers).get('Idempotency-Key'), key);
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  }
+  assert.deepEqual(
+    JSON.parse((fetch.mock.calls[6]!.arguments[1] as RequestInit).body as string),
+    execute,
+  );
+  assert.equal((fetch.mock.calls[8]!.arguments[1] as RequestInit).method, 'DELETE');
+  controller.abort();
+  for (const call of fetch.mock.calls)
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
