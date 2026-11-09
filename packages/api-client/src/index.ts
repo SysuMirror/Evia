@@ -69,6 +69,24 @@ export type DashboardWidgetRun = components['schemas']['DashboardWidgetRun'];
 export type DashboardRun = components['schemas']['DashboardRun'];
 export type DashboardVersionList = components['schemas']['DashboardVersionList'];
 export type DashboardList = components['schemas']['DashboardList'];
+export type ProjectSettings = components['schemas']['ProjectSettings'];
+export type ProjectSettingsUpdate = components['schemas']['ProjectSettingsUpdate'];
+export type ProjectMember = components['schemas']['ProjectMember'];
+export type ProjectMemberAdd = components['schemas']['ProjectMemberAdd'];
+export type ProjectMemberUpdate = components['schemas']['ProjectMemberUpdate'];
+export type ProjectMemberResult = components['schemas']['ProjectMemberResult'];
+export type ProjectMemberList = components['schemas']['ProjectMemberList'];
+export type ProjectAuditEntry = components['schemas']['ProjectAuditEntry'];
+export type ProjectAuditList = components['schemas']['ProjectAuditList'];
+export type ProjectMemberPage = { cursor?: string; limit?: number };
+export type ProjectAuditPage = {
+  from: string;
+  to: string;
+  action?: string;
+  actorID?: string;
+  cursor?: string;
+  limit?: number;
+};
 export type Environment = Release['environment'];
 export type CatalogPage = { environment?: Environment; cursor?: string; limit?: number };
 export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
@@ -191,6 +209,16 @@ function catalogQuery(page: CatalogPage): string {
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   return query.size ? `?${query.toString()}` : '';
 }
+function auditQuery(page: ProjectAuditPage): string {
+  const query = new URLSearchParams();
+  query.set('from', page.from);
+  query.set('to', page.to);
+  if (page.action) query.set('action', page.action);
+  if (page.actorID) query.set('actor_id', page.actorID);
+  if (page.cursor !== undefined) query.set('cursor', page.cursor);
+  if (page.limit !== undefined) query.set('limit', String(page.limit));
+  return `?${query.toString()}`;
+}
 export const api = {
   session: (signal?: AbortSignal) => request<Session>('/api/v1/session', { signal }),
   login: (body: components['schemas']['LoginInput']) =>
@@ -259,6 +287,83 @@ export const api = {
     }),
   getProject: (projectID: string, signal?: AbortSignal) =>
     request<Project>(projectPath(projectID), { signal }),
+  listMembers: (projectID: string, page: ProjectMemberPage = {}, signal?: AbortSignal) =>
+    request<ProjectMemberList>(
+      `${projectPath(projectID)}/members${catalogQuery({ cursor: page.cursor, limit: page.limit })}`,
+      { signal },
+    ),
+  addMember: (
+    projectID: string,
+    revision: number,
+    body: ProjectMemberAdd,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectMemberResult>(`${projectPath(projectID)}/members`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+    }),
+  updateMember: (
+    projectID: string,
+    userID: string,
+    revision: number,
+    body: ProjectMemberUpdate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectMemberResult>(
+      `${projectPath(projectID)}/members/${encodeURIComponent(userID)}`,
+      {
+        method: 'PATCH',
+        body,
+        csrf,
+        signal,
+        headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  removeMember: (
+    projectID: string,
+    userID: string,
+    revision: number,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectMemberResult>(
+      `${projectPath(projectID)}/members/${encodeURIComponent(userID)}`,
+      {
+        method: 'DELETE',
+        csrf,
+        signal,
+        headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  getSettings: (projectID: string, signal?: AbortSignal) =>
+    request<ProjectSettings>(`${projectPath(projectID)}/settings`, { signal }),
+  updateSettings: (
+    projectID: string,
+    revision: number,
+    body: ProjectSettingsUpdate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectSettings>(`${projectPath(projectID)}/settings`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+    }),
+  listAuditLogs: (projectID: string, page: ProjectAuditPage, signal?: AbortSignal) =>
+    request<ProjectAuditList>(`${projectPath(projectID)}/audit-logs${auditQuery(page)}`, {
+      signal,
+    }),
   getActivation: (projectID: string, environment: Environment, signal?: AbortSignal) =>
     request<Activation>(
       `${projectPath(projectID)}/release-activations${catalogQuery({ environment })}`,

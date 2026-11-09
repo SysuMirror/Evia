@@ -634,3 +634,110 @@ test('machine creation can retry an uncertain response with its original request
     (first.headers as Headers).get('Idempotency-Key'),
   );
 });
+
+test('governance reads encode scope and audit filters without leaking unknown params', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listMembers('p/q', { cursor: 'a+/=', limit: 5 }, controller.signal);
+  await api.getSettings('p/q', controller.signal);
+  await api.listAuditLogs(
+    'p/q',
+    {
+      from: '2026-11-01T00:00:00Z',
+      to: '2026-11-08T00:00:00Z',
+      action: 'project.settings.update',
+      actorID: 'a/b',
+      cursor: 'c',
+      limit: 50,
+    },
+    controller.signal,
+  );
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/members?cursor=a%2B%2F%3D&limit=5',
+      '/api/v1/projects/p%2Fq/settings',
+      '/api/v1/projects/p%2Fq/audit-logs?from=2026-11-01T00%3A00%3A00Z&to=2026-11-08T00%3A00%3A00Z&action=project.settings.update&actor_id=a%2Fb&cursor=c&limit=50',
+    ],
+  );
+  controller.abort();
+  for (const call of fetch.mock.calls) {
+    const init = call.arguments[1] as RequestInit;
+    assert.equal(init.method, 'GET');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.signal?.aborted, true);
+    assert.equal(init.body, undefined);
+  }
+});
+
+test('governance writes pin revisions and idempotency while member removal sends no body', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.addMember(
+    'p/q',
+    3,
+    { username: 'Editor.Name', role: 'editor' },
+    'add-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.updateMember(
+    'p/q',
+    'u/1',
+    4,
+    { role: 'viewer' },
+    'role-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.removeMember('p/q', 'u/1', 5, 'remove-key', 'csrf', controller.signal);
+  await api.updateSettings(
+    'p/q',
+    2,
+    { name: '论坛分析', timezone: 'Asia/Shanghai' },
+    'settings-key',
+    'csrf',
+    controller.signal,
+  );
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/members',
+      '/api/v1/projects/p%2Fq/members/u%2F1',
+      '/api/v1/projects/p%2Fq/members/u%2F1',
+      '/api/v1/projects/p%2Fq/settings',
+    ],
+  );
+  const expected = [
+    {
+      method: 'POST',
+      revision: '"3"',
+      key: 'add-key',
+      body: { username: 'Editor.Name', role: 'editor' },
+    },
+    { method: 'PATCH', revision: '"4"', key: 'role-key', body: { role: 'viewer' } },
+    { method: 'DELETE', revision: '"5"', key: 'remove-key', body: undefined },
+    {
+      method: 'PATCH',
+      revision: '"2"',
+      key: 'settings-key',
+      body: { name: '论坛分析', timezone: 'Asia/Shanghai' },
+    },
+  ];
+  controller.abort();
+  fetch.mock.calls.forEach((call, index) => {
+    const init = call.arguments[1] as RequestInit;
+    const headers = init.headers as Headers;
+    assert.equal(init.method, expected[index]!.method);
+    assert.equal(headers.get('If-Match'), expected[index]!.revision);
+    assert.equal(headers.get('Idempotency-Key'), expected[index]!.key);
+    assert.equal(headers.get('X-CSRF-Token'), 'csrf');
+    if (expected[index]!.body === undefined) {
+      assert.equal(init.body, undefined);
+      assert.equal(headers.has('Content-Type'), false);
+    } else {
+      assert.deepEqual(JSON.parse(init.body as string), expected[index]!.body);
+    }
+    assert.equal(init.signal?.aborted, true);
+  });
+});
