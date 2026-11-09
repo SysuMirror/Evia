@@ -231,3 +231,61 @@ print(
     f"property examples, {len(saved_cases) + 1} saved-analysis cases, "
     f"three collection and {saved_negative_count} saved-analysis negative cases passed."
 )
+
+# Independent metrics reuse pinned query primitives, never saved-analysis IDs.
+metric_definition = {
+    "title": "Activity count", "description": "",
+    "event_versions": saved_definition["query"]["event_versions"],
+    "subject": "uid", "aggregation": {"op": "count", "accuracy": "exact"},
+    "unit": "event", "filter": saved_definition["query"]["filter"],
+}
+metric_resource = {key: value for key, value in saved_resource.items() if key not in {"kind", "analysis_id"}}
+metric_resource["metric_id"] = saved_id
+metric_validation = {**saved_validation, "normalized_definition": metric_definition, "diff": [{"category": "definition", "path": "/definition", "after": metric_definition}]}
+metric_version = {key: value for key, value in saved_version.items() if key != "analysis_id"}
+metric_version.update(metric_id=saved_id, definition=metric_definition)
+metric_execute = {**saved_execute, "interval": "day", "limit": 500}
+metric_cases = {
+    "MetricDefinition": metric_definition,
+    "MetricRecord": metric_resource,
+    "MetricDraft": {**metric_resource, "definition": metric_definition},
+    "MetricVersion": metric_version,
+    "MetricValidation": metric_validation,
+    "MetricCreate": {"environment": "development", "definition": metric_definition},
+    "MetricUpdate": {"definition": metric_definition},
+    "MetricValidate": saved_cases["SavedAnalysisValidate"],
+    "MetricPublish": saved_cases["SavedAnalysisPublish"],
+    "MetricExecute": metric_execute,
+    "MetricList": {"items": [metric_resource], "next_cursor": None},
+    "MetricVersionList": {"items": [metric_version], "next_cursor": None},
+}
+for name, value in metric_cases.items():
+    validator(name).validate(value)
+    if validator(name).is_valid({**value, "unexpected_field": True}):
+        raise AssertionError(f"generated {name} accepted unknown field")
+validator("MetricExecute").validate(saved_execute)  # Whole-window aggregation.
+metric_negative_count = 0
+for op, subject, field, allowed in (
+    ("count", "uid", None, {"event"}),
+    ("unique", "uid", None, {"raw_uid"}),
+    ("unique", "anonymous", None, {"anonymous_id"}),
+    ("unique", "uid", {"kind": "property", "event_key": "activity_view", "schema_version": 1, "key": "score"}, {"distinct_value"}),
+    *((op, "uid", {"kind": "property", "event_key": "activity_view", "schema_version": 1, "key": "score"}, {"number", "millisecond", "second", "byte"}) for op in ("sum", "avg", "min", "max", "p95")),
+):
+    for unit in ("event", "raw_uid", "anonymous_id", "distinct_value", "number", "millisecond", "second", "byte", "unknown"):
+        value = {**metric_definition, "subject": subject, "aggregation": {"op": op}, "unit": unit}
+        if field is not None:
+            value["aggregation"]["field"] = field
+        if validator("MetricDefinition").is_valid(value) != (unit in allowed):
+            raise AssertionError(f"generated metric unit policy mismatch {op}/{subject}/{unit}")
+        metric_negative_count += int(unit not in allowed)
+for field, value in (("query", {}), ("visualization", {}), ("metric_id", saved_id), ("formula", "a+b"), ("environment", "production"), ("event_versions", []), ("subject", "resolved_person")):
+    reject_saved("MetricDefinition", field, metric_definition, [field], value)
+reject_saved("MetricDefinition", "resolved type", metric_definition, ["filter", "args", 0, "field", "resolved_type"], "boolean")
+reject_saved("MetricDefinition", "unpinned version", metric_definition, ["event_versions", 0, "schema_version"], 0)
+reject_saved("MetricExecute", "group budget", metric_execute, ["group_by"], [{"kind": "system", "key": "event_key"}] * 4)
+reject_saved("MetricExecute", "row budget", metric_execute, ["limit"], 501)
+reject_saved("MetricExecute", "interval", metric_execute, ["interval"], "week")
+reject_saved("MetricExecute", "scope override", metric_execute, ["environment"], "production")
+reject_saved("MetricValidation", "execution performed", metric_validation, ["execution_performed"], True)
+print(f"Independent metric contracts verified: {len(metric_cases)} cases and {metric_negative_count} unit incompatibilities, plus strict fields/runtime budgets.")

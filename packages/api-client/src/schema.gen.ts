@@ -917,6 +917,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * listMetrics
+         * @description Authorized environment-scoped list sorted by analysis UUID ascending with a signed scoped cursor. Unknown or duplicate query parameters are rejected.
+         */
+        get: operations["listMetrics"];
+        put?: never;
+        /**
+         * createMetric
+         * @description Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected.
+         */
+        post: operations["createMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getMetric
+         * @description Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected.
+         */
+        get: operations["getMetric"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getMetricDraft
+         * @description Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected.
+         */
+        get: operations["getMetricDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * updateMetricDraft
+         * @description Replaces the complete draft definition. Every accepted update advances draft_revision; If-Match is the current decimal draft revision in double quotes. Environment is immutable.
+         */
+        patch: operations["updateMetricDraft"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/validations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * validateMetric
+         * @description Read-authorized, CSRF-protected validation without execution or persistent side effects. Requires exact draft and publication counters; no environment override or query parameters are accepted.
+         */
+        post: operations["validateMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * listMetricVersions
+         * @description Lists complete immutable versions in numeric ascending order. Cursor scope includes actor, project and analysis. Unknown or duplicate query parameters, including environment, are rejected.
+         */
+        get: operations["listMetricVersions"];
+        put?: never;
+        /**
+         * publishMetric
+         * @description Publishes the validated exact draft transactionally. Reauthorizes and recomputes validation_hash under current locks. Advances published_version without changing draft_revision; replays the original response for an identical idempotency key.
+         */
+        post: operations["publishMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getMetricVersion
+         * @description Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected.
+         */
+        get: operations["getMetricVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions/{version}/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * executeMetricVersion
+         * @description Enqueues the exact immutable saved version with real time_range and timezone under the existing query budgets. An identical actor/project/version/key/payload reuses its query job for seven days. Changed payload returns IDEMPOTENCY_CONFLICT; expired or deleted jobs within the retry window return QUERY_REQUEST_EXPIRED. Disabled execution returns 503. Resource environment cannot be overridden.
+         */
+        post: operations["executeMetricVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1755,7 +1907,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run";
+        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run" | "metrics.read" | "metrics.write" | "metrics.publish" | "metrics.run";
         MachinePrincipal: {
             /** Format: uuid */
             id: string;
@@ -1874,6 +2026,124 @@ export interface components {
             items: components["schemas"]["ProjectAuditEntry"][];
             next_cursor: string | null;
         };
+        MetricDraft: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            title: string;
+            draft_revision: number;
+            published_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            definition: components["schemas"]["MetricDefinition"];
+        };
+        MetricVersion: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            version: number;
+            draft_revision: number;
+            definition: components["schemas"]["MetricDefinition"];
+            dependencies: components["schemas"]["QueryDependencyManifest"];
+            definition_hash: string;
+            dependency_hash: string;
+            validation_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+        };
+        /** @description Read-only semantic validation. No query execution, mutation or audit write occurs. The validation hash binds the resource scope, draft/publication counters, normalized definition, dependencies and bounded diff; publication reauthorizes and recomputes it transactionally. */
+        MetricValidation: {
+            /** @constant */
+            valid: true;
+            /** @constant */
+            execution_performed: false;
+            draft_revision: number;
+            published_version: number;
+            normalized_definition: components["schemas"]["MetricDefinition"];
+            dependencies: components["schemas"]["QueryDependencyManifest"];
+            definition_hash: string;
+            dependency_hash: string;
+            diff: components["schemas"]["MetricChange"][];
+            validation_hash: string;
+        };
+        MetricCreate: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            definition: components["schemas"]["MetricDefinition"];
+        };
+        MetricUpdate: {
+            definition: components["schemas"]["MetricDefinition"];
+        };
+        MetricValidate: {
+            draft_revision: number;
+            expected_published_version: number;
+        };
+        MetricPublish: {
+            draft_revision: number;
+            expected_published_version: number;
+            validation_hash: string;
+        };
+        /** @description Binds a published metric to its stored environment and an explicit range of at most 31 days. Runtime filter is AND-combined with its fixed filter. Unit annotations perform no conversion. Omit interval for a whole-window aggregate; daily unique values must never be summed to derive whole-window unique. */
+        MetricExecute: {
+            time_range: components["schemas"]["time_range"];
+            timezone: components["schemas"]["timezone"];
+            interval?: components["schemas"]["interval"];
+            group_by?: components["schemas"]["group_by"];
+            filter?: components["schemas"]["filter"];
+            limit?: components["schemas"]["limit"];
+        };
+        MetricList: {
+            items: components["schemas"]["MetricRecord"][];
+            next_cursor: string | null;
+        };
+        MetricVersionList: {
+            items: components["schemas"]["MetricVersion"][];
+            next_cursor: string | null;
+        };
+        MetricChange: {
+            /** @enum {string} */
+            category: "definition" | "metadata" | "event_versions" | "filter" | "subject" | "aggregation" | "unit";
+            path: string;
+            before?: unknown;
+            after?: unknown;
+        };
+        MetricRecord: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            title: string;
+            draft_revision: number;
+            published_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Independent atomic metric; maximum 131072 UTF-8 JSON bytes. Pinned immutable event versions, fixed filter and aggregation define its semantics. Unit annotates the result and performs no conversion. Count requires event; unique without field uses raw_uid for uid or anonymous_id for anonymous; unique with field uses distinct_value; numerical aggregations use number, millisecond, second or byte. */
+        MetricDefinition: {
+            title: string;
+            description?: string;
+            event_versions: components["schemas"]["event_versions"];
+            filter?: components["schemas"]["filter"];
+            /** @enum {unknown} */
+            subject: "uid" | "anonymous";
+            aggregation: components["schemas"]["items"];
+            /** @enum {string} */
+            unit: "event" | "raw_uid" | "anonymous_id" | "distinct_value" | "number" | "millisecond" | "second" | "byte";
+        } & (unknown & unknown & unknown);
         filter: {
             /** @enum {unknown} */
             op: "and" | "or";
@@ -2250,6 +2520,24 @@ export interface components {
             to: string;
         };
         timezone: string;
+        items: {
+            /** @enum {unknown} */
+            op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p95";
+            field?: {
+                /** @constant */
+                kind: "system";
+                /** @enum {unknown} */
+                key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
+            } | {
+                /** @constant */
+                kind: "property";
+                event_key: string;
+                schema_version: number;
+                key: string;
+            };
+            /** @enum {unknown} */
+            accuracy?: "exact" | "approximate";
+        };
     };
     responses: never;
     parameters: never;
@@ -10233,6 +10521,1192 @@ export interface operations {
                 };
             };
             /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMetrics: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricList"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createMetric: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricCreate"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDraft"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricRecord"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMetricDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDraft"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateMetricDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                "If-Match": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricUpdate"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDraft"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    validateMetric: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricValidate"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricValidation"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMetricVersions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricVersionList"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    publishMetric: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPublish"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricVersion"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMetricVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricVersion"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeMetricVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                metric_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricExecute"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            202: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["query-job.schema"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
             503: {
                 headers: {
                     [name: string]: unknown;

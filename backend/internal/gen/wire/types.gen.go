@@ -562,6 +562,113 @@ type MemberList struct {
 	NextCursor *string  `json:"next_cursor"`
 }
 
+type MetricChange struct {
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
+}
+
+type MetricCreate struct {
+	Environment string           `json:"environment"`
+	Definition  MetricDefinition `json:"definition"`
+}
+
+type MetricDefinition struct {
+	Title         string          `json:"title"`
+	Description   *string         `json:"description,omitempty"`
+	EventVersions json.RawMessage `json:"event_versions"`
+	Filter        json.RawMessage `json:"filter,omitempty"`
+	Subject       string          `json:"subject"`
+	Aggregation   json.RawMessage `json:"aggregation"`
+	Unit          string          `json:"unit"`
+}
+
+type MetricDraft struct {
+	MetricID         string           `json:"metric_id"`
+	ProjectID        string           `json:"project_id"`
+	Environment      string           `json:"environment"`
+	Title            string           `json:"title"`
+	DraftRevision    int64            `json:"draft_revision"`
+	PublishedVersion int64            `json:"published_version"`
+	CreatedAt        string           `json:"created_at"`
+	UpdatedAt        string           `json:"updated_at"`
+	Definition       MetricDefinition `json:"definition"`
+}
+
+type MetricExecute struct {
+	TimeRange json.RawMessage `json:"time_range"`
+	Timezone  json.RawMessage `json:"timezone"`
+	Interval  json.RawMessage `json:"interval,omitempty"`
+	GroupBy   json.RawMessage `json:"group_by,omitempty"`
+	Filter    json.RawMessage `json:"filter,omitempty"`
+	Limit     json.RawMessage `json:"limit,omitempty"`
+}
+
+type MetricList struct {
+	Items      []MetricRecord `json:"items"`
+	NextCursor *string        `json:"next_cursor"`
+}
+
+type MetricPublish struct {
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
+}
+
+type MetricRecord struct {
+	MetricID         string `json:"metric_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type MetricUpdate struct {
+	Definition MetricDefinition `json:"definition"`
+}
+
+type MetricValidate struct {
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
+}
+
+type MetricValidation struct {
+	Valid                bool                    `json:"valid"`
+	ExecutionPerformed   bool                    `json:"execution_performed"`
+	DraftRevision        int64                   `json:"draft_revision"`
+	PublishedVersion     int64                   `json:"published_version"`
+	NormalizedDefinition MetricDefinition        `json:"normalized_definition"`
+	Dependencies         QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash       string                  `json:"definition_hash"`
+	DependencyHash       string                  `json:"dependency_hash"`
+	Diff                 []MetricChange          `json:"diff"`
+	ValidationHash       string                  `json:"validation_hash"`
+}
+
+type MetricVersion struct {
+	MetricID       string                  `json:"metric_id"`
+	ProjectID      string                  `json:"project_id"`
+	Environment    string                  `json:"environment"`
+	Version        int64                   `json:"version"`
+	DraftRevision  int64                   `json:"draft_revision"`
+	Definition     MetricDefinition        `json:"definition"`
+	Dependencies   QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash string                  `json:"definition_hash"`
+	DependencyHash string                  `json:"dependency_hash"`
+	ValidationHash string                  `json:"validation_hash"`
+	CreatedAt      string                  `json:"created_at"`
+	CreatedBy      string                  `json:"created_by"`
+}
+
+type MetricVersionList struct {
+	Items      []MetricVersion `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+}
+
 type Problem struct {
 	Code      string          `json:"code"`
 	Message   string          `json:"message"`

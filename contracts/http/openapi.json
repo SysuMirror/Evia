@@ -11016,6 +11016,1746 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/metrics": {
+      "get": {
+        "operationId": "listMetrics",
+        "summary": "listMetrics",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Authorized environment-scoped list sorted by analysis UUID ascending with a signed scoped cursor. Unknown or duplicate query parameters are rejected."
+      },
+      "post": {
+        "operationId": "createMetric",
+        "summary": "createMetric",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}": {
+      "get": {
+        "operationId": "getMetric",
+        "summary": "getMetric",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected."
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/draft": {
+      "get": {
+        "operationId": "getMetricDraft",
+        "summary": "getMetricDraft",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected."
+      },
+      "patch": {
+        "operationId": "updateMetricDraft",
+        "summary": "updateMetricDraft",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replaces the complete draft definition. Every accepted update advances draft_revision; If-Match is the current decimal draft revision in double quotes. Environment is immutable.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/validations": {
+      "post": {
+        "operationId": "validateMetric",
+        "summary": "validateMetric",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricValidation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read-authorized, CSRF-protected validation without execution or persistent side effects. Requires exact draft and publication counters; no environment override or query parameters are accepted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricValidate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions": {
+      "get": {
+        "operationId": "listMetricVersions",
+        "summary": "listMetricVersions",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricVersionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Lists complete immutable versions in numeric ascending order. Cursor scope includes actor, project and analysis. Unknown or duplicate query parameters, including environment, are rejected."
+      },
+      "post": {
+        "operationId": "publishMetric",
+        "summary": "publishMetric",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Publishes the validated exact draft transactionally. Reauthorizes and recomputes validation_hash under current locks. Advances published_version without changing draft_revision; replays the original response for an identical idempotency key.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricPublish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions/{version}": {
+      "get": {
+        "operationId": "getMetricVersion",
+        "summary": "getMetricVersion",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Project-scoped saved analysis operation. Unknown or duplicate query parameters are rejected."
+      }
+    },
+    "/api/v1/projects/{project_id}/metrics/{metric_id}/versions/{version}/queries": {
+      "post": {
+        "operationId": "executeMetricVersion",
+        "summary": "executeMetricVersion",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "../query/query-job.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Enqueues the exact immutable saved version with real time_range and timezone under the existing query budgets. An identical actor/project/version/key/payload reuses its query job for seven days. Changed payload returns IDEMPOTENCY_CONFLICT; expired or deleted jobs within the retry window return QUERY_REQUEST_EXPIRED. Disabled execution returns 503. Resource environment cannot be overridden.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricExecute"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14830,7 +16570,11 @@
           "dashboards.read",
           "dashboards.write",
           "dashboards.publish",
-          "dashboards.run"
+          "dashboards.run",
+          "metrics.read",
+          "metrics.write",
+          "metrics.publish",
+          "metrics.run"
         ]
       },
       "MachinePrincipal": {
@@ -14861,7 +16605,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": 24,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -14994,7 +16738,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": 24,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -15112,7 +16856,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": 24,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -15351,6 +17095,670 @@
         "required": [
           "items",
           "next_cursor"
+        ]
+      },
+      "MetricDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "title",
+          "draft_revision",
+          "published_version",
+          "created_at",
+          "updated_at",
+          "definition"
+        ]
+      },
+      "MetricVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "definition": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/QueryDependencyManifest",
+            "properties": {
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "environment": {
+                "type": "string",
+                "enum": [
+                  "development",
+                  "staging",
+                  "production"
+                ]
+              },
+              "selection_mode": {
+                "enum": [
+                  "event_versions",
+                  "funnel_steps"
+                ]
+              },
+              "unfixed_event_keys": {
+                "maxItems": 0
+              },
+              "event_versions": {
+                "minItems": 1,
+                "maxItems": 20
+              }
+            }
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dependency_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "version",
+          "draft_revision",
+          "definition",
+          "dependencies",
+          "definition_hash",
+          "dependency_hash",
+          "validation_hash",
+          "created_at",
+          "created_by"
+        ]
+      },
+      "MetricValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "execution_performed": {
+            "type": "boolean",
+            "const": false
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "normalized_definition": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/QueryDependencyManifest",
+            "properties": {
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "environment": {
+                "type": "string",
+                "enum": [
+                  "development",
+                  "staging",
+                  "production"
+                ]
+              },
+              "selection_mode": {
+                "enum": [
+                  "event_versions",
+                  "funnel_steps"
+                ]
+              },
+              "unfixed_event_keys": {
+                "maxItems": 0
+              },
+              "event_versions": {
+                "minItems": 1,
+                "maxItems": 20
+              }
+            }
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dependency_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "diff": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/MetricChange"
+            }
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "valid",
+          "execution_performed",
+          "draft_revision",
+          "published_version",
+          "normalized_definition",
+          "dependencies",
+          "definition_hash",
+          "dependency_hash",
+          "diff",
+          "validation_hash"
+        ],
+        "description": "Read-only semantic validation. No query execution, mutation or audit write occurs. The validation hash binds the resource scope, draft/publication counters, normalized definition, dependencies and bounded diff; publication reauthorizes and recomputes it transactionally."
+      },
+      "MetricCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "definition": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          }
+        },
+        "required": [
+          "environment",
+          "definition"
+        ]
+      },
+      "MetricUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          }
+        },
+        "required": [
+          "definition"
+        ]
+      },
+      "MetricValidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "draft_revision",
+          "expected_published_version"
+        ]
+      },
+      "MetricPublish": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "draft_revision",
+          "expected_published_version",
+          "validation_hash"
+        ]
+      },
+      "MetricExecute": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time_range": {
+            "$ref": "../query/query-request.schema.json#/properties/time_range"
+          },
+          "timezone": {
+            "$ref": "../query/query-request.schema.json#/properties/timezone"
+          },
+          "interval": {
+            "$ref": "../query/query-request.schema.json#/properties/interval"
+          },
+          "group_by": {
+            "$ref": "../query/query-request.schema.json#/properties/group_by"
+          },
+          "filter": {
+            "$ref": "../query/query-request.schema.json#/properties/filter"
+          },
+          "limit": {
+            "$ref": "../query/query-request.schema.json#/properties/limit"
+          }
+        },
+        "required": [
+          "time_range",
+          "timezone"
+        ],
+        "description": "Binds a published metric to its stored environment and an explicit range of at most 31 days. Runtime filter is AND-combined with its fixed filter. Unit annotations perform no conversion. Omit interval for a whole-window aggregate; daily unique values must never be summed to derive whole-window unique."
+      },
+      "MetricList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/MetricRecord"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "MetricVersionList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/MetricVersion"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "MetricChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "definition",
+              "metadata",
+              "event_versions",
+              "filter",
+              "subject",
+              "aggregation",
+              "unit"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "before": {},
+          "after": {}
+        },
+        "required": [
+          "category",
+          "path"
+        ]
+      },
+      "MetricRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "title",
+          "draft_revision",
+          "published_version",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "MetricDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "event_versions": {
+            "$ref": "../query/query-request.schema.json#/properties/event_versions"
+          },
+          "filter": {
+            "$ref": "../query/query-request.schema.json#/properties/filter"
+          },
+          "subject": {
+            "enum": [
+              "uid",
+              "anonymous"
+            ]
+          },
+          "aggregation": {
+            "$ref": "../query/query-request.schema.json#/properties/metrics/items"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "event",
+              "raw_uid",
+              "anonymous_id",
+              "distinct_value",
+              "number",
+              "millisecond",
+              "second",
+              "byte"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "event_versions",
+          "subject",
+          "aggregation",
+          "unit"
+        ],
+        "description": "Independent atomic metric; maximum 131072 UTF-8 JSON bytes. Pinned immutable event versions, fixed filter and aggregation define its semantics. Unit annotates the result and performs no conversion. Count requires event; unique without field uses raw_uid for uid or anonymous_id for anonymous; unique with field uses distinct_value; numerical aggregations use number, millisecond, second or byte.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "aggregation": {
+                  "properties": {
+                    "op": {
+                      "const": "count"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "unit": {
+                  "const": "event"
+                },
+                "aggregation": {
+                  "not": {
+                    "required": [
+                      "field"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "aggregation": {
+                  "properties": {
+                    "op": {
+                      "const": "unique"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "if": {
+                "properties": {
+                  "aggregation": {
+                    "required": [
+                      "field"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "unit": {
+                    "const": "distinct_value"
+                  }
+                }
+              },
+              "else": {
+                "if": {
+                  "properties": {
+                    "subject": {
+                      "const": "uid"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "unit": {
+                      "const": "raw_uid"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "unit": {
+                      "const": "anonymous_id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "aggregation": {
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "sum",
+                        "avg",
+                        "min",
+                        "max",
+                        "p95"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "unit": {
+                  "enum": [
+                    "number",
+                    "millisecond",
+                    "second",
+                    "byte"
+                  ]
+                },
+                "aggregation": {
+                  "required": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          }
         ]
       }
     }
