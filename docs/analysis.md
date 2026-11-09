@@ -22,6 +22,8 @@ The read view deduplicates by project, environment, source, and event ID before 
 
 Trend queries use the same tuple-valued winner selection with only the columns needed by the request. Migration 004 supplies compact hash bytes and effective timestamps; historical parts remain correct before explicit materialization, but their read cost is not yet reduced. A necessary UID or anonymous-ID equality can first locate candidate source/event pairs through migration 005's projections. Every raw version of those pairs still participates in winner selection, and the complete event, version, time, identity and property predicates remain outside it. Projection availability affects cost, not the definition of a matching fact.
 
+The trend winner aggregate groups by source and event ID within the fixed authorized project and environment. These two scope values are bound once and reconstructed as output constants, avoiding repeated strings in each aggregation key. Raw and candidate scope columns are explicitly qualified so an outer constant alias cannot replace the stored authorization predicate. This optimization does not combine projects, environments or sources.
+
 Numeric property guards recognize ClickHouse JSON categories `Int64`, `UInt64` and `Double`. Decimal and exponent values participate in numeric aggregation and comparisons; strings and booleans are not scalar numbers. Properties continue to use the original document. A proposed per-property layout was deferred because the database's raw-extraction functions normalize number tokens; the [property read design](plans/property-read-layout.md) records the compatibility requirements.
 
 ## Timestamp deployment order
