@@ -64,6 +64,7 @@ func (a *CollectionAPI) Handler() http.Handler {
 func collectionCORS(w http.ResponseWriter, origin string) {
 	if origin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Expose-Headers", "Retry-After, X-Request-ID")
 		w.Header().Add("Vary", "Origin")
 	}
 }
