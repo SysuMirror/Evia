@@ -53,6 +53,8 @@ web-check:
 	$(PNPM) format:check
 	$(PNPM) typecheck
 	$(PNPM) test:client
+	$(PNPM) test:sdk
+	$(PNPM) build:sdk
 	$(PNPM) build
 
 browser-test:
