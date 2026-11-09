@@ -5,14 +5,16 @@ from pathlib import Path
 import time
 
 from benchmark_common import require, SmokeFailure, timestamp, parse_time, distribution
-from benchmark_workloads import workloads, request_base, validate_result
+from benchmark_workloads import workloads, request_base, validate_result, select_workloads
 
 def run_queries(bench, config, args):
+    selected = select_workloads(getattr(args, "workloads", None)) if args.action != "drain" else []
     bench.project = config["project_id"]
     cases = workloads(config)
     report = {"report_version": 1, "stage": "query", "started_at": timestamp(),
               "project_id": bench.project, "run_id": config["run_id"],
               "events_expected": args.events, "exact_uid_expected": min(args.events, config["uid_cardinality"]),
+              "selected_workloads": selected,
               "fixture": {"uid_cardinality": config["uid_cardinality"], "section_cardinality": 10,
                           "post_cardinality": 10000, "page_cardinality": 1000, "lookback_seconds": 1800},
               "query_time_range": request_base(config)["time_range"], "query_groups": [],
@@ -59,7 +61,8 @@ def run_queries(bench, config, args):
     if args.action == "drain":
         report.update(stage="drain", success=True, query_jobs=bench.query_jobs, http_status_counts=dict(bench.http.statuses))
         return report
-    for name, request in cases.items():
+    for name in selected:
+        request = cases[name]
         try:
             first = bench.query(request)
             rows = validate_result(name, first["result"], config, args.events)

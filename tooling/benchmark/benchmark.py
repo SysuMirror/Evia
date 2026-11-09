@@ -13,7 +13,7 @@ import sys
 from benchmark_common import (SmokeFailure, credentials, private_path, load_config, require,
                               distribution, loopback, parse_time, timestamp, EVENT_KEY)
 from benchmark_api import Benchmark
-from benchmark_workloads import matching_modulo, validate_result, workloads, uid
+from benchmark_workloads import matching_modulo, validate_result, workloads, uid, select_workloads
 from benchmark_queries import run_queries
 
 def main():
@@ -28,6 +28,7 @@ def main():
     query.add_argument("--events", type=int, required=True)
     query.add_argument("--samples", type=int, default=30)
     query.add_argument("--concurrency", default="1,4,8")
+    query.add_argument("--workloads", help="Comma-separated workload names; defaults to all eight workloads")
     query.add_argument("--drain-timeout", type=int, default=600)
     query.add_argument("--report", required=True)
     query.add_argument("--ingestion-report")
@@ -39,6 +40,9 @@ def main():
     drain.add_argument("--ingestion-report")
     drain.set_defaults(samples=1, concurrency="1")
     args = parser.parse_args()
+    selected_workloads = None
+    if args.action == "queries":
+        selected_workloads = select_workloads(args.workloads)  # Validate before API session creation.
     settings = credentials()
     bench = None
     try:
@@ -60,7 +64,10 @@ def main():
             require(bool(args.concurrency) and all(value in (1, 4, 8) for value in args.concurrency)
                     and len(set(args.concurrency)) == len(args.concurrency), "Concurrency must select distinct values from 1,4,8")
             config = load_config(args.config)
-            require(matching_modulo(args.events, config["uid_cardinality"]) <= 500, "Known UID journey exceeds snapshot budget; increase UID cardinality")
+            # Only journey returns the 500-row identity snapshot. Keep drain's
+            # existing preflight; a partial matrix need not include journey.
+            if args.action == "drain" or "journey" in selected_workloads:
+                require(matching_modulo(args.events, config["uid_cardinality"]) <= 500, "Known UID journey exceeds snapshot budget; increase UID cardinality")
             bench = Benchmark(config["api_url"], settings)
             try:
                 report = run_queries(bench, config, args)

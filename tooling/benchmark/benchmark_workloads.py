@@ -6,6 +6,22 @@ import uuid
 
 from benchmark_common import parse_time, timestamp, delta_ns, require, SmokeFailure
 
+WORKLOAD_NAMES = ("count", "exact_uid", "hour_bucket", "section_group",
+                  "high_cardinality_uid_filter", "property_filter", "journey", "ordered_funnel")
+
+
+def select_workloads(value=None):
+    """Resolve a CLI matrix selection without creating fixtures or API sessions."""
+    if value is None:
+        return list(WORKLOAD_NAMES)
+    require(isinstance(value, str), "Workloads must be comma-separated names")
+    selected = [name.strip() for name in value.split(",")]
+    require(all(name in WORKLOAD_NAMES for name in selected)
+            and len(set(selected)) == len(selected),
+            "Workloads must select distinct names from " + ",".join(WORKLOAD_NAMES))
+    return selected
+
+
 def uid(config, ordinal=0):
     return "bench-" + config["run_id"] + "-" + str(ordinal % config["uid_cardinality"])
 
