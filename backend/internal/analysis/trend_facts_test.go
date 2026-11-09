@@ -53,6 +53,11 @@ func TestTrendWinnerProjectsOnlyRequiredColumns(t *testing.T) {
 					t.Fatal("unneeded raw payload was loaded", unused)
 				}
 			}
+			for _, original := range []string{"occurred_at_precise", "event_time_precise", "toDateTime64(", "unhex("} {
+				if strings.Contains(plan.SQL, original) {
+					t.Fatal("compact winner reader recomputes original payload", original)
+				}
+			}
 		})
 	}
 }

@@ -84,7 +84,9 @@ func TestClickHouseNarrowTrendMatchesFullWinnerView(t *testing.T) {
 	hashWinner := makeFact("hash-order", "hash-first", 9, 7)
 	hashLoser := makeFact("hash-order", "hash-later", 8, 999)
 	hashWinner["received_at"], hashLoser["received_at"] = "2026-11-07 10:00:10.000000000", "2026-11-07 10:00:10.000000000"
-	hashLoser["canonical_hash"] = strings.Repeat("b", 64)
+	// Cross a hexadecimal digit boundary to exercise packed-byte hash ordering.
+	hashWinner["canonical_hash"] = "09" + strings.Repeat("f", 62)
+	hashLoser["canonical_hash"] = "0a" + strings.Repeat("0", 62)
 	legacy := makeFact("precision-order", "legacy", 12, 11)
 	legacy["occurred_at_precise"], legacy["event_time_precise"] = nil, nil
 	preciseReplay := cloneTrendFact(legacy)

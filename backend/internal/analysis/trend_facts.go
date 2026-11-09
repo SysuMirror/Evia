@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-// These expressions match migration 003, including the legacy millisecond
-// fallback. Both precise timestamps remain in the winner weight even when the
-// query does not expose them: equal receipt/hash replays must select the same
-// legacy-versus-precise row as event_facts.
-const trendOccurredTime = "coalesce(occurred_at_precise,toDateTime64(occurred_at,9,'UTC'))"
-const trendEventTime = "coalesce(event_time_precise,toDateTime64(event_time,9,'UTC'))"
-const trendWinnerWeight = "tuple(received_at,canonical_hash," + trendOccurredTime + "," + trendEventTime + ")"
+// Migration 004 computes these columns from migration 003's exact legacy
+// fallback. Packed lowercase hexadecimal preserves the original hash ordering.
+// Both precise timestamps remain in the weight even when not exposed, so tied
+// receipt/hash replays select the same legacy-versus-precise row as event_facts.
+const trendOccurredTime = "occurred_at_effective"
+const trendEventTime = "event_time_effective"
+const trendWinnerWeight = "tuple(received_at,canonical_hash_bytes," + trendOccurredTime + "," + trendEventTime + ")"
 
 // trendFactsSource projects only the winner payload used by a trend query. The
 // deduplication identity and ordering are identical to the public event_facts
