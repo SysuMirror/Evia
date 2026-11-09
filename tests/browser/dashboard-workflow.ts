@@ -6,6 +6,93 @@ import type {
   Session,
 } from '../../packages/api-client/src/index';
 
+/** Wait for the chart ResizeObserver to reconcile the requested viewport before asserting final geometry. */
+async function waitForDashboardResponsiveLayout(page: Page) {
+  const geometry = () =>
+    page.evaluate(() => {
+      const width = innerWidth,
+        documentWidth = document.documentElement.scrollWidth;
+      const charts = [
+        ...document.querySelectorAll<HTMLElement>(
+          '.dashboard-run .saved-analysis-chart[role="img"]',
+        ),
+      ]
+        .slice(0, 12)
+        .map((chart) => {
+          const box = chart.getBoundingClientRect(),
+            card = chart.closest('.evia-dashboard-card')?.getBoundingClientRect(),
+            svg = chart.querySelector('svg')?.getBoundingClientRect();
+          return {
+            x: box.x,
+            width: box.width,
+            right: box.right,
+            cardX: card?.x ?? null,
+            cardWidth: card?.width ?? null,
+            cardRight: card?.right ?? null,
+            clientWidth: chart.clientWidth,
+            svgWidth: svg?.width ?? null,
+          };
+        });
+      const ready =
+        documentWidth <= width &&
+        charts.length > 0 &&
+        charts.every(
+          (chart) =>
+            chart.cardX !== null &&
+            chart.cardRight !== null &&
+            chart.x >= chart.cardX &&
+            chart.right <= chart.cardRight &&
+            chart.clientWidth > 0 &&
+            chart.svgWidth !== null &&
+            Math.abs(chart.svgWidth - chart.clientWidth) <= 1,
+        );
+      const overflow =
+        documentWidth > width
+          ? [...document.querySelectorAll('body *')]
+              .map((element) => ({ element, box: element.getBoundingClientRect() }))
+              .filter(
+                ({ element, box }) =>
+                  box.width > 0 &&
+                  (box.right > width + 1 || box.left < -1) &&
+                  !element.closest('dialog:not([open])'),
+              )
+              .slice(0, 12)
+              .map(({ element, box }) => ({
+                tag: element.tagName,
+                class: element.getAttribute('class'),
+                x: box.x,
+                width: box.width,
+                right: box.right,
+                overflowX: getComputedStyle(element).overflowX,
+              }))
+          : [];
+      return { ready, width, documentWidth, charts, overflow };
+    });
+  const initial = await geometry();
+  let settled = initial;
+  try {
+    await expect
+      .poll(
+        async () => {
+          settled = await geometry();
+          return settled.ready;
+        },
+        {
+          message: '看板页面与图表需完成响应式布局，文档和图表均不得溢出',
+          timeout: 5000,
+          intervals: [16, 32, 50, 100, 200],
+        },
+      )
+      .toBe(true);
+  } catch (cause) {
+    throw new Error(`Dashboard responsive geometry ${JSON.stringify({ initial, settled })}`, {
+      cause,
+    });
+  }
+  if (initial.documentWidth > initial.width)
+    console.log('Dashboard responsive geometry', JSON.stringify({ initial, settled }));
+}
+
 /** Real API setup and UI execution reuse the core workflow's three synthetic events. */
 export async function verifyDashboardWorkflow(
   page: Page,
@@ -181,6 +268,7 @@ export async function verifyDashboardWorkflow(
   expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(360);
   await screenshot('desktop-dashboard-result.png');
   await page.setViewportSize({ width: 390, height: 844 });
+  await waitForDashboardResponsiveLayout(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(650);
