@@ -70,7 +70,12 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 		{"operation_id", "operation_id"}, {"properties_json", "properties_json"},
 	}
 	arguments := make([]string, 0, len(columns))
-	projection := []string{"project_id", "environment", "source_id", "event_id"}
+	// The raw predicate fixes both authorization dimensions for every input
+	// row. Return those dimensions as bound constants rather than carrying the
+	// same strings in each winner's grouping key and aggregate output block.
+	project := p.bind("String", scope.ProjectID)
+	environment := p.bind("String", scope.Environment)
+	projection := []string{project + " AS project_id", environment + " AS environment", "source_id", "event_id"}
 	for _, column := range columns {
 		if needed[column.name] {
 			arguments = append(arguments, column.expression)
@@ -81,14 +86,16 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 	// equality may first identify candidate keys, but every version of those
 	// keys remains eligible. Event, time, UID and property predicates still apply
 	// to the winner; a matching losing replay cannot replace an excluded winner.
-	predicate := "project_id=" + p.bind("String", scope.ProjectID) +
-		" AND environment=" + p.bind("String", scope.Environment)
+	// Qualify the stored scope columns: the outer constant aliases must never
+	// replace the authoritative raw-table authorization predicate.
+	predicate := "raw_facts.project_id=" + project +
+		" AND raw_facts.environment=" + environment
 	if candidates := p.identityCandidatePredicate(database, scope, request); candidates != "" {
 		predicate += " AND " + candidates
 	}
 	return "(SELECT " + strings.Join(projection, ",") +
-		" FROM (SELECT project_id,environment,source_id,event_id,argMin(tuple(" + strings.Join(arguments, ",") +
-		")," + trendWinnerWeight + ") AS winner FROM `" + database + "`.`event_facts_raw`" +
+		" FROM (SELECT source_id,event_id,argMin(tuple(" + strings.Join(arguments, ",") +
+		")," + trendWinnerWeight + ") AS winner FROM `" + database + "`.`event_facts_raw` AS raw_facts" +
 		" WHERE " + predicate +
-		" GROUP BY project_id,environment,source_id,event_id))", nil
+		" GROUP BY source_id,event_id))", nil
 }

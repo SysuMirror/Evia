@@ -70,22 +70,52 @@ func TestTrendWinnerOnlyPushesScopeBeforeDeduplication(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	start := strings.Index(plan.SQL, "FROM `testdb`.`event_facts_raw` WHERE ")
+	start := strings.Index(plan.SQL, "FROM `testdb`.`event_facts_raw` AS raw_facts WHERE ")
 	if start < 0 {
 		t.Fatal("deduplicated raw source missing", plan.SQL)
 	}
-	end := strings.Index(plan.SQL[start:], " GROUP BY project_id,environment,source_id,event_id")
+	end := strings.Index(plan.SQL[start:], " GROUP BY source_id,event_id")
 	if end < 0 {
 		t.Fatal("deduplication scope or identity missing", plan.SQL)
 	}
 	inner := plan.SQL[start : start+end]
-	if strings.Count(inner, "=") != 2 || !strings.Contains(inner, "WHERE project_id=") || !strings.Contains(inner, " AND environment=") {
+	if strings.Count(inner, "=") != 2 || !strings.Contains(inner, "WHERE raw_facts.project_id=") || !strings.Contains(inner, " AND raw_facts.environment=") {
 		t.Fatal("payload predicate moved ahead of deduplication", inner)
 	}
 	for _, value := range []string{"private-project", "opened", "label", "' OR 1=1 --"} {
 		if strings.Contains(plan.SQL, value) {
 			t.Fatal("request value interpolated into SQL", value)
 		}
+	}
+}
+
+func TestTrendWinnerScopeConstantsStayOutsideAggregation(t *testing.T) {
+	r := request(t, baseRequest)
+	plan, err := Compile("db", "event_facts", Scope{ProjectID: "private-project", Environment: r.Environment}, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopeBinding := func(value, alias string) string {
+		t.Helper()
+		for name, bound := range plan.Parameters {
+			token := "{" + name + ":String}"
+			if bound == value && strings.Contains(plan.SQL, token+" AS "+alias) {
+				return token
+			}
+		}
+		t.Fatal("outer scope alias does not bind the authorized value", alias)
+		return ""
+	}
+	project := scopeBinding("private-project", "project_id")
+	environment := scopeBinding(r.Environment, "environment")
+	if !strings.Contains(plan.SQL, "SELECT "+project+" AS project_id,"+environment+" AS environment,source_id,event_id,") ||
+		!strings.Contains(plan.SQL, "FROM (SELECT source_id,event_id,argMin(") ||
+		!strings.Contains(plan.SQL, "WHERE raw_facts.project_id="+project+" AND raw_facts.environment="+environment) ||
+		!strings.Contains(plan.SQL, "GROUP BY source_id,event_id") {
+		t.Fatal("constant scope must be reconstructed outside the winner aggregate with qualified raw authorization", plan.SQL)
+	}
+	if strings.Contains(plan.SQL, "GROUP BY project_id") || strings.Contains(plan.SQL, "SELECT project_id,environment,source_id,event_id,argMin(") {
+		t.Fatal("constant scope remains in winner grouping or output", plan.SQL)
 	}
 }
 

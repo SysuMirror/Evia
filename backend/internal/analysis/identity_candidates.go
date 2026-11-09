@@ -52,10 +52,13 @@ func (p *planner) identityCandidatePredicate(database string, scope Scope, reque
 	if key == "" {
 		return ""
 	}
-	return "(source_id,event_id) IN (SELECT source_id,event_id FROM `" + database + "`.`event_facts_raw`" +
-		" WHERE project_id=" + p.bind("String", scope.ProjectID) +
-		" AND environment=" + p.bind("String", scope.Environment) +
-		" AND " + key + "=" + p.bind("String", value) + ")"
+	// Bind every lookup column to this raw scan explicitly. Winner payload
+	// aliases and reconstructed scope constants in surrounding queries must not
+	// capture any part of the candidate lookup's authorization or identity.
+	return "(source_id,event_id) IN (SELECT candidate_facts.source_id,candidate_facts.event_id FROM `" + database + "`.`event_facts_raw` AS candidate_facts" +
+		" WHERE candidate_facts.project_id=" + p.bind("String", scope.ProjectID) +
+		" AND candidate_facts.environment=" + p.bind("String", scope.Environment) +
+		" AND candidate_facts." + key + "=" + p.bind("String", value) + ")"
 }
 
 func (p *planner) identityFactsSource(database string, scope Scope, request Request) string {

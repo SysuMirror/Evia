@@ -47,7 +47,7 @@ func TestIdentityCandidateSourceKeepsWinnerPredicatesOutside(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plan.SQL, "(source_id,event_id) IN (SELECT source_id,event_id FROM `evia`.`event_facts_raw` WHERE project_id=") || strings.Contains(plan.SQL, "O'Hare") {
+	if !strings.Contains(plan.SQL, "(source_id,event_id) IN (SELECT candidate_facts.source_id,candidate_facts.event_id FROM `evia`.`event_facts_raw` AS candidate_facts WHERE candidate_facts.project_id=") || strings.Contains(plan.SQL, "O'Hare") {
 		t.Fatal("candidate lookup must use scoped bound source/event pairs", plan.SQL)
 	}
 	if strings.Count(plan.SQL, "uid=") != 2 || strings.Count(plan.SQL, "event_time>=") != 1 {
@@ -56,5 +56,19 @@ func TestIdentityCandidateSourceKeepsWinnerPredicatesOutside(t *testing.T) {
 	reference, err := Compile("evia", "event_facts_reference", Scope{ProjectID: "project-one", Environment: r.Environment}, r)
 	if err != nil || strings.Contains(reference.SQL, "event_facts_raw") {
 		t.Fatal("custom view must retain its configured source", reference, err)
+	}
+}
+
+func TestIdentityCandidateColumnsBelongToTheirOwnRawScan(t *testing.T) {
+	for _, key := range []string{"uid", "anonymous_id"} {
+		t.Run(key, func(t *testing.T) {
+			p := planner{params: map[string]string{}}
+			predicate := p.identityCandidatePredicate("evia", Scope{ProjectID: "project-one", Environment: "development"}, Request{Filter: identityEquality(key, "selected")})
+			for _, column := range []string{"source_id", "event_id", "project_id", "environment", key} {
+				if !strings.Contains(predicate, "candidate_facts."+column) {
+					t.Fatal("candidate lookup could resolve a column against surrounding winner aliases", column, predicate)
+				}
+			}
+		})
 	}
 }
