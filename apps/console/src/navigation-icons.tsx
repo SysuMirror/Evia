@@ -7,9 +7,16 @@ export type WorkspaceSection =
   | 'analysis'
   | 'saved-analyses'
   | 'dashboards'
-  | 'machine-access';
+  | 'machine-access'
+  | 'governance';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  governance: (
+    <>
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M5.5 19a6.5 6.5 0 0 1 13 0M4 21h16" />
+    </>
+  ),
   'machine-access': (
     <>
       <rect x="4" y="4" width="16" height="12" rx="3" />

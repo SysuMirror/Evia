@@ -65,6 +65,9 @@ const SavedAnalysesPage = lazy(() =>
 const MachineAccessPage = lazy(() =>
   import('./machine-access').then((module) => ({ default: module.MachineAccessPage })),
 );
+const GovernancePage = lazy(() =>
+  import('./governance/governance').then((module) => ({ default: module.GovernancePage })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
@@ -201,6 +204,9 @@ function Workspace({ session }: { session: Session }) {
     { path: 'dashboards', label: '自定义看板', component: DashboardsPage },
     ...(project.data?.permissions.includes('machine_principals.manage')
       ? [{ path: 'machine-access' as const, label: '机器访问', component: MachineAccessPage }]
+      : []),
+    ...(project.data?.permissions.includes('settings.read')
+      ? [{ path: 'governance' as const, label: '项目治理', component: GovernancePage }]
       : []),
   ];
   const navigationItems = projectID
