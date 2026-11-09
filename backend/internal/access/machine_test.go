@@ -48,6 +48,11 @@ func TestMachineInputsRejectUnknownAndAmbiguousAuthority(t *testing.T) {
 	if _, e := s.RotateCredential(context.Background(), "actor", "project", "principal", 1, "key", MachineRotate{OverlapSeconds: 301}); e == nil {
 		t.Fatal("unbounded overlap accepted")
 	}
+	for _, key := range []string{"", "space key", "换", "line\nbreak", strings.Repeat("k", 129)} {
+		if _, e := s.CreatePrincipal(context.Background(), "actor", "project", key, valid); e == nil {
+			t.Fatal("invalid idempotency key accepted")
+		}
+	}
 }
 
 func TestMachineCredentialExpiryIsBoundedAtDurableIssuance(t *testing.T) {

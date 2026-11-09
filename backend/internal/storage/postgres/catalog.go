@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/jackc/pgx/v5"
@@ -28,13 +29,21 @@ func (s *Store) catalogTx(ctx context.Context, actor, project string, write bool
 	if e != nil {
 		return nil, e
 	}
-	var role string
-	e = tx.QueryRow(ctx, `SELECT m.role FROM project_members m JOIN accounts a ON a.id=m.user_id WHERE m.project_id=$1 AND m.user_id=$2 AND NOT a.disabled FOR SHARE OF m,a`, project, actor).Scan(&role)
-	if errors.Is(e, pgx.ErrNoRows) {
-		e = fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "项目不存在或不可见")
-	}
-	if e == nil && write && role != "owner" && role != "editor" {
-		e = fault.New(fault.Forbidden, "PROJECT_FORBIDDEN", "当前角色不能修改此项目")
+	identity, _ := access.IdentityFromContext(ctx)
+	if identity.PrincipalID != "" || identity.CredentialID != "" {
+		_, e = lockMachineIdentity(ctx, tx, actor, project)
+	} else {
+		var role string
+		e = tx.QueryRow(ctx, `SELECT m.role FROM project_members m JOIN accounts a ON a.id=m.user_id WHERE m.project_id=$1 AND m.user_id=$2 AND NOT a.disabled FOR SHARE OF m,a`, project, actor).Scan(&role)
+		if errors.Is(e, pgx.ErrNoRows) {
+			e = projectInvisible()
+		}
+		if e == nil && write && role != "owner" && role != "editor" {
+			e = fault.New(fault.Forbidden, "PROJECT_FORBIDDEN", "当前角色不能修改此项目")
+		}
+		if e == nil {
+			e = setAuditCredential(ctx, tx, "")
+		}
 	}
 	if e == nil && write {
 		_, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project)
@@ -51,6 +60,9 @@ func (s *Store) CreateEvent(ctx context.Context, actor, project string, in catal
 		return catalog.Event{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, "", access.PermissionCatalogDraftsWrite); e != nil {
+		return catalog.Event{}, e
+	}
 	definition := catalog.DraftInput{DisplayName: &in.DisplayName, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}, FieldMetadata: map[string]any{}, ExampleProperties: map[string]any{}}
 	data, e := json.Marshal(definition)
 	if e != nil {
@@ -82,8 +94,20 @@ func (s *Store) ListEvents(ctx context.Context, actor, project, environment, aft
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, "", access.PermissionCatalogDraftsRead); e != nil {
+		return nil, e
+	}
+	if identity, machine := access.IdentityFromContext(ctx); machine && identity.PrincipalID != "" && environment == "" {
+		return nil, catalog.Invalid("INVALID_ENVIRONMENT", "机器调用必须指定环境")
+	}
+	if environment != "" {
+		if e = s.authorizeOperation(ctx, tx, actor, project, environment, access.PermissionCatalogReleasesRead); e != nil {
+			return nil, e
+		}
+	}
 	// Event definitions are project-scoped. Environment filters versions through
-	// manifests; drafts remain visible in every authorized project environment.
+	// manifests. Current names and unpublished events expose project-wide draft
+	// metadata, so machine callers need explicit draft and release read grants.
 	rows, e := tx.Query(ctx, `SELECT e.event_type_id,e.event_key,e.display_name,COALESCE((SELECT array_agg(v.schema_version ORDER BY v.schema_version) FROM catalog_versions v WHERE v.project_id=e.project_id AND v.event_key=e.event_key AND ($2='' OR EXISTS(SELECT 1 FROM catalog_release_events re WHERE re.project_id=v.project_id AND re.environment=$2 AND re.event_key=v.event_key AND re.schema_version=v.schema_version))),ARRAY[]::bigint[]) FROM catalog_events e WHERE e.project_id=$1 AND e.event_key>$3 ORDER BY e.event_key LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
@@ -125,6 +149,9 @@ func (s *Store) GetDraft(ctx context.Context, actor, project, key string) (catal
 		return catalog.Draft{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, "", access.PermissionCatalogDraftsRead); e != nil {
+		return catalog.Draft{}, e
+	}
 	out, e := readDraft(ctx, tx, project, key)
 	if e != nil {
 		return out, e
@@ -137,6 +164,9 @@ func (s *Store) SaveDraft(ctx context.Context, actor, project, key string, revis
 		return catalog.Draft{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, "", access.PermissionCatalogDraftsWrite); e != nil {
+		return catalog.Draft{}, e
+	}
 	old, e := readDraft(ctx, tx, project, key)
 	if e != nil {
 		return catalog.Draft{}, e
@@ -189,6 +219,9 @@ func (s *Store) ValidationDraft(ctx context.Context, actor, project, key string,
 		return catalog.Draft{}, nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, "", access.PermissionCatalogDraftsRead); e != nil {
+		return catalog.Draft{}, nil, e
+	}
 	// Lock this event across both reads to compare one draft with its latest
 	// published version, even if another transaction is building a release.
 	if _, e = tx.Exec(ctx, `SELECT event_key FROM catalog_events WHERE project_id=$1 AND event_key=$2 FOR SHARE`, project, key); e != nil {
@@ -222,9 +255,18 @@ func (s *Store) GetEventVersion(ctx context.Context, actor, project, key string,
 		return catalog.EventVersion{}, e
 	}
 	defer tx.Rollback(context.Background())
+	// Versions are shared by project, but machine access is restricted to versions
+	// that actually appear in a release for the credential's bound environment.
+	environment := ""
+	if identity, machine := access.IdentityFromContext(ctx); machine && identity.PrincipalID != "" {
+		environment = identity.Environment
+	}
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, access.PermissionCatalogReleasesRead); e != nil {
+		return catalog.EventVersion{}, e
+	}
 	out := catalog.EventVersion{Key: key, SchemaVersion: version}
 	var raw []byte
-	e = tx.QueryRow(ctx, `SELECT draft_revision,definition FROM catalog_versions WHERE project_id=$1 AND event_key=$2 AND schema_version=$3`, project, key, version).Scan(&out.DraftRevision, &raw)
+	e = tx.QueryRow(ctx, `SELECT v.draft_revision,v.definition FROM catalog_versions v WHERE v.project_id=$1 AND v.event_key=$2 AND v.schema_version=$3 AND ($4='' OR EXISTS(SELECT 1 FROM catalog_release_events re WHERE re.project_id=v.project_id AND re.environment=$4 AND re.event_key=v.event_key AND re.schema_version=v.schema_version))`, project, key, version, environment).Scan(&out.DraftRevision, &raw)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = fault.New(fault.NotFound, "EVENT_VERSION_NOT_FOUND", "已发布事件版本不存在或不可见")
 	}

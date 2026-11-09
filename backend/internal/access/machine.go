@@ -91,8 +91,13 @@ type Machines struct{ store MachineStore }
 func NewMachines(store MachineStore) *Machines  { return &Machines{store: store} }
 func machineInvalid(code, message string) error { return fault.New(fault.Invalid, code, message) }
 func machineKey(key string) error {
-	if len(key) < 1 || len(key) > 200 || strings.ContainsRune(key, 0) || !utf8.ValidString(key) {
+	if len(key) < 1 || len(key) > 128 {
 		return machineInvalid("INVALID_IDEMPOTENCY_KEY", "幂等键无效")
+	}
+	for _, char := range key {
+		if char < 33 || char > 126 {
+			return machineInvalid("INVALID_IDEMPOTENCY_KEY", "幂等键无效")
+		}
 	}
 	return nil
 }
