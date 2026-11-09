@@ -162,7 +162,7 @@ export async function verifyDashboardWorkflow(
     } else await route.continue();
   });
   await page.getByRole('button', { name: '运行看板', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: '运行响应尚未确认' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '运行响应尚未确认' })).toBeVisible();
   await page.getByRole('button', { name: '重试运行看板', exact: true }).click();
   const results = page.getByRole('region', { name: '看板查询结果', exact: true });
   await expect(results.getByRole('img')).toHaveCount(2, { timeout: 25000 });
@@ -225,7 +225,7 @@ export async function verifyDashboardWorkflow(
   });
   expect(changed.status()).toBe(200);
   await page.getByRole('button', { name: '保存草稿', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: '远端修订已变化' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '远端修订已变化' })).toBeVisible();
   await expect(page.getByLabel('看板标题', { exact: true })).toHaveValue(`${title} 本地`);
   await page.getByRole('button', { name: '读取最新草稿', exact: true }).first().click();
   await page.getByRole('button', { name: '以最新修订继续编辑本地内容', exact: true }).click();
