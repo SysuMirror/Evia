@@ -76,7 +76,7 @@ creates a saved analysis with explicit event-version pins, publishes two version
 runs count/UID metrics, and checks immutable history, invalid advanced JSON,
 unsaved-work focus and a committed publication whose response was lost. Its retry
 must reuse the original request key and create no extra version. No extra login
-is needed for this extension. Apply the current PostgreSQL chain through `008`
+is needed for this extension. Apply the current PostgreSQL chain through `012`
 before starting the executable.
 
 The workflow never replaces successful API replies
