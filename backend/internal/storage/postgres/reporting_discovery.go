@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
-	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/jackc/pgx/v5"
 )
@@ -19,6 +19,14 @@ func (s *Store) AuthorizeAnalysisDiscovery(ctx context.Context, actor, project s
 		return e
 	}
 	defer tx.Rollback(context.Background())
+	environment := ""
+	if identity, ok := access.IdentityFromContext(ctx); ok {
+		environment = identity.Environment
+	}
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "queries.read"); e != nil {
+		return e
+	}
+
 	return tx.Commit(ctx)
 }
 func discoveryRevision(ctx context.Context, tx pgx.Tx, project, environment string) (int64, error) {
@@ -38,6 +46,9 @@ func (s *Store) ListAnalysisCatalog(ctx context.Context, actor, project, environ
 		return reporting.CatalogSnapshot{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "queries.read"); e != nil {
+		return reporting.CatalogSnapshot{}, e
+	}
 	// Publications and activations take the project update lock. A shared lock
 	// also protects the empty environment case before its first publication.
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR SHARE`, project); e != nil {
@@ -87,15 +98,10 @@ func (s *Store) ValidateAnalysisQuery(ctx context.Context, actor, project string
 		return reporting.ResolvedValidation{}, e
 	}
 	defer tx.Rollback(context.Background())
-	if queryDetail(request.Kind) {
-		var role string
-		if e = tx.QueryRow(ctx, `SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2`, project, actor).Scan(&role); e != nil {
-			return reporting.ResolvedValidation{}, e
-		}
-		if role != "owner" && role != "editor" {
-			return reporting.ResolvedValidation{}, fault.New(fault.Forbidden, "PROJECT_FORBIDDEN", "当前角色不能查看用户事件明细")
-		}
+	if e = s.authorizeQuery(ctx, tx, actor, project, request.Environment, "queries.read", analysis.RequiresRawAccess(request)); e != nil {
+		return reporting.ResolvedValidation{}, e
 	}
+
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR SHARE`, project); e != nil {
 		return reporting.ResolvedValidation{}, e
 	}

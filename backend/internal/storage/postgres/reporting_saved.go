@@ -120,6 +120,9 @@ func (s *Store) CreateSavedAnalysis(ctx context.Context, actor, project, key str
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, in.Environment, "analyses.write"); e != nil {
+		return out, e
+	}
 	if e = savedKey(key); e != nil {
 		return out, e
 	}
@@ -174,6 +177,9 @@ func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environme
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "analyses.read"); e != nil {
+		return nil, e
+	}
 	rows, e := tx.Query(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND environment=$2 AND ($3='' OR analysis_id>NULLIF($3,'')::uuid) ORDER BY analysis_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
@@ -199,6 +205,9 @@ func (s *Store) GetSavedAnalysis(ctx context.Context, actor, project, id string)
 		return reporting.SavedAnalysis{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.read"); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
 	out, e := scanSavedAnalysis(tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id))
 	if e != nil {
 		return out, e
@@ -211,6 +220,9 @@ func (s *Store) GetSavedAnalysisDraft(ctx context.Context, actor, project, id st
 		return reporting.SavedAnalysisDraft{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.read"); e != nil {
+		return reporting.SavedAnalysisDraft{}, e
+	}
 	out, e := readSavedAnalysisDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
@@ -224,6 +236,9 @@ func (s *Store) SaveSavedAnalysisDraft(ctx context.Context, actor, project, id s
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.write"); e != nil {
+		return out, e
+	}
 	old, e := readSavedAnalysisDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
@@ -334,6 +349,9 @@ func (s *Store) SavedAnalysisValidationSnapshot(ctx context.Context, actor, proj
 		return reporting.SavedAnalysisSnapshot{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.read"); e != nil {
+		return reporting.SavedAnalysisSnapshot{}, e
+	}
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR SHARE`, project); e != nil {
 		return reporting.SavedAnalysisSnapshot{}, e
 	}
@@ -350,6 +368,9 @@ func (s *Store) PublishSavedAnalysis(ctx context.Context, actor, project, id, ke
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.publish"); e != nil {
+		return out, e
+	}
 	if e = savedKey(key); e != nil {
 		return out, e
 	}
@@ -430,6 +451,9 @@ func (s *Store) GetSavedAnalysisVersion(ctx context.Context, actor, project, id 
 		return reporting.SavedAnalysisVersion{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analysis_versions", "analysis_id", "analyses.read"); e != nil {
+		return reporting.SavedAnalysisVersion{}, e
+	}
 	out, e := readSavedAnalysisVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return out, e
@@ -448,6 +472,9 @@ func (s *Store) ListSavedAnalysisVersions(ctx context.Context, actor, project, i
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.read"); e != nil {
+		return nil, e
+	}
 	if _, e = scanSavedAnalysis(tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id)); e != nil {
 		return nil, e
 	}

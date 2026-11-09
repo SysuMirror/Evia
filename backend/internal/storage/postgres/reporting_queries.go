@@ -24,6 +24,9 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 		return analysis.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analysis_versions", "analysis_id", "analyses.run"); e != nil {
+		return analysis.Job{}, e
+	}
 	if e = savedKey(key); e != nil {
 		return analysis.Job{}, e
 	}
@@ -36,6 +39,9 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 	}
 	request, e := snapshot.Definition.Query.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
 	if e != nil {
+		return analysis.Job{}, e
+	}
+	if e = s.authorizeQuery(ctx, tx, actor, project, request.Environment, "queries.run", analysis.RequiresRawAccess(request)); e != nil {
 		return analysis.Job{}, e
 	}
 	// Equal instants in different RFC3339 offsets bind the same request.
@@ -90,7 +96,7 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 	if _, e = tx.Exec(ctx, `DELETE FROM saved_analysis_query_requests WHERE ctid IN (SELECT ctid FROM saved_analysis_query_requests WHERE project_id=$1 AND expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 1000)`, project); e != nil {
 		return analysis.Job{}, e
 	}
-	job, e := enqueueQueryTx(ctx, tx, actor, project, request)
+	job, e := s.enqueueQueryTx(ctx, tx, actor, project, request)
 	if e != nil {
 		return analysis.Job{}, e
 	}

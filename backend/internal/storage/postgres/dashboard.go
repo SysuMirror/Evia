@@ -100,6 +100,9 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, in.Environment, "dashboards.write"); e != nil {
+		return out, e
+	}
 	if e = savedKey(key); e != nil {
 		return out, e
 	}
@@ -154,6 +157,9 @@ func (s *Store) ListDashboards(ctx context.Context, actor, project, environment,
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "dashboards.read"); e != nil {
+		return nil, e
+	}
 	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
@@ -179,6 +185,9 @@ func (s *Store) GetDashboard(ctx context.Context, actor, project, id string) (re
 		return reporting.Dashboard{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.read"); e != nil {
+		return reporting.Dashboard{}, e
+	}
 	out, e := scanDashboard(tx.QueryRow(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id))
 	if e != nil {
 		return out, e
@@ -191,6 +200,9 @@ func (s *Store) GetDashboardDraft(ctx context.Context, actor, project, id string
 		return reporting.DashboardDraft{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.read"); e != nil {
+		return reporting.DashboardDraft{}, e
+	}
 	out, e := readDashboardDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
@@ -204,6 +216,9 @@ func (s *Store) SaveDashboardDraft(ctx context.Context, actor, project, id strin
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.write"); e != nil {
+		return out, e
+	}
 	old, e := readDashboardDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
@@ -281,6 +296,9 @@ func (s *Store) DashboardValidationSnapshot(ctx context.Context, actor, project,
 		return reporting.DashboardSnapshot{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.read"); e != nil {
+		return reporting.DashboardSnapshot{}, e
+	}
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR SHARE`, project); e != nil {
 		return reporting.DashboardSnapshot{}, e
 	}
@@ -297,6 +315,9 @@ func (s *Store) PublishDashboard(ctx context.Context, actor, project, id, key st
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.publish"); e != nil {
+		return out, e
+	}
 	if e = savedKey(key); e != nil {
 		return out, e
 	}
@@ -371,6 +392,9 @@ func (s *Store) GetDashboardVersion(ctx context.Context, actor, project, id stri
 		return reporting.DashboardVersion{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboard_versions", "dashboard_id", "dashboards.read"); e != nil {
+		return reporting.DashboardVersion{}, e
+	}
 	out, e := readDashboardVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return out, e
@@ -389,6 +413,9 @@ func (s *Store) ListDashboardVersions(ctx context.Context, actor, project, id st
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.read"); e != nil {
+		return nil, e
+	}
 	if _, e = scanDashboard(tx.QueryRow(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id)); e != nil {
 		return nil, e
 	}

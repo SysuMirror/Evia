@@ -115,6 +115,8 @@ type Result struct {
 }
 type Claim struct {
 	JobID, ActorID, ProjectID, Worker string
+	CredentialID                      string
+	RequiresRaw                       bool
 	Generation                        int64
 	Request                           Request
 }

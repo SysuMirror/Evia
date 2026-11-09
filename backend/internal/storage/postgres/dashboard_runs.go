@@ -30,6 +30,9 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboard_versions", "dashboard_id", "dashboards.run"); e != nil {
+		return out, e
+	}
 	if e = savedKey(key); e != nil {
 		return out, e
 	}
@@ -41,6 +44,10 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		return out, e
 	}
 	in, e = reporting.NormalizeDashboardExecution(in, snapshot.Definition)
+	if e != nil {
+		return out, e
+	}
+	requests, e := s.dashboardRequestsTx(ctx, tx, actor, project, snapshot, in, "queries.run")
 	if e != nil {
 		return out, e
 	}
@@ -61,7 +68,7 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		return out, e
 	}
 	if replay {
-		out, e = readDashboardRunTx(ctx, tx, project, prior.RunID)
+		out, e = s.readDashboardRunTx(ctx, tx, actor, project, prior.RunID, "queries.run")
 		if e != nil {
 			return out, e
 		}
@@ -79,25 +86,10 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		}
 		return out, nil
 	}
-	filters := map[string]*analysis.Filter{}
-	for _, filter := range in.WidgetFilters {
-		filters[filter.WidgetID] = filter.Filter
-	}
-	jobs := make([]analysis.Job, 0, len(snapshot.Definition.Widgets))
+	jobs := make([]analysis.Job, 0, len(requests))
 	var expires time.Time
-	for _, widget := range snapshot.Definition.Widgets {
-		v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)
-		if e != nil {
-			return out, e
-		}
-		if v.Environment != snapshot.Environment {
-			return out, analysis.Invalid("DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH", "看板组件分析版本不属于当前环境")
-		}
-		request, e := reporting.BindDashboardWidget(v, filters[widget.ID], in)
-		if e != nil {
-			return out, e
-		}
-		job, e := enqueueQueryTx(ctx, tx, actor, project, request)
+	for _, request := range requests {
+		job, e := s.enqueueQueryTx(ctx, tx, actor, project, request)
 		if e != nil {
 			return out, e
 		}
@@ -135,7 +127,7 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 	if e = dashboardIdempotencyWrite(ctx, tx, actor, project, snapshot.Environment, operation, key, hash, prior); e != nil {
 		return out, e
 	}
-	out, e = readDashboardRunTx(ctx, tx, project, runID)
+	out, e = s.readDashboardRunTx(ctx, tx, actor, project, runID, "queries.run")
 	if e != nil {
 		return out, e
 	}
@@ -151,7 +143,7 @@ type dashboardRunReference struct {
 
 // Query jobs own results and expiry. References preserve widget identity after
 // normal query cleanup, without retaining or copying any result data.
-func readDashboardRunTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.DashboardRun, error) {
+func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, project, id, permission string) (reporting.DashboardRun, error) {
 	var out reporting.DashboardRun
 	var executionData []byte
 	e := tx.QueryRow(ctx, `SELECT run_id::text,dashboard_id::text,project_id::text,environment,version,created_by::text,execution_input,created_at,expires_at FROM dashboard_runs WHERE project_id=$1 AND run_id=$2`, project, id).Scan(&out.ID, &out.DashboardID, &out.ProjectID, &out.Environment, &out.Version, &out.CreatedBy, &executionData, &out.CreatedAt, &out.ExpiresAt)
@@ -166,6 +158,14 @@ func readDashboardRunTx(ctx context.Context, tx pgx.Tx, project, id string) (rep
 		return out, e
 	}
 	out.TimeRange, out.Timezone, out.WidgetFilters = execution.TimeRange, execution.Timezone, execution.WidgetFilters
+	snapshot, e := readDashboardVersionTx(ctx, tx, project, out.DashboardID, out.Version)
+	if e != nil {
+		return out, e
+	}
+	if _, e = s.dashboardRequestsTx(ctx, tx, actor, project, snapshot, execution, permission); e != nil {
+		return out, e
+	}
+
 	rows, e := tx.Query(ctx, `SELECT widget_id::text,analysis_id::text,analysis_version,query_id::text,original_query_id::text,query_created_at FROM dashboard_run_widgets WHERE project_id=$1 AND run_id=$2 ORDER BY position`, project, id)
 	if e != nil {
 		return out, e
@@ -188,6 +188,17 @@ func readDashboardRunTx(ctx context.Context, tx pgx.Tx, project, id string) (rep
 	for _, ref := range refs {
 		ref.widget.Query = analysis.Job{ID: ref.originalID, State: "expired", CreatedAt: ref.created, Error: &analysis.JobError{Code: "QUERY_EXPIRED", Retryable: false}}
 		if ref.queryID != nil {
+			var raw bool
+			var kind string
+			e = tx.QueryRow(ctx, `SELECT requires_raw,kind FROM analysis_query_jobs WHERE id=$1 AND project_id=$2 AND environment=$3`, *ref.queryID, project, out.Environment).Scan(&raw, &kind)
+			if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+				return out, e
+			}
+			if e == nil {
+				if e = s.authorizeQuery(ctx, tx, actor, project, out.Environment, permission, raw || queryDetail(kind)); e != nil {
+					return out, e
+				}
+			}
 			if e = expireQuery(ctx, tx, *ref.queryID); e != nil {
 				return out, e
 			}
@@ -224,7 +235,10 @@ func (s *Store) GetDashboardRun(ctx context.Context, actor, project, id string) 
 		return reporting.DashboardRun{}, e
 	}
 	defer tx.Rollback(context.Background())
-	out, e := readDashboardRunTx(ctx, tx, project, id)
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboard_runs", "run_id", "dashboards.read"); e != nil {
+		return reporting.DashboardRun{}, e
+	}
+	out, e := s.readDashboardRunTx(ctx, tx, actor, project, id, "queries.read")
 	if e != nil {
 		return out, e
 	}
@@ -237,12 +251,15 @@ func (s *Store) CancelDashboardRun(ctx context.Context, actor, project, id strin
 		return out, e
 	}
 	defer tx.Rollback(context.Background())
-	out, e = readDashboardRunTx(ctx, tx, project, id)
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboard_runs", "run_id", "dashboards.run"); e != nil {
+		return out, e
+	}
+	out, e = s.readDashboardRunTx(ctx, tx, actor, project, id, "queries.run")
 	if e != nil {
 		return out, e
 	}
 	var permitted bool
-	if e = tx.QueryRow(ctx, `SELECT (r.created_by=$3 OR m.role IN ('owner','editor')) FROM dashboard_runs r JOIN project_members m ON m.project_id=r.project_id AND m.user_id=$3 WHERE r.project_id=$1 AND r.run_id=$2`, project, id, actor).Scan(&permitted); e != nil {
+	if e = tx.QueryRow(ctx, `SELECT (r.created_by=$3 OR EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=r.project_id AND m.user_id=$3 AND m.role IN ('owner','editor'))) FROM dashboard_runs r WHERE r.project_id=$1 AND r.run_id=$2`, project, id, actor).Scan(&permitted); e != nil {
 		return out, e
 	}
 	if !permitted {
@@ -266,9 +283,37 @@ func (s *Store) CancelDashboardRun(ctx context.Context, actor, project, id strin
 			return out, e
 		}
 	}
-	out, e = readDashboardRunTx(ctx, tx, project, id)
+	out, e = s.readDashboardRunTx(ctx, tx, actor, project, id, "queries.run")
 	if e != nil {
 		return out, e
 	}
 	return out, tx.Commit(ctx)
+}
+
+// Rebind immutable widget snapshots on reads too, so expired/deleted child jobs
+// cannot bypass raw access checks for identity-bearing execution filters.
+func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, project string, snapshot reporting.DashboardVersion, in reporting.DashboardExecute, permission string) ([]analysis.Request, error) {
+	filters := map[string]*analysis.Filter{}
+	for _, filter := range in.WidgetFilters {
+		filters[filter.WidgetID] = filter.Filter
+	}
+	requests := make([]analysis.Request, 0, len(snapshot.Definition.Widgets))
+	for _, widget := range snapshot.Definition.Widgets {
+		v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)
+		if e != nil {
+			return nil, e
+		}
+		if v.Environment != snapshot.Environment {
+			return nil, analysis.Invalid("DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH", "看板组件分析版本不属于当前环境")
+		}
+		request, e := reporting.BindDashboardWidget(v, filters[widget.ID], in)
+		if e != nil {
+			return nil, e
+		}
+		if e = s.authorizeQuery(ctx, tx, actor, project, request.Environment, permission, analysis.RequiresRawAccess(request)); e != nil {
+			return nil, e
+		}
+		requests = append(requests, request)
+	}
+	return requests, nil
 }

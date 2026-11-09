@@ -378,7 +378,13 @@ func TestSavedAnalysisQueryMigrationPreservesExistingJobs(t *testing.T) {
 	if e = s.CreateProject(ctx, actor, access.Project{ID: project, Name: "Upgrade", Timezone: "UTC"}); e != nil {
 		t.Fatal(e)
 	}
-	legacy, e := s.EnqueueQuery(ctx, actor, project, queryRequest(t, "trend"))
+	// Seed the historical row with its original schema. Current enqueue code
+	// requires later authorization columns and must not run before migration.
+	requestJSON, e := json.Marshal(queryRequest(t, "trend"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	legacy, e := scanQuery(pool.QueryRow(ctx, `INSERT INTO analysis_query_jobs(id,project_id,environment,actor_id,kind,request) VALUES($1,$2,'development',$3,'trend',$4) RETURNING `+queryJobColumns, ids.New(), project, actor, requestJSON), project)
 	if e != nil {
 		t.Fatal(e)
 	}

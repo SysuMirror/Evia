@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/jackc/pgx/v5"
@@ -38,7 +39,7 @@ func (s *Store) ClaimQuery(ctx context.Context, worker string, lease time.Durati
 	var claim analysis.Claim
 	var data []byte
 	var kind string
-	e = tx.QueryRow(ctx, `SELECT j.id::text,j.actor_id::text,j.project_id::text,j.request,j.kind FROM analysis_query_jobs j WHERE (j.state='queued' OR (j.state='running' AND j.lease_until<=clock_timestamp() AND j.attempts<3)) AND j.expires_at>clock_timestamp() AND (SELECT count(*) FROM analysis_query_jobs active WHERE active.project_id=j.project_id AND active.state='running' AND active.lease_until>clock_timestamp())<4 ORDER BY j.created_at,j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED`).Scan(&claim.JobID, &claim.ActorID, &claim.ProjectID, &data, &kind)
+	e = tx.QueryRow(ctx, `SELECT j.id::text,j.actor_id::text,j.project_id::text,j.request,j.kind,COALESCE(j.credential_id::text,''),j.requires_raw FROM analysis_query_jobs j WHERE (j.state='queued' OR (j.state='running' AND j.lease_until<=clock_timestamp() AND j.attempts<3)) AND j.expires_at>clock_timestamp() AND (SELECT count(*) FROM analysis_query_jobs active WHERE active.project_id=j.project_id AND active.state='running' AND active.lease_until>clock_timestamp())<4 ORDER BY j.created_at,j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED`).Scan(&claim.JobID, &claim.ActorID, &claim.ProjectID, &data, &kind, &claim.CredentialID, &claim.RequiresRaw)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, tx.Commit(ctx)
 	}
@@ -59,7 +60,7 @@ func (s *Store) ClaimQuery(ctx context.Context, worker string, lease time.Durati
 	if active >= 4 {
 		return nil, nil
 	}
-	authorized, e := queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, kind)
+	authorized, e := s.queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, claim.JobID)
 	if e != nil {
 		return nil, e
 	}
@@ -83,16 +84,33 @@ func (s *Store) ClaimQuery(ctx context.Context, worker string, lease time.Durati
 	}
 	return &claim, nil
 }
-func queryActorAuthorized(ctx context.Context, tx pgx.Tx, actor, project, kind string) (bool, error) {
-	var role string
-	e := tx.QueryRow(ctx, `SELECT m.role FROM project_members m JOIN accounts a ON a.id=m.user_id WHERE m.project_id=$1 AND m.user_id=$2 AND NOT a.disabled FOR SHARE OF m,a`, project, actor).Scan(&role)
+
+// Authorization always reloads the durable credential and scope. A worker's
+// incoming context and mutable claim cannot substitute a rotated credential.
+func (s *Store) queryActorAuthorized(ctx context.Context, tx pgx.Tx, actor, project, id string) (bool, error) {
+	var environment, credential, kind string
+	var raw bool
+	e := tx.QueryRow(ctx, `SELECT environment,COALESCE(credential_id::text,''),requires_raw,kind FROM analysis_query_jobs WHERE id=$1 AND project_id=$2 AND actor_id=$3`, id, project, actor).Scan(&environment, &credential, &raw, &kind)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if e != nil {
 		return false, e
 	}
-	return !queryDetail(kind) || role == "owner" || role == "editor", nil
+	identity := access.Identity{}
+	if credential != "" {
+		identity = access.Identity{PrincipalID: actor, CredentialID: credential, ProjectID: project, Environment: environment}
+	}
+	ctx = access.WithIdentity(ctx, identity)
+	e = s.authorizeQuery(ctx, tx, actor, project, environment, "queries.run", raw || queryDetail(kind))
+	if e == nil {
+		return true, nil
+	}
+	var problem *fault.Error
+	if errors.As(e, &problem) && (problem.Kind == fault.Forbidden || problem.Kind == fault.Unauthenticated || problem.Kind == fault.NotFound) {
+		return false, nil
+	}
+	return false, e
 }
 func (s *Store) QueryLeaseValid(ctx context.Context, claim analysis.Claim) (bool, error) {
 	tx, e := s.Pool.Begin(ctx)
@@ -108,7 +126,7 @@ func (s *Store) QueryLeaseValid(ctx context.Context, claim analysis.Claim) (bool
 	if e != nil {
 		return false, e
 	}
-	authorized, e := queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, kind)
+	authorized, e := s.queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, claim.JobID)
 	if e != nil {
 		return false, e
 	}
@@ -157,7 +175,7 @@ func (s *Store) CompleteQuery(ctx context.Context, claim analysis.Claim, outcome
 	if e != nil {
 		return e
 	}
-	authorized, e := queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, kind)
+	authorized, e := s.queryActorAuthorized(ctx, tx, claim.ActorID, claim.ProjectID, claim.JobID)
 	if e != nil {
 		return e
 	}

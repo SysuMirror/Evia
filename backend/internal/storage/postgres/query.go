@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
@@ -50,12 +51,12 @@ func scanQuery(row queryScanner, project string) (analysis.Job, error) {
 	return job, nil
 }
 func (s *Store) EnqueueQuery(ctx context.Context, actor, project string, request analysis.Request) (analysis.Job, error) {
-	tx, e := s.catalogTx(ctx, actor, project, queryDetail(request.Kind))
+	tx, e := s.catalogTx(ctx, actor, project, false)
 	if e != nil {
 		return analysis.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
-	job, e := enqueueQueryTx(ctx, tx, actor, project, request)
+	job, e := s.enqueueQueryTx(ctx, tx, actor, project, request)
 	if e != nil {
 		return analysis.Job{}, e
 	}
@@ -66,9 +67,12 @@ func (s *Store) EnqueueQuery(ctx context.Context, actor, project string, request
 }
 
 // enqueueQueryTx admits direct and saved queries under the same project lock,
-// queue budget, field resolver and audit boundary. The caller owns authorization
-// and commits the complete transaction, including any execution provenance.
-func enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project string, request analysis.Request) (analysis.Job, error) {
+// queue budget, field resolver and audit boundary. Admission checks the query
+// grants; the caller checks its parent operation and commits all provenance.
+func (s *Store) enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project string, request analysis.Request) (analysis.Job, error) {
+	if e := s.authorizeQuery(ctx, tx, actor, project, request.Environment, "queries.run", analysis.RequiresRawAccess(request)); e != nil {
+		return analysis.Job{}, e
+	}
 	if _, e := tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return analysis.Job{}, e
 	}
@@ -87,7 +91,12 @@ func enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project string, reque
 		return analysis.Job{}, e
 	}
 	id := ids.New()
-	job, e := scanQuery(tx.QueryRow(ctx, `INSERT INTO analysis_query_jobs(id,project_id,environment,actor_id,kind,request) VALUES($1,$2,$3,$4,$5,$6) RETURNING `+queryJobColumns, id, project, request.Environment, actor, request.Kind, data), project)
+	identity, _ := access.IdentityFromContext(ctx)
+	var credentialID any
+	if identity.CredentialID != "" {
+		credentialID = identity.CredentialID
+	}
+	job, e := scanQuery(tx.QueryRow(ctx, `INSERT INTO analysis_query_jobs(id,project_id,environment,actor_id,kind,request,credential_id,requires_raw) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+queryJobColumns, id, project, request.Environment, actor, request.Kind, data, credentialID, analysis.RequiresRawAccess(request)), project)
 	if e != nil {
 		return analysis.Job{}, e
 	}
@@ -160,21 +169,28 @@ func expireQuery(ctx context.Context, tx pgx.Tx, id string) error {
 	_, e := tx.Exec(ctx, `UPDATE analysis_query_jobs SET state='expired',result_json=NULL,finished_at=COALESCE(finished_at,clock_timestamp()),lease_owner=NULL,lease_until=NULL,error_json='{"code":"QUERY_EXPIRED","retryable":false}'::jsonb WHERE id=$1 AND state<>'expired' AND (expires_at<=clock_timestamp() OR (state='queued' AND queued_deadline<=clock_timestamp()) OR (state='succeeded' AND result_expires_at<=clock_timestamp()))`, id)
 	return e
 }
-func (s *Store) queryReadTx(ctx context.Context, actor, project, id string) (pgx.Tx, string, error) {
+
+// Completed jobs follow current project/environment read grants. Original
+// credentials bind execution authority, not permanent ownership of project data.
+func (s *Store) queryReadTx(ctx context.Context, actor, project, id, permission string) (pgx.Tx, string, error) {
 	tx, e := s.catalogTx(ctx, actor, project, false)
 	if e != nil {
 		return nil, "", e
 	}
-	var kind string
-	e = tx.QueryRow(ctx, `SELECT kind FROM analysis_query_jobs WHERE id=$1 AND project_id=$2`, id, project).Scan(&kind)
+	var kind, environment string
+	var raw bool
+	e = tx.QueryRow(ctx, `SELECT kind,environment,requires_raw FROM analysis_query_jobs WHERE id=$1 AND project_id=$2`, id, project).Scan(&kind, &environment, &raw)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = queryMissing()
 	}
-	if e == nil && queryDetail(kind) {
-		var role string
-		e = tx.QueryRow(ctx, `SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2`, project, actor).Scan(&role)
-		if e == nil && role != "owner" && role != "editor" {
-			e = fault.New(fault.Forbidden, "QUERY_DETAIL_FORBIDDEN", "当前角色不能查看用户事件明细")
+	if e == nil {
+		e = s.authorizeQuery(ctx, tx, actor, project, environment, permission, raw || queryDetail(kind))
+		if e != nil && (raw || queryDetail(kind)) {
+			identity, _ := access.IdentityFromContext(ctx)
+			var problem *fault.Error
+			if identity.PrincipalID == "" && errors.As(e, &problem) && problem.Code == "PROJECT_FORBIDDEN" {
+				e = fault.New(fault.Forbidden, "QUERY_DETAIL_FORBIDDEN", "当前角色不能查看用户事件明细")
+			}
 		}
 	}
 	if e == nil {
@@ -187,7 +203,7 @@ func (s *Store) queryReadTx(ctx context.Context, actor, project, id string) (pgx
 	return tx, kind, nil
 }
 func (s *Store) GetQuery(ctx context.Context, actor, project, id string) (analysis.Job, error) {
-	tx, _, e := s.queryReadTx(ctx, actor, project, id)
+	tx, _, e := s.queryReadTx(ctx, actor, project, id, "queries.read")
 	if e != nil {
 		return analysis.Job{}, e
 	}
@@ -199,13 +215,17 @@ func (s *Store) GetQuery(ctx context.Context, actor, project, id string) (analys
 	return job, tx.Commit(ctx)
 }
 func (s *Store) CancelQuery(ctx context.Context, actor, project, id string) (analysis.Job, error) {
-	tx, _, e := s.queryReadTx(ctx, actor, project, id)
+	tx, _, e := s.queryReadTx(ctx, actor, project, id, "queries.run")
 	if e != nil {
 		return analysis.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
 	var permitted bool
-	if e = tx.QueryRow(ctx, `SELECT (j.actor_id=$3 OR m.role IN ('owner','editor')) FROM analysis_query_jobs j JOIN project_members m ON m.project_id=j.project_id AND m.user_id=$3 WHERE j.id=$1 AND j.project_id=$2 FOR UPDATE OF j`, id, project, actor).Scan(&permitted); e != nil {
+	var environment string
+	if e = tx.QueryRow(ctx, `SELECT environment FROM analysis_query_jobs WHERE id=$1 AND project_id=$2 FOR UPDATE`, id, project).Scan(&environment); e != nil {
+		return analysis.Job{}, e
+	}
+	if e = tx.QueryRow(ctx, `SELECT (j.actor_id=$3 OR EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=j.project_id AND m.user_id=$3 AND m.role IN ('owner','editor'))) FROM analysis_query_jobs j WHERE j.id=$1 AND j.project_id=$2`, id, project, actor).Scan(&permitted); e != nil {
 		return analysis.Job{}, e
 	}
 	if !permitted {
@@ -227,7 +247,7 @@ func (s *Store) CancelQuery(ctx context.Context, actor, project, id string) (ana
 	return job, tx.Commit(ctx)
 }
 func (s *Store) QueryResult(ctx context.Context, actor, project, id string) (analysis.Result, error) {
-	tx, _, e := s.queryReadTx(ctx, actor, project, id)
+	tx, _, e := s.queryReadTx(ctx, actor, project, id, "queries.read")
 	if e != nil {
 		return analysis.Result{}, e
 	}
@@ -260,4 +280,40 @@ func (s *Store) QueryResult(ctx context.Context, actor, project, id string) (ana
 		return result, e
 	}
 	return result, tx.Commit(ctx)
+}
+
+// Operation authorization precedes resource data, mutation and idempotent replay.
+func (s *Store) authorizeQuery(ctx context.Context, tx pgx.Tx, actor, project, environment, permission string, raw bool) error {
+	if e := s.authorizeOperation(ctx, tx, actor, project, environment, permission); e != nil {
+		return e
+	}
+	if raw {
+		return s.authorizeOperation(ctx, tx, actor, project, environment, "queries.raw.read")
+	}
+	return nil
+}
+
+// Resource identifiers supply scope only after the project baseline is checked.
+// Table and identifier names are private constants selected by callers.
+func (s *Store) authorizeReportingResource(ctx context.Context, tx pgx.Tx, actor, project, id, table, column, permission string) error {
+	var environment string
+	e := tx.QueryRow(ctx, "SELECT environment FROM "+table+" WHERE project_id=$1 AND "+column+"=$2", project, id).Scan(&environment)
+	if errors.Is(e, pgx.ErrNoRows) {
+		switch table {
+		case "dashboards":
+			return dashboardMissing()
+		case "dashboard_runs":
+			return dashboardRunMissing()
+		case "saved_analysis_versions":
+			return savedVersionMissing()
+		case "dashboard_versions":
+			return dashboardVersionMissing()
+		default:
+			return savedMissing()
+		}
+	}
+	if e != nil {
+		return e
+	}
+	return s.authorizeOperation(ctx, tx, actor, project, environment, permission)
 }
