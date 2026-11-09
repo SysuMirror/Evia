@@ -94,7 +94,9 @@ func (p *planner) field(f Field) (fieldSQL, error) {
 	case "boolean":
 		extract = "if(" + jsonType + "='Bool',JSONExtractBool(properties_json," + key + "),NULL)"
 	case "number", "integer":
-		extract = "if(" + jsonType + " IN ('Int64','UInt64','Float64'),JSONExtractFloat(properties_json," + key + "),NULL)"
+		// JSONType names JSON floating-point values Double (not the SQL type
+		// Float64). Keep the numeric guard strict so other JSON kinds are omitted.
+		extract = "if(" + jsonType + " IN ('Int64','UInt64','Double'),JSONExtractFloat(properties_json," + key + "),NULL)"
 	case "array:string", "array:boolean", "array:number", "array:integer":
 		item := "String"
 		if f.ResolvedType == "array:boolean" {
