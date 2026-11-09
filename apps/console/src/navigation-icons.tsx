@@ -1,9 +1,21 @@
 import type { ReactNode } from 'react';
 
 export type WorkspaceSection =
-  'events' | 'releases' | 'sources' | 'analysis' | 'saved-analyses' | 'dashboards';
+  | 'events'
+  | 'releases'
+  | 'sources'
+  | 'analysis'
+  | 'saved-analyses'
+  | 'dashboards'
+  | 'machine-access';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  'machine-access': (
+    <>
+      <rect x="4" y="4" width="16" height="12" rx="3" />
+      <path d="M9 20h6m-3-4v4M8 9h.01M12 9h4M8 12h8" />
+    </>
+  ),
   dashboards: (
     <>
       <rect x="3" y="3" width="11" height="8" rx="2" />

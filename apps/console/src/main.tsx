@@ -62,6 +62,9 @@ const DashboardsPage = lazy(() =>
 const SavedAnalysesPage = lazy(() =>
   import('./saved-analyses').then((module) => ({ default: module.SavedAnalysesPage })),
 );
+const MachineAccessPage = lazy(() =>
+  import('./machine-access').then((module) => ({ default: module.MachineAccessPage })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
@@ -196,6 +199,9 @@ function Workspace({ session }: { session: Session }) {
     { path: 'analysis', label: '数据分析', component: AnalysisPage },
     { path: 'saved-analyses', label: '保存的分析', component: SavedAnalysesPage },
     { path: 'dashboards', label: '自定义看板', component: DashboardsPage },
+    ...(project.data?.permissions.includes('machine_principals.manage')
+      ? [{ path: 'machine-access' as const, label: '机器访问', component: MachineAccessPage }]
+      : []),
   ];
   const navigationItems = projectID
     ? sections.map((section) => ({
