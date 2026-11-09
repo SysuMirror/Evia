@@ -1,0 +1,5919 @@
+{
+  "report_version": 1,
+  "execution_date_utc": "2026-11-09",
+  "tooling_subset_commit": "a446685",
+  "source_commits": {
+    "initial_reported_base_only": "39cb5587e2b9f9a273a3a201f3ffc2c8a5e83bbf",
+    "compact": "3be4cec3bf59e23f705d9ac08fc8dab98b6a1542",
+    "identity": "04f4d3dfc6344ee38843706e20acfd681e240923",
+    "concurrent_baseline_and_fresh_ingestion": "6375656c5a8a9684f703ee66c524444e7896a52e",
+    "final_scope": "9dfa020b96be7fee52fec7704f781fbb501270d4"
+  },
+  "binary_build_metadata": {
+    "initial_reused": {
+      "vcs_revision": "39cb5587e2b9f9a273a3a201f3ffc2c8a5e83bbf",
+      "vcs_modified": true,
+      "note": "Reused previous final binary identified by SHA256; not a clean build of the turn starting revision."
+    },
+    "compact": {
+      "vcs_modified": false
+    },
+    "identity": {
+      "vcs_modified": false
+    },
+    "concurrent_baseline_and_fresh_ingestion": {
+      "vcs_modified": false
+    },
+    "final_scope": {
+      "vcs_modified": false
+    }
+  },
+  "binary_sha256": {
+    "initial": "2bb64bf0cd82bc60c624a56d456277c56f9b75e469f5a0f39c04cb636f9dba24",
+    "compact": "5f9d0ffba1ceb35f30177e80e6b88020683b9a1fd95cb0b2891217251a36e9cf",
+    "identity": "00135f3333a8e2c6d075e0d99a5a677791e66c8150477f94975b7eae950b8c50",
+    "concurrent_baseline_and_fresh_ingestion": "f27b044207a4c05ebbf29b5efee3dd5df8845a6a4c364efece5abedc1c8603c4",
+    "final_scope": "9715b5a80b779ab236f78517385d816da55a1d3f8976f5dc7cc7fbccdbf69345"
+  },
+  "environment": {
+    "available_cpu": 5,
+    "host_memory_approx_gib": 17.6,
+    "gomaxprocs": 2,
+    "query_workers": 2,
+    "clickhouse_version": "26.8.36.3",
+    "clickhouse_server_memory_bytes": 3221225472,
+    "clickhouse_disk_reserve_bytes": 2147483648,
+    "independent_container_cpu_memory_limits": false,
+    "query_budgets": {
+      "rows": 2000000,
+      "read_bytes": 268435456,
+      "memory_bytes": 536870912,
+      "execution_seconds": 30,
+      "threads": 2
+    }
+  },
+  "reports": {
+    "million-before": {
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "failure": "QUERY_COST_EXCEEDED",
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 147,
+        "202": 2
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [],
+      "query_jobs": 2,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "stage": "query",
+      "success": false,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 5275.983,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_started_at": "2026-11-09T03:24:15.799Z",
+        "exact_count_verified": false,
+        "exact_uid_verified": false
+      }
+    },
+    "million-compact-smoke": {
+      "cancellation": {
+        "latency_ms": 14.892070001224056,
+        "state": "canceled",
+        "submit_ms": 5.225697997957468
+      },
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 1281,
+        "202": 20
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4349.92,
+            "mean_ms": 4349.92,
+            "min_ms": 4349.92,
+            "n": 1,
+            "p50_ms": 4349.92,
+            "p95_ms": 4349.92,
+            "p99_ms": 4349.92,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.949,
+            "mean_ms": 3.949,
+            "min_ms": 3.949,
+            "n": 1,
+            "p50_ms": 3.949,
+            "p95_ms": 3.949,
+            "p99_ms": 3.949,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4205.306,
+            "mean_ms": 4205.306,
+            "min_ms": 4205.306,
+            "n": 1,
+            "p50_ms": 4205.306,
+            "p95_ms": 4205.306,
+            "p99_ms": 4205.306,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.222,
+            "mean_ms": 3.222,
+            "min_ms": 3.222,
+            "n": 1,
+            "p50_ms": 3.222,
+            "p95_ms": 3.222,
+            "p99_ms": 3.222,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 6453.232,
+            "mean_ms": 6453.232,
+            "min_ms": 6453.232,
+            "n": 1,
+            "p50_ms": 6453.232,
+            "p95_ms": 6453.232,
+            "p99_ms": 6453.232,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.943,
+            "mean_ms": 4.943,
+            "min_ms": 4.943,
+            "n": 1,
+            "p50_ms": 4.943,
+            "p95_ms": 4.943,
+            "p99_ms": 4.943,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 6219.586,
+            "mean_ms": 6219.586,
+            "min_ms": 6219.586,
+            "n": 1,
+            "p50_ms": 6219.586,
+            "p95_ms": 6219.586,
+            "p99_ms": 6219.586,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 6.845,
+            "mean_ms": 6.845,
+            "min_ms": 6.845,
+            "n": 1,
+            "p50_ms": 6.845,
+            "p95_ms": 6.845,
+            "p99_ms": 6.845,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4995.379,
+            "mean_ms": 4995.379,
+            "min_ms": 4995.379,
+            "n": 1,
+            "p50_ms": 4995.379,
+            "p95_ms": 4995.379,
+            "p99_ms": 4995.379,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 28.82,
+            "mean_ms": 28.82,
+            "min_ms": 28.82,
+            "n": 1,
+            "p50_ms": 28.82,
+            "p95_ms": 28.82,
+            "p99_ms": 28.82,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5478.457,
+            "mean_ms": 5478.457,
+            "min_ms": 5478.457,
+            "n": 1,
+            "p50_ms": 5478.457,
+            "p95_ms": 5478.457,
+            "p99_ms": 5478.457,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 6.004,
+            "mean_ms": 6.004,
+            "min_ms": 6.004,
+            "n": 1,
+            "p50_ms": 6.004,
+            "p95_ms": 6.004,
+            "p99_ms": 6.004,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4931.178,
+            "mean_ms": 4931.178,
+            "min_ms": 4931.178,
+            "n": 1,
+            "p50_ms": 4931.178,
+            "p95_ms": 4931.178,
+            "p99_ms": 4931.178,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.503,
+            "mean_ms": 4.503,
+            "min_ms": 4.503,
+            "n": 1,
+            "p50_ms": 4.503,
+            "p95_ms": 4.503,
+            "p99_ms": 4.503,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4803.491,
+            "mean_ms": 4803.491,
+            "min_ms": 4803.491,
+            "n": 1,
+            "p50_ms": 4803.491,
+            "p95_ms": 4803.491,
+            "p99_ms": 4803.491,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 6.686,
+            "mean_ms": 6.686,
+            "min_ms": 6.686,
+            "n": 1,
+            "p50_ms": 6.686,
+            "p95_ms": 6.686,
+            "p99_ms": 6.686,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "ordered_funnel"
+        }
+      ],
+      "query_jobs": 19,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "stage": "query",
+      "success": false,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 4590.719,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_ms": 9923.685,
+        "drain_started_at": "2026-11-09T03:27:39.895Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 35216157.312,
+        "ingestion_start_to_verified_ms": 35339216.137,
+        "verified_at": "2026-11-09T03:27:49.819Z"
+      }
+    },
+    "million-identity-smoke": {
+      "cancellation": {
+        "latency_ms": 7.651235995581374,
+        "state": "canceled",
+        "submit_ms": 3.0327200001920573
+      },
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 954,
+        "202": 20
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4651.815,
+            "mean_ms": 4651.815,
+            "min_ms": 4651.815,
+            "n": 1,
+            "p50_ms": 4651.815,
+            "p95_ms": 4651.815,
+            "p99_ms": 4651.815,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 5.013,
+            "mean_ms": 5.013,
+            "min_ms": 5.013,
+            "n": 1,
+            "p50_ms": 5.013,
+            "p95_ms": 5.013,
+            "p99_ms": 5.013,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4189.168,
+            "mean_ms": 4189.168,
+            "min_ms": 4189.168,
+            "n": 1,
+            "p50_ms": 4189.168,
+            "p95_ms": 4189.168,
+            "p99_ms": 4189.168,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.16,
+            "mean_ms": 4.16,
+            "min_ms": 4.16,
+            "n": 1,
+            "p50_ms": 4.16,
+            "p95_ms": 4.16,
+            "p99_ms": 4.16,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5666.029,
+            "mean_ms": 5666.029,
+            "min_ms": 5666.029,
+            "n": 1,
+            "p50_ms": 5666.029,
+            "p95_ms": 5666.029,
+            "p99_ms": 5666.029,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.527,
+            "mean_ms": 4.527,
+            "min_ms": 4.527,
+            "n": 1,
+            "p50_ms": 4.527,
+            "p95_ms": 4.527,
+            "p99_ms": 4.527,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5601.703,
+            "mean_ms": 5601.703,
+            "min_ms": 5601.703,
+            "n": 1,
+            "p50_ms": 5601.703,
+            "p95_ms": 5601.703,
+            "p99_ms": 5601.703,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.049,
+            "mean_ms": 4.049,
+            "min_ms": 4.049,
+            "n": 1,
+            "p50_ms": 4.049,
+            "p95_ms": 4.049,
+            "p99_ms": 4.049,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4494.58,
+            "mean_ms": 4494.58,
+            "min_ms": 4494.58,
+            "n": 1,
+            "p50_ms": 4494.58,
+            "p95_ms": 4494.58,
+            "p99_ms": 4494.58,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.603,
+            "mean_ms": 3.603,
+            "min_ms": 3.603,
+            "n": 1,
+            "p50_ms": 3.603,
+            "p95_ms": 3.603,
+            "p99_ms": 3.603,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 3936.352,
+            "mean_ms": 3936.352,
+            "min_ms": 3936.352,
+            "n": 1,
+            "p50_ms": 3936.352,
+            "p95_ms": 3936.352,
+            "p99_ms": 3936.352,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.943,
+            "mean_ms": 4.943,
+            "min_ms": 4.943,
+            "n": 1,
+            "p50_ms": 4.943,
+            "p95_ms": 4.943,
+            "p99_ms": 4.943,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 298.204,
+            "mean_ms": 298.204,
+            "min_ms": 298.204,
+            "n": 1,
+            "p50_ms": 298.204,
+            "p95_ms": 298.204,
+            "p99_ms": 298.204,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 6.41,
+            "mean_ms": 6.41,
+            "min_ms": 6.41,
+            "n": 1,
+            "p50_ms": 6.41,
+            "p95_ms": 6.41,
+            "p99_ms": 6.41,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 329.791,
+            "mean_ms": 329.791,
+            "min_ms": 329.791,
+            "n": 1,
+            "p50_ms": 329.791,
+            "p95_ms": 329.791,
+            "p99_ms": 329.791,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.863,
+            "mean_ms": 3.863,
+            "min_ms": 3.863,
+            "n": 1,
+            "p50_ms": 3.863,
+            "p95_ms": 3.863,
+            "p99_ms": 3.863,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 239.798,
+            "mean_ms": 239.798,
+            "min_ms": 239.798,
+            "n": 1,
+            "p50_ms": 239.798,
+            "p95_ms": 239.798,
+            "p99_ms": 239.798,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 4.444,
+            "mean_ms": 4.444,
+            "min_ms": 4.444,
+            "n": 1,
+            "p50_ms": 4.444,
+            "p95_ms": 4.444,
+            "p99_ms": 4.444,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 386.978,
+            "mean_ms": 386.978,
+            "min_ms": 386.978,
+            "n": 1,
+            "p50_ms": 386.978,
+            "p95_ms": 386.978,
+            "p99_ms": 386.978,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 4.923,
+            "mean_ms": 4.923,
+            "min_ms": 4.923,
+            "n": 1,
+            "p50_ms": 4.923,
+            "p95_ms": 4.923,
+            "p99_ms": 4.923,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 281.433,
+            "mean_ms": 281.433,
+            "min_ms": 281.433,
+            "n": 1,
+            "p50_ms": 281.433,
+            "p95_ms": 281.433,
+            "p99_ms": 281.433,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 4.348,
+            "mean_ms": 4.348,
+            "min_ms": 4.348,
+            "n": 1,
+            "p50_ms": 4.348,
+            "p95_ms": 4.348,
+            "p99_ms": 4.348,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 384.287,
+            "mean_ms": 384.287,
+            "min_ms": 384.287,
+            "n": 1,
+            "p50_ms": 384.287,
+            "p95_ms": 384.287,
+            "p99_ms": 384.287,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 4.98,
+            "mean_ms": 4.98,
+            "min_ms": 4.98,
+            "n": 1,
+            "p50_ms": 4.98,
+            "p95_ms": 4.98,
+            "p99_ms": 4.98,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        }
+      ],
+      "query_jobs": 19,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "stage": "query",
+      "success": false,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 4939.536,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_ms": 11240.907,
+        "drain_started_at": "2026-11-09T03:34:56.892Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 35654471.312,
+        "ingestion_start_to_verified_ms": 35777530.137,
+        "verified_at": "2026-11-09T03:35:08.133Z"
+      }
+    },
+    "million-concurrent-baseline": {
+      "cancellation": {
+        "latency_ms": 8.29150500067044,
+        "state": "canceled",
+        "submit_ms": 3.8924210020923056
+      },
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "finished_at": "2026-11-09T04:16:36.809Z",
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 74857,
+        "202": 732
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4390.997,
+            "mean_ms": 4390.997,
+            "min_ms": 4390.997,
+            "n": 1,
+            "p50_ms": 4390.997,
+            "p95_ms": 4390.997,
+            "p99_ms": 4390.997,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 5.158,
+            "mean_ms": 5.158,
+            "min_ms": 5.158,
+            "n": 1,
+            "p50_ms": 5.158,
+            "p95_ms": 5.158,
+            "p99_ms": 5.158,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4873.057,
+            "mean_ms": 4270.075,
+            "min_ms": 3803.295,
+            "n": 30,
+            "p50_ms": 4227.681,
+            "p95_ms": 4815.192,
+            "p99_ms": 4873.057,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 28.04,
+            "mean_ms": 5.857,
+            "min_ms": 2.753,
+            "n": 30,
+            "p50_ms": 3.922,
+            "p95_ms": 11.711,
+            "p99_ms": 28.04,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "count"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 13628.302,
+            "mean_ms": 10501.444,
+            "min_ms": 5935.005,
+            "n": 27,
+            "p50_ms": 10714.107,
+            "p95_ms": 12610.643,
+            "p99_ms": 13628.302,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 35.724,
+            "mean_ms": 11.751,
+            "min_ms": 3.731,
+            "n": 27,
+            "p50_ms": 10.365,
+            "p95_ms": 30.05,
+            "p99_ms": 35.724,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 27,
+          "workload": "count"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 24011.326,
+            "mean_ms": 18128.502,
+            "min_ms": 9626.698,
+            "n": 22,
+            "p50_ms": 17463.124,
+            "p95_ms": 23540.267,
+            "p99_ms": 24011.326,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 25.118,
+            "mean_ms": 10.744,
+            "min_ms": 2.694,
+            "n": 22,
+            "p50_ms": 8.266,
+            "p95_ms": 21.438,
+            "p99_ms": 25.118,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 22,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4936.31,
+            "mean_ms": 4936.31,
+            "min_ms": 4936.31,
+            "n": 1,
+            "p50_ms": 4936.31,
+            "p95_ms": 4936.31,
+            "p99_ms": 4936.31,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.983,
+            "mean_ms": 3.983,
+            "min_ms": 3.983,
+            "n": 1,
+            "p50_ms": 3.983,
+            "p95_ms": 3.983,
+            "p99_ms": 3.983,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 6668.107,
+            "mean_ms": 5662.066,
+            "min_ms": 5099.406,
+            "n": 30,
+            "p50_ms": 5590.834,
+            "p95_ms": 6378.658,
+            "p99_ms": 6668.107,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 11.011,
+            "mean_ms": 4.336,
+            "min_ms": 2.569,
+            "n": 30,
+            "p50_ms": 3.421,
+            "p95_ms": 9.059,
+            "p99_ms": 11.011,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 14639.03,
+            "mean_ms": 11932.729,
+            "min_ms": 6747.861,
+            "n": 23,
+            "p50_ms": 12999.877,
+            "p95_ms": 14627.939,
+            "p99_ms": 14639.03,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 34.693,
+            "mean_ms": 12.543,
+            "min_ms": 3.591,
+            "n": 23,
+            "p50_ms": 9.932,
+            "p95_ms": 26.021,
+            "p99_ms": 34.693,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 23,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 28675.821,
+            "mean_ms": 23897.835,
+            "min_ms": 7039.738,
+            "n": 25,
+            "p50_ms": 25741.131,
+            "p95_ms": 28290.754,
+            "p99_ms": 28675.821,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 38.297,
+            "mean_ms": 12.625,
+            "min_ms": 3.594,
+            "n": 25,
+            "p50_ms": 9.256,
+            "p95_ms": 26.46,
+            "p99_ms": 38.297,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 25,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4743.924,
+            "mean_ms": 4743.924,
+            "min_ms": 4743.924,
+            "n": 1,
+            "p50_ms": 4743.924,
+            "p95_ms": 4743.924,
+            "p99_ms": 4743.924,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 7.42,
+            "mean_ms": 7.42,
+            "min_ms": 7.42,
+            "n": 1,
+            "p50_ms": 7.42,
+            "p95_ms": 7.42,
+            "p99_ms": 7.42,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5082.927,
+            "mean_ms": 4305.303,
+            "min_ms": 3812.095,
+            "n": 30,
+            "p50_ms": 4189.632,
+            "p95_ms": 4962.612,
+            "p99_ms": 5082.927,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 16.807,
+            "mean_ms": 4.661,
+            "min_ms": 2.398,
+            "n": 30,
+            "p50_ms": 3.527,
+            "p95_ms": 11.168,
+            "p99_ms": 16.807,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 10547.178,
+            "mean_ms": 9374.926,
+            "min_ms": 5429.696,
+            "n": 26,
+            "p50_ms": 9682.326,
+            "p95_ms": 10445.08,
+            "p99_ms": 10547.178,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 23.064,
+            "mean_ms": 7.472,
+            "min_ms": 2.882,
+            "n": 26,
+            "p50_ms": 5.852,
+            "p95_ms": 14.046,
+            "p99_ms": 23.064,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 26,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 21656.887,
+            "mean_ms": 16591.787,
+            "min_ms": 6179.754,
+            "n": 23,
+            "p50_ms": 17522.084,
+            "p95_ms": 21528.417,
+            "p99_ms": 21656.887,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 29.078,
+            "mean_ms": 11.853,
+            "min_ms": 3.69,
+            "n": 23,
+            "p50_ms": 9.81,
+            "p95_ms": 23.489,
+            "p99_ms": 29.078,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 23,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 168.382,
+            "mean_ms": 168.382,
+            "min_ms": 168.382,
+            "n": 1,
+            "p50_ms": 168.382,
+            "p95_ms": 168.382,
+            "p99_ms": 168.382,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.394,
+            "mean_ms": 3.394,
+            "min_ms": 3.394,
+            "n": 1,
+            "p50_ms": 3.394,
+            "p95_ms": 3.394,
+            "p99_ms": 3.394,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 367.619,
+            "mean_ms": 241.201,
+            "min_ms": 114.035,
+            "n": 30,
+            "p50_ms": 223.038,
+            "p95_ms": 345.612,
+            "p99_ms": 367.619,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 8.77,
+            "mean_ms": 4.394,
+            "min_ms": 2.419,
+            "n": 30,
+            "p50_ms": 3.542,
+            "p95_ms": 7.751,
+            "p99_ms": 8.77,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 456.01,
+            "mean_ms": 230.776,
+            "min_ms": 174.015,
+            "n": 30,
+            "p50_ms": 231.598,
+            "p95_ms": 408.574,
+            "p99_ms": 456.01,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 16.205,
+            "mean_ms": 7.632,
+            "min_ms": 3.35,
+            "n": 30,
+            "p50_ms": 6.207,
+            "p95_ms": 15.838,
+            "p99_ms": 16.205,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 901.339,
+            "mean_ms": 640.363,
+            "min_ms": 345.154,
+            "n": 30,
+            "p50_ms": 638.119,
+            "p95_ms": 845.918,
+            "p99_ms": 901.339,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 35.02,
+            "mean_ms": 14.171,
+            "min_ms": 4.845,
+            "n": 30,
+            "p50_ms": 12.533,
+            "p95_ms": 27.154,
+            "p99_ms": 35.02,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 336.185,
+            "mean_ms": 336.185,
+            "min_ms": 336.185,
+            "n": 1,
+            "p50_ms": 336.185,
+            "p95_ms": 336.185,
+            "p99_ms": 336.185,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 5.305,
+            "mean_ms": 5.305,
+            "min_ms": 5.305,
+            "n": 1,
+            "p50_ms": 5.305,
+            "p95_ms": 5.305,
+            "p99_ms": 5.305,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 481.316,
+            "mean_ms": 355.815,
+            "min_ms": 225.531,
+            "n": 30,
+            "p50_ms": 348.039,
+            "p95_ms": 468.783,
+            "p99_ms": 481.316,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 12.206,
+            "mean_ms": 5.629,
+            "min_ms": 2.776,
+            "n": 30,
+            "p50_ms": 4.488,
+            "p95_ms": 12.086,
+            "p99_ms": 12.206,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 667.153,
+            "mean_ms": 386.316,
+            "min_ms": 292.472,
+            "n": 30,
+            "p50_ms": 357.221,
+            "p95_ms": 546.417,
+            "p99_ms": 667.153,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 13.413,
+            "mean_ms": 7.139,
+            "min_ms": 4.072,
+            "n": 30,
+            "p50_ms": 6.391,
+            "p95_ms": 12.722,
+            "p99_ms": 13.413,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 1412.688,
+            "mean_ms": 922.525,
+            "min_ms": 417.966,
+            "n": 30,
+            "p50_ms": 904.224,
+            "p95_ms": 1183.764,
+            "p99_ms": 1412.688,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 22.936,
+            "mean_ms": 10.505,
+            "min_ms": 3.763,
+            "n": 30,
+            "p50_ms": 9.674,
+            "p95_ms": 20.266,
+            "p99_ms": 22.936,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 304.386,
+            "mean_ms": 304.386,
+            "min_ms": 304.386,
+            "n": 1,
+            "p50_ms": 304.386,
+            "p95_ms": 304.386,
+            "p99_ms": 304.386,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 16.121,
+            "mean_ms": 16.121,
+            "min_ms": 16.121,
+            "n": 1,
+            "p50_ms": 16.121,
+            "p95_ms": 16.121,
+            "p99_ms": 16.121,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 515.654,
+            "mean_ms": 338.443,
+            "min_ms": 223.311,
+            "n": 30,
+            "p50_ms": 335.018,
+            "p95_ms": 454.343,
+            "p99_ms": 515.654,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 16.38,
+            "mean_ms": 4.175,
+            "min_ms": 2.603,
+            "n": 30,
+            "p50_ms": 3.281,
+            "p95_ms": 8.467,
+            "p99_ms": 16.38,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 753.104,
+            "mean_ms": 472.643,
+            "min_ms": 337.68,
+            "n": 30,
+            "p50_ms": 451.872,
+            "p95_ms": 684.76,
+            "p99_ms": 753.104,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 25.297,
+            "mean_ms": 9.689,
+            "min_ms": 2.781,
+            "n": 30,
+            "p50_ms": 8.07,
+            "p95_ms": 19.62,
+            "p99_ms": 25.297,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 1067.998,
+            "mean_ms": 739.942,
+            "min_ms": 428.417,
+            "n": 30,
+            "p50_ms": 751.66,
+            "p95_ms": 1010.772,
+            "p99_ms": 1067.998,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 32.967,
+            "mean_ms": 10.745,
+            "min_ms": 3.344,
+            "n": 30,
+            "p50_ms": 7.141,
+            "p95_ms": 28.554,
+            "p99_ms": 32.967,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        }
+      ],
+      "query_jobs": 731,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "stage": "query",
+      "started_at": "2026-11-09T03:53:27.504Z",
+      "success": false,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 4505.766,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_ms": 10369.56,
+        "drain_started_at": "2026-11-09T03:53:27.504Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 36764211.312,
+        "ingestion_start_to_verified_ms": 36887270.137,
+        "verified_at": "2026-11-09T03:53:37.873Z"
+      }
+    },
+    "million-final-queries": {
+      "cancellation": {
+        "latency_ms": 8.989390000351705,
+        "state": "canceled",
+        "submit_ms": 3.5552089975681156
+      },
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "finished_at": "2026-11-09T04:45:12.827Z",
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 69730,
+        "202": 732
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4829.262,
+            "mean_ms": 4829.262,
+            "min_ms": 4829.262,
+            "n": 1,
+            "p50_ms": 4829.262,
+            "p95_ms": 4829.262,
+            "p99_ms": 4829.262,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 9.624,
+            "mean_ms": 9.624,
+            "min_ms": 9.624,
+            "n": 1,
+            "p50_ms": 9.624,
+            "p95_ms": 9.624,
+            "p99_ms": 9.624,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5998.755,
+            "mean_ms": 4348.785,
+            "min_ms": 3384.7,
+            "n": 30,
+            "p50_ms": 4095.372,
+            "p95_ms": 5933.61,
+            "p99_ms": 5998.755,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 16.859,
+            "mean_ms": 6.29,
+            "min_ms": 2.701,
+            "n": 30,
+            "p50_ms": 5.065,
+            "p95_ms": 12.657,
+            "p99_ms": 16.859,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "count"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 10387.764,
+            "mean_ms": 8609.227,
+            "min_ms": 4591.119,
+            "n": 27,
+            "p50_ms": 9128.113,
+            "p95_ms": 10178.385,
+            "p99_ms": 10387.764,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 19.714,
+            "mean_ms": 8.33,
+            "min_ms": 2.862,
+            "n": 27,
+            "p50_ms": 7.471,
+            "p95_ms": 15.749,
+            "p99_ms": 19.714,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 27,
+          "workload": "count"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 20699.588,
+            "mean_ms": 16267.585,
+            "min_ms": 4884.939,
+            "n": 25,
+            "p50_ms": 16980.026,
+            "p95_ms": 20186.374,
+            "p99_ms": 20699.588,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 35.382,
+            "mean_ms": 13.443,
+            "min_ms": 3.717,
+            "n": 25,
+            "p50_ms": 11.539,
+            "p95_ms": 32.383,
+            "p99_ms": 35.382,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 25,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5838.393,
+            "mean_ms": 5838.393,
+            "min_ms": 5838.393,
+            "n": 1,
+            "p50_ms": 5838.393,
+            "p95_ms": 5838.393,
+            "p99_ms": 5838.393,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.101,
+            "mean_ms": 3.101,
+            "min_ms": 3.101,
+            "n": 1,
+            "p50_ms": 3.101,
+            "p95_ms": 3.101,
+            "p99_ms": 3.101,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 6019.996,
+            "mean_ms": 5493.509,
+            "min_ms": 4695.666,
+            "n": 30,
+            "p50_ms": 5507.289,
+            "p95_ms": 5986.22,
+            "p99_ms": 6019.996,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 10.935,
+            "mean_ms": 4.88,
+            "min_ms": 2.395,
+            "n": 30,
+            "p50_ms": 4.068,
+            "p95_ms": 9.239,
+            "p99_ms": 10.935,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 15200.906,
+            "mean_ms": 12627.415,
+            "min_ms": 7608.067,
+            "n": 24,
+            "p50_ms": 13377.651,
+            "p95_ms": 14887.98,
+            "p99_ms": 15200.906,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 21.268,
+            "mean_ms": 8.215,
+            "min_ms": 3.519,
+            "n": 24,
+            "p50_ms": 6.444,
+            "p95_ms": 16.681,
+            "p99_ms": 21.268,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 24,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 29523.145,
+            "mean_ms": 19865.125,
+            "min_ms": 7478.079,
+            "n": 19,
+            "p50_ms": 21365.335,
+            "p95_ms": 29523.145,
+            "p99_ms": 29523.145,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 23.928,
+            "mean_ms": 11.356,
+            "min_ms": 4.281,
+            "n": 19,
+            "p50_ms": 9.605,
+            "p95_ms": 23.928,
+            "p99_ms": 23.928,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 19,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 3846.289,
+            "mean_ms": 3846.289,
+            "min_ms": 3846.289,
+            "n": 1,
+            "p50_ms": 3846.289,
+            "p95_ms": 3846.289,
+            "p99_ms": 3846.289,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 9.507,
+            "mean_ms": 9.507,
+            "min_ms": 9.507,
+            "n": 1,
+            "p50_ms": 9.507,
+            "p95_ms": 9.507,
+            "p99_ms": 9.507,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4621.038,
+            "mean_ms": 4100.382,
+            "min_ms": 3629.116,
+            "n": 30,
+            "p50_ms": 4040.197,
+            "p95_ms": 4607.568,
+            "p99_ms": 4621.038,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 34.255,
+            "mean_ms": 5.786,
+            "min_ms": 2.698,
+            "n": 30,
+            "p50_ms": 4.035,
+            "p95_ms": 12.432,
+            "p99_ms": 34.255,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 10152.012,
+            "mean_ms": 8981.646,
+            "min_ms": 5241.711,
+            "n": 28,
+            "p50_ms": 9298.459,
+            "p95_ms": 9913.195,
+            "p99_ms": 10152.012,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 45.542,
+            "mean_ms": 7.854,
+            "min_ms": 3.041,
+            "n": 28,
+            "p50_ms": 5.988,
+            "p95_ms": 14.127,
+            "p99_ms": 45.542,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 28,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "max_ms": 20948.689,
+            "mean_ms": 17139.324,
+            "min_ms": 5570.249,
+            "n": 25,
+            "p50_ms": 18009.758,
+            "p95_ms": 20655.964,
+            "p99_ms": 20948.689,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 37.765,
+            "mean_ms": 16.196,
+            "min_ms": 4.172,
+            "n": 25,
+            "p50_ms": 13.787,
+            "p95_ms": 33.188,
+            "p99_ms": 37.765,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 25,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 219.253,
+            "mean_ms": 219.253,
+            "min_ms": 219.253,
+            "n": 1,
+            "p50_ms": 219.253,
+            "p95_ms": 219.253,
+            "p99_ms": 219.253,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 2.905,
+            "mean_ms": 2.905,
+            "min_ms": 2.905,
+            "n": 1,
+            "p50_ms": 2.905,
+            "p95_ms": 2.905,
+            "p99_ms": 2.905,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 363.702,
+            "mean_ms": 293.474,
+            "min_ms": 113.226,
+            "n": 30,
+            "p50_ms": 302.96,
+            "p95_ms": 361.25,
+            "p99_ms": 363.702,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 20.353,
+            "mean_ms": 5.177,
+            "min_ms": 2.517,
+            "n": 30,
+            "p50_ms": 4.074,
+            "p95_ms": 15.336,
+            "p99_ms": 20.353,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 463.992,
+            "mean_ms": 248.25,
+            "min_ms": 173.803,
+            "n": 30,
+            "p50_ms": 242.37,
+            "p95_ms": 411.103,
+            "p99_ms": 463.992,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 13.663,
+            "mean_ms": 8.129,
+            "min_ms": 3.763,
+            "n": 30,
+            "p50_ms": 7.185,
+            "p95_ms": 12.98,
+            "p99_ms": 13.663,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 752.26,
+            "mean_ms": 464.548,
+            "min_ms": 301.181,
+            "n": 30,
+            "p50_ms": 441.406,
+            "p95_ms": 654.984,
+            "p99_ms": 752.26,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 29.911,
+            "mean_ms": 10.56,
+            "min_ms": 3.448,
+            "n": 30,
+            "p50_ms": 8.012,
+            "p95_ms": 24.455,
+            "p99_ms": 29.911,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 4,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 8,
+          "failures": [
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED",
+            "QUERY_COST_EXCEEDED"
+          ],
+          "latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [],
+          "submit_latency": {
+            "n": 0,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 0,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 339.235,
+            "mean_ms": 339.235,
+            "min_ms": 339.235,
+            "n": 1,
+            "p50_ms": 339.235,
+            "p95_ms": 339.235,
+            "p99_ms": 339.235,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 4.499,
+            "mean_ms": 4.499,
+            "min_ms": 4.499,
+            "n": 1,
+            "p50_ms": 4.499,
+            "p95_ms": 4.499,
+            "p99_ms": 4.499,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 441.39,
+            "mean_ms": 337.091,
+            "min_ms": 223.889,
+            "n": 30,
+            "p50_ms": 341.83,
+            "p95_ms": 436.874,
+            "p99_ms": 441.39,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 13.457,
+            "mean_ms": 5.369,
+            "min_ms": 2.921,
+            "n": 30,
+            "p50_ms": 3.914,
+            "p95_ms": 10.721,
+            "p99_ms": 13.457,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 815.922,
+            "mean_ms": 484.801,
+            "min_ms": 294.461,
+            "n": 30,
+            "p50_ms": 455.686,
+            "p95_ms": 815.171,
+            "p99_ms": 815.922,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 26.3,
+            "mean_ms": 10.533,
+            "min_ms": 4.725,
+            "n": 30,
+            "p50_ms": 10.516,
+            "p95_ms": 17.592,
+            "p99_ms": 26.3,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 1089.498,
+            "mean_ms": 810.757,
+            "min_ms": 417.95,
+            "n": 30,
+            "p50_ms": 781.099,
+            "p95_ms": 1081.875,
+            "p99_ms": 1089.498,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 25.114,
+            "mean_ms": 11.055,
+            "min_ms": 3.155,
+            "n": 30,
+            "p50_ms": 10.198,
+            "p95_ms": 21.087,
+            "p99_ms": 25.114,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 399.24,
+            "mean_ms": 399.24,
+            "min_ms": 399.24,
+            "n": 1,
+            "p50_ms": 399.24,
+            "p95_ms": 399.24,
+            "p99_ms": 399.24,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 4.696,
+            "mean_ms": 4.696,
+            "min_ms": 4.696,
+            "n": 1,
+            "p50_ms": 4.696,
+            "p95_ms": 4.696,
+            "p99_ms": 4.696,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 443.845,
+            "mean_ms": 338.62,
+            "min_ms": 221.928,
+            "n": 30,
+            "p50_ms": 335.39,
+            "p95_ms": 412.025,
+            "p99_ms": 443.845,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 16.032,
+            "mean_ms": 5.377,
+            "min_ms": 2.477,
+            "n": 30,
+            "p50_ms": 3.855,
+            "p95_ms": 14.092,
+            "p99_ms": 16.032,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 4,
+          "failures": [],
+          "latency": {
+            "max_ms": 721.276,
+            "mean_ms": 434.318,
+            "min_ms": 340.213,
+            "n": 30,
+            "p50_ms": 349.339,
+            "p95_ms": 645.043,
+            "p99_ms": 721.276,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 15.038,
+            "mean_ms": 8.212,
+            "min_ms": 3.877,
+            "n": 30,
+            "p50_ms": 7.861,
+            "p95_ms": 14.226,
+            "p99_ms": 15.038,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 1394.555,
+            "mean_ms": 1057.429,
+            "min_ms": 434.117,
+            "n": 30,
+            "p50_ms": 1087.402,
+            "p95_ms": 1381.787,
+            "p99_ms": 1394.555,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 38.465,
+            "mean_ms": 12.289,
+            "min_ms": 3.612,
+            "n": 30,
+            "p50_ms": 9.33,
+            "p95_ms": 33.805,
+            "p99_ms": 38.465,
+            "percentile_method": "nearest_rank",
+            "small_sample": false
+          },
+          "successes": 30,
+          "workload": "ordered_funnel"
+        }
+      ],
+      "query_jobs": 731,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "stage": "query",
+      "started_at": "2026-11-09T04:22:51.391Z",
+      "success": false,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 4027.403,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_ms": 10123.168,
+        "drain_started_at": "2026-11-09T04:22:51.392Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 38527853.312,
+        "ingestion_start_to_verified_ms": 38650912.137,
+        "verified_at": "2026-11-09T04:23:01.515Z"
+      }
+    },
+    "100k-ingestion": {
+      "version": 1,
+      "complete": true,
+      "stop_reason": "completed",
+      "mode": "closed_loop_concurrency",
+      "run_id": "b02753c5-c091-489c-a1d9-d4ce530f4d6d",
+      "source_kind": "server",
+      "project_id": "f1a7603f-4c73-4da4-bb5c-c8cef8a584de",
+      "source_id": "b450cd23-e087-462a-975d-a908cc1a51c8",
+      "environment": "development",
+      "event_key": "benchmark_page_view",
+      "schema_version": 1,
+      "release_revision": 1,
+      "expected": {
+        "count": 100000,
+        "uid_cardinality": 10000,
+        "value_sum": 4950000,
+        "duration_ms_average": 499.5,
+        "section_zero_count": 10000
+      },
+      "requested_unique_events": 100000,
+      "expected_uid_cardinality": 10000,
+      "planned_replay_events": 10000,
+      "batch_size": 50,
+      "concurrency": 8,
+      "target_events_per_second": 0,
+      "window_start": "2026-11-09T03:21:32.364Z",
+      "window_end": "2026-11-09T03:51:32.364Z",
+      "started_at": "2026-11-09T03:51:40.500879809Z",
+      "finished_at": "2026-11-09T03:51:53.646219049Z",
+      "elapsed_seconds": 13.14533924,
+      "unique": {
+        "attempted": 100000,
+        "accepted": 100000,
+        "permanent_rejected": 0,
+        "retryable_rejected": 0,
+        "rate_limited": 0,
+        "server_errors": 0,
+        "unexpected": 0,
+        "dropped": 0
+      },
+      "replay": {
+        "attempted": 10000,
+        "accepted": 10000,
+        "permanent_rejected": 0,
+        "retryable_rejected": 0,
+        "rate_limited": 0,
+        "server_errors": 0,
+        "unexpected": 0,
+        "dropped": 0
+      },
+      "requests": 2200,
+      "request_bytes": 71337740,
+      "requests_per_second": 167.35969759575408,
+      "unique_accepted_events_per_second": 7607.258981625186,
+      "max_schedule_lag_ms": 0,
+      "latency": {
+        "method": "logarithmic_1.02_upper_bound",
+        "sample_count": 2200,
+        "p50_ms": 39.91093412097904,
+        "p95_ms": 89.88742406206191,
+        "p99_ms": 120.97663805864363,
+        "max_ms": 178.876064
+      },
+      "http_statuses": {
+        "202": 2200
+      },
+      "failure_samples": [],
+      "failure_samples_truncated": false,
+      "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase"
+    },
+    "100k-queries": {
+      "cancellation": {
+        "latency_ms": 17.139882998890243,
+        "state": "canceled",
+        "submit_ms": 9.076627000467852
+      },
+      "events_expected": 100000,
+      "exact_uid_expected": 10000,
+      "finished_at": "2026-11-09T03:52:26.541Z",
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 10000
+      },
+      "http_status_counts": {
+        "200": 136,
+        "202": 20
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 13.14533924,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 100000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 10000,
+          "uid_cardinality": 10000,
+          "value_sum": 4950000
+        },
+        "expected_uid_cardinality": 10000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-09T03:51:53.646219049Z",
+        "http_statuses": {
+          "202": 2200
+        },
+        "latency": {
+          "max_ms": 178.876064,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 39.91093412097904,
+          "p95_ms": 89.88742406206191,
+          "p99_ms": 120.97663805864363,
+          "sample_count": 2200
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 10000,
+        "project_id": "f1a7603f-4c73-4da4-bb5c-c8cef8a584de",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 10000,
+          "attempted": 10000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 71337740,
+        "requested_unique_events": 100000,
+        "requests": 2200,
+        "requests_per_second": 167.35969759575408,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "b02753c5-c091-489c-a1d9-d4ce530f4d6d",
+        "schema_version": 1,
+        "source_id": "b450cd23-e087-462a-975d-a908cc1a51c8",
+        "source_kind": "server",
+        "started_at": "2026-11-09T03:51:40.500879809Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 7607.258981625186,
+        "version": 1,
+        "window_end": "2026-11-09T03:51:32.364Z",
+        "window_start": "2026-11-09T03:21:32.364Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "f1a7603f-4c73-4da4-bb5c-c8cef8a584de",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 297.87,
+            "mean_ms": 297.87,
+            "min_ms": 297.87,
+            "n": 1,
+            "p50_ms": 297.87,
+            "p95_ms": 297.87,
+            "p99_ms": 297.87,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.457,
+            "mean_ms": 4.457,
+            "min_ms": 4.457,
+            "n": 1,
+            "p50_ms": 4.457,
+            "p95_ms": 4.457,
+            "p99_ms": 4.457,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 404.471,
+            "mean_ms": 404.471,
+            "min_ms": 404.471,
+            "n": 1,
+            "p50_ms": 404.471,
+            "p95_ms": 404.471,
+            "p99_ms": 404.471,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.736,
+            "mean_ms": 4.736,
+            "min_ms": 4.736,
+            "n": 1,
+            "p50_ms": 4.736,
+            "p95_ms": 4.736,
+            "p99_ms": 4.736,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 330.488,
+            "mean_ms": 330.488,
+            "min_ms": 330.488,
+            "n": 1,
+            "p50_ms": 330.488,
+            "p95_ms": 330.488,
+            "p99_ms": 330.488,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.303,
+            "mean_ms": 3.303,
+            "min_ms": 3.303,
+            "n": 1,
+            "p50_ms": 3.303,
+            "p95_ms": 3.303,
+            "p99_ms": 3.303,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 444.087,
+            "mean_ms": 444.087,
+            "min_ms": 444.087,
+            "n": 1,
+            "p50_ms": 444.087,
+            "p95_ms": 444.087,
+            "p99_ms": 444.087,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.856,
+            "mean_ms": 3.856,
+            "min_ms": 3.856,
+            "n": 1,
+            "p50_ms": 3.856,
+            "p95_ms": 3.856,
+            "p99_ms": 3.856,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 223.079,
+            "mean_ms": 223.079,
+            "min_ms": 223.079,
+            "n": 1,
+            "p50_ms": 223.079,
+            "p95_ms": 223.079,
+            "p99_ms": 223.079,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.009,
+            "mean_ms": 3.009,
+            "min_ms": 3.009,
+            "n": 1,
+            "p50_ms": 3.009,
+            "p95_ms": 3.009,
+            "p99_ms": 3.009,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 492.263,
+            "mean_ms": 492.263,
+            "min_ms": 492.263,
+            "n": 1,
+            "p50_ms": 492.263,
+            "p95_ms": 492.263,
+            "p99_ms": 492.263,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.6,
+            "mean_ms": 3.6,
+            "min_ms": 3.6,
+            "n": 1,
+            "p50_ms": 3.6,
+            "p95_ms": 3.6,
+            "p99_ms": 3.6,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 327.859,
+            "mean_ms": 327.859,
+            "min_ms": 327.859,
+            "n": 1,
+            "p50_ms": 327.859,
+            "p95_ms": 327.859,
+            "p99_ms": 327.859,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 4.019,
+            "mean_ms": 4.019,
+            "min_ms": 4.019,
+            "n": 1,
+            "p50_ms": 4.019,
+            "p95_ms": 4.019,
+            "p99_ms": 4.019,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 447.702,
+            "mean_ms": 447.702,
+            "min_ms": 447.702,
+            "n": 1,
+            "p50_ms": 447.702,
+            "p95_ms": 447.702,
+            "p99_ms": 447.702,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 3.024,
+            "mean_ms": 3.024,
+            "min_ms": 3.024,
+            "n": 1,
+            "p50_ms": 3.024,
+            "p95_ms": 3.024,
+            "p99_ms": 3.024,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "section_group"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 115.355,
+            "mean_ms": 115.355,
+            "min_ms": 115.355,
+            "n": 1,
+            "p50_ms": 115.355,
+            "p95_ms": 115.355,
+            "p99_ms": 115.355,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.356,
+            "mean_ms": 4.356,
+            "min_ms": 4.356,
+            "n": 1,
+            "p50_ms": 4.356,
+            "p95_ms": 4.356,
+            "p99_ms": 4.356,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 168.732,
+            "mean_ms": 168.732,
+            "min_ms": 168.732,
+            "n": 1,
+            "p50_ms": 168.732,
+            "p95_ms": 168.732,
+            "p99_ms": 168.732,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.92,
+            "mean_ms": 3.92,
+            "min_ms": 3.92,
+            "n": 1,
+            "p50_ms": 3.92,
+            "p95_ms": 3.92,
+            "p99_ms": 3.92,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "high_cardinality_uid_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 332.438,
+            "mean_ms": 332.438,
+            "min_ms": 332.438,
+            "n": 1,
+            "p50_ms": 332.438,
+            "p95_ms": 332.438,
+            "p99_ms": 332.438,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.623,
+            "mean_ms": 3.623,
+            "min_ms": 3.623,
+            "n": 1,
+            "p50_ms": 3.623,
+            "p95_ms": 3.623,
+            "p99_ms": 3.623,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 497.021,
+            "mean_ms": 497.021,
+            "min_ms": 497.021,
+            "n": 1,
+            "p50_ms": 497.021,
+            "p95_ms": 497.021,
+            "p99_ms": 497.021,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.384,
+            "mean_ms": 3.384,
+            "min_ms": 3.384,
+            "n": 1,
+            "p50_ms": 3.384,
+            "p95_ms": 3.384,
+            "p99_ms": 3.384,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "property_filter"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 386.765,
+            "mean_ms": 386.765,
+            "min_ms": 386.765,
+            "n": 1,
+            "p50_ms": 386.765,
+            "p95_ms": 386.765,
+            "p99_ms": 386.765,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 4.008,
+            "mean_ms": 4.008,
+            "min_ms": 4.008,
+            "n": 1,
+            "p50_ms": 4.008,
+            "p95_ms": 4.008,
+            "p99_ms": 4.008,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 280.605,
+            "mean_ms": 280.605,
+            "min_ms": 280.605,
+            "n": 1,
+            "p50_ms": 280.605,
+            "p95_ms": 280.605,
+            "p99_ms": 280.605,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            10
+          ],
+          "submit_latency": {
+            "max_ms": 3.796,
+            "mean_ms": 3.796,
+            "min_ms": 3.796,
+            "n": 1,
+            "p50_ms": 3.796,
+            "p95_ms": 3.796,
+            "p99_ms": 3.796,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "journey"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 385.375,
+            "mean_ms": 385.375,
+            "min_ms": 385.375,
+            "n": 1,
+            "p50_ms": 385.375,
+            "p95_ms": 385.375,
+            "p99_ms": 385.375,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 4.226,
+            "mean_ms": 4.226,
+            "min_ms": 4.226,
+            "n": 1,
+            "p50_ms": 4.226,
+            "p95_ms": 4.226,
+            "p99_ms": 4.226,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 285.812,
+            "mean_ms": 285.812,
+            "min_ms": 285.812,
+            "n": 1,
+            "p50_ms": 285.812,
+            "p95_ms": 285.812,
+            "p99_ms": 285.812,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            2
+          ],
+          "submit_latency": {
+            "max_ms": 3.331,
+            "mean_ms": 3.331,
+            "min_ms": 3.331,
+            "n": 1,
+            "p50_ms": 3.331,
+            "p95_ms": 3.331,
+            "p99_ms": 3.331,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "ordered_funnel"
+        }
+      ],
+      "query_jobs": 19,
+      "query_time_range": {
+        "from": "2026-11-09T03:21:31.364Z",
+        "to": "2026-11-09T03:51:33.364Z"
+      },
+      "report_version": 1,
+      "run_id": "b02753c5-c091-489c-a1d9-d4ce530f4d6d",
+      "stage": "query",
+      "started_at": "2026-11-09T03:52:19.896Z",
+      "success": true,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 500.048,
+            "visible_count": 100000
+          }
+        ],
+        "drain_ms": 1202.796,
+        "drain_started_at": "2026-11-09T03:52:19.896Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 27452.781,
+        "ingestion_start_to_verified_ms": 40598.121,
+        "verified_at": "2026-11-09T03:52:21.099Z"
+      }
+    },
+    "100k-materialization": {
+      "ingestion_started_at": "2026-11-09T03:51:40.500879809Z",
+      "ingestion_finished_at": "2026-11-09T03:51:53.646219049Z",
+      "query_log": [
+        {
+          "insert_queries": 865,
+          "inserted_rows": 110000,
+          "first_insert_started": "2026-11-09 03:51:40.634905",
+          "last_insert_finished": "2026-11-09 03:52:09.966805"
+        }
+      ],
+      "consumer_positions": [
+        {
+          "partition": 0,
+          "current_offset": 1432549,
+          "log_end_offset": 1432549,
+          "lag": 0
+        }
+      ]
+    },
+    "compact-materialization": {
+      "mutations": [
+        {
+          "column": "canonical_hash_bytes",
+          "partition_id": "202611",
+          "elapsed_seconds": 0.232
+        },
+        {
+          "column": "occurred_at_effective",
+          "partition_id": "202611",
+          "elapsed_seconds": 0.223
+        },
+        {
+          "column": "event_time_effective",
+          "partition_id": "202611",
+          "elapsed_seconds": 0.21
+        }
+      ]
+    },
+    "identity-materialization": {
+      "mutations": [
+        {
+          "projection": "identity_uid",
+          "partition_id": "202611",
+          "elapsed_seconds": 1.206
+        },
+        {
+          "projection": "identity_anonymous_id",
+          "partition_id": "202611",
+          "elapsed_seconds": 0.442
+        }
+      ]
+    },
+    "million-single-worker-smoke": {
+      "cancellation": {
+        "latency_ms": 11.563674001081381,
+        "state": "canceled",
+        "submit_ms": 6.072466996556614
+      },
+      "events_expected": 1000000,
+      "exact_uid_expected": 100000,
+      "finished_at": "2026-11-09T04:48:46.500Z",
+      "fixture": {
+        "lookback_seconds": 1800,
+        "page_cardinality": 1000,
+        "post_cardinality": 10000,
+        "section_cardinality": 10,
+        "uid_cardinality": 100000
+      },
+      "http_status_counts": {
+        "200": 8663,
+        "202": 31
+      },
+      "ingestion_report": {
+        "batch_size": 50,
+        "complete": true,
+        "concurrency": 8,
+        "elapsed_seconds": 123.058825088,
+        "environment": "development",
+        "event_key": "benchmark_page_view",
+        "expected": {
+          "count": 1000000,
+          "duration_ms_average": 499.5,
+          "section_zero_count": 100000,
+          "uid_cardinality": 100000,
+          "value_sum": 49500000
+        },
+        "expected_uid_cardinality": 100000,
+        "failure_samples": [],
+        "failure_samples_truncated": false,
+        "finished_at": "2026-11-08T17:40:53.661688684Z",
+        "http_statuses": {
+          "202": 22000
+        },
+        "latency": {
+          "max_ms": 225.705871,
+          "method": "logarithmic_1.02_upper_bound",
+          "p50_ms": 38.36114390713096,
+          "p95_ms": 76.71805092805218,
+          "p99_ms": 103.25239572200354,
+          "sample_count": 22000
+        },
+        "max_schedule_lag_ms": 0,
+        "mode": "closed_loop_concurrency",
+        "planned_replay_events": 100000,
+        "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+        "release_revision": 1,
+        "replay": {
+          "accepted": 100000,
+          "attempted": 100000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "request_bytes": 715579050,
+        "requested_unique_events": 1000000,
+        "requests": 22000,
+        "requests_per_second": 178.77628836670337,
+        "retry_policy": "none; 429 Retry-After observed as admission failure; replay is an explicit separate phase",
+        "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+        "schema_version": 1,
+        "source_id": "9459b93b-a4d0-4c69-902b-81543eea588d",
+        "source_kind": "server",
+        "started_at": "2026-11-08T17:38:50.602863606Z",
+        "stop_reason": "completed",
+        "target_events_per_second": 0,
+        "unique": {
+          "accepted": 1000000,
+          "attempted": 1000000,
+          "dropped": 0,
+          "permanent_rejected": 0,
+          "rate_limited": 0,
+          "retryable_rejected": 0,
+          "server_errors": 0,
+          "unexpected": 0
+        },
+        "unique_accepted_events_per_second": 8126.194925759244,
+        "version": 1,
+        "window_end": "2026-11-08T17:38:15.301Z",
+        "window_start": "2026-11-08T17:08:15.301Z"
+      },
+      "notes": [
+        "Collection 202 means queue acknowledgement, not persisted facts.",
+        "First-observed samples do not imply an empty database or OS cache.",
+        "Warm samples repeat the same query; result metadata currently reports cache_hit=false.",
+        "Query latency includes submit, bounded polling, and result retrieval.",
+        "Latency percentiles cover successful samples; failed samples are counted separately by code.",
+        "Funnel is two ordered visits for one known UID; it measures a bounded identity slice."
+      ],
+      "project_id": "b704a373-6622-4fa5-87d6-4766571b0652",
+      "query_groups": [
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 3888.143,
+            "mean_ms": 3888.143,
+            "min_ms": 3888.143,
+            "n": 1,
+            "p50_ms": 3888.143,
+            "p95_ms": 3888.143,
+            "p99_ms": 3888.143,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 3.652,
+            "mean_ms": 3.652,
+            "min_ms": 3.652,
+            "n": 1,
+            "p50_ms": 3.652,
+            "p95_ms": 3.652,
+            "p99_ms": 3.652,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "count"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 30885.81,
+            "mean_ms": 17712.839,
+            "min_ms": 4304.183,
+            "n": 8,
+            "p50_ms": 15823.82,
+            "p95_ms": 30885.81,
+            "p99_ms": 30885.81,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 19.829,
+            "mean_ms": 13.373,
+            "min_ms": 6.708,
+            "n": 8,
+            "p50_ms": 13.193,
+            "p95_ms": 19.829,
+            "p99_ms": 19.829,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 8,
+          "workload": "count"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 5228.06,
+            "mean_ms": 5228.06,
+            "min_ms": 5228.06,
+            "n": 1,
+            "p50_ms": 5228.06,
+            "p95_ms": 5228.06,
+            "p99_ms": 5228.06,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 5.109,
+            "mean_ms": 5.109,
+            "min_ms": 5.109,
+            "n": 1,
+            "p50_ms": 5.109,
+            "p95_ms": 5.109,
+            "p99_ms": 5.109,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 42014.877,
+            "mean_ms": 24019.172,
+            "min_ms": 5834.261,
+            "n": 8,
+            "p50_ms": 21461.492,
+            "p95_ms": 42014.877,
+            "p99_ms": 42014.877,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 29.227,
+            "mean_ms": 20.948,
+            "min_ms": 11.598,
+            "n": 8,
+            "p50_ms": 17.817,
+            "p95_ms": 29.227,
+            "p99_ms": 29.227,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 8,
+          "workload": "exact_uid"
+        },
+        {
+          "concurrency": 1,
+          "failures": [],
+          "latency": {
+            "max_ms": 4030.625,
+            "mean_ms": 4030.625,
+            "min_ms": 4030.625,
+            "n": 1,
+            "p50_ms": 4030.625,
+            "p95_ms": 4030.625,
+            "p99_ms": 4030.625,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "first_observed",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 4.302,
+            "mean_ms": 4.302,
+            "min_ms": 4.302,
+            "n": 1,
+            "p50_ms": 4.302,
+            "p95_ms": 4.302,
+            "p99_ms": 4.302,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 1,
+          "workload": "hour_bucket"
+        },
+        {
+          "concurrency": 8,
+          "failures": [],
+          "latency": {
+            "max_ms": 31019.906,
+            "mean_ms": 17721.395,
+            "min_ms": 4201.52,
+            "n": 8,
+            "p50_ms": 15984.305,
+            "p95_ms": 31019.906,
+            "p99_ms": 31019.906,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "phase": "warm",
+          "rows": [
+            1
+          ],
+          "submit_latency": {
+            "max_ms": 21.13,
+            "mean_ms": 13.217,
+            "min_ms": 7.195,
+            "n": 8,
+            "p50_ms": 11.588,
+            "p95_ms": 21.13,
+            "p99_ms": 21.13,
+            "percentile_method": "nearest_rank",
+            "small_sample": true
+          },
+          "successes": 8,
+          "workload": "hour_bucket"
+        }
+      ],
+      "query_jobs": 30,
+      "query_time_range": {
+        "from": "2026-11-08T17:08:14.301Z",
+        "to": "2026-11-08T17:38:16.301Z"
+      },
+      "report_version": 1,
+      "run_id": "29fbd9e3-1db8-444d-89f1-0614f53595c6",
+      "selected_workloads": [
+        "count",
+        "exact_uid",
+        "hour_bucket"
+      ],
+      "stage": "query",
+      "started_at": "2026-11-09T04:46:40.212Z",
+      "success": true,
+      "visibility": {
+        "count_observations": [
+          {
+            "elapsed_ms": 3692.095,
+            "visible_count": 1000000
+          }
+        ],
+        "drain_ms": 9196.125,
+        "drain_started_at": "2026-11-09T04:46:40.212Z",
+        "exact_count_verified": true,
+        "exact_uid_verified": true,
+        "ingestion_end_to_verified_ms": 39955746.312,
+        "ingestion_start_to_verified_ms": 40078805.137,
+        "verified_at": "2026-11-09T04:46:49.408Z"
+      }
+    },
+    "final-storage-audit": {
+      "observed_at": "2026-11-09T04:46:30.197937+00:00",
+      "compact_values": [
+        {
+          "checked_rows": 1432549,
+          "mismatches": 0
+        }
+      ],
+      "active_parts": [
+        {
+          "rows": 1432549,
+          "bytes_on_disk": 722741090,
+          "parts": 8
+        }
+      ],
+      "unfinished_mutations": [
+        {
+          "unfinished": 0
+        }
+      ],
+      "disks": [
+        {
+          "name": "default",
+          "free_space": 2865385472,
+          "unreserved_space": 2865385472,
+          "keep_free_space": 2147483648
+        }
+      ]
+    }
+  },
+  "diagnostics": {
+    "million-concurrent-baseline-diagnostics": {
+      "since": "2026-11-09T03:53:27.504Z",
+      "until": "2026-11-09T04:16:36.809Z",
+      "query_log_groups": [
+        {
+          "normalized_query_hash": "10460414217652656111",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 97,
+          "p95_duration_ms": 163,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 30350313,
+          "max_read_bytes": 30350313,
+          "avg_read_bytes": 30350313,
+          "min_memory_usage": 9474429,
+          "max_memory_usage": 12072814,
+          "avg_memory_usage": 10461808.131868131,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 84254
+        },
+        {
+          "normalized_query_hash": "14502773060546031204",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 179,
+          "p95_duration_ms": 270,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 33997587,
+          "max_memory_usage": 35219782,
+          "avg_memory_usage": 34758987.307692304,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 146355
+        },
+        {
+          "normalized_query_hash": "15052114235024167865",
+          "exception_code": 0,
+          "n": 79,
+          "p50_duration_ms": 4770,
+          "p95_duration_ms": 6062,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867817,
+          "max_read_bytes": 201867817,
+          "avg_read_bytes": 201867817,
+          "min_memory_usage": 182108490,
+          "max_memory_usage": 314857053,
+          "avg_memory_usage": 279161825,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5344476
+        },
+        {
+          "normalized_query_hash": "15052114235024167865",
+          "exception_code": 241,
+          "n": 10,
+          "p50_duration_ms": 2550,
+          "p95_duration_ms": 4327,
+          "min_read_rows": 249917,
+          "max_read_rows": 1058752,
+          "avg_read_rows": 763400.7,
+          "min_read_bytes": 44944992,
+          "max_read_bytes": 192962653,
+          "avg_read_bytes": 138913037.1,
+          "min_memory_usage": 227032208,
+          "max_memory_usage": 311376764,
+          "avg_memory_usage": 293983793.2,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3469410
+        },
+        {
+          "normalized_query_hash": "18017290711550786240",
+          "exception_code": 241,
+          "n": 9,
+          "p50_duration_ms": 1327,
+          "p95_duration_ms": 2955,
+          "min_read_rows": 168686,
+          "max_read_rows": 719431,
+          "avg_read_rows": 443441,
+          "min_read_bytes": 48037291,
+          "max_read_bytes": 209443953,
+          "avg_read_bytes": 128559446.33333333,
+          "min_memory_usage": 211964697,
+          "max_memory_usage": 337874035,
+          "avg_memory_usage": 289986349.4444444,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2325258
+        },
+        {
+          "normalized_query_hash": "18017290711550786240",
+          "exception_code": 307,
+          "n": 77,
+          "p50_duration_ms": 3442,
+          "p95_duration_ms": 4437,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 174628327,
+          "max_memory_usage": 340855050,
+          "avg_memory_usage": 288234537.6103896,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 4319656
+        },
+        {
+          "normalized_query_hash": "5448048469914828430",
+          "exception_code": 0,
+          "n": 80,
+          "p50_duration_ms": 6417,
+          "p95_duration_ms": 7553,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 264473661,
+          "max_read_bytes": 264473661,
+          "avg_read_bytes": 264473661,
+          "min_memory_usage": 182277326,
+          "max_memory_usage": 340480826,
+          "avg_memory_usage": 301865385.9,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 6957516
+        },
+        {
+          "normalized_query_hash": "5448048469914828430",
+          "exception_code": 241,
+          "n": 12,
+          "p50_duration_ms": 1346,
+          "p95_duration_ms": 3699,
+          "min_read_rows": 225549,
+          "max_read_rows": 951248,
+          "avg_read_rows": 482569,
+          "min_read_bytes": 52999044,
+          "max_read_bytes": 227085722,
+          "avg_read_bytes": 114655084.91666667,
+          "min_memory_usage": 242558975,
+          "max_memory_usage": 335417600,
+          "avg_memory_usage": 294875185.1666667,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3145061
+        },
+        {
+          "normalized_query_hash": "6950042430127166967",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 157,
+          "p95_duration_ms": 263,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 34167176,
+          "max_memory_usage": 35454907,
+          "avg_memory_usage": 35273234.296703294,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 159096
+        },
+        {
+          "normalized_query_hash": "8965398548978194134",
+          "exception_code": 0,
+          "n": 80,
+          "p50_duration_ms": 4789,
+          "p95_duration_ms": 5702,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867817,
+          "max_read_bytes": 201867817,
+          "avg_read_bytes": 201867817,
+          "min_memory_usage": 182157570,
+          "max_memory_usage": 339984277,
+          "avg_memory_usage": 302089438.4125,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5274059
+        },
+        {
+          "normalized_query_hash": "8965398548978194134",
+          "exception_code": 241,
+          "n": 11,
+          "p50_duration_ms": 1281,
+          "p95_duration_ms": 2821,
+          "min_read_rows": 249917,
+          "max_read_rows": 1058752,
+          "avg_read_rows": 500004.63636363635,
+          "min_read_bytes": 44944992,
+          "max_read_bytes": 192962653,
+          "avg_read_bytes": 90711284.72727273,
+          "min_memory_usage": 227060104,
+          "max_memory_usage": 318392438,
+          "avg_memory_usage": 276084467.90909094,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2345168
+        },
+        {
+          "normalized_query_hash": "9888425901144139945",
+          "exception_code": 241,
+          "n": 8,
+          "p50_duration_ms": 1572,
+          "p95_duration_ms": 2983,
+          "min_read_rows": 249917,
+          "max_read_rows": 719431,
+          "avg_read_rows": 476734.75,
+          "min_read_bytes": 71843557,
+          "max_read_bytes": 209443953,
+          "avg_read_bytes": 138316846.625,
+          "min_memory_usage": 253855005,
+          "max_memory_usage": 337743627,
+          "avg_memory_usage": 300347912,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2453589
+        },
+        {
+          "normalized_query_hash": "9888425901144139945",
+          "exception_code": 307,
+          "n": 83,
+          "p50_duration_ms": 3489,
+          "p95_duration_ms": 4492,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 174583291,
+          "max_memory_usage": 339595661,
+          "avg_memory_usage": 291297546.73493975,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3979707
+        }
+      ]
+    },
+    "million-baseline-complete-diagnostics": {
+      "since": "2026-11-09T03:53:27.504Z",
+      "until": "2026-11-09T04:16:36.809Z",
+      "query_log_groups": [
+        {
+          "normalized_query_hash": "10460414217652656111",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 97,
+          "p95_duration_ms": 163,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 30350313,
+          "max_read_bytes": 30350313,
+          "avg_read_bytes": 30350313,
+          "min_memory_usage": 9474429,
+          "max_memory_usage": 12072814,
+          "avg_memory_usage": 10461808.131868131,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 84254
+        },
+        {
+          "normalized_query_hash": "14502773060546031204",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 179,
+          "p95_duration_ms": 270,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 33997587,
+          "max_memory_usage": 35219782,
+          "avg_memory_usage": 34758987.307692304,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 146355
+        },
+        {
+          "normalized_query_hash": "15052114235024167865",
+          "exception_code": 0,
+          "n": 79,
+          "p50_duration_ms": 4770,
+          "p95_duration_ms": 6062,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867817,
+          "max_read_bytes": 201867817,
+          "avg_read_bytes": 201867817,
+          "min_memory_usage": 182108490,
+          "max_memory_usage": 314857053,
+          "avg_memory_usage": 279161825,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5344476
+        },
+        {
+          "normalized_query_hash": "15052114235024167865",
+          "exception_code": 241,
+          "n": 10,
+          "p50_duration_ms": 2550,
+          "p95_duration_ms": 4327,
+          "min_read_rows": 249917,
+          "max_read_rows": 1058752,
+          "avg_read_rows": 763400.7,
+          "min_read_bytes": 44944992,
+          "max_read_bytes": 192962653,
+          "avg_read_bytes": 138913037.1,
+          "min_memory_usage": 227032208,
+          "max_memory_usage": 311376764,
+          "avg_memory_usage": 293983793.2,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3469410
+        },
+        {
+          "normalized_query_hash": "18017290711550786240",
+          "exception_code": 241,
+          "n": 9,
+          "p50_duration_ms": 1327,
+          "p95_duration_ms": 2955,
+          "min_read_rows": 168686,
+          "max_read_rows": 719431,
+          "avg_read_rows": 443441,
+          "min_read_bytes": 48037291,
+          "max_read_bytes": 209443953,
+          "avg_read_bytes": 128559446.33333333,
+          "min_memory_usage": 211964697,
+          "max_memory_usage": 337874035,
+          "avg_memory_usage": 289986349.4444444,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2325258
+        },
+        {
+          "normalized_query_hash": "18017290711550786240",
+          "exception_code": 307,
+          "n": 77,
+          "p50_duration_ms": 3442,
+          "p95_duration_ms": 4437,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 174628327,
+          "max_memory_usage": 340855050,
+          "avg_memory_usage": 288234537.6103896,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 4319656
+        },
+        {
+          "normalized_query_hash": "5448048469914828430",
+          "exception_code": 0,
+          "n": 80,
+          "p50_duration_ms": 6417,
+          "p95_duration_ms": 7553,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 264473661,
+          "max_read_bytes": 264473661,
+          "avg_read_bytes": 264473661,
+          "min_memory_usage": 182277326,
+          "max_memory_usage": 340480826,
+          "avg_memory_usage": 301865385.9,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 6957516
+        },
+        {
+          "normalized_query_hash": "5448048469914828430",
+          "exception_code": 241,
+          "n": 12,
+          "p50_duration_ms": 1346,
+          "p95_duration_ms": 3699,
+          "min_read_rows": 225549,
+          "max_read_rows": 951248,
+          "avg_read_rows": 482569,
+          "min_read_bytes": 52999044,
+          "max_read_bytes": 227085722,
+          "avg_read_bytes": 114655084.91666667,
+          "min_memory_usage": 242558975,
+          "max_memory_usage": 335417600,
+          "avg_memory_usage": 294875185.1666667,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3145061
+        },
+        {
+          "normalized_query_hash": "6950042430127166967",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 157,
+          "p95_duration_ms": 263,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 34167176,
+          "max_memory_usage": 35454907,
+          "avg_memory_usage": 35273234.296703294,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 159096
+        },
+        {
+          "normalized_query_hash": "8965398548978194134",
+          "exception_code": 0,
+          "n": 80,
+          "p50_duration_ms": 4789,
+          "p95_duration_ms": 5702,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867817,
+          "max_read_bytes": 201867817,
+          "avg_read_bytes": 201867817,
+          "min_memory_usage": 182157570,
+          "max_memory_usage": 339984277,
+          "avg_memory_usage": 302089438.4125,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5274059
+        },
+        {
+          "normalized_query_hash": "8965398548978194134",
+          "exception_code": 241,
+          "n": 11,
+          "p50_duration_ms": 1281,
+          "p95_duration_ms": 2821,
+          "min_read_rows": 249917,
+          "max_read_rows": 1058752,
+          "avg_read_rows": 500004.63636363635,
+          "min_read_bytes": 44944992,
+          "max_read_bytes": 192962653,
+          "avg_read_bytes": 90711284.72727273,
+          "min_memory_usage": 227060104,
+          "max_memory_usage": 318392438,
+          "avg_memory_usage": 276084467.90909094,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2345168
+        },
+        {
+          "normalized_query_hash": "9888425901144139945",
+          "exception_code": 241,
+          "n": 8,
+          "p50_duration_ms": 1572,
+          "p95_duration_ms": 2983,
+          "min_read_rows": 249917,
+          "max_read_rows": 719431,
+          "avg_read_rows": 476734.75,
+          "min_read_bytes": 71843557,
+          "max_read_bytes": 209443953,
+          "avg_read_bytes": 138316846.625,
+          "min_memory_usage": 253855005,
+          "max_memory_usage": 337743627,
+          "avg_memory_usage": 300347912,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2453589
+        },
+        {
+          "normalized_query_hash": "9888425901144139945",
+          "exception_code": 307,
+          "n": 83,
+          "p50_duration_ms": 3489,
+          "p95_duration_ms": 4492,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 174583291,
+          "max_memory_usage": 339595661,
+          "avg_memory_usage": 291297546.73493975,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3979707
+        }
+      ],
+      "error_scopes": [
+        {
+          "exception_code": 241,
+          "memory_scope": "server_total",
+          "executions": 50
+        },
+        {
+          "exception_code": 307,
+          "memory_scope": "other",
+          "executions": 160
+        }
+      ],
+      "notes": [
+        "Execution-log groups are observations, not a one-to-one mapping to API task outcomes.",
+        "Only fixed safe counters and classifications are retained; no raw SQL or exception messages."
+      ]
+    },
+    "million-final-diagnostics": {
+      "since": "2026-11-09T04:22:51.391Z",
+      "until": "2026-11-09T04:45:12.827Z",
+      "query_log_groups": [
+        {
+          "normalized_query_hash": "1149444040608196693",
+          "exception_code": 241,
+          "n": 8,
+          "p50_duration_ms": 1632,
+          "p95_duration_ms": 2841,
+          "min_read_rows": 266156,
+          "max_read_rows": 846985,
+          "avg_read_rows": 525126.5,
+          "min_read_bytes": 76602547,
+          "max_read_bytes": 246826658,
+          "avg_read_bytes": 152498911.375,
+          "min_memory_usage": 275487630,
+          "max_memory_usage": 382027093,
+          "avg_memory_usage": 306263862.875,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2630107
+        },
+        {
+          "normalized_query_hash": "1149444040608196693",
+          "exception_code": 307,
+          "n": 83,
+          "p50_duration_ms": 3395,
+          "p95_duration_ms": 4010,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 217313685,
+          "max_memory_usage": 386990296,
+          "avg_memory_usage": 303995850.8313253,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3720951
+        },
+        {
+          "normalized_query_hash": "11793964725672808561",
+          "exception_code": 0,
+          "n": 72,
+          "p50_duration_ms": 6394,
+          "p95_duration_ms": 7913,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 264473661,
+          "max_read_bytes": 264473661,
+          "avg_read_bytes": 264473661,
+          "min_memory_usage": 163358500,
+          "max_memory_usage": 371064536,
+          "avg_memory_usage": 319197216.3888889,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 7266058
+        },
+        {
+          "normalized_query_hash": "11793964725672808561",
+          "exception_code": 241,
+          "n": 9,
+          "p50_duration_ms": 457,
+          "p95_duration_ms": 3195,
+          "min_read_rows": 258038,
+          "max_read_rows": 914934,
+          "avg_read_rows": 502764.8888888889,
+          "min_read_bytes": 60792666,
+          "max_read_bytes": 218374396,
+          "avg_read_bytes": 119499828.44444445,
+          "min_memory_usage": 264415780,
+          "max_memory_usage": 367094615,
+          "avg_memory_usage": 320880215,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2970198
+        },
+        {
+          "normalized_query_hash": "15134244916991284890",
+          "exception_code": 241,
+          "n": 9,
+          "p50_duration_ms": 424,
+          "p95_duration_ms": 1903,
+          "min_read_rows": 184940,
+          "max_read_rows": 615033,
+          "avg_read_rows": 376179.44444444444,
+          "min_read_bytes": 52800984,
+          "max_read_bytes": 178847354,
+          "avg_read_bytes": 108846903.44444445,
+          "min_memory_usage": 222603160,
+          "max_memory_usage": 381952503,
+          "avg_memory_usage": 305892261.2222222,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 1590823
+        },
+        {
+          "normalized_query_hash": "15134244916991284890",
+          "exception_code": 307,
+          "n": 82,
+          "p50_duration_ms": 3315,
+          "p95_duration_ms": 4025,
+          "min_read_rows": 925947,
+          "max_read_rows": 925947,
+          "avg_read_rows": 925947,
+          "min_read_bytes": 269968295,
+          "max_read_bytes": 269968295,
+          "avg_read_bytes": 269968295,
+          "min_memory_usage": 179054099,
+          "max_memory_usage": 385476919,
+          "avg_memory_usage": 305403225.85365856,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 4059512
+        },
+        {
+          "normalized_query_hash": "15962335870072694128",
+          "exception_code": 0,
+          "n": 84,
+          "p50_duration_ms": 4491,
+          "p95_duration_ms": 5376,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867809,
+          "max_read_bytes": 201867809,
+          "avg_read_bytes": 201867809,
+          "min_memory_usage": 188805502,
+          "max_memory_usage": 338640826,
+          "avg_memory_usage": 299838533.6547619,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 4964191
+        },
+        {
+          "normalized_query_hash": "15962335870072694128",
+          "exception_code": 241,
+          "n": 7,
+          "p50_duration_ms": 1368,
+          "p95_duration_ms": 2724,
+          "min_read_rows": 314867,
+          "max_read_rows": 955252,
+          "avg_read_rows": 656155.2857142857,
+          "min_read_bytes": 56830906,
+          "max_read_bytes": 174022033,
+          "avg_read_bytes": 119287007.42857143,
+          "min_memory_usage": 255346326,
+          "max_memory_usage": 334278870,
+          "avg_memory_usage": 308966399.4285714,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2066577
+        },
+        {
+          "normalized_query_hash": "5320092582892758296",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 179,
+          "p95_duration_ms": 344,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 34397416,
+          "max_memory_usage": 35691179,
+          "avg_memory_usage": 35483931.307692304,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 167943
+        },
+        {
+          "normalized_query_hash": "5909921057777995103",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 175,
+          "p95_duration_ms": 307,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 65313775,
+          "max_read_bytes": 65313775,
+          "avg_read_bytes": 65313775,
+          "min_memory_usage": 34244787,
+          "max_memory_usage": 35466390,
+          "avg_memory_usage": 35316316.37362637,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 154210
+        },
+        {
+          "normalized_query_hash": "6278324266997509858",
+          "exception_code": 0,
+          "n": 91,
+          "p50_duration_ms": 86,
+          "p95_duration_ms": 115,
+          "min_read_rows": 266269,
+          "max_read_rows": 266269,
+          "avg_read_rows": 266269,
+          "min_read_bytes": 30350313,
+          "max_read_bytes": 30350313,
+          "avg_read_bytes": 30350313,
+          "min_memory_usage": 9356082,
+          "max_memory_usage": 11963704,
+          "avg_memory_usage": 9937359.142857144,
+          "max_selected_marks": 33,
+          "max_cpu_microseconds": 80205
+        },
+        {
+          "normalized_query_hash": "8370212257838384268",
+          "exception_code": 0,
+          "n": 80,
+          "p50_duration_ms": 4521,
+          "p95_duration_ms": 5373,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867809,
+          "max_read_bytes": 201867809,
+          "avg_read_bytes": 201867809,
+          "min_memory_usage": 188765637,
+          "max_memory_usage": 338708094,
+          "avg_memory_usage": 303216364.825,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5318790
+        },
+        {
+          "normalized_query_hash": "8370212257838384268",
+          "exception_code": 241,
+          "n": 8,
+          "p50_duration_ms": 2166,
+          "p95_duration_ms": 2972,
+          "min_read_rows": 314867,
+          "max_read_rows": 962571,
+          "avg_read_rows": 663876.625,
+          "min_read_bytes": 56830906,
+          "max_read_bytes": 175361426,
+          "avg_read_bytes": 120700027.375,
+          "min_memory_usage": 255017563,
+          "max_memory_usage": 338279009,
+          "avg_memory_usage": 311608943.75,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 2349940
+        }
+      ],
+      "error_scopes": [
+        {
+          "exception_code": 241,
+          "memory_scope": "server_total",
+          "executions": 41
+        },
+        {
+          "exception_code": 307,
+          "memory_scope": "other",
+          "executions": 165
+        }
+      ],
+      "notes": [
+        "Execution-log groups are observations, not a one-to-one mapping to API task outcomes.",
+        "Only fixed safe counters and classifications are retained; no raw SQL or exception messages."
+      ]
+    },
+    "million-single-worker-diagnostics": {
+      "since": "2026-11-09T04:46:40.212Z",
+      "until": "2026-11-09T04:48:46.500Z",
+      "query_log_groups": [
+        {
+          "normalized_query_hash": "11793964725672808561",
+          "exception_code": 0,
+          "n": 10,
+          "p50_duration_ms": 5213,
+          "p95_duration_ms": 5551,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 264473661,
+          "max_read_bytes": 264473661,
+          "avg_read_bytes": 264473661,
+          "min_memory_usage": 367660308,
+          "max_memory_usage": 369970619,
+          "avg_memory_usage": 369280671,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 5346089
+        },
+        {
+          "normalized_query_hash": "15962335870072694128",
+          "exception_code": 0,
+          "n": 9,
+          "p50_duration_ms": 3868,
+          "p95_duration_ms": 4096,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867809,
+          "max_read_bytes": 201867809,
+          "avg_read_bytes": 201867809,
+          "min_memory_usage": 338164066,
+          "max_memory_usage": 338640250,
+          "avg_memory_usage": 338265167.8888889,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3931183
+        },
+        {
+          "normalized_query_hash": "8370212257838384268",
+          "exception_code": 0,
+          "n": 10,
+          "p50_duration_ms": 3824,
+          "p95_duration_ms": 4036,
+          "min_read_rows": 1112368,
+          "max_read_rows": 1112368,
+          "avg_read_rows": 1112368,
+          "min_read_bytes": 201867809,
+          "max_read_bytes": 201867809,
+          "avg_read_bytes": 201867809,
+          "min_memory_usage": 338268081,
+          "max_memory_usage": 338604738,
+          "avg_memory_usage": 338349952.5,
+          "max_selected_marks": 147,
+          "max_cpu_microseconds": 3818100
+        }
+      ],
+      "error_scopes": [],
+      "notes": [
+        "Execution-log groups are observations, not a one-to-one mapping to API task outcomes.",
+        "Only fixed safe counters and classifications are retained; no raw SQL or exception messages."
+      ]
+    }
+  },
+  "storage_observations_before_fresh_ingestion": {
+    "rows": 1322549,
+    "active_part_bytes_before_layouts": 509894485,
+    "active_part_bytes_after_layouts": 667171334,
+    "note": "Observed part statistics, not a controlled physical-disk increment; layouts and background merges can differ."
+  },
+  "additional_profiles": {
+    "single_worker_smoke": {
+      "query_workers": 1,
+      "samples_per_workload_at_concurrency_8": 8,
+      "budget_changes": false,
+      "notes": [
+        "Separate smaller profile; cannot replace the complete two-worker matrix.",
+        "Same backend binary and database; only query worker count changed."
+      ]
+    }
+  },
+  "resource_summaries": {
+    "concurrent_baseline": {
+      "samples": 278,
+      "first_sample_at": "2026-11-09T03:53:29.989006+00:00",
+      "last_sample_at": "2026-11-09T04:16:35.149632+00:00",
+      "min_host_disk_free_bytes": 4359266304,
+      "min_host_memory_available_bytes": 13736390656,
+      "max_host_load_one_minute": 9.70361328125,
+      "processes": {
+        "api": {
+          "pid": 1857425,
+          "samples": 278,
+          "max_rss_bytes": 41521152
+        },
+        "ingestion_worker": {
+          "pid": 1857495,
+          "samples": 278,
+          "max_rss_bytes": 49864704
+        },
+        "query_worker": {
+          "pid": 1857540,
+          "samples": 278,
+          "max_rss_bytes": 23314432
+        }
+      },
+      "caveats": [
+        "Sampled peaks may miss intervals between samples.",
+        "Host metrics include both dependency environments and unrelated activity.",
+        "Docker CPU and memory fields share a cgroup and are not attributable to individual containers.",
+        "Container init-process RSS excludes child processes; it is not the full database footprint."
+      ]
+    },
+    "final": {
+      "samples": 268,
+      "first_sample_at": "2026-11-09T04:22:57.402158+00:00",
+      "last_sample_at": "2026-11-09T04:45:12.486882+00:00",
+      "min_host_disk_free_bytes": 4766887936,
+      "min_host_memory_available_bytes": 13746434048,
+      "max_host_load_one_minute": 7.7119140625,
+      "processes": {
+        "api": {
+          "pid": 2135581,
+          "samples": 268,
+          "max_rss_bytes": 31277056
+        },
+        "ingestion_worker": {
+          "pid": 2135650,
+          "samples": 268,
+          "max_rss_bytes": 34779136
+        },
+        "query_worker": {
+          "pid": 2136489,
+          "samples": 268,
+          "max_rss_bytes": 23646208
+        }
+      },
+      "caveats": [
+        "Sampled peaks may miss intervals between samples.",
+        "Host metrics include both dependency environments and unrelated activity.",
+        "Docker CPU and memory fields share a cgroup and are not attributable to individual containers.",
+        "Container init-process RSS excludes child processes; it is not the full database footprint."
+      ]
+    },
+    "single_worker_smoke": {
+      "samples": 23,
+      "first_sample_at": "2026-11-09T04:46:52.348510+00:00",
+      "last_sample_at": "2026-11-09T04:48:42.351121+00:00",
+      "min_host_disk_free_bytes": 4904992768,
+      "min_host_memory_available_bytes": 14227664896,
+      "max_host_load_one_minute": 3.74560546875,
+      "processes": {
+        "api": {
+          "pid": 2135581,
+          "samples": 23,
+          "max_rss_bytes": 31395840
+        },
+        "ingestion_worker": {
+          "pid": 2135650,
+          "samples": 23,
+          "max_rss_bytes": 34779136
+        },
+        "query_worker": {
+          "pid": 2341248,
+          "samples": 23,
+          "max_rss_bytes": 21569536
+        }
+      },
+      "caveats": [
+        "Sampled peaks may miss intervals between samples.",
+        "Host metrics include both dependency environments and unrelated activity.",
+        "Docker CPU and memory fields share a cgroup and are not attributable to individual containers.",
+        "Container init-process RSS excludes child processes; it is not the full database footprint."
+      ]
+    }
+  },
+  "notes": [
+    "The initial before-layout binary was reused from the prior run and has a modified working-tree build marker; its base revision is not an exact source snapshot.",
+    "The million-event ingestion report is reused from November 8; it is not new ingestion throughput with projections.",
+    "Fresh ingestion after migrations used 100000 unique events and 10000 replays.",
+    "Fresh ingestion has no overlapping CPU/RSS sampler records; first sample is 6.341 seconds after intake ended.",
+    "API outcomes are authoritative. Query-log groups can omit entries; their totals need not match task counts.",
+    "First-observed is not cold cache. Successful-sample percentiles exclude failed attempts, which remain in outcome totals.",
+    "Query latency includes job queueing and bounded polling.",
+    "Parts, caches and server allocation state are not frozen across measurements.",
+    "No native JSON property migration or per-property reader was delivered.",
+    "No ten-million-user capacity claim is supported by these synthetic measurements."
+  ],
+  "evidence_sha256": {
+    "million-before.json": "34e1cfd76024e168b7778fbd697c15c1dc3d74bb54763a2b59acddbfc7f5ac54",
+    "million-compact-smoke.json": "1f828bc2d76f9e5aac873ebae22f807e052a806eef7b7f6007a9c807f4fa6f09",
+    "million-identity-smoke.json": "70f0a4472c19fe9c92de9f50876637423ccd89083689d41e857f203f41a95d65",
+    "million-concurrent-baseline.json": "5a30950a7fdd426ce556a24523bfd011a6ebc0bad16c025a678714654e414310",
+    "million-final-queries.json": "122aef0bb9801c79a0aa63a58cac45dc1934385c46a4bd33cd9a0027c2d0b46a",
+    "100k-ingestion.json": "e0ddf59783bdf8c0f7d73c2746fe3e1eaedb2137382f2823e8877e0d87cbc15e",
+    "100k-queries.json": "3256700c3508640b9acfca51302d33ade51ea0699a589186c4cf78582b3e7340",
+    "100k-materialization.json": "3b54882dfb0092bad9e810c952697cb0c8573743f5dc9a5a56e9486e34a18ff0",
+    "compact-materialization.json": "85d23eab5fb0f48bb3d4b67e625721033a0d900e7eaa994fee392238a869d4e4",
+    "identity-materialization.json": "f795654640fd0ba17392eb98794bba64f1509e7bb53a321b9034cb9dc5a8d72c",
+    "million-single-worker-smoke.json": "a04446cd7fd8182692ab22e241e80e975903551ad439e46124d090edfab6ce9c",
+    "final-storage-audit.json": "6ae4f46ba62263904e54624afe0b60fe3f9e4fb617811edc610fa31c420d5db0"
+  }
+}
