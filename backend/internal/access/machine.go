@@ -30,6 +30,10 @@ const (
 	PermissionAnalysesWrite           = "analyses.write"
 	PermissionAnalysesPublish         = "analyses.publish"
 	PermissionAnalysesRun             = "analyses.run"
+	PermissionMetricsRead             = "metrics.read"
+	PermissionMetricsWrite            = "metrics.write"
+	PermissionMetricsPublish          = "metrics.publish"
+	PermissionMetricsRun              = "metrics.run"
 	PermissionDashboardsRead          = "dashboards.read"
 	PermissionDashboardsWrite         = "dashboards.write"
 	PermissionDashboardsPublish       = "dashboards.publish"
@@ -42,6 +46,7 @@ var machinePermissions = map[string]bool{
 	PermissionSourcesRead: true, PermissionSourcesWrite: true, PermissionSourcesRotate: true,
 	PermissionQueriesRead: true, PermissionQueriesRun: true, PermissionQueriesRawRead: true,
 	PermissionAnalysesRead: true, PermissionAnalysesWrite: true, PermissionAnalysesPublish: true, PermissionAnalysesRun: true,
+	PermissionMetricsRead: true, PermissionMetricsWrite: true, PermissionMetricsPublish: true, PermissionMetricsRun: true,
 	PermissionDashboardsRead: true, PermissionDashboardsWrite: true, PermissionDashboardsPublish: true, PermissionDashboardsRun: true,
 }
 

@@ -19,6 +19,25 @@ func (a *API) projectAuth(mutate bool, next authorizedEndpoint) http.HandlerFunc
 	return a.authenticate(mutate, true, next)
 }
 
+// projectPermissionAuth requires an explicit grant at the HTTP boundary. The
+// persistence operation still rechecks the current credential and resource scope
+// in its own transaction; authentication metadata cannot replace that check.
+func (a *API) projectPermissionAuth(mutate bool, permission string, next authorizedEndpoint) http.HandlerFunc {
+	return a.projectAuth(mutate, func(w http.ResponseWriter, r *http.Request, actor authorizedActor) error {
+		if identity, machine := access.IdentityFromContext(r.Context()); machine {
+			if access.KnownMachinePermission(permission) {
+				for _, granted := range identity.Permissions {
+					if granted == permission {
+						return next(w, r, actor)
+					}
+				}
+			}
+			return fault.New(fault.Forbidden, "MACHINE_FORBIDDEN", "机器主体无权执行此操作")
+		}
+		return next(w, r, actor)
+	})
+}
+
 func (a *API) authenticate(mutate, machineAllowed bool, next authorizedEndpoint) http.HandlerFunc {
 	return a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		if e := a.origin(r); e != nil {
