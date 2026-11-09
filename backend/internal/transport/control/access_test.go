@@ -235,11 +235,11 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 			}
 			if tc.status == 200 {
 				permissions := out["permissions"].([]any)
-				expected := 2
+				expected := 4
 				if tc.role == "owner" {
-					expected = 7
+					expected = 11
 				} else if tc.role == "editor" {
-					expected = 3
+					expected = 7
 				}
 				if len(permissions) != expected || out["id"] != projectID {
 					t.Fatal(out)
@@ -251,5 +251,24 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 	catalogStatus(t, publicConfigRequest(api(t, f), "GET", base, nil), 401)
 	if f.projectCalls != 0 {
 		t.Fatal("unauthenticated project read")
+	}
+}
+
+func TestProjectMetricPermissionsMatchHumanRolePolicy(t *testing.T) {
+	for _, role := range []string{"owner", "editor", "viewer"} {
+		has := map[string]bool{}
+		for _, permission := range projectWire(access.Project{Role: role}).Permissions {
+			has[permission] = true
+		}
+		for _, permission := range []string{access.PermissionMetricsRead, access.PermissionMetricsRun} {
+			if !has[permission] {
+				t.Fatalf("%s cannot discover %s", role, permission)
+			}
+		}
+		for _, permission := range []string{access.PermissionMetricsWrite, access.PermissionMetricsPublish} {
+			if has[permission] != (role == "owner" || role == "editor") {
+				t.Fatalf("%s has incorrect %s policy", role, permission)
+			}
+		}
 	}
 }

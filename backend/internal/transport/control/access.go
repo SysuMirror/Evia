@@ -37,6 +37,7 @@ type API struct {
 	Analysis      AnalysisService
 	Discovery     reporting.DiscoveryService
 	SavedAnalyses reporting.SavedAnalysisService
+	Metrics       reporting.MetricService
 	Dashboards    reporting.DashboardService
 	Delivery      DeliveryService
 	Cursor        *cursor.Codec
@@ -66,6 +67,7 @@ func (a *API) Handler() http.Handler {
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
 	(&DiscoveryAPI{API: a, Service: a.Discovery}).Register(mux)
 	(&SavedAnalysesAPI{API: a, Service: a.SavedAnalyses}).Register(mux)
+	(&MetricsAPI{API: a, Service: a.Metrics}).Register(mux)
 	(&DashboardsAPI{API: a, Service: a.Dashboards}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
@@ -150,9 +152,9 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request, actor authorizedAct
 	return nil
 }
 func projectWire(p access.Project) wire.Project {
-	permissions := []string{"project.read", "settings.read"}
+	permissions := []string{"project.read", "settings.read", access.PermissionMetricsRead, access.PermissionMetricsRun}
 	if p.Role == "owner" || p.Role == "editor" {
-		permissions = append(permissions, "project.write")
+		permissions = append(permissions, "project.write", access.PermissionMetricsWrite, access.PermissionMetricsPublish)
 	}
 	if p.Role == "owner" {
 		permissions = append(permissions, "machine_principals.manage", "settings.write", "members.manage", "audit.read")

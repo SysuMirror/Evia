@@ -165,6 +165,9 @@ type analysisServicesStore interface {
 func configureAnalysis(api *control.API, store analysisServicesStore, validator analysis.Validator, engine analysis.Engine) {
 	api.Discovery = reporting.NewDiscovery(store, validator, engine != nil)
 	api.SavedAnalyses = reporting.NewSavedAnalyses(store, validator, engine != nil)
+	if metrics, ok := store.(reporting.MetricStore); ok {
+		api.Metrics = reporting.NewMetrics(metrics, validator, engine != nil)
+	}
 	if dashboards, ok := store.(reporting.DashboardStore); ok {
 		api.Dashboards = reporting.NewDashboards(dashboards, validator, engine != nil)
 	}
