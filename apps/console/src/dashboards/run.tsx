@@ -144,7 +144,7 @@ export function DashboardRunView({
       JSON.stringify(filters) !== filterBaseline);
   return (
     <div className="section-stack dashboard-run">
-      <Panel label="看板执行条件">
+      <Panel label="看板执行条件" className="dashboard-run-controls">
         <Toolbar
           actions={
             <>

@@ -98,3 +98,92 @@
     width: 100%;
   }
 }
+
+/* Dashboard context stays compact so the first result shares the working viewport. */
+.dashboard-workspace.section-stack,
+.dashboard-published.section-stack,
+.dashboard-run.section-stack,
+.dashboard-run .section-stack {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.dashboard-workspace > .page-heading {
+  margin-bottom: 0;
+}
+.dashboard-tabs.evia-panel,
+.dashboard-version-picker.evia-panel,
+.dashboard-run-controls.evia-panel {
+  padding: 0;
+}
+.dashboard-tabs .evia-tab-panel {
+  padding-top: 12px;
+}
+.dashboard-version-picker > .evia-toolbar,
+.dashboard-run-controls > .evia-toolbar {
+  margin-bottom: 0;
+}
+.dashboard-version-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+}
+.dashboard-version-picker .evia-toolbar-controls > .evia-select {
+  width: auto;
+  max-width: min(420px, 100%);
+}
+.dashboard-run .evia-dashboard-card-content {
+  overflow-x: visible;
+}
+.dashboard-run .saved-analysis-result,
+.dashboard-run .saved-analysis-result > .section-stack,
+.dashboard-run .saved-analysis-chart-wrap,
+.dashboard-run .saved-analysis-chart,
+.dashboard-run .saved-analysis-result details,
+.dashboard-run .saved-analysis-result .data-surface {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.dashboard-run .saved-analysis-result .evia-table-region {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+@media (max-width: 800px) {
+  .dashboard-version-picker .evia-toolbar-controls {
+    align-items: flex-start;
+  }
+  .dashboard-run-controls > .evia-toolbar > .inline-actions {
+    align-self: auto;
+  }
+}
+.dashboard-workspace.section-stack,
+.dashboard-published.section-stack,
+.dashboard-run.section-stack {
+  gap: 8px;
+}
+.dashboard-tabs .evia-tab-panel {
+  padding-top: 8px;
+}
+.dashboard-run-status {
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (max-width: 800px) {
+  .dashboard-version-picker .evia-toolbar-controls > .evia-select {
+    flex: 1 1 180px;
+    width: 0;
+    min-width: 0;
+  }
+  .dashboard-version-metadata {
+    flex-basis: 100%;
+  }
+  .dashboard-run-controls > .evia-toolbar {
+    gap: 8px;
+  }
+  .dashboard-run-controls .evia-toolbar-controls {
+    gap: 4px 8px;
+  }
+}

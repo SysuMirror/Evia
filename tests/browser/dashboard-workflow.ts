@@ -176,9 +176,22 @@ export async function verifyDashboardWorkflow(
     await expect(table.locator('tbody tr')).toHaveCount(1);
     await expect(table.locator('tbody td').last()).toHaveText('2');
   }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const desktopCard = results.getByRole('region', { name: '访问趋势', exact: true }).first();
+  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(360);
   await screenshot('desktop-dashboard-result.png');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(650);
+  for (const img of await results.getByRole('img').all()) {
+    const bounds = await img.boundingBox();
+    const card = await img
+      .locator('xpath=ancestor::section[contains(@class,"evia-dashboard-card")]')
+      .boundingBox();
+    expect(bounds!.width).toBeLessThanOrEqual(card!.width - 24);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(card!.x + card!.width);
+  }
   await screenshot('mobile-dashboard-result.png');
   await page.setViewportSize({ width: 1440, height: 900 });
   // Discover a published property and target one component; its sibling keeps real data.
@@ -236,8 +249,32 @@ export async function verifyDashboardWorkflow(
   await page.getByRole('button', { name: '组件运行筛选 (0)', exact: true }).click();
   await expect(filters.getByLabel('条件 1 目标组件', { exact: true })).toHaveCount(0);
   await filters.getByRole('button', { name: '返回', exact: true }).click();
+  // Apply a real v2 filter, then switch directly while preserving the old run snapshot.
+  await page.getByRole('button', { name: '统一时间范围', exact: true }).click();
+  await range
+    .getByLabel('开始时间（UTC）', { exact: true })
+    .fill(new Date(Date.now() - 3600000).toISOString().slice(0, 16));
+  await range
+    .getByLabel('结束时间（UTC，不含）', { exact: true })
+    .fill(new Date(Date.now() + 60000).toISOString().slice(0, 16));
+  await range.getByRole('button', { name: '完成', exact: true }).click();
+  await page.getByRole('button', { name: '组件运行筛选 (0)', exact: true }).click();
+  await filters.getByRole('button', { name: '添加运行筛选', exact: true }).click();
+  await filters.getByLabel('条件 1 目标组件', { exact: true }).selectOption({ label: '访问趋势' });
+  await filters.getByLabel('条件 1 字段', { exact: true }).selectOption(property!);
+  await filters.getByLabel('条件 1 值', { exact: true }).fill('not-present-in-synthetic-events');
+  await filters.getByRole('button', { name: '应用筛选', exact: true }).click();
+  await page.getByRole('button', { name: '运行看板', exact: true }).click();
+  await expect(emptyCard.getByText('完整结果表（0 行）', { exact: true })).toBeVisible({
+    timeout: 25000,
+  });
+  await expect(page.getByRole('combobox', { name: '已发布版本', exact: true })).toBeEnabled();
   await page.getByRole('combobox', { name: '已发布版本', exact: true }).selectOption('1');
   await expect(page.getByText('不可变版本 v1', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '组件运行筛选 (0)', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '组件运行筛选 (0)', exact: true }).click();
+  await expect(filters.getByLabel('条件 1 目标组件', { exact: true })).toHaveCount(0);
+  await filters.getByRole('button', { name: '返回', exact: true }).click();
   // Version selection retains its own immutable definition.
   await page.getByText('查看该版本的固定配置与依赖', { exact: true }).click();
   await expect(
