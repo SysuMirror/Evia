@@ -235,11 +235,11 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 			}
 			if tc.status == 200 {
 				permissions := out["permissions"].([]any)
-				expected := 1
+				expected := 2
 				if tc.role == "owner" {
-					expected = 3
+					expected = 7
 				} else if tc.role == "editor" {
-					expected = 2
+					expected = 3
 				}
 				if len(permissions) != expected || out["id"] != projectID {
 					t.Fatal(out)

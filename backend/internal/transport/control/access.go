@@ -29,6 +29,9 @@ type API struct {
 	Boundary      *httpapi.Boundary
 	Access        AccessService
 	Machines      MachineService
+	Memberships   MembershipService
+	Settings      SettingsService
+	AuditLogs     AuditService
 	Catalog       CatalogService
 	Sources       SourceService
 	Analysis      AnalysisService
@@ -57,6 +60,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/projects", a.auth(true, a.createProject))
 	mux.HandleFunc("GET /api/v1/projects/{project_id}", a.projectAuth(false, a.getProject))
 	a.registerMachines(mux)
+	a.registerGovernance(mux)
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
@@ -146,12 +150,12 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request, actor authorizedAct
 	return nil
 }
 func projectWire(p access.Project) wire.Project {
-	permissions := []string{"project.read"}
+	permissions := []string{"project.read", "settings.read"}
 	if p.Role == "owner" || p.Role == "editor" {
 		permissions = append(permissions, "project.write")
 	}
 	if p.Role == "owner" {
-		permissions = append(permissions, "machine_principals.manage")
+		permissions = append(permissions, "machine_principals.manage", "settings.write", "members.manage", "audit.read")
 	}
 	return wire.Project{ID: p.ID, Name: p.Name, Timezone: p.Timezone, Capabilities: []string{}, Permissions: permissions}
 }
