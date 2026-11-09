@@ -1,0 +1,312 @@
+import { useEffect, useId, useRef, useState } from 'react';
+import type { DashboardDefinition, DashboardWidget, SavedAnalysisVersion } from '@evia/api-client';
+import {
+  Badge,
+  Button,
+  DashboardCard,
+  DashboardGrid,
+  Field,
+  Input,
+  Textarea,
+  Modal,
+  nextDashboardLayout,
+} from '@evia/design-system';
+import type { CatalogPageProps } from '../catalog';
+import { DashboardWidgetPicker } from './picker';
+import { availableWidgetPosition, dashboardIssues, reorderWidget } from './model';
+
+export function DashboardEditor({
+  context,
+  value,
+  disabled,
+  readOnly,
+  onChange,
+  onValidityChange,
+  onPendingChange,
+  onDenied,
+}: {
+  context: CatalogPageProps;
+  value: DashboardDefinition;
+  disabled: boolean;
+  readOnly: boolean;
+  onChange: (value: DashboardDefinition) => void;
+  onValidityChange: (valid: boolean) => void;
+  onPendingChange: (pending: boolean) => void;
+  onDenied: (error: Error) => void;
+}) {
+  const id = useId(),
+    [picker, setPicker] = useState(false),
+    [editing, setEditing] = useState<string>(),
+    [replacing, setReplacing] = useState<string>(),
+    [notice, setNotice] = useState('');
+  const fallback = useRef<HTMLButtonElement>(null),
+    returnTarget = useRef<HTMLButtonElement | null>(null);
+  const [title, setTitle] = useState('');
+  const issues = dashboardIssues(value),
+    widget = value.widgets.find((w) => w.widget_id === editing),
+    frozen = disabled || readOnly;
+  useEffect(
+    () => onValidityChange(issues.length === 0),
+    [JSON.stringify(issues), onValidityChange],
+  );
+  useEffect(() => onPendingChange(false), [onPendingChange]);
+  function update(next: DashboardWidget) {
+    onChange({
+      ...value,
+      widgets: value.widgets.map((w) => (w.widget_id === next.widget_id ? next : w)),
+    });
+  }
+  function layout(patch: Partial<DashboardWidget['layout']>) {
+    if (!widget || frozen) return;
+    const next = nextDashboardLayout(
+      widget.layout,
+      value.widgets.filter((w) => w.widget_id !== widget.widget_id).map((w) => w.layout),
+      patch,
+    );
+    if (!next) {
+      setNotice('该位置与其他组件重叠或超出布局边界。');
+      return;
+    }
+    update({ ...widget, layout: next });
+    setNotice(
+      `布局已调整，第 ${next.y + 1} 行，第 ${next.x + 1} 列，宽 ${next.width} 列，高 ${next.height} 行。`,
+    );
+  }
+  function add(version: SavedAnalysisVersion, title: string) {
+    if (replacing) {
+      const current = value.widgets.find((w) => w.widget_id === replacing);
+      if (current)
+        update({ ...current, analysis_id: version.analysis_id, analysis_version: version.version });
+      setReplacing(undefined);
+      return;
+    }
+    const w: DashboardWidget = {
+      widget_id: crypto.randomUUID(),
+      analysis_id: version.analysis_id,
+      analysis_version: version.version,
+      title,
+      reading_order: value.widgets.length,
+      layout: availableWidgetPosition(value.widgets),
+    };
+    onChange({ ...value, widgets: [...value.widgets, w] });
+    setNotice(`已添加组件 ${title}`);
+  }
+  return (
+    <div className="section-stack dashboard-editor">
+      <div className="dashboard-metadata">
+        <Field label="看板标题" htmlFor={`${id}-title`}>
+          <Input
+            id={`${id}-title`}
+            required
+            maxLength={256}
+            value={value.title}
+            readOnly={readOnly}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...value, title: e.target.value })}
+          />
+        </Field>
+        <Field label="描述" htmlFor={`${id}-description`}>
+          <Textarea
+            id={`${id}-description`}
+            rows={2}
+            maxLength={4000}
+            value={value.description ?? ''}
+            readOnly={readOnly}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...value, description: e.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="dashboard-section-actions">
+        <span>{value.widgets.length} / 12 个组件</span>
+        <Button
+          ref={fallback}
+          disabled={frozen || value.widgets.length >= 12}
+          onClick={() => {
+            setReplacing(undefined);
+            setPicker(true);
+          }}
+        >
+          添加分析组件
+        </Button>
+      </div>
+      {issues.length > 0 && (
+        <ul className="field-help" aria-label="待完善看板">
+          {issues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
+      <p role="status" aria-live="polite" className="field-help">
+        {notice}
+      </p>
+      {value.widgets.length === 0 ? (
+        <div className="dashboard-empty">
+          <h3>添加第一个分析组件</h3>
+          <p>选择已发布分析的精确版本，再设置布局。可并排展示趋势、指标和完整结果表。</p>
+        </div>
+      ) : (
+        <DashboardGrid
+          label="草稿组件布局"
+          items={value.widgets.map((w) => ({
+            id: w.widget_id,
+            reading_order: w.reading_order,
+            layout: w.layout,
+            content: (
+              <DashboardCard
+                title={w.title}
+                summary={`分析 v${w.analysis_version}，阅读顺序 ${w.reading_order + 1}`}
+                action={
+                  <Button
+                    disabled={frozen}
+                    onClick={(e) => {
+                      returnTarget.current = e.currentTarget;
+                      setTitle(w.title);
+                      setEditing(w.widget_id);
+                      setNotice('');
+                    }}
+                    aria-label={`编辑组件 ${w.title}`}
+                  >
+                    编辑组件
+                  </Button>
+                }
+              >
+                <div className="dashboard-widget-preview">
+                  <span>已固定发布分析 v{w.analysis_version}</span>
+                  <dl>
+                    <div>
+                      <dt>位置</dt>
+                      <dd>
+                        第 {w.layout.y + 1} 行，第 {w.layout.x + 1} 列
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>尺寸</dt>
+                      <dd>
+                        {w.layout.width} 列 × {w.layout.height} 行
+                      </dd>
+                    </div>
+                  </dl>
+                  <p>发布后可按统一时间运行真实查询。</p>
+                </div>
+              </DashboardCard>
+            ),
+          }))}
+        />
+      )}
+      <DashboardWidgetPicker
+        context={context}
+        open={picker}
+        onClose={() => setPicker(false)}
+        onAdd={add}
+        onDenied={onDenied}
+      />
+      <Modal
+        open={!!widget}
+        title="编辑组件"
+        onRequestClose={() => {
+          if (!disabled) {
+            setEditing(undefined);
+            onPendingChange(false);
+          }
+        }}
+        footer={
+          <Button
+            variant="primary"
+            disabled={disabled}
+            onClick={() => {
+              setEditing(undefined);
+              onPendingChange(false);
+            }}
+          >
+            完成
+          </Button>
+        }
+      >
+        {widget && (
+          <div className="section-stack">
+            <Field label="组件标题" htmlFor={`${id}-widget-title`}>
+              <Input
+                id={`${id}-widget-title`}
+                value={widget.title}
+                maxLength={256}
+                required
+                disabled={frozen}
+                onChange={(e) => update({ ...widget, title: e.target.value })}
+              />
+            </Field>
+            <Button
+              disabled={frozen}
+              onClick={() => {
+                setReplacing(widget.widget_id);
+                setPicker(true);
+              }}
+            >
+              更换分析版本
+            </Button>
+            <p className="field-help">
+              方向按钮移动一格，尺寸按钮调整一格。位置和尺寸立即应用，碰撞与越界时保留原布局。
+            </p>
+            <fieldset disabled={frozen} className="dashboard-layout-controls">
+              <legend>移动组件</legend>
+              <Button onClick={() => layout({ y: widget.layout.y - 1 })}>向上移动</Button>
+              <Button onClick={() => layout({ y: widget.layout.y + 1 })}>向下移动</Button>
+              <Button onClick={() => layout({ x: widget.layout.x - 1 })}>向左移动</Button>
+              <Button onClick={() => layout({ x: widget.layout.x + 1 })}>向右移动</Button>
+            </fieldset>
+            <fieldset disabled={frozen} className="dashboard-layout-controls">
+              <legend>调整尺寸</legend>
+              <Button onClick={() => layout({ width: widget.layout.width - 1 })}>减少宽度</Button>
+              <Button onClick={() => layout({ width: widget.layout.width + 1 })}>增加宽度</Button>
+              <Button onClick={() => layout({ height: widget.layout.height - 1 })}>减少高度</Button>
+              <Button onClick={() => layout({ height: widget.layout.height + 1 })}>增加高度</Button>
+            </fieldset>
+            <p role="status" aria-live="polite">
+              {notice ||
+                `第 ${widget.layout.y + 1} 行，第 ${widget.layout.x + 1} 列，宽 ${widget.layout.width} 列，高 ${widget.layout.height} 行。`}
+            </p>
+            <fieldset disabled={frozen} className="dashboard-layout-controls">
+              <legend>阅读顺序 {widget.reading_order + 1}</legend>
+              <Button
+                disabled={frozen || widget.reading_order === 0}
+                onClick={() =>
+                  onChange({
+                    ...value,
+                    widgets: reorderWidget(value.widgets, widget.widget_id, -1),
+                  })
+                }
+              >
+                提前阅读
+              </Button>
+              <Button
+                disabled={frozen || widget.reading_order === value.widgets.length - 1}
+                onClick={() =>
+                  onChange({ ...value, widgets: reorderWidget(value.widgets, widget.widget_id, 1) })
+                }
+              >
+                延后阅读
+              </Button>
+            </fieldset>
+            <Button
+              variant="danger"
+              disabled={frozen}
+              onClick={() => {
+                onChange({
+                  ...value,
+                  widgets: value.widgets
+                    .filter((w) => w.widget_id !== widget.widget_id)
+                    .sort((a, b) => a.reading_order - b.reading_order)
+                    .map((w, reading_order) => ({ ...w, reading_order })),
+                });
+                setEditing(undefined);
+                onPendingChange(false);
+              }}
+            >
+              移除组件
+            </Button>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
