@@ -47,12 +47,14 @@ const jobLabels: Record<QueryJob['state'], string> = {
 
 export function SavedResultPresentation({
   snapshot,
+  compact = false,
   changed,
   observing,
   notice,
   onResume,
 }: {
   snapshot: ExecutionSnapshot;
+  compact?: boolean;
   changed: boolean;
   observing: boolean;
   notice: string;
@@ -69,10 +71,49 @@ export function SavedResultPresentation({
   );
   return (
     <Panel label="已发布分析结果" className="saved-analysis-result">
-      <ResultHeader
-        title={snapshot.version.definition.title}
-        summary={`v${snapshot.version.version}，${environmentLabel[snapshot.version.environment]}`}
-        action={
+      {!compact && (
+        <ResultHeader
+          title={snapshot.version.definition.title}
+          summary={`v${snapshot.version.version}，${environmentLabel[snapshot.version.environment]}`}
+          action={
+            <div className="inline-actions">
+              <Badge
+                tone={
+                  snapshot.job.state === 'succeeded'
+                    ? 'success'
+                    : snapshot.job.state === 'failed' || snapshot.job.state === 'expired'
+                      ? 'error'
+                      : 'neutral'
+                }
+              >
+                {jobLabels[snapshot.job.state]}
+              </Badge>
+              {result && (
+                <>
+                  <Badge tone={result.metadata.accuracy === 'approximate' ? 'warning' : 'neutral'}>
+                    {result.metadata.accuracy === 'exact'
+                      ? '精确'
+                      : result.metadata.accuracy === 'approximate'
+                        ? '近似'
+                        : '明细'}
+                  </Badge>
+                  <Badge
+                    tone={result.metadata.coverage.state === 'settled' ? 'success' : 'warning'}
+                  >
+                    {
+                      { provisional: '覆盖暂定', settled: '覆盖已稳定', partial: '部分覆盖' }[
+                        result.metadata.coverage.state
+                      ]
+                    }
+                  </Badge>
+                </>
+              )}
+            </div>
+          }
+        />
+      )}
+      <div className="section-stack">
+        {compact && (
           <div className="inline-actions">
             <Badge
               tone={
@@ -95,18 +136,12 @@ export function SavedResultPresentation({
                       : '明细'}
                 </Badge>
                 <Badge tone={result.metadata.coverage.state === 'settled' ? 'success' : 'warning'}>
-                  {
-                    { provisional: '覆盖暂定', settled: '覆盖已稳定', partial: '部分覆盖' }[
-                      result.metadata.coverage.state
-                    ]
-                  }
+                  {result.metadata.coverage.state === 'settled' ? '覆盖已稳定' : '覆盖暂定'}
                 </Badge>
               </>
             )}
           </div>
-        }
-      />
-      <div className="section-stack">
+        )}
         <div className="analysis-query-context">
           {formatTime(snapshot.body.time_range.from, snapshot.body.timezone)} 至{' '}
           {formatTime(snapshot.body.time_range.to, snapshot.body.timezone)}（不含），
@@ -162,15 +197,32 @@ export function SavedResultPresentation({
                 </Suspense>
               </ChartBoundary>
             )}
-            <DataSurface label="保存分析结果表">
-              <DataTable
-                caption="已发布分析的完整有界结果"
-                rows={rows}
-                columns={columns}
-                rowKey={(row) => String(rows.indexOf(row))}
-                empty="该范围内无匹配结果，不等同于数值零。"
-              />
-            </DataSurface>
+            {compact ? (
+              <details>
+                <summary>完整结果表（{rows.length} 行）</summary>
+                <DataSurface label="保存分析结果表">
+                  <DataTable
+                    caption="已发布分析的完整有界结果"
+                    rows={rows}
+                    columns={columns}
+                    rowKey={(row) => String(rows.indexOf(row))}
+                    empty="该范围内无匹配结果，不等同于数值零。"
+                  />
+                </DataSurface>
+              </details>
+            ) : (
+              <>
+                <DataSurface label="保存分析结果表">
+                  <DataTable
+                    caption="已发布分析的完整有界结果"
+                    rows={rows}
+                    columns={columns}
+                    rowKey={(row) => String(rows.indexOf(row))}
+                    empty="该范围内无匹配结果，不等同于数值零。"
+                  />
+                </DataSurface>
+              </>
+            )}
             <p className="field-help">
               返回 {rows.length} 行，上限 {snapshot.version.definition.query.limit ?? 200}{' '}
               行。缺失时间桶未补零，各桶去重数不能相加为整段去重数。

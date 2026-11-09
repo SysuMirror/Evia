@@ -152,3 +152,10 @@ export function SavedAnalysisRun({
     </div>
   );
 }
+
+export { SavedResultPresentation as SavedAnalysisResultPresentation } from './saved-analysis-run/result-presentation';
+export type { ExecutionSnapshot as SavedAnalysisResultSnapshot } from './saved-analysis-run/types';
+export {
+  SavedTimeControls as SavedAnalysisTimeControls,
+  savedExecutionBody as savedAnalysisExecutionBody,
+} from './saved-analysis-run/time-controls';
