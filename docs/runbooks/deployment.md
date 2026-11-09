@@ -52,6 +52,22 @@ proves event-pipeline readiness or disaster recovery. Use UTC timestamps for
 storage and IANA project timezones such as `Asia/Shanghai` for business reporting
 boundaries. The Go binary embeds timezone data.
 
+## ClickHouse read-layout upgrades
+
+`evia migrate` manages PostgreSQL only. Apply the ordered scripts in
+`deploy/clickhouse` explicitly to the intended ClickHouse database. Current
+query workers require migration 004's compact winner columns; migration 005
+adds the identity projections used to reduce candidate scans. Read access to
+both `event_facts` and `event_facts_raw` is required for the query role.
+
+The [compact-column upgrade](compact-winner-upgrade.md) and
+[identity-projection upgrade](identity-query-upgrade.md) separate additive DDL
+from historical materialization. Inspect disk reserves and unfinished mutations,
+materialize one inspected partition at a time, and wait for completion before
+claiming the new read cost. Unmaterialized historical data remains correct but
+can exceed the unchanged query budgets. Keep original columns and the reference
+view available during reader rollback. No property-column migration is shipped.
+
 ## Evidence required before expanding deployment scope
 
 Apply changes first to a disposable or staging database, run the actual

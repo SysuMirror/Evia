@@ -26,7 +26,15 @@ uses `evia.dev.events`, `evia.dev.quarantine`, the reserved
 `evia.dev.readiness` topic, group `evia-dev-materializer` and ClickHouse database
 `evia_dev`. Provisioning and process lifecycle remain explicit operator actions.
 
-Apply `003_event_precision.sql` before starting the new ingest sink. It adds two
+Apply the full ordered migration chain before starting the current runtime.
+`004_compact_winner_columns.sql` is required by query readers, and
+`005_identity_projections.sql` adds selective identity access paths. Historical
+materialization is separate from DDL; follow the
+[compact-column](compact-winner-upgrade.md) and
+[identity-projection](identity-query-upgrade.md) procedures. The synthetic runtime
+preparation helper applies DDL explicitly, but never rewrites historical parts.
+
+`003_event_precision.sql` is required by the ingest sink. It adds two
 nullable DateTime64(9) payload columns and replaces the exact view aliases while
 retaining the existing sorting-key layout. The view coalesces omitted new fields
 to the legacy timestamps, preserving compatibility with old writers, including
