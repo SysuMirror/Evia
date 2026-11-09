@@ -1,0 +1,122 @@
+//go:build integration
+
+package postgres
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
+	"testing"
+
+	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func TestAccountProvisionRequiresInitializedEnabledAccount(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	_, err := access.ProvisionAccount(ctx, s, "first", "First", "synthetic-password-42")
+	if err == nil || fault.Public(err).Code != "ACCOUNT_PROVISION_REQUIRES_BOOTSTRAP" {
+		t.Fatal("provisioning created initial account", err)
+	}
+	var accounts, events int
+	if err = s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM accounts),(SELECT count(*) FROM account_provision_events)`).Scan(&accounts, &events); err != nil || accounts != 0 || events != 0 {
+		t.Fatal("failed provisioning left rows", accounts, events, err)
+	}
+	if err = s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Pool.Exec(ctx, `UPDATE accounts SET disabled=true`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = access.ProvisionAccount(ctx, s, "recovery", "Recovery", "synthetic-password-42"); err == nil || fault.Public(err).Code != "ACCOUNT_PROVISION_REQUIRES_BOOTSTRAP" {
+		t.Fatal("provisioning bypassed disabled installation", err)
+	}
+}
+
+func TestAccountProvisionNoOverwriteAndNoAuthority(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	user, err := access.ProvisionAccount(ctx, s, "  New.Account  ", "Synthetic member", "synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.FindUser(ctx, "new.account")
+	if err != nil || stored.ID != user.ID || stored.Disabled || bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("synthetic-password-42")) != nil {
+		t.Fatal("new account cannot use normalized credentials", err)
+	}
+	var kind, actorKind, target string
+	var events, memberships, sessions int
+	err = s.Pool.QueryRow(ctx, `SELECT p.kind,e.actor_kind,e.target_id::text,(SELECT count(*) FROM account_provision_events),
+	(SELECT count(*) FROM project_members WHERE user_id=$1),(SELECT count(*) FROM sessions WHERE user_id=$1)
+	FROM principals p JOIN account_provision_events e ON e.target_id=p.id WHERE p.id=$1`, user.ID).Scan(&kind, &actorKind, &target, &events, &memberships, &sessions)
+	if err != nil || kind != "human" || actorKind != "operator" || target != user.ID || events != 1 || memberships != 0 || sessions != 0 {
+		t.Fatal("provisioning registry/audit/scope boundary failed", kind, actorKind, events, memberships, sessions, err)
+	}
+	if _, err = access.ProvisionAccount(ctx, s, "NEW.ACCOUNT", "Replacement", "different-password-42"); err == nil || fault.Public(err).Code != "ACCOUNT_USERNAME_EXISTS" {
+		t.Fatal("duplicate username accepted", err)
+	}
+	after, err := s.FindUser(ctx, "new.account")
+	if err != nil || after != stored {
+		t.Fatal("duplicate changed existing account", err)
+	}
+	if err = s.Pool.QueryRow(ctx, `SELECT count(*) FROM account_provision_events`).Scan(&events); err != nil || events != 1 {
+		t.Fatal("duplicate emitted a successful provision event", events, err)
+	}
+	if err = s.Bootstrap(ctx, "overwrite", "Overwrite", "different-password-42"); err == nil || fault.Public(err).Code != "BOOTSTRAP_COMPLETE" {
+		t.Fatal("bootstrap semantics changed", err)
+	}
+}
+
+func TestAccountProvisionConcurrentDuplicateAndAuditRollback(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := access.PasswordHash("synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Go(func() {
+			err := s.ProvisionAccount(ctx, access.User{ID: ids.New(), Username: "concurrent", DisplayName: "Concurrent", PasswordHash: hash})
+			if err == nil {
+				successes.Add(1)
+			} else if fault.Public(err).Code != "ACCOUNT_USERNAME_EXISTS" {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	var accounts, events int
+	if err = s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM accounts WHERE username='concurrent'),(SELECT count(*) FROM account_provision_events)`).Scan(&accounts, &events); err != nil || successes.Load() != 1 || accounts != 1 || events != 1 {
+		t.Fatal("concurrent duplicate was not consumed once", successes.Load(), accounts, events, err)
+	}
+	if _, err = s.Pool.Exec(ctx, `CREATE FUNCTION deny_account_provision_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic audit failure'; END $$;
+	CREATE TRIGGER deny_account_provision_audit BEFORE INSERT ON account_provision_events FOR EACH ROW EXECUTE FUNCTION deny_account_provision_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	id := ids.New()
+	if err = s.ProvisionAccount(ctx, access.User{ID: id, Username: "rollback", DisplayName: "Rollback", PasswordHash: hash}); err == nil {
+		t.Fatal("audit failure accepted")
+	}
+	if _, err = s.FindUser(ctx, "rollback"); !errors.Is(err, access.ErrMissing) {
+		t.Fatal("audit failure left account", err)
+	}
+	var principals int
+	if err = s.Pool.QueryRow(ctx, `SELECT count(*) FROM principals WHERE id=$1`, id).Scan(&principals); err != nil || principals != 0 {
+		t.Fatal("audit failure left principal", principals, err)
+	}
+	if err = s.Pool.QueryRow(ctx, `SELECT count(*) FROM account_provision_events`).Scan(&events); err != nil || events != 1 {
+		t.Fatal("audit failure changed event history", events, err)
+	}
+}
