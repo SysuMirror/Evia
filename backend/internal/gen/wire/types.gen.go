@@ -157,11 +157,65 @@ type CredentialRotation struct {
 }
 
 type Dashboard struct {
-	ID        string           `json:"id"`
-	Revision  int64            `json:"revision"`
-	Name      string           `json:"name"`
-	ReportIDs []string         `json:"report_ids"`
-	Layout    []map[string]any `json:"layout"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	DashboardID      string `json:"dashboard_id"`
+}
+
+type DashboardChange struct {
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
+}
+
+type DashboardCreate struct {
+	Environment string              `json:"environment"`
+	Definition  DashboardDefinition `json:"definition"`
+}
+
+type DashboardDefinition struct {
+	Title       string            `json:"title"`
+	Description *string           `json:"description,omitempty"`
+	Widgets     []DashboardWidget `json:"widgets"`
+}
+
+type DashboardDependencies struct {
+	ProjectID   string                `json:"project_id"`
+	Environment string                `json:"environment"`
+	Analyses    []DashboardDependency `json:"analyses"`
+}
+
+type DashboardDependency struct {
+	WidgetID        string `json:"widget_id"`
+	AnalysisID      string `json:"analysis_id"`
+	AnalysisVersion int64  `json:"analysis_version"`
+	DefinitionHash  string `json:"definition_hash"`
+	DependencyHash  string `json:"dependency_hash"`
+	ValidationHash  string `json:"validation_hash"`
+}
+
+type DashboardDraft struct {
+	ProjectID        string              `json:"project_id"`
+	Environment      string              `json:"environment"`
+	Title            string              `json:"title"`
+	DraftRevision    int64               `json:"draft_revision"`
+	PublishedVersion int64               `json:"published_version"`
+	CreatedAt        string              `json:"created_at"`
+	UpdatedAt        string              `json:"updated_at"`
+	DashboardID      string              `json:"dashboard_id"`
+	Definition       DashboardDefinition `json:"definition"`
+}
+
+type DashboardExecute struct {
+	TimeRange     json.RawMessage         `json:"time_range"`
+	Timezone      json.RawMessage         `json:"timezone"`
+	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
 }
 
 type DashboardInput struct {
@@ -170,9 +224,102 @@ type DashboardInput struct {
 	Layout    []map[string]any `json:"layout"`
 }
 
+type DashboardLayout struct {
+	X      int64 `json:"x"`
+	Y      int64 `json:"y"`
+	Width  int64 `json:"width"`
+	Height int64 `json:"height"`
+}
+
 type DashboardList struct {
 	Items      []Dashboard `json:"items"`
 	NextCursor *string     `json:"next_cursor"`
+}
+
+type DashboardPublish struct {
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
+}
+
+type DashboardRun struct {
+	RunID         string                  `json:"run_id"`
+	DashboardID   string                  `json:"dashboard_id"`
+	ProjectID     string                  `json:"project_id"`
+	Environment   string                  `json:"environment"`
+	Version       int64                   `json:"version"`
+	CreatedBy     string                  `json:"created_by"`
+	TimeRange     json.RawMessage         `json:"time_range"`
+	Timezone      json.RawMessage         `json:"timezone"`
+	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	State         string                  `json:"state"`
+	CreatedAt     string                  `json:"created_at"`
+	ExpiresAt     string                  `json:"expires_at"`
+	PollAfterMs   *int64                  `json:"poll_after_ms,omitempty"`
+	Widgets       []DashboardWidgetRun    `json:"widgets"`
+}
+
+type DashboardUpdate struct {
+	Definition DashboardDefinition `json:"definition"`
+}
+
+type DashboardValidate struct {
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
+}
+
+type DashboardValidation struct {
+	Valid                bool                  `json:"valid"`
+	ExecutionPerformed   bool                  `json:"execution_performed"`
+	DraftRevision        int64                 `json:"draft_revision"`
+	PublishedVersion     int64                 `json:"published_version"`
+	NormalizedDefinition DashboardDefinition   `json:"normalized_definition"`
+	Dependencies         DashboardDependencies `json:"dependencies"`
+	DefinitionHash       string                `json:"definition_hash"`
+	DependencyHash       string                `json:"dependency_hash"`
+	Diff                 []DashboardChange     `json:"diff"`
+	ValidationHash       string                `json:"validation_hash"`
+}
+
+type DashboardVersion struct {
+	ProjectID      string                `json:"project_id"`
+	Environment    string                `json:"environment"`
+	Version        int64                 `json:"version"`
+	DraftRevision  int64                 `json:"draft_revision"`
+	Definition     DashboardDefinition   `json:"definition"`
+	Dependencies   DashboardDependencies `json:"dependencies"`
+	DefinitionHash string                `json:"definition_hash"`
+	DependencyHash string                `json:"dependency_hash"`
+	ValidationHash string                `json:"validation_hash"`
+	CreatedAt      string                `json:"created_at"`
+	CreatedBy      string                `json:"created_by"`
+	DashboardID    string                `json:"dashboard_id"`
+}
+
+type DashboardVersionList struct {
+	Items      []DashboardVersion `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
+type DashboardWidget struct {
+	WidgetID        string          `json:"widget_id"`
+	AnalysisID      string          `json:"analysis_id"`
+	AnalysisVersion int64           `json:"analysis_version"`
+	Title           string          `json:"title"`
+	ReadingOrder    int64           `json:"reading_order"`
+	Layout          DashboardLayout `json:"layout"`
+}
+
+type DashboardWidgetFilter struct {
+	WidgetID string          `json:"widget_id"`
+	Filter   json.RawMessage `json:"filter"`
+}
+
+type DashboardWidgetRun struct {
+	WidgetID        string   `json:"widget_id"`
+	AnalysisID      string   `json:"analysis_id"`
+	AnalysisVersion int64    `json:"analysis_version"`
+	Query           QueryJob `json:"query"`
 }
 
 type Diagnostic struct {
