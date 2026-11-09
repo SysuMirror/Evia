@@ -40,6 +40,9 @@ type SourceStore interface {
 	CreateSource(context.Context, string, string, Source, Credential) (Source, error)
 	ListSources(context.Context, string, string, string, string, int) ([]Source, error)
 	GetSource(context.Context, string, string, string) (Source, error)
+	// Mutation preflights use their own operation authority; read is not implied.
+	GetSourceForUpdate(context.Context, string, string, string) (Source, error)
+	GetSourceForRotation(context.Context, string, string, string) (Source, error)
 	UpdateSource(context.Context, string, string, string, int64, SourceUpdate) (Source, error)
 	RotateSource(context.Context, string, string, string, string, int64, Credential) (Source, Credential, error)
 }

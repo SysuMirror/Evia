@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/jackc/pgx/v5"
@@ -45,6 +46,9 @@ func (s *Store) PrepareActivation(ctx context.Context, actor, project, key, hash
 		return delivery.Candidate{}, nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, in.Environment, access.PermissionCatalogReleasesActivate); e != nil {
+		return delivery.Candidate{}, nil, e
+	}
 	replay, e := activationReplay(ctx, tx, actor, project, key, hash, in.Environment)
 	if e != nil {
 		return delivery.Candidate{}, nil, e
@@ -98,6 +102,9 @@ func (s *Store) CommitActivation(ctx context.Context, actor, project, key, hash 
 		return delivery.Activation{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, in.Environment, access.PermissionCatalogReleasesActivate); e != nil {
+		return delivery.Activation{}, e
+	}
 	replay, e := activationReplay(ctx, tx, actor, project, key, hash, in.Environment)
 	if e != nil {
 		return delivery.Activation{}, e
@@ -212,14 +219,21 @@ func (s *Store) RenewReadiness(ctx context.Context, c delivery.Candidate, p deli
 	return tx.Commit(ctx)
 }
 
-// GetActivation reads authorization and active revision from one snapshot. An
-// environment row is created lazily when building a release; its absence means
-// revision zero only after a live project membership has been established.
+// GetActivation reads current authority and the active revision in one transaction.
+// An environment without a release has revision zero after authorization.
 func (s *Store) GetActivation(ctx context.Context, actor, project, environment string) (delivery.Activation, error) {
-	out := delivery.Activation{Environment: environment}
-	e := s.Pool.QueryRow(ctx, `SELECT COALESCE(env.active_revision,0) FROM projects p JOIN project_members m ON m.project_id=p.id JOIN accounts a ON a.id=m.user_id LEFT JOIN catalog_environments env ON env.project_id=p.id AND env.environment=$3 WHERE p.id=$1 AND m.user_id=$2 AND NOT a.disabled`, project, actor, environment).Scan(&out.ActiveReleaseRevision)
-	if errors.Is(e, pgx.ErrNoRows) {
-		e = fault.New(fault.NotFound, "PROJECT_NOT_FOUND", "项目不存在或不可见")
+	tx, e := s.catalogTx(ctx, actor, project, false)
+	if e != nil {
+		return delivery.Activation{}, e
 	}
-	return out, e
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, access.PermissionCatalogReleasesRead); e != nil {
+		return delivery.Activation{}, e
+	}
+	out := delivery.Activation{Environment: environment}
+	e = tx.QueryRow(ctx, `SELECT COALESCE((SELECT active_revision FROM catalog_environments WHERE project_id=$1 AND environment=$2),0)`, project, environment).Scan(&out.ActiveReleaseRevision)
+	if e != nil {
+		return delivery.Activation{}, e
+	}
+	return out, tx.Commit(ctx)
 }

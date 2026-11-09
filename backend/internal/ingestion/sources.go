@@ -194,7 +194,7 @@ func (s *SourceService) UpdateSource(ctx context.Context, actor, project, id str
 			return Source{}, e
 		}
 		in.AllowedOrigins = &origins
-		prior, e := s.store.GetSource(ctx, actor, project, id)
+		prior, e := s.store.GetSourceForUpdate(ctx, actor, project, id)
 		if e != nil {
 			return Source{}, e
 		}
@@ -215,7 +215,7 @@ func (s *SourceService) RotateSource(ctx context.Context, actor, project, id, ke
 	if overlap < 0 || overlap > 86400 {
 		return Issued{}, Invalid("INVALID_OVERLAP", "凭据重叠期必须在 0 到 86400 秒之间")
 	}
-	prior, e := s.store.GetSource(ctx, actor, project, id)
+	prior, e := s.store.GetSourceForRotation(ctx, actor, project, id)
 	if e != nil {
 		return Issued{}, e
 	}

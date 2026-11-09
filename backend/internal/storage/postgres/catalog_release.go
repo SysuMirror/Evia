@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -58,6 +59,9 @@ func (s *Store) CreateRelease(ctx context.Context, actor, project, key string, i
 		return catalog.Release{}, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, in.Environment, access.PermissionCatalogReleasesPublish); e != nil {
+		return catalog.Release{}, e
+	}
 	var existingHash, existingID string
 	e = tx.QueryRow(ctx, `SELECT request_hash,release_id::text FROM catalog_idempotency WHERE actor_id=$1 AND project_id=$2 AND environment=$3 AND operation='release.create' AND idempotency_key=$4`, actor, project, in.Environment, key).Scan(&existingHash, &existingID)
 	if e == nil {
@@ -176,6 +180,9 @@ func (s *Store) GetRelease(ctx context.Context, actor, project, id string) (cata
 	if e != nil {
 		return r, e
 	}
+	if e = s.authorizeOperation(ctx, tx, actor, project, r.Environment, access.PermissionCatalogReleasesRead); e != nil {
+		return catalog.Release{}, e
+	}
 	return r, tx.Commit(ctx)
 }
 func (s *Store) ListReleases(ctx context.Context, actor, project, environment, after string, limit int) ([]catalog.Release, error) {
@@ -187,6 +194,9 @@ func (s *Store) ListReleases(ctx context.Context, actor, project, environment, a
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = s.authorizeOperation(ctx, tx, actor, project, environment, access.PermissionCatalogReleasesRead); e != nil {
+		return nil, e
+	}
 	rows, e := tx.Query(ctx, `SELECT `+releaseColumns+` FROM `+releaseTables+` WHERE r.project_id=$1 AND ($2='' OR r.environment=$2) AND ($3='' OR r.id>nullif($3,'')::uuid) ORDER BY r.id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
