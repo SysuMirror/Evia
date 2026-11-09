@@ -6,7 +6,7 @@
 
 控制台使用自建原生组件，提供结构化编辑、多指标图表和完整结果表。模块按编辑、发布、执行和结果职责拆分，依赖边界与运行时循环检查进入 CI。完整浏览器回归 **38 项通过**，模块与交互规范见[前端职责说明](docs/standards/frontend-modules.md)。
 
-真实压测完成十万、百万事件上报和存储核对，修复缓存到期误拒绝并减少趋势查询读取列；**百万条全量查询仍受默认资源预算限制**。数据规模、失败记录、恢复操作和复现方法见[压测与工程整理](docs/verification/load-and-maintainability-2026-11-08.md)。自定义看板、独立指标注册、机器令牌和浏览器 SDK 等仍待交付，完整状态见 [PROGRESS.md](PROGRESS.md)。
+真实压测完成十万、百万事件上报和存储核对，已加入紧凑胜出排序列与身份投影。百万数据上的指定 UID 筛选、行为链和有序漏斗 **273 / 273 通过**；默认双工作任务配置仍有并发内存拒绝，完整属性查询仍超预算。全部成功/失败、升级步骤及配置复验见[百万查询报告](docs/verification/query-capacity-2026-11-09.md)。自定义看板、独立指标注册、机器令牌和浏览器 SDK 等仍待交付，完整状态见 [PROGRESS.md](PROGRESS.md)。
 
 <details>
 <summary>查看保存分析界面</summary>
@@ -22,9 +22,9 @@
 <details>
 <summary>查看本轮压测观测</summary>
 
-![Evia 单机上报吞吐与十万条计数查询 p95。](docs/assets/load-2026-11-08.svg)
+![Evia 百万事件查询的成功与失败数量，以及成功样本端到端 p95。](docs/assets/capacity-2026-11-09.svg)
 
-图表由[实际报告数据](docs/verification/data/load-2026-11-08.json)绘制。查询延迟只统计成功样本，前后分片布局与恢复状态不同，不能视为仅改变 SQL 的受控性能实验。
+图表由[实际报告数据](docs/verification/data/capacity-2026-11-09.json)绘制。完整矩阵 **514 / 728 成功**，延迟只统计成功样本，不能据此忽略失败或宣称千万用户容量。[上一轮报告](docs/verification/load-and-maintainability-2026-11-08.md)保留上报吞吐、早期失败及恢复证据。
 
 </details>
 
