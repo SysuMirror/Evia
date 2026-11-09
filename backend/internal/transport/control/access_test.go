@@ -219,6 +219,7 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 		status, calls    int
 	}{
 		{name: "owner", path: base, role: "owner", status: 200, calls: 1},
+		{name: "editor", path: base, role: "editor", status: 200, calls: 1},
 		{name: "viewer", path: base, role: "viewer", status: 200, calls: 1},
 		{name: "invalid id", path: "/api/v1/projects/invalid", status: 400},
 		{name: "unknown query", path: base + "?cursor=abc", status: 400},
@@ -236,6 +237,8 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 				permissions := out["permissions"].([]any)
 				expected := 1
 				if tc.role == "owner" {
+					expected = 3
+				} else if tc.role == "editor" {
 					expected = 2
 				}
 				if len(permissions) != expected || out["id"] != projectID {

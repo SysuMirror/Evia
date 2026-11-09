@@ -187,7 +187,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		return stageError("access service", err)
 	}
 	boundary := &httpapi.Boundary{Validator: validator, Logger: logger}
-	api := &control.API{Boundary: boundary, Access: accounts, Catalog: catalog.New(store), Cursor: codec, Origin: c.Origin, SecureCookies: c.SecureCookies}
+	api := &control.API{Boundary: boundary, Access: accounts, Machines: access.NewMachines(store), Catalog: catalog.New(store), Cursor: codec, Origin: c.Origin, SecureCookies: c.SecureCookies}
 	mux := http.NewServeMux()
 	probes := []func(context.Context) error{store.Pool.Ping}
 	client := httpClient()

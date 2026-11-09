@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
@@ -25,19 +24,19 @@ func (a *SavedAnalysesAPI) Register(mux *http.ServeMux) {
 		return
 	}
 	const base = "/api/v1/projects/{project_id}/saved-analyses"
-	mux.HandleFunc("GET "+base, a.API.auth(false, a.list))
-	mux.HandleFunc("POST "+base, a.API.auth(true, a.create))
-	mux.HandleFunc("GET "+base+"/{analysis_id}", a.API.auth(false, a.get))
-	mux.HandleFunc("GET "+base+"/{analysis_id}/draft", a.API.auth(false, a.draft))
-	mux.HandleFunc("PATCH "+base+"/{analysis_id}/draft", a.API.auth(true, a.save))
-	mux.HandleFunc("POST "+base+"/{analysis_id}/validations", a.API.auth(true, a.validate))
-	mux.HandleFunc("GET "+base+"/{analysis_id}/versions", a.API.auth(false, a.versions))
-	mux.HandleFunc("POST "+base+"/{analysis_id}/versions", a.API.auth(true, a.publish))
-	mux.HandleFunc("GET "+base+"/{analysis_id}/versions/{version}", a.API.auth(false, a.version))
-	mux.HandleFunc("POST "+base+"/{analysis_id}/versions/{version}/queries", a.API.auth(true, a.execute))
+	mux.HandleFunc("GET "+base, a.API.projectAuth(false, a.list))
+	mux.HandleFunc("POST "+base, a.API.projectAuth(true, a.create))
+	mux.HandleFunc("GET "+base+"/{analysis_id}", a.API.projectAuth(false, a.get))
+	mux.HandleFunc("GET "+base+"/{analysis_id}/draft", a.API.projectAuth(false, a.draft))
+	mux.HandleFunc("PATCH "+base+"/{analysis_id}/draft", a.API.projectAuth(true, a.save))
+	mux.HandleFunc("POST "+base+"/{analysis_id}/validations", a.API.projectAuth(true, a.validate))
+	mux.HandleFunc("GET "+base+"/{analysis_id}/versions", a.API.projectAuth(false, a.versions))
+	mux.HandleFunc("POST "+base+"/{analysis_id}/versions", a.API.projectAuth(true, a.publish))
+	mux.HandleFunc("GET "+base+"/{analysis_id}/versions/{version}", a.API.projectAuth(false, a.version))
+	mux.HandleFunc("POST "+base+"/{analysis_id}/versions/{version}/queries", a.API.projectAuth(true, a.execute))
 }
 
-func (a *SavedAnalysesAPI) scope(r *http.Request, s access.Session, write bool) (string, error) {
+func (a *SavedAnalysesAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
 	if id := r.PathValue("analysis_id"); id != "" && !catalogUUID.MatchString(id) {
 		return "", analysis.Invalid("INVALID_ANALYSIS_ID", "保存分析标识无效")
 	}
@@ -91,7 +90,7 @@ func savedIdempotency(r *http.Request) (string, error) {
 	}
 	return keys[0], nil
 }
-func (a *SavedAnalysesAPI) create(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) create(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -107,13 +106,13 @@ func (a *SavedAnalysesAPI) create(w http.ResponseWriter, r *http.Request, s acce
 	if e = a.API.Boundary.Decode(w, r, "SavedAnalysisCreate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.CreateSavedAnalysis(r.Context(), s.UserID, p, key, in)
+	out, e := a.Service.CreateSavedAnalysis(r.Context(), s.ID, p, key, in)
 	if e != nil {
 		return e
 	}
 	return a.draftResponse(w, 201, out)
 }
-func (a *SavedAnalysesAPI) get(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) get(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -121,13 +120,13 @@ func (a *SavedAnalysesAPI) get(w http.ResponseWriter, r *http.Request, s access.
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.GetSavedAnalysis(r.Context(), s.UserID, p, r.PathValue("analysis_id"))
+	out, e := a.Service.GetSavedAnalysis(r.Context(), s.ID, p, r.PathValue("analysis_id"))
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "SavedAnalysis", out)
 }
-func (a *SavedAnalysesAPI) draft(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) draft(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -135,7 +134,7 @@ func (a *SavedAnalysesAPI) draft(w http.ResponseWriter, r *http.Request, s acces
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.GetSavedAnalysisDraft(r.Context(), s.UserID, p, r.PathValue("analysis_id"))
+	out, e := a.Service.GetSavedAnalysisDraft(r.Context(), s.ID, p, r.PathValue("analysis_id"))
 	if e != nil {
 		return e
 	}
@@ -145,7 +144,7 @@ func (a *SavedAnalysesAPI) draftResponse(w http.ResponseWriter, status int, out 
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(out.DraftRevision, 10)))
 	return a.API.Boundary.JSON(w, status, "SavedAnalysisDraft", out)
 }
-func (a *SavedAnalysesAPI) save(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) save(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -164,13 +163,13 @@ func (a *SavedAnalysesAPI) save(w http.ResponseWriter, r *http.Request, s access
 	if e = a.API.Boundary.Decode(w, r, "SavedAnalysisUpdate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.SaveSavedAnalysisDraft(r.Context(), s.UserID, p, r.PathValue("analysis_id"), revision, in.Definition)
+	out, e := a.Service.SaveSavedAnalysisDraft(r.Context(), s.ID, p, r.PathValue("analysis_id"), revision, in.Definition)
 	if e != nil {
 		return e
 	}
 	return a.draftResponse(w, 200, out)
 }
-func (a *SavedAnalysesAPI) validate(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) validate(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -182,13 +181,13 @@ func (a *SavedAnalysesAPI) validate(w http.ResponseWriter, r *http.Request, s ac
 	if e = a.API.Boundary.Decode(w, r, "SavedAnalysisValidate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.ValidateSavedAnalysis(r.Context(), s.UserID, p, r.PathValue("analysis_id"), in)
+	out, e := a.Service.ValidateSavedAnalysis(r.Context(), s.ID, p, r.PathValue("analysis_id"), in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "SavedAnalysisValidation", out)
 }
-func (a *SavedAnalysesAPI) publish(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) publish(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -204,13 +203,13 @@ func (a *SavedAnalysesAPI) publish(w http.ResponseWriter, r *http.Request, s acc
 	if e = a.API.Boundary.Decode(w, r, "SavedAnalysisPublish", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.PublishSavedAnalysis(r.Context(), s.UserID, p, r.PathValue("analysis_id"), key, in)
+	out, e := a.Service.PublishSavedAnalysis(r.Context(), s.ID, p, r.PathValue("analysis_id"), key, in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 201, "SavedAnalysisVersion", out)
 }
-func (a *SavedAnalysesAPI) version(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) version(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -219,13 +218,13 @@ func (a *SavedAnalysesAPI) version(w http.ResponseWriter, r *http.Request, s acc
 		return e
 	}
 	version, _ := savedVersion(r.PathValue("version"))
-	out, e := a.Service.GetSavedAnalysisVersion(r.Context(), s.UserID, p, r.PathValue("analysis_id"), version)
+	out, e := a.Service.GetSavedAnalysisVersion(r.Context(), s.ID, p, r.PathValue("analysis_id"), version)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "SavedAnalysisVersion", out)
 }
-func (a *SavedAnalysesAPI) execute(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) execute(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -242,13 +241,13 @@ func (a *SavedAnalysesAPI) execute(w http.ResponseWriter, r *http.Request, s acc
 		return e
 	}
 	version, _ := savedVersion(r.PathValue("version"))
-	out, e := a.Service.EnqueueSavedAnalysisVersion(r.Context(), s.UserID, p, r.PathValue("analysis_id"), version, key, in)
+	out, e := a.Service.EnqueueSavedAnalysisVersion(r.Context(), s.ID, p, r.PathValue("analysis_id"), version, key, in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 202, "QueryJob", out)
 }
-func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -261,12 +260,12 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s access
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"saved_analyses", s.UserID, p, q.Get("environment")}, ":")
+	scope := strings.Join([]string{"saved_analyses", s.ID, p, q.Get("environment")}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListSavedAnalyses(r.Context(), s.UserID, p, q.Get("environment"), after, limit)
+	items, e := a.Service.ListSavedAnalyses(r.Context(), s.ID, p, q.Get("environment"), after, limit)
 	if e != nil {
 		return e
 	}
@@ -282,7 +281,7 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s access
 	out.Items = append(out.Items, items...)
 	return a.API.Boundary.JSON(w, 200, "SavedAnalysisList", out)
 }
-func (a *SavedAnalysesAPI) versions(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *SavedAnalysesAPI) versions(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -296,7 +295,7 @@ func (a *SavedAnalysesAPI) versions(w http.ResponseWriter, r *http.Request, s ac
 		return e
 	}
 	id := r.PathValue("analysis_id")
-	scope := strings.Join([]string{"saved_analysis_versions", s.UserID, p, id}, ":")
+	scope := strings.Join([]string{"saved_analysis_versions", s.ID, p, id}, ":")
 	position, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
@@ -308,7 +307,7 @@ func (a *SavedAnalysesAPI) versions(w http.ResponseWriter, r *http.Request, s ac
 			return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 		}
 	}
-	items, e := a.Service.ListSavedAnalysisVersions(r.Context(), s.UserID, p, id, after, limit)
+	items, e := a.Service.ListSavedAnalysisVersions(r.Context(), s.ID, p, id, after, limit)
 	if e != nil {
 		return e
 	}

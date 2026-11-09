@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
@@ -25,19 +24,19 @@ func (a *API) registerSources(mux *http.ServeMux) {
 		return
 	}
 	const base = "/api/v1/projects/{project_id}/sources"
-	mux.HandleFunc("POST "+base, a.auth(true, a.createSource))
-	mux.HandleFunc("GET "+base, a.auth(false, a.listSources))
-	mux.HandleFunc("GET "+base+"/{source_id}", a.auth(false, a.getSource))
-	mux.HandleFunc("PATCH "+base+"/{source_id}", a.auth(true, a.updateSource))
-	mux.HandleFunc("POST "+base+"/{source_id}/credential-rotations", a.auth(true, a.rotateSource))
+	mux.HandleFunc("POST "+base, a.projectAuth(true, a.createSource))
+	mux.HandleFunc("GET "+base, a.projectAuth(false, a.listSources))
+	mux.HandleFunc("GET "+base+"/{source_id}", a.projectAuth(false, a.getSource))
+	mux.HandleFunc("PATCH "+base+"/{source_id}", a.projectAuth(true, a.updateSource))
+	mux.HandleFunc("POST "+base+"/{source_id}/credential-rotations", a.projectAuth(true, a.rotateSource))
 }
-func (a *API) sourceProject(r *http.Request, s access.Session, write bool) (string, error) {
+func (a *API) sourceProject(r *http.Request, s authorizedActor, write bool) (string, error) {
 	p := r.PathValue("project_id")
 	id := r.PathValue("source_id")
 	if !catalogUUID.MatchString(p) || (id != "" && !catalogUUID.MatchString(id)) {
 		return "", ingestion.Invalid("INVALID_RESOURCE_ID", "资源标识格式无效")
 	}
-	if e := a.Access.Authorize(r.Context(), s.UserID, p, write); e != nil {
+	if e := a.authorizeProject(r, s, p, write); e != nil {
 		return "", e
 	}
 	return p, nil
@@ -52,7 +51,7 @@ func issuedWire(s ingestion.Issued) map[string]any {
 	}
 	return out
 }
-func (a *API) createSource(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) createSource(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.sourceProject(r, s, true)
 	if e != nil {
 		return e
@@ -64,14 +63,14 @@ func (a *API) createSource(w http.ResponseWriter, r *http.Request, s access.Sess
 	if e = a.Boundary.Decode(w, r, "SourceInput", &in); e != nil {
 		return e
 	}
-	out, e := a.Sources.CreateSource(r.Context(), s.UserID, p, ingestion.SourceInput{Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: in.AllowedOrigins})
+	out, e := a.Sources.CreateSource(r.Context(), s.ID, p, ingestion.SourceInput{Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: in.AllowedOrigins})
 	if e != nil {
 		return e
 	}
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(out.Source.Revision, 10)))
 	return a.Boundary.JSON(w, 201, "SourceIssued", issuedWire(out))
 }
-func (a *API) getSource(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getSource(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.sourceProject(r, s, false)
 	if e != nil {
 		return e
@@ -79,14 +78,14 @@ func (a *API) getSource(w http.ResponseWriter, r *http.Request, s access.Session
 	if _, e = catalogQuery(r, false); e != nil {
 		return e
 	}
-	out, e := a.Sources.GetSource(r.Context(), s.UserID, p, r.PathValue("source_id"))
+	out, e := a.Sources.GetSource(r.Context(), s.ID, p, r.PathValue("source_id"))
 	if e != nil {
 		return e
 	}
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(out.Revision, 10)))
 	return a.Boundary.JSON(w, 200, "Source", sourceWire(out))
 }
-func (a *API) listSources(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) listSources(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.sourceProject(r, s, false)
 	if e != nil {
 		return e
@@ -100,12 +99,12 @@ func (a *API) listSources(w http.ResponseWriter, r *http.Request, s access.Sessi
 		return e
 	}
 	env := q.Get("environment")
-	scope := strings.Join([]string{"sources", s.UserID, p, env}, ":")
+	scope := strings.Join([]string{"sources", s.ID, p, env}, ":")
 	after, e := a.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || (after != "" && !catalogUUID.MatchString(after)) {
 		return ingestion.Invalid("INVALID_CURSOR", "分页游标无效")
 	}
-	rows, e := a.Sources.ListSources(r.Context(), s.UserID, p, env, after, limit)
+	rows, e := a.Sources.ListSources(r.Context(), s.ID, p, env, after, limit)
 	if e != nil {
 		return e
 	}
@@ -120,7 +119,7 @@ func (a *API) listSources(w http.ResponseWriter, r *http.Request, s access.Sessi
 	}
 	return a.Boundary.JSON(w, 200, "SourceList", map[string]any{"items": items, "next_cursor": next})
 }
-func (a *API) updateSource(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) updateSource(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.sourceProject(r, s, true)
 	if e != nil {
 		return e
@@ -143,14 +142,14 @@ func (a *API) updateSource(w http.ResponseWriter, r *http.Request, s access.Sess
 	if in.AllowedOrigins != nil {
 		origins = &in.AllowedOrigins
 	}
-	out, e := a.Sources.UpdateSource(r.Context(), s.UserID, p, r.PathValue("source_id"), revision, ingestion.SourceUpdate{Status: in.Status, AllowedOrigins: origins})
+	out, e := a.Sources.UpdateSource(r.Context(), s.ID, p, r.PathValue("source_id"), revision, ingestion.SourceUpdate{Status: in.Status, AllowedOrigins: origins})
 	if e != nil {
 		return e
 	}
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(out.Revision, 10)))
 	return a.Boundary.JSON(w, 200, "Source", sourceWire(out))
 }
-func (a *API) rotateSource(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) rotateSource(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.sourceProject(r, s, true)
 	if e != nil {
 		return e
@@ -166,7 +165,7 @@ func (a *API) rotateSource(w http.ResponseWriter, r *http.Request, s access.Sess
 	if e = a.Boundary.Decode(w, r, "CredentialRotation", &in); e != nil {
 		return e
 	}
-	out, e := a.Sources.RotateSource(r.Context(), s.UserID, p, r.PathValue("source_id"), keys[0], in.OverlapSeconds)
+	out, e := a.Sources.RotateSource(r.Context(), s.ID, p, r.PathValue("source_id"), keys[0], in.OverlapSeconds)
 	if e != nil {
 		return e
 	}

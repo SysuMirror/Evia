@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -24,12 +23,12 @@ func (a *API) registerDelivery(mux *http.ServeMux) {
 	if a.Delivery == nil {
 		return
 	}
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/release-activations", a.auth(false, a.getActivation))
-	mux.HandleFunc("POST /api/v1/projects/{project_id}/release-activations", a.auth(true, a.activateRelease))
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/release-activations", a.projectAuth(false, a.getActivation))
+	mux.HandleFunc("POST /api/v1/projects/{project_id}/release-activations", a.projectAuth(true, a.activateRelease))
 	mux.HandleFunc("GET /v1/config", a.Boundary.Handler(a.publicConfig))
 	mux.HandleFunc("OPTIONS /v1/config", a.Boundary.Handler(a.preflightConfig))
 }
-func (a *API) activateRelease(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) activateRelease(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project, e := a.catalogProject(r, s, true)
 	if e != nil {
 		return e
@@ -45,7 +44,7 @@ func (a *API) activateRelease(w http.ResponseWriter, r *http.Request, s access.S
 	if e = a.Boundary.Decode(w, r, "ActivationInput", &in); e != nil {
 		return e
 	}
-	out, e := a.Delivery.Activate(r.Context(), s.UserID, project, keys[0], delivery.ActivationInput{Environment: in.Environment, ReleaseID: in.ReleaseID, ExpectedActiveRevision: in.ExpectedActiveRevision})
+	out, e := a.Delivery.Activate(r.Context(), s.ID, project, keys[0], delivery.ActivationInput{Environment: in.Environment, ReleaseID: in.ReleaseID, ExpectedActiveRevision: in.ExpectedActiveRevision})
 	if e != nil {
 		return e
 	}
@@ -183,7 +182,7 @@ func (a *API) preflightConfig(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (a *API) getActivation(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getActivation(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project := r.PathValue("project_id")
 	if !catalogUUID.MatchString(project) {
 		return delivery.Invalid("INVALID_PROJECT_ID", "项目标识格式不正确")
@@ -204,7 +203,7 @@ func (a *API) getActivation(w http.ResponseWriter, r *http.Request, s access.Ses
 	if environment != "development" && environment != "staging" && environment != "production" {
 		return delivery.Invalid("INVALID_ENVIRONMENT", "请提供有效环境")
 	}
-	out, e := a.Delivery.GetActivation(r.Context(), s.UserID, project, environment)
+	out, e := a.Delivery.GetActivation(r.Context(), s.ID, project, environment)
 	if e != nil {
 		return e
 	}

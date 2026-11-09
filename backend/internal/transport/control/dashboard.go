@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
@@ -23,21 +22,21 @@ func (a *DashboardsAPI) Register(mux *http.ServeMux) {
 		return
 	}
 	const base = "/api/v1/projects/{project_id}/dashboards"
-	mux.HandleFunc("GET "+base, a.API.auth(false, a.list))
-	mux.HandleFunc("POST "+base, a.API.auth(true, a.create))
-	mux.HandleFunc("GET "+base+"/{dashboard_id}", a.API.auth(false, a.get))
-	mux.HandleFunc("GET "+base+"/{dashboard_id}/draft", a.API.auth(false, a.draft))
-	mux.HandleFunc("PATCH "+base+"/{dashboard_id}/draft", a.API.auth(true, a.save))
-	mux.HandleFunc("POST "+base+"/{dashboard_id}/validations", a.API.auth(true, a.validate))
-	mux.HandleFunc("GET "+base+"/{dashboard_id}/versions", a.API.auth(false, a.versions))
-	mux.HandleFunc("POST "+base+"/{dashboard_id}/versions", a.API.auth(true, a.publish))
-	mux.HandleFunc("GET "+base+"/{dashboard_id}/versions/{version}", a.API.auth(false, a.version))
-	mux.HandleFunc("POST "+base+"/{dashboard_id}/versions/{version}/runs", a.API.auth(true, a.execute))
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.auth(false, a.run))
-	mux.HandleFunc("DELETE /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.auth(true, a.cancelRun))
+	mux.HandleFunc("GET "+base, a.API.projectAuth(false, a.list))
+	mux.HandleFunc("POST "+base, a.API.projectAuth(true, a.create))
+	mux.HandleFunc("GET "+base+"/{dashboard_id}", a.API.projectAuth(false, a.get))
+	mux.HandleFunc("GET "+base+"/{dashboard_id}/draft", a.API.projectAuth(false, a.draft))
+	mux.HandleFunc("PATCH "+base+"/{dashboard_id}/draft", a.API.projectAuth(true, a.save))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/validations", a.API.projectAuth(true, a.validate))
+	mux.HandleFunc("GET "+base+"/{dashboard_id}/versions", a.API.projectAuth(false, a.versions))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/versions", a.API.projectAuth(true, a.publish))
+	mux.HandleFunc("GET "+base+"/{dashboard_id}/versions/{version}", a.API.projectAuth(false, a.version))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/versions/{version}/runs", a.API.projectAuth(true, a.execute))
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.projectAuth(false, a.run))
+	mux.HandleFunc("DELETE /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.projectAuth(true, a.cancelRun))
 }
 
-func (a *DashboardsAPI) scope(r *http.Request, s access.Session, write bool) (string, error) {
+func (a *DashboardsAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
 	if id := r.PathValue("dashboard_id"); id != "" && !catalogUUID.MatchString(id) {
 		return "", analysis.Invalid("INVALID_DASHBOARD_ID", "看板标识无效")
 	}
@@ -51,7 +50,7 @@ func (a *DashboardsAPI) scope(r *http.Request, s access.Session, write bool) (st
 	}
 	return a.API.catalogProject(r, s, write)
 }
-func (a *DashboardsAPI) create(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) create(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -67,13 +66,13 @@ func (a *DashboardsAPI) create(w http.ResponseWriter, r *http.Request, s access.
 	if e = a.API.Boundary.Decode(w, r, "DashboardCreate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.CreateDashboard(r.Context(), s.UserID, p, key, in)
+	out, e := a.Service.CreateDashboard(r.Context(), s.ID, p, key, in)
 	if e != nil {
 		return e
 	}
 	return a.draftResponse(w, 201, out)
 }
-func (a *DashboardsAPI) get(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) get(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -81,13 +80,13 @@ func (a *DashboardsAPI) get(w http.ResponseWriter, r *http.Request, s access.Ses
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.GetDashboard(r.Context(), s.UserID, p, r.PathValue("dashboard_id"))
+	out, e := a.Service.GetDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"))
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "Dashboard", out)
 }
-func (a *DashboardsAPI) draft(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) draft(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -95,7 +94,7 @@ func (a *DashboardsAPI) draft(w http.ResponseWriter, r *http.Request, s access.S
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.GetDashboardDraft(r.Context(), s.UserID, p, r.PathValue("dashboard_id"))
+	out, e := a.Service.GetDashboardDraft(r.Context(), s.ID, p, r.PathValue("dashboard_id"))
 	if e != nil {
 		return e
 	}
@@ -105,7 +104,7 @@ func (a *DashboardsAPI) draftResponse(w http.ResponseWriter, status int, out rep
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(out.DraftRevision, 10)))
 	return a.API.Boundary.JSON(w, status, "DashboardDraft", out)
 }
-func (a *DashboardsAPI) save(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) save(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -124,13 +123,13 @@ func (a *DashboardsAPI) save(w http.ResponseWriter, r *http.Request, s access.Se
 	if e = a.API.Boundary.Decode(w, r, "DashboardUpdate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.SaveDashboardDraft(r.Context(), s.UserID, p, r.PathValue("dashboard_id"), revision, in.Definition)
+	out, e := a.Service.SaveDashboardDraft(r.Context(), s.ID, p, r.PathValue("dashboard_id"), revision, in.Definition)
 	if e != nil {
 		return e
 	}
 	return a.draftResponse(w, 200, out)
 }
-func (a *DashboardsAPI) validate(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) validate(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -142,13 +141,13 @@ func (a *DashboardsAPI) validate(w http.ResponseWriter, r *http.Request, s acces
 	if e = a.API.Boundary.Decode(w, r, "DashboardValidate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.ValidateDashboard(r.Context(), s.UserID, p, r.PathValue("dashboard_id"), in)
+	out, e := a.Service.ValidateDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"), in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "DashboardValidation", out)
 }
-func (a *DashboardsAPI) publish(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) publish(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, true)
 	if e != nil {
 		return e
@@ -164,13 +163,13 @@ func (a *DashboardsAPI) publish(w http.ResponseWriter, r *http.Request, s access
 	if e = a.API.Boundary.Decode(w, r, "DashboardPublish", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.PublishDashboard(r.Context(), s.UserID, p, r.PathValue("dashboard_id"), key, in)
+	out, e := a.Service.PublishDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"), key, in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 201, "DashboardVersion", out)
 }
-func (a *DashboardsAPI) version(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) version(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -179,13 +178,13 @@ func (a *DashboardsAPI) version(w http.ResponseWriter, r *http.Request, s access
 		return e
 	}
 	version, _ := savedVersion(r.PathValue("version"))
-	out, e := a.Service.GetDashboardVersion(r.Context(), s.UserID, p, r.PathValue("dashboard_id"), version)
+	out, e := a.Service.GetDashboardVersion(r.Context(), s.ID, p, r.PathValue("dashboard_id"), version)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "DashboardVersion", out)
 }
-func (a *DashboardsAPI) execute(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) execute(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -202,13 +201,13 @@ func (a *DashboardsAPI) execute(w http.ResponseWriter, r *http.Request, s access
 		return e
 	}
 	version, _ := savedVersion(r.PathValue("version"))
-	out, e := a.Service.EnqueueDashboardRun(r.Context(), s.UserID, p, r.PathValue("dashboard_id"), version, key, in)
+	out, e := a.Service.EnqueueDashboardRun(r.Context(), s.ID, p, r.PathValue("dashboard_id"), version, key, in)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 202, "DashboardRun", out)
 }
-func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -221,12 +220,12 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s access.Se
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"dashboards", s.UserID, p, q.Get("environment")}, ":")
+	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment")}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListDashboards(r.Context(), s.UserID, p, q.Get("environment"), after, limit)
+	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit)
 	if e != nil {
 		return e
 	}
@@ -242,7 +241,7 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s access.Se
 	out.Items = append(out.Items, items...)
 	return a.API.Boundary.JSON(w, 200, "DashboardList", out)
 }
-func (a *DashboardsAPI) versions(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) versions(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -256,7 +255,7 @@ func (a *DashboardsAPI) versions(w http.ResponseWriter, r *http.Request, s acces
 		return e
 	}
 	id := r.PathValue("dashboard_id")
-	scope := strings.Join([]string{"dashboard_versions", s.UserID, p, id}, ":")
+	scope := strings.Join([]string{"dashboard_versions", s.ID, p, id}, ":")
 	position, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
@@ -268,7 +267,7 @@ func (a *DashboardsAPI) versions(w http.ResponseWriter, r *http.Request, s acces
 			return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 		}
 	}
-	items, e := a.Service.ListDashboardVersions(r.Context(), s.UserID, p, id, after, limit)
+	items, e := a.Service.ListDashboardVersions(r.Context(), s.ID, p, id, after, limit)
 	if e != nil {
 		return e
 	}
@@ -285,7 +284,7 @@ func (a *DashboardsAPI) versions(w http.ResponseWriter, r *http.Request, s acces
 	return a.API.Boundary.JSON(w, 200, "DashboardVersionList", out)
 }
 
-func (a *DashboardsAPI) run(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) run(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -293,13 +292,13 @@ func (a *DashboardsAPI) run(w http.ResponseWriter, r *http.Request, s access.Ses
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.GetDashboardRun(r.Context(), s.UserID, p, r.PathValue("run_id"))
+	out, e := a.Service.GetDashboardRun(r.Context(), s.ID, p, r.PathValue("run_id"))
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "DashboardRun", out)
 }
-func (a *DashboardsAPI) cancelRun(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *DashboardsAPI) cancelRun(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -307,7 +306,7 @@ func (a *DashboardsAPI) cancelRun(w http.ResponseWriter, r *http.Request, s acce
 	if _, e = savedQuery(r, false, false); e != nil {
 		return e
 	}
-	out, e := a.Service.CancelDashboardRun(r.Context(), s.UserID, p, r.PathValue("run_id"))
+	out, e := a.Service.CancelDashboardRun(r.Context(), s.ID, p, r.PathValue("run_id"))
 	if e != nil {
 		return e
 	}

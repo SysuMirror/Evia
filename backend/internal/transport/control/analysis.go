@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 )
 
@@ -23,13 +22,13 @@ func (a *AnalysisAPI) Register(mux *http.ServeMux) {
 		return
 	}
 	const base = "/api/v1/projects/{project_id}"
-	mux.HandleFunc("POST "+base+"/queries", a.API.auth(true, a.create))
-	mux.HandleFunc("POST "+base+"/journeys/query", a.API.auth(true, a.journey))
-	mux.HandleFunc("GET "+base+"/queries/{query_id}", a.API.auth(false, a.get))
-	mux.HandleFunc("DELETE "+base+"/queries/{query_id}", a.API.auth(true, a.cancel))
-	mux.HandleFunc("GET "+base+"/queries/{query_id}/result", a.API.auth(false, a.result))
+	mux.HandleFunc("POST "+base+"/queries", a.API.projectAuth(true, a.create))
+	mux.HandleFunc("POST "+base+"/journeys/query", a.API.projectAuth(true, a.journey))
+	mux.HandleFunc("GET "+base+"/queries/{query_id}", a.API.projectAuth(false, a.get))
+	mux.HandleFunc("DELETE "+base+"/queries/{query_id}", a.API.projectAuth(true, a.cancel))
+	mux.HandleFunc("GET "+base+"/queries/{query_id}/result", a.API.projectAuth(false, a.result))
 }
-func (a *AnalysisAPI) scope(r *http.Request, s access.Session, result bool) (string, error) {
+func (a *AnalysisAPI) scope(r *http.Request, s authorizedActor, result bool) (string, error) {
 	project := r.PathValue("project_id")
 	if !catalogUUID.MatchString(project) {
 		return "", analysis.Invalid("INVALID_PROJECT_ID", "项目标识无效")
@@ -52,18 +51,18 @@ func (a *AnalysisAPI) scope(r *http.Request, s access.Session, result bool) (str
 			return "", analysis.Invalid("UNSUPPORTED_QUERY_CURSOR", "当前版本提供有界结果快照")
 		}
 	}
-	if e = a.API.Access.Authorize(r.Context(), s.UserID, project, false); e != nil {
+	if e = a.API.authorizeProject(r, s, project, false); e != nil {
 		return "", e
 	}
 	return project, nil
 }
-func (a *AnalysisAPI) create(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *AnalysisAPI) create(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	return a.createKind(w, r, s, false)
 }
-func (a *AnalysisAPI) journey(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *AnalysisAPI) journey(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	return a.createKind(w, r, s, true)
 }
-func (a *AnalysisAPI) createKind(w http.ResponseWriter, r *http.Request, s access.Session, journey bool) error {
+func (a *AnalysisAPI) createKind(w http.ResponseWriter, r *http.Request, s authorizedActor, journey bool) error {
 	project, e := a.scope(r, s, false)
 	if e != nil {
 		return e
@@ -83,40 +82,40 @@ func (a *AnalysisAPI) createKind(w http.ResponseWriter, r *http.Request, s acces
 			return analysis.Invalid("INVALID_QUERY_KIND", "轨迹接口必须使用 journey 查询", "/kind")
 		}
 	}
-	job, e := a.Service.Create(r.Context(), s.UserID, project, raw)
+	job, e := a.Service.Create(r.Context(), s.ID, project, raw)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 202, "QueryJob", job)
 }
-func (a *AnalysisAPI) get(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *AnalysisAPI) get(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project, e := a.scope(r, s, false)
 	if e != nil {
 		return e
 	}
-	job, e := a.Service.Get(r.Context(), s.UserID, project, r.PathValue("query_id"))
+	job, e := a.Service.Get(r.Context(), s.ID, project, r.PathValue("query_id"))
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "QueryJob", job)
 }
-func (a *AnalysisAPI) cancel(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *AnalysisAPI) cancel(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project, e := a.scope(r, s, false)
 	if e != nil {
 		return e
 	}
-	job, e := a.Service.Cancel(r.Context(), s.UserID, project, r.PathValue("query_id"))
+	job, e := a.Service.Cancel(r.Context(), s.ID, project, r.PathValue("query_id"))
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, 202, "QueryJob", job)
 }
-func (a *AnalysisAPI) result(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *AnalysisAPI) result(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project, e := a.scope(r, s, true)
 	if e != nil {
 		return e
 	}
-	result, e := a.Service.Result(r.Context(), s.UserID, project, r.PathValue("query_id"))
+	result, e := a.Service.Result(r.Context(), s.ID, project, r.PathValue("query_id"))
 	if e != nil {
 		return e
 	}

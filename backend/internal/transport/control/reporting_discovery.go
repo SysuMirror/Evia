@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
@@ -23,11 +22,11 @@ func (a *DiscoveryAPI) Register(mux *http.ServeMux) {
 		return
 	}
 	const base = "/api/v1/projects/{project_id}"
-	mux.HandleFunc("GET "+base+"/analysis-capabilities", a.API.auth(false, a.capabilities))
-	mux.HandleFunc("GET "+base+"/analysis-catalog", a.API.auth(false, a.catalog))
-	mux.HandleFunc("POST "+base+"/query-validations", a.API.auth(true, a.validate))
+	mux.HandleFunc("GET "+base+"/analysis-capabilities", a.API.projectAuth(false, a.capabilities))
+	mux.HandleFunc("GET "+base+"/analysis-catalog", a.API.projectAuth(false, a.catalog))
+	mux.HandleFunc("POST "+base+"/query-validations", a.API.projectAuth(true, a.validate))
 }
-func (a *DiscoveryAPI) capabilities(w http.ResponseWriter, r *http.Request, session access.Session) error {
+func (a *DiscoveryAPI) capabilities(w http.ResponseWriter, r *http.Request, session authorizedActor) error {
 	project, e := a.API.catalogProject(r, session, false)
 	if e != nil {
 		return e
@@ -35,7 +34,7 @@ func (a *DiscoveryAPI) capabilities(w http.ResponseWriter, r *http.Request, sess
 	if _, e = catalogQuery(r, false); e != nil {
 		return e
 	}
-	out, e := a.Service.Capabilities(r.Context(), session.UserID, project)
+	out, e := a.Service.Capabilities(r.Context(), session.ID, project)
 	if e != nil {
 		return e
 	}
@@ -49,7 +48,7 @@ type discoveryCatalogResponse struct {
 	NextCursor  *string                  `json:"next_cursor"`
 }
 
-func (a *DiscoveryAPI) catalog(w http.ResponseWriter, r *http.Request, session access.Session) error {
+func (a *DiscoveryAPI) catalog(w http.ResponseWriter, r *http.Request, session authorizedActor) error {
 	project, e := a.API.catalogProject(r, session, false)
 	if e != nil {
 		return e
@@ -66,7 +65,7 @@ func (a *DiscoveryAPI) catalog(w http.ResponseWriter, r *http.Request, session a
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"analysis_catalog", session.UserID, project, environment}, ":")
+	scope := strings.Join([]string{"analysis_catalog", session.ID, project, environment}, ":")
 	position, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
@@ -75,7 +74,7 @@ func (a *DiscoveryAPI) catalog(w http.ResponseWriter, r *http.Request, session a
 	if e != nil {
 		return e
 	}
-	snapshot, e := a.Service.Catalog(r.Context(), session.UserID, project, environment, afterKey, afterVersion, limit)
+	snapshot, e := a.Service.Catalog(r.Context(), session.ID, project, environment, afterKey, afterVersion, limit)
 	if e != nil {
 		return e
 	}
@@ -90,7 +89,7 @@ func (a *DiscoveryAPI) catalog(w http.ResponseWriter, r *http.Request, session a
 	}
 	return a.API.Boundary.JSON(w, 200, "AnalysisCatalog", out)
 }
-func (a *DiscoveryAPI) validate(w http.ResponseWriter, r *http.Request, session access.Session) error {
+func (a *DiscoveryAPI) validate(w http.ResponseWriter, r *http.Request, session authorizedActor) error {
 	project, e := a.API.catalogProject(r, session, false)
 	if e != nil {
 		return e
@@ -102,7 +101,7 @@ func (a *DiscoveryAPI) validate(w http.ResponseWriter, r *http.Request, session 
 	if e = a.API.Boundary.Decode(w, r, "QueryRequest", &raw); e != nil {
 		return e
 	}
-	out, e := a.Service.ValidateQuery(r.Context(), session.UserID, project, raw)
+	out, e := a.Service.ValidateQuery(r.Context(), session.ID, project, raw)
 	if e != nil {
 		return e
 	}

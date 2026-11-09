@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
@@ -36,20 +35,20 @@ func (a *API) registerCatalog(mux *http.ServeMux) {
 	}
 	const events = "/api/v1/projects/{project_id}/event-definitions"
 	const releases = "/api/v1/projects/{project_id}/releases"
-	mux.HandleFunc("GET "+events, a.auth(false, a.listEvents))
-	mux.HandleFunc("POST "+events, a.auth(true, a.createEvent))
-	mux.HandleFunc("GET "+events+"/{event_key}/versions/{schema_version}", a.auth(false, a.getEventVersion))
-	mux.HandleFunc("GET "+events+"/{event_key}/draft", a.auth(false, a.getDraft))
-	mux.HandleFunc("PATCH "+events+"/{event_key}/draft", a.auth(true, a.saveDraft))
-	mux.HandleFunc("POST "+events+"/{event_key}/validate", a.auth(true, a.validateSample))
-	mux.HandleFunc("GET "+releases, a.auth(false, a.listReleases))
-	mux.HandleFunc("POST "+releases, a.auth(true, a.createRelease))
-	mux.HandleFunc("GET "+releases+"/{release_id}", a.auth(false, a.getRelease))
+	mux.HandleFunc("GET "+events, a.projectAuth(false, a.listEvents))
+	mux.HandleFunc("POST "+events, a.projectAuth(true, a.createEvent))
+	mux.HandleFunc("GET "+events+"/{event_key}/versions/{schema_version}", a.projectAuth(false, a.getEventVersion))
+	mux.HandleFunc("GET "+events+"/{event_key}/draft", a.projectAuth(false, a.getDraft))
+	mux.HandleFunc("PATCH "+events+"/{event_key}/draft", a.projectAuth(true, a.saveDraft))
+	mux.HandleFunc("POST "+events+"/{event_key}/validate", a.projectAuth(true, a.validateSample))
+	mux.HandleFunc("GET "+releases, a.projectAuth(false, a.listReleases))
+	mux.HandleFunc("POST "+releases, a.projectAuth(true, a.createRelease))
+	mux.HandleFunc("GET "+releases+"/{release_id}", a.projectAuth(false, a.getRelease))
 }
 
 // Project authorization precedes resource access. Stores also recheck membership
 // in their transactions so revoked privileges cannot survive this HTTP check.
-func (a *API) catalogProject(r *http.Request, s access.Session, write bool) (string, error) {
+func (a *API) catalogProject(r *http.Request, s authorizedActor, write bool) (string, error) {
 	p := r.PathValue("project_id")
 	if !catalogUUID.MatchString(p) {
 		return "", catalog.Invalid("INVALID_PROJECT_ID", "项目标识格式不正确")
@@ -60,7 +59,7 @@ func (a *API) catalogProject(r *http.Request, s access.Session, write bool) (str
 	if id := r.PathValue("release_id"); id != "" && !catalogUUID.MatchString(id) {
 		return "", catalog.Invalid("INVALID_RELEASE_ID", "发布标识格式不正确")
 	}
-	if e := a.Access.Authorize(r.Context(), s.UserID, p, write); e != nil {
+	if e := a.authorizeProject(r, s, p, write); e != nil {
 		return "", e
 	}
 	return p, nil
@@ -83,7 +82,7 @@ func catalogQuery(r *http.Request, list bool) (url.Values, error) {
 	}
 	return q, nil
 }
-func (a *API) catalogPage(r *http.Request, s access.Session, project, operation string) (string, string, string, int, error) {
+func (a *API) catalogPage(r *http.Request, s authorizedActor, project, operation string) (string, string, string, int, error) {
 	q, e := catalogQuery(r, true)
 	if e != nil {
 		return "", "", "", 0, e
@@ -93,14 +92,14 @@ func (a *API) catalogPage(r *http.Request, s access.Session, project, operation 
 		return "", "", "", 0, e
 	}
 	env := q.Get("environment")
-	scope := strings.Join([]string{"catalog", operation, s.UserID, project, env}, ":")
+	scope := strings.Join([]string{"catalog", operation, s.ID, project, env}, ":")
 	after, e := a.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || (after != "" && ((operation == "events" && !catalogEventKey.MatchString(after)) || (operation == "releases" && !catalogUUID.MatchString(after)))) {
 		return "", "", "", 0, catalog.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载")
 	}
 	return env, scope, after, limit, nil
 }
-func (a *API) createEvent(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) createEvent(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, true)
 	if e != nil {
 		return e
@@ -112,13 +111,13 @@ func (a *API) createEvent(w http.ResponseWriter, r *http.Request, s access.Sessi
 	if e = a.Boundary.Decode(w, r, "EventInput", &in); e != nil {
 		return e
 	}
-	event, e := a.Catalog.CreateEvent(r.Context(), s.UserID, p, catalog.EventInput{Key: in.EventKey, DisplayName: in.DisplayName, Description: optionalValue(in.Description)})
+	event, e := a.Catalog.CreateEvent(r.Context(), s.ID, p, catalog.EventInput{Key: in.EventKey, DisplayName: in.DisplayName, Description: optionalValue(in.Description)})
 	if e != nil {
 		return e
 	}
 	return a.Boundary.JSON(w, 201, "EventDefinition", eventWire(event))
 }
-func (a *API) listEvents(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) listEvents(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, false)
 	if e != nil {
 		return e
@@ -127,7 +126,7 @@ func (a *API) listEvents(w http.ResponseWriter, r *http.Request, s access.Sessio
 	if e != nil {
 		return e
 	}
-	events, e := a.Catalog.ListEvents(r.Context(), s.UserID, p, env, after, limit)
+	events, e := a.Catalog.ListEvents(r.Context(), s.ID, p, env, after, limit)
 	if e != nil {
 		return e
 	}
@@ -142,7 +141,7 @@ func (a *API) listEvents(w http.ResponseWriter, r *http.Request, s access.Sessio
 	}
 	return a.Boundary.JSON(w, 200, "EventDefinitionList", out)
 }
-func (a *API) getDraft(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getDraft(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, false)
 	if e != nil {
 		return e
@@ -150,13 +149,13 @@ func (a *API) getDraft(w http.ResponseWriter, r *http.Request, s access.Session)
 	if _, e = catalogQuery(r, false); e != nil {
 		return e
 	}
-	draft, e := a.Catalog.GetDraft(r.Context(), s.UserID, p, r.PathValue("event_key"))
+	draft, e := a.Catalog.GetDraft(r.Context(), s.ID, p, r.PathValue("event_key"))
 	if e != nil {
 		return e
 	}
 	return a.draftResponse(w, draft)
 }
-func (a *API) saveDraft(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) saveDraft(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, true)
 	if e != nil {
 		return e
@@ -175,7 +174,7 @@ func (a *API) saveDraft(w http.ResponseWriter, r *http.Request, s access.Session
 	if e = a.Boundary.Decode(w, r, "DraftInput", &in); e != nil {
 		return e
 	}
-	draft, e := a.Catalog.SaveDraft(r.Context(), s.UserID, p, r.PathValue("event_key"), revision, draftInput(in))
+	draft, e := a.Catalog.SaveDraft(r.Context(), s.ID, p, r.PathValue("event_key"), revision, draftInput(in))
 	if e != nil {
 		return e
 	}
@@ -185,7 +184,7 @@ func (a *API) draftResponse(w http.ResponseWriter, draft catalog.Draft) error {
 	w.Header().Set("ETag", strconv.Quote(strconv.FormatInt(draft.Revision, 10)))
 	return a.Boundary.JSON(w, 200, "Draft", wire.Draft{Revision: draft.Revision, Definition: draftWire(draft.Definition)})
 }
-func (a *API) validateSample(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) validateSample(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, true)
 	if e != nil {
 		return e
@@ -197,7 +196,7 @@ func (a *API) validateSample(w http.ResponseWriter, r *http.Request, s access.Se
 	if e = a.Boundary.Decode(w, r, "ValidationInput", &in); e != nil {
 		return e
 	}
-	result, e := a.Catalog.ValidateSample(r.Context(), s.UserID, p, r.PathValue("event_key"), in.DraftRevision, in.SampleProperties)
+	result, e := a.Catalog.ValidateSample(r.Context(), s.ID, p, r.PathValue("event_key"), in.DraftRevision, in.SampleProperties)
 	if e != nil {
 		return e
 	}
@@ -216,7 +215,7 @@ func (a *API) validateSample(w http.ResponseWriter, r *http.Request, s access.Se
 	}
 	return a.Boundary.JSON(w, 200, "ValidationResult", out)
 }
-func (a *API) createRelease(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) createRelease(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, true)
 	if e != nil {
 		return e
@@ -236,13 +235,13 @@ func (a *API) createRelease(w http.ResponseWriter, r *http.Request, s access.Ses
 	for _, event := range in.Events {
 		input.Events = append(input.Events, catalog.ReleaseEvent{Key: event.EventKey, DraftRevision: event.DraftRevision})
 	}
-	release, e := a.Catalog.CreateRelease(r.Context(), s.UserID, p, keys[0], input)
+	release, e := a.Catalog.CreateRelease(r.Context(), s.ID, p, keys[0], input)
 	if e != nil {
 		return e
 	}
 	return a.Boundary.JSON(w, 202, "Release", releaseWire(release))
 }
-func (a *API) getRelease(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getRelease(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, false)
 	if e != nil {
 		return e
@@ -250,13 +249,13 @@ func (a *API) getRelease(w http.ResponseWriter, r *http.Request, s access.Sessio
 	if _, e = catalogQuery(r, false); e != nil {
 		return e
 	}
-	release, e := a.Catalog.GetRelease(r.Context(), s.UserID, p, r.PathValue("release_id"))
+	release, e := a.Catalog.GetRelease(r.Context(), s.ID, p, r.PathValue("release_id"))
 	if e != nil {
 		return e
 	}
 	return a.Boundary.JSON(w, 200, "Release", releaseWire(release))
 }
-func (a *API) listReleases(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) listReleases(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.catalogProject(r, s, false)
 	if e != nil {
 		return e
@@ -265,7 +264,7 @@ func (a *API) listReleases(w http.ResponseWriter, r *http.Request, s access.Sess
 	if e != nil {
 		return e
 	}
-	releases, e := a.Catalog.ListReleases(r.Context(), s.UserID, p, env, after, limit)
+	releases, e := a.Catalog.ListReleases(r.Context(), s.ID, p, env, after, limit)
 	if e != nil {
 		return e
 	}
@@ -311,7 +310,7 @@ func releaseWire(v catalog.Release) wire.Release {
 
 var _ CatalogService = (*catalog.Service)(nil)
 
-func (a *API) getEventVersion(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getEventVersion(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	project, e := a.catalogProject(r, s, false)
 	if e != nil {
 		return e
@@ -324,7 +323,7 @@ func (a *API) getEventVersion(w http.ResponseWriter, r *http.Request, s access.S
 	if e != nil || version < 1 || version > catalog.MaxInteger || strconv.FormatInt(version, 10) != value {
 		return catalog.Invalid("INVALID_SCHEMA_VERSION", "事件版本必须为安全的正整数")
 	}
-	out, e := a.Catalog.GetEventVersion(r.Context(), s.UserID, project, r.PathValue("event_key"), version)
+	out, e := a.Catalog.GetEventVersion(r.Context(), s.ID, project, r.PathValue("event_key"), version)
 	if e != nil {
 		return e
 	}

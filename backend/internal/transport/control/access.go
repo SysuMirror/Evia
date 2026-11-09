@@ -3,7 +3,6 @@ package control
 
 import (
 	"context"
-	"crypto/subtle"
 	"net"
 	"net/http"
 	"strings"
@@ -29,6 +28,7 @@ type AccessService interface {
 type API struct {
 	Boundary      *httpapi.Boundary
 	Access        AccessService
+	Machines      MachineService
 	Catalog       CatalogService
 	Sources       SourceService
 	Analysis      AnalysisService
@@ -40,18 +40,23 @@ type API struct {
 	Origin        string
 	SecureCookies bool
 }
-type authorizedEndpoint func(http.ResponseWriter, *http.Request, access.Session) error
+type authorizedActor struct {
+	ID      string
+	Session *access.Session
+}
+type authorizedEndpoint func(http.ResponseWriter, *http.Request, authorizedActor) error
 
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/session/login", a.Boundary.Handler(a.login))
-	mux.HandleFunc("GET /api/v1/session", a.auth(false, func(w http.ResponseWriter, r *http.Request, s access.Session) error {
-		return a.Boundary.JSON(w, 200, "Session", sessionWire(s))
+	mux.HandleFunc("GET /api/v1/session", a.auth(false, func(w http.ResponseWriter, r *http.Request, actor authorizedActor) error {
+		return a.Boundary.JSON(w, 200, "Session", sessionWire(*actor.Session))
 	}))
 	mux.HandleFunc("DELETE /api/v1/session", a.auth(true, a.logout))
 	mux.HandleFunc("GET /api/v1/projects", a.auth(false, a.listProjects))
 	mux.HandleFunc("POST /api/v1/projects", a.auth(true, a.createProject))
-	mux.HandleFunc("GET /api/v1/projects/{project_id}", a.auth(false, a.getProject))
+	mux.HandleFunc("GET /api/v1/projects/{project_id}", a.projectAuth(false, a.getProject))
+	a.registerMachines(mux)
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
@@ -85,25 +90,6 @@ func (a *API) origin(r *http.Request) error {
 	}
 	return nil
 }
-func (a *API) auth(mutate bool, next authorizedEndpoint) http.HandlerFunc {
-	return a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
-		if e := a.origin(r); e != nil {
-			return e
-		}
-		cookies := r.CookiesNamed("evia_session")
-		if len(cookies) != 1 {
-			return fault.New(fault.Unauthenticated, "SESSION_REQUIRED", "请先登录")
-		}
-		session, e := a.Access.Authenticate(r.Context(), cookies[0].Value)
-		if e != nil {
-			return e
-		}
-		if mutate && (len(r.Header.Values("X-CSRF-Token")) != 1 || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(session.CSRF)) != 1) {
-			return fault.New(fault.Forbidden, "CSRF_REQUIRED", "请求验证已失效，请刷新后重试")
-		}
-		return next(w, r, session)
-	})
-}
 func (a *API) cookie(w http.ResponseWriter, secret string, maxAge int) {
 	c := &http.Cookie{Name: "evia_session", Value: secret, Path: "/", HttpOnly: true, Secure: a.SecureCookies, SameSite: http.SameSiteStrictMode, MaxAge: maxAge}
 	if maxAge < 0 {
@@ -115,6 +101,9 @@ func sessionWire(s access.Session) wire.Session {
 	return wire.Session{UserID: s.UserID, DisplayName: s.DisplayName, CSRFToken: s.CSRF}
 }
 func (a *API) login(w http.ResponseWriter, r *http.Request) error {
+	if len(r.Header.Values("Authorization")) != 0 {
+		return fault.New(fault.Unauthenticated, "AUTHENTICATION_MODE_INVALID", "登录接口不接受 Bearer 凭据")
+	}
 	if e := a.origin(r); e != nil {
 		return e
 	}
@@ -148,8 +137,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) error {
 	a.cookie(w, secret, 8*60*60)
 	return a.Boundary.JSON(w, 200, "Session", sessionWire(session))
 }
-func (a *API) logout(w http.ResponseWriter, r *http.Request, s access.Session) error {
-	if e := a.Access.Logout(r.Context(), s); e != nil {
+func (a *API) logout(w http.ResponseWriter, r *http.Request, actor authorizedActor) error {
+	if e := a.Access.Logout(r.Context(), *actor.Session); e != nil {
 		return e
 	}
 	a.cookie(w, "", -1)
@@ -161,20 +150,23 @@ func projectWire(p access.Project) wire.Project {
 	if p.Role == "owner" || p.Role == "editor" {
 		permissions = append(permissions, "project.write")
 	}
+	if p.Role == "owner" {
+		permissions = append(permissions, "machine_principals.manage")
+	}
 	return wire.Project{ID: p.ID, Name: p.Name, Timezone: p.Timezone, Capabilities: []string{}, Permissions: permissions}
 }
-func (a *API) createProject(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) createProject(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	var in wire.ProjectInput
 	if e := a.Boundary.Decode(w, r, "ProjectInput", &in); e != nil {
 		return e
 	}
-	project, e := a.Access.CreateProject(r.Context(), s.UserID, in.Name, in.Timezone)
+	project, e := a.Access.CreateProject(r.Context(), s.ID, in.Name, in.Timezone)
 	if e != nil {
 		return e
 	}
 	return a.Boundary.JSON(w, 201, "Project", projectWire(project))
 }
-func (a *API) listProjects(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) listProjects(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	for key, values := range r.URL.Query() {
 		if (key != "cursor" && key != "limit") || len(values) != 1 {
 			return fault.New(fault.Invalid, "INVALID_QUERY", "查询参数不符合接口定义")
@@ -184,12 +176,12 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request, s access.Sess
 	if e != nil {
 		return e
 	}
-	scope := "projects:" + s.UserID
+	scope := "projects:" + s.ID
 	after, e := a.Cursor.Decode(scope, r.URL.Query().Get("cursor"))
 	if e != nil {
 		return fault.New(fault.Invalid, "INVALID_CURSOR", "分页游标已失效，请重新加载")
 	}
-	projects, e := a.Access.ListProjects(r.Context(), s.UserID, after, limit)
+	projects, e := a.Access.ListProjects(r.Context(), s.ID, after, limit)
 	if e != nil {
 		return e
 	}
@@ -207,7 +199,7 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request, s access.Sess
 
 func NormalizeOrigin(origin string) string { return strings.TrimSuffix(origin, "/") }
 
-func (a *API) getProject(w http.ResponseWriter, r *http.Request, s access.Session) error {
+func (a *API) getProject(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	projectID := r.PathValue("project_id")
 	if !catalogUUID.MatchString(projectID) {
 		return fault.New(fault.Invalid, "INVALID_PROJECT_ID", "项目标识格式不正确")
@@ -215,9 +207,13 @@ func (a *API) getProject(w http.ResponseWriter, r *http.Request, s access.Sessio
 	if _, e := catalogQuery(r, false); e != nil {
 		return e
 	}
-	project, e := a.Access.GetProject(r.Context(), s.UserID, projectID)
+	project, e := a.Access.GetProject(r.Context(), s.ID, projectID)
 	if e != nil {
 		return e
 	}
-	return a.Boundary.JSON(w, 200, "Project", projectWire(project))
+	out := projectWire(project)
+	if identity, ok := access.IdentityFromContext(r.Context()); ok {
+		out.Permissions = append([]string{}, identity.Permissions...)
+	}
+	return a.Boundary.JSON(w, 200, "Project", out)
 }
