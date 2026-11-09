@@ -1,0 +1,24 @@
+{
+  "format": "activity.desired-events.v1",
+  "project_id": "00000000-0000-4000-8000-000000000001",
+  "environment": "development",
+  "complete_release": true,
+  "removed_event_keys": [],
+  "events": [
+    {
+      "event_key": "item_saved",
+      "display_name": "Item save observed",
+      "trigger": "The application receives a successful save response for the selected item.",
+      "allowed_source_kinds": ["browser"],
+      "fact_kind": "client_observed",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {"item_id": {"type": "string", "minLength": 1, "maxLength": 128}},
+        "required": ["item_id"]
+      },
+      "example_properties": {"item_id": "synthetic-item"},
+      "implementation_sites": [{"path": "src/items/save.ts", "reason": "Successful application response callback; replace with an inspected real code site."}]
+    }
+  ]
+}

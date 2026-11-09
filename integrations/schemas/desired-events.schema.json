@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Complete desired business event release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "project_id", "environment", "complete_release", "removed_event_keys", "events"],
+  "properties": {
+    "format": {"const": "activity.desired-events.v1"},
+    "project_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "environment": {"enum": ["development", "staging", "production"]},
+    "complete_release": {"const": true},
+    "removed_event_keys": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/event_key"}},
+    "events": {
+      "type": "array", "minItems": 1, "maxItems": 200,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["event_key", "display_name", "trigger", "allowed_source_kinds", "fact_kind", "schema", "example_properties", "implementation_sites"],
+        "properties": {
+          "event_key": {"$ref": "#/$defs/event_key"},
+          "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+          "description": {"type": "string", "maxLength": 2000},
+          "trigger": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "allowed_source_kinds": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["browser", "server"]}},
+          "fact_kind": {"enum": ["user_intent", "client_observed", "server_confirmed"]},
+          "schema": {
+            "type": "object", "required": ["type", "additionalProperties", "properties"],
+            "properties": {"type": {"const": "object"}, "additionalProperties": {"const": false}, "properties": {"type": "object", "maxProperties": 50, "propertyNames": {"$ref": "#/$defs/event_key"}}}
+          },
+          "example_properties": {"type": "object", "maxProperties": 50},
+          "field_metadata": {"type": "object", "maxProperties": 50},
+          "implementation_sites": {
+            "type": "array", "minItems": 1, "maxItems": 100,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["path", "reason"],
+              "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 512, "description": "Relative repository path; executable instructions and path traversal are prohibited."}, "reason": {"type": "string", "minLength": 1, "maxLength": 2000}}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {"event_key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}}
+}
