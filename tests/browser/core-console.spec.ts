@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { verifySavedAnalysisWorkflow } from './saved-analysis-workflow';
+import { verifyBrowserSDKWorkflow } from './browser-sdk-workflow';
 
 // Credential responses must never enter automatic trace or screenshot artifacts.
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
@@ -321,6 +322,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await expect(page).toHaveURL(/environment=staging/);
   await page.getByRole('link', { name: '接入来源', exact: true }).click();
   await expect(page.getByText('合成浏览器来源', { exact: true })).not.toBeVisible();
+  await verifyBrowserSDKWorkflow(page, projectID);
   expect(errors, 'no uncaught browser exceptions').toEqual([]);
 });
 
