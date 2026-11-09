@@ -1,11 +1,11 @@
 # README figures and console screenshots
 
-The two conceptual figures below were generated with ImageGen. The event-data figure was reviewed on 2026-11-08 and the versioned-analysis figure was regenerated and reviewed on 2026-11-09 (Asia/Shanghai). They illustrate logical relationships, not measured performance or production capacity. PNG originals are committed locally so the README does not depend on an external image host.
+The conceptual figures below were generated with ImageGen. The current event-data figure was regenerated and visually reviewed on 2026-11-09 UTC after the SDK and dashboard backend delivery. The earlier versioned-analysis figure is retained as a historical illustration and is no longer embedded in the README. They illustrate logical relationships, not measured performance or production capacity. PNG originals are committed locally so the README does not depend on an external image host.
 
-| Figure                                                     | Meaning                                                                                           | Authoritative references                                                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| [Event data architecture](event-data-architecture.png)     | Existing control, ingestion and query flows, with planned SDK, identity processing and dashboards | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [backend evidence](../verification/backend-2026-11-07.md) |
-| [Versioned analytics model](versioned-analytics-model.png) | Implemented event lifecycle and directly pinned saved analyses, with planned reporting extensions                      | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md)                                              |
+| Figure                                                     | Meaning                                                                                                                         | Authoritative references                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [Event data architecture](event-data-architecture.png)     | Implemented SDK, control, ingestion, dashboard metadata and query flows; planned identity, machine access and lifecycle modules | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [backend evidence](../verification/backend-2026-11-07.md) |
+| [Versioned analytics model](versioned-analytics-model.png) | Historical pre-dashboard snapshot of the event and saved-analysis lifecycle                                                     | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md)      |
 
 ## Semantics to preserve
 
@@ -14,13 +14,14 @@ The two conceptual figures below were generated with ImageGen. The event-data fi
 - The control lane illustrates console access and API responsibilities. The console now also exposes event, release, source and analysis workspaces; the small access label is not an exhaustive page inventory. Consult PROGRESS.md for current feature evidence.
 - Published definitions remain immutable. Real Kafka/ClickHouse delivery verification yields a time-limited readiness lease; activation is explicit. Publishing alone does not authorize ingestion.
 - Saved analyses directly pin immutable published event versions. Draft validation/diff is read only; publication is immutable; execution binds real time/timezone and uses the existing shared query budget and current session authorization.
-- The metric registry, dashboard layouts and machine-authenticated Agent API are planned, shown separately with dashed borders. The implemented saved-analysis session API does not provide machine bearer authentication.
+- Dashboards pin saved-analysis versions and enqueue their child queries atomically. Workers execute these queries independently; the figure does not imply an atomic cross-widget result snapshot. The metric registry and machine-authenticated Agent API remain planned.
+- Source configuration flows through the shared PostgreSQL-backed services; the upward configuration arrow is a logical dependency, not a separate network hop between API processes.
 
 ## Updating the artwork
 
 Use ImageGen with a white landscape canvas, legible English labels, consistent navy outlines, restrained blue and teal, aligned panels, solid existing modules and dashed planned modules. Keep legends and short notes. Do not add decorative plots, fabricated metrics or capacity claims.
 
-For the architecture figure, retain three independent logical lanes: control, ingestion and analysis. Connect Redis only to ingestion admission. Keep planned extensions in a separate region.
+For the architecture figure, keep event data separate from management/query coordination. Connect Redis only to collection admission. Show both PostgreSQL job claiming and result/status persistence, and keep planned extensions in a separate region. The current PNG SHA-256 is `0cea7e25b1797789882acaf2cebe6261b07d9beb75bd5e7acb2295cc15c641d6`.
 
 For the versioning figure, retain three panels: implemented event draft/validate/publish/verify/activate; implemented directly schema-pinned saved analysis draft/validate-and-diff/publish/bind-time-and-zone/shared-query-job through the session API; and planned metric registry/dashboard layouts/machine-authenticated Agent API. Do not insert the future metric registry as a required dependency of current saved analyses.
 
@@ -43,3 +44,5 @@ With optional Matplotlib installed, regenerate from the repository root using `M
 `capacity-2026-11-09.svg` plots the complete two-worker million-event matrix from [the subsequent measured evidence](../verification/data/capacity-2026-11-09.json). Panel A includes every first-observed and repeated attempt, with failed attempts shown explicitly. Panel B uses only successful-sample end-to-end p95 at client concurrency 1, 4 and 8; it does not imply those workloads were free of failures. The separate smaller single-worker profile is not mixed into this figure.
 
 Regenerate with `MPLCONFIGDIR=/tmp/evia-matplotlib python3 tooling/benchmark/plot_query_capacity.py`. This Matplotlib figure uses a fixed SVG identifier salt and omits generated date metadata. The rendered PNG preview was visually inspected for labels, units, legends and clipping, and outcome counts were checked against the JSON. Conditions, failed queries and deployment limitations are documented in [the query capacity report](../verification/query-capacity-2026-11-09.md).
+
+`dashboard-desktop.png` and `dashboard-mobile.png` are unedited captures from the real dashboard/SDK browser workflow on 2026-11-09. Production entry `/assets/index-C_5Zmr32.js` uses API/runtime migration 009. Two published analysis widgets show count 3 and raw-UID distinct count 2 from synthetic facts. The mobile chart fits its card; only wide result tables scroll horizontally. See the [verification record](../verification/dashboards-sdk-2026-11-09.md) for failed baselines, revised layout bounds and final checks.
