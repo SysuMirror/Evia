@@ -16,6 +16,16 @@ export { Modal, type ModalProps } from './modal';
 export { DataTable, type DataTableColumn, type DataTableProps } from './table';
 export { Toolbar, Panel, CodeBlock, Tabs, ResultHeader, type TabItem } from './content';
 export {
+  DashboardGrid,
+  DashboardCard,
+  dashboardLayoutFits,
+  nextDashboardLayout,
+  type DashboardLayout,
+  type DashboardGridItem,
+  type DashboardGridProps,
+  type DashboardCardProps,
+} from './dashboard-grid';
+export {
   Brand,
   AuthLayout,
   WorkspaceShell,
