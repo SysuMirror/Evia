@@ -108,6 +108,7 @@ def scoped_path(value, project, environment):
                 r"/event-definitions(?:/[a-z][a-z0-9_]{0,63}/(?:draft|validate|versions/[1-9][0-9]*))?",
                 r"/releases(?:/" + UUID + r")?", r"/release-activations",
                 r"/analysis-(?:capabilities|catalog)", r"/query-validations",
+                r"/metrics(?:/" + UUID + r"(?:/(?:draft|validations|versions(?:/[1-9][0-9]*(?:/queries)?)?))?)?",
                 r"/queries(?:/" + UUID + r"(?:/result)?)?", r"/journeys/query"]
     if not any(re.fullmatch(pattern, relative) for pattern in patterns):
         raise SafeError("API path outside the integration helper allowlist")

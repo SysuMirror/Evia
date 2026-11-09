@@ -290,6 +290,21 @@ class HTTPTests(unittest.TestCase):
             with self.assertRaises(api.SafeError):
                 api.private_read(fifo)
 
+    def test_metric_routes_preserve_scope_and_explicit_allowlist(self):
+        base = f"/api/v1/projects/{PROJECT}/metrics"
+        for suffix in ("?environment=development&limit=20", f"/{PROJECT}",
+                       f"/{PROJECT}/draft", f"/{PROJECT}/validations",
+                       f"/{PROJECT}/versions", f"/{PROJECT}/versions/1",
+                       f"/{PROJECT}/versions/1/queries"):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(api.scoped_path(base + suffix, PROJECT, "development"), base + suffix)
+        for path in (base + "/latest", base + f"/{PROJECT}/versions/0",
+                     base + f"/{PROJECT}/versions/1/sql", base + f"/{PROJECT}/archive",
+                     base + "?environment=production", base + "?permission=metrics.write",
+                     base.replace(PROJECT, "00000000-0000-4000-8000-000000000002")):
+            with self.subTest(path=path), self.assertRaises(api.SafeError):
+                api.scoped_path(path, PROJECT, "development")
+
 
 if __name__ == "__main__":
     unittest.main()
