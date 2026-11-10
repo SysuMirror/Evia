@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
 func request(t *testing.T, raw string) Request {
@@ -91,6 +92,36 @@ func TestPlannerBindsValuesAndPreservesScopedMissingSemantics(t *testing.T) {
 	}
 	if !strings.Contains(plan.SQL, "AND NOT JSONHas") {
 		t.Fatal("missing treated as zero/false")
+	}
+}
+func TestPlannerPropertyExpressionsGateOnLosslessLayout(t *testing.T) {
+	r := request(t, baseRequest)
+	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 2, Key: "title", ResolvedType: "string"}, Value: "Home"}
+	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	plan, e := Compile("testdb", "event_facts", Scope{ProjectID: "project-secret", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	encoded := propertylayout.EncodeKey("title")
+	for _, fragment := range []string{
+		"property_layout_version=1",
+		"mapContains(property_tokens,",
+		"concat('{\"f\":',property_tokens[",
+		"JSONExtractString(",
+	} {
+		if !strings.Contains(plan.SQL, fragment) {
+			t.Fatalf("property SQL missing %q: %s", fragment, plan.SQL)
+		}
+	}
+	if strings.Contains(plan.SQL, encoded) {
+		t.Fatal("encoded property key must stay a bound parameter, not SQL text", plan.SQL)
+	}
+	bound := false
+	for _, value := range plan.Parameters {
+		bound = bound || value == encoded
+	}
+	if !bound {
+		t.Fatal("encoded property key missing from bound parameters", plan.Parameters)
 	}
 }
 func TestMetricPrecisionAndTypes(t *testing.T) {
