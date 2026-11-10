@@ -71,6 +71,18 @@ type Request struct {
 	Funnel           *Funnel         `json:"funnel,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
+	// Formula is an internal-only execution marker. It is absent from the
+	// public query contract, whose strict decoder rejects unknown fields, so a
+	// client can never set it; only the formula metric enqueue path writes it
+	// into a durable job, and the composite engine routes on it.
+	Formula *FormulaJobRef `json:"formula_ref,omitempty"`
+}
+
+// FormulaJobRef identifies the immutable composite metric version a durable job
+// must evaluate. The query worker resolves its atomic leaves at execution time.
+type FormulaJobRef struct {
+	MetricID string `json:"metric_id"`
+	Version  int64  `json:"version"`
 }
 type Scope struct{ ProjectID, Environment string }
 type JobError struct {
