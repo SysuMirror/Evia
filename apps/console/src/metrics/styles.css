@@ -1,0 +1,83 @@
+.metrics-workspace {
+  display: grid;
+  gap: 20px;
+}
+.metric-form {
+  display: grid;
+  gap: 16px;
+}
+.metric-fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.metric-fieldset legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 6px;
+}
+.metric-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.metric-field-option {
+  display: grid;
+  gap: 10px;
+}
+.metric-event-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 8px;
+  align-items: center;
+}
+.metric-event-version {
+  min-width: 0;
+}
+.metric-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.metric-error-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.metric-validation {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.metric-diff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.metric-diff-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.metric-diff-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.metric-result {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .metric-fields,
+  .metric-event-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
