@@ -1632,13 +1632,20 @@ export interface components {
             /** @enum {string} */
             kind: "metric" | "line" | "bar" | "table" | "funnel";
         };
-        /** @description At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. Visualization compatibility is validated without executing the query. */
+        /** @description Immutable pointer to a published metric version. The exact version is pinned at publication and never resolves to the latest metric. */
+        MetricReference: {
+            /** Format: uuid */
+            metric_id: string;
+            version: number;
+        };
+        /** @description At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. A metric_ref is mutually exclusive with an inline query on input; the server derives the query from the pinned immutable metric version and returns both. Visualization compatibility is validated without executing the query. */
         SavedAnalysisDefinition: {
             title: string;
             description?: string;
-            query: components["schemas"]["saved-analysis-template.schema"];
+            query?: components["schemas"]["saved-analysis-template.schema"];
+            metric_ref?: components["schemas"]["MetricReference"];
             visualization: components["schemas"]["SavedAnalysisVisualization"];
-        } & (unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown & unknown);
         SavedAnalysis: {
             /** Format: uuid */
             analysis_id: string;

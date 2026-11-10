@@ -15224,6 +15224,26 @@
           "kind"
         ]
       },
+      "MetricReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "metric_id",
+          "version"
+        ],
+        "description": "Immutable pointer to a published metric version. The exact version is pinned at publication and never resolves to the latest metric."
+      },
       "SavedAnalysisDefinition": {
         "type": "object",
         "additionalProperties": false,
@@ -15241,17 +15261,54 @@
           "query": {
             "$ref": "#/components/schemas/SavedAnalysisTemplate"
           },
+          "metric_ref": {
+            "$ref": "#/components/schemas/MetricReference"
+          },
           "visualization": {
             "$ref": "#/components/schemas/SavedAnalysisVisualization"
           }
         },
         "required": [
           "title",
-          "query",
           "visualization"
         ],
-        "description": "At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. Visualization compatibility is validated without executing the query.",
+        "description": "At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. A metric_ref is mutually exclusive with an inline query on input; the server derives the query from the pinned immutable metric version and returns both. Visualization compatibility is validated without executing the query.",
         "allOf": [
+          {
+            "if": {
+              "required": [
+                "metric_ref"
+              ]
+            },
+            "then": {
+              "properties": {
+                "visualization": {
+                  "properties": {
+                    "kind": {
+                      "const": "metric"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "not": {
+                "required": [
+                  "metric_ref"
+                ]
+              }
+            },
+            "then": {
+              "required": [
+                "query"
+              ]
+            }
+          },
           {
             "if": {
               "properties": {
