@@ -289,3 +289,109 @@ reject_saved("MetricExecute", "interval", metric_execute, ["interval"], "week")
 reject_saved("MetricExecute", "scope override", metric_execute, ["environment"], "production")
 reject_saved("MetricValidation", "execution performed", metric_validation, ["execution_performed"], True)
 print(f"Independent metric contracts verified: {len(metric_cases)} cases and {metric_negative_count} unit incompatibilities, plus strict fields/runtime budgets.")
+
+# Composite formula metrics reuse immutable metric references and a restricted
+# typed expression. Exercise the generated bundle for every management shape.
+formula_ref_a = {"metric_id": saved_id, "version": 1}
+formula_ref_b = {"metric_id": "00000000-0000-4000-8000-000000000002", "version": 1}
+formula_expr = {
+    "op": "divide",
+    "left": {"op": "metric", "metric": formula_ref_a},
+    "right": {"op": "metric", "metric": formula_ref_b},
+}
+formula_formula = {"expression": formula_expr, "unit": "number"}
+formula_definition = {"title": "Lesson ratio", "description": "two counts", "formula": formula_formula}
+formula_dependency = {
+    "project_id": saved_id,
+    "environment": "development",
+    "metrics": [
+        {"metric_id": saved_id, "version": 1, "definition_hash": "a" * 64},
+        {"metric_id": "00000000-0000-4000-8000-000000000002", "version": 1, "definition_hash": "b" * 64},
+    ],
+}
+formula_record = {
+    "metric_id": saved_id, "project_id": saved_id, "environment": "development",
+    "title": "Lesson ratio", "draft_revision": 1, "published_version": 0,
+    "created_at": "2026-11-10T00:00:00Z", "updated_at": "2026-11-10T00:00:00Z",
+}
+formula_validation = {
+    "valid": True, "execution_performed": False, "draft_revision": 1,
+    "published_version": 0, "normalized_definition": formula_definition,
+    "dependencies": formula_dependency, "definition_hash": "c" * 64,
+    "dependency_hash": "d" * 64,
+    "diff": [{"category": "definition", "path": "/definition", "after": formula_definition}],
+    "validation_hash": "e" * 64,
+}
+formula_version = {
+    "metric_id": saved_id, "project_id": saved_id, "environment": "development",
+    "version": 1, "draft_revision": 1, "definition": formula_definition,
+    "dependencies": formula_dependency, "definition_hash": "c" * 64,
+    "dependency_hash": "d" * 64, "validation_hash": "e" * 64,
+    "created_at": "2026-11-10T00:00:00Z", "created_by": saved_id,
+}
+formula_cases = {
+    "FormulaExpression": formula_expr,
+    "FormulaDefinition": formula_formula,
+    "FormulaMetricDefinition": formula_definition,
+    "FormulaDependencyManifest": formula_dependency,
+    "FormulaMetricRecord": formula_record,
+    "FormulaMetricDraft": {**formula_record, "definition": formula_definition},
+    "FormulaMetricVersion": formula_version,
+    "FormulaMetricValidation": formula_validation,
+    "FormulaMetricCreate": {"environment": "development", "definition": formula_definition},
+    "FormulaMetricUpdate": {"definition": formula_definition},
+    "FormulaMetricValidate": {"draft_revision": 1, "expected_published_version": 0},
+    "FormulaMetricPublish": {"draft_revision": 1, "expected_published_version": 0, "validation_hash": "e" * 64},
+    "FormulaMetricList": {"items": [formula_record], "next_cursor": None},
+    "FormulaMetricVersionList": {"items": [formula_version], "next_cursor": None},
+}
+for name, value in formula_cases.items():
+    validator(name).validate(value)
+    if validator(name).is_valid({**value, "unexpected_field": True}):
+        raise AssertionError(f"generated {name} accepted unknown field")
+
+# Nested expression, constant scaling and nullable-free arithmetic are allowed.
+nested_expr = {
+    "op": "multiply",
+    "left": {"op": "metric", "metric": formula_ref_a},
+    "right": {"op": "add", "left": {"op": "constant", "value": 1}, "right": {"op": "metric", "metric": formula_ref_b}},
+}
+validator("FormulaExpression").validate(nested_expr)
+
+formula_negative_count = 0
+for label, path, value in (
+    ("unknown op", ["op"], "pow"),
+    ("missing op", ["op"], None),
+    ("unsafe constant", ["right", "left", "value"], 9007199254740992),
+    ("bad reference id", ["right", "right", "metric", "metric_id"], "not-a-uuid"),
+    ("bad reference version", ["right", "right", "metric", "version"], 0),
+):
+    bad = copy.deepcopy(nested_expr)
+    parent = bad
+    for key in path[:-1]:
+        parent = parent[key]
+    if value is None:
+        del parent[path[-1]]
+    else:
+        parent[path[-1]] = value
+    if validator("FormulaExpression").is_valid(bad):
+        raise AssertionError(f"FormulaExpression accepted invalid {label}")
+    formula_negative_count += 1
+for label, path, value in (
+    ("atomic event_versions", ["event_versions"], []),
+    ("atomic aggregation", ["aggregation"], {"op": "count"}),
+    ("unbounded title", ["title"], "a" * 129),
+    ("unbounded description", ["description"], "a" * 2001),
+    ("bad formula unit", ["formula", "unit"], "parsec"),
+    ("missing formula", ["formula"], None),
+):
+    reject_saved("FormulaMetricDefinition", label, formula_definition, path, value, remove=(value is None))
+    formula_negative_count += 1
+reject_saved("FormulaDefinition", "invalid unit", formula_formula, ["unit"], "parsec")
+reject_saved("FormulaDependencyManifest", "empty metrics", formula_dependency, ["metrics"], [])
+reject_saved("FormulaDependencyManifest", "too many metrics", formula_dependency, ["metrics"], formula_dependency["metrics"] * 5)
+reject_saved("FormulaMetricValidation", "execution performed", formula_validation, ["execution_performed"], True)
+reject_saved("FormulaMetricPublish", "malformed hash", formula_cases["FormulaMetricPublish"], ["validation_hash"], "invalid")
+reject_saved("FormulaMetricList", "unbounded list", formula_cases["FormulaMetricList"], ["items"], [formula_record] * 101)
+reject_saved("FormulaMetricVersionList", "unbounded version list", formula_cases["FormulaMetricVersionList"], ["items"], [formula_version] * 51)
+print(f"Composite formula metric contracts verified: {len(formula_cases)} cases and {formula_negative_count} negative cases, plus recursive expression and strict field checks.")

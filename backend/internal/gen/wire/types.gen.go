@@ -479,6 +479,125 @@ type ExportList struct {
 	NextCursor *string     `json:"next_cursor"`
 }
 
+type FormulaDefinition struct {
+	Expression FormulaExpression `json:"expression"`
+	Unit       string            `json:"unit"`
+}
+
+type FormulaDependencyManifest struct {
+	ProjectID   string                    `json:"project_id"`
+	Environment string                    `json:"environment"`
+	Metrics     []FormulaMetricDependency `json:"metrics"`
+}
+
+type FormulaExpression struct {
+	Op     string             `json:"op"`
+	Value  *float64           `json:"value,omitempty"`
+	Metric *MetricReference   `json:"metric,omitempty"`
+	Left   *FormulaExpression `json:"left,omitempty"`
+	Right  *FormulaExpression `json:"right,omitempty"`
+}
+
+type FormulaMetricChange struct {
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
+}
+
+type FormulaMetricCreate struct {
+	Environment string                  `json:"environment"`
+	Definition  FormulaMetricDefinition `json:"definition"`
+}
+
+type FormulaMetricDefinition struct {
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Formula     FormulaDefinition `json:"formula"`
+}
+
+type FormulaMetricDependency struct {
+	MetricID       string `json:"metric_id"`
+	Version        int64  `json:"version"`
+	DefinitionHash string `json:"definition_hash"`
+}
+
+type FormulaMetricDraft struct {
+	MetricID         string                  `json:"metric_id"`
+	ProjectID        string                  `json:"project_id"`
+	Environment      string                  `json:"environment"`
+	Title            string                  `json:"title"`
+	DraftRevision    int64                   `json:"draft_revision"`
+	PublishedVersion int64                   `json:"published_version"`
+	CreatedAt        string                  `json:"created_at"`
+	UpdatedAt        string                  `json:"updated_at"`
+	Definition       FormulaMetricDefinition `json:"definition"`
+}
+
+type FormulaMetricList struct {
+	Items      []FormulaMetricRecord `json:"items"`
+	NextCursor *string               `json:"next_cursor"`
+}
+
+type FormulaMetricPublish struct {
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
+}
+
+type FormulaMetricRecord struct {
+	MetricID         string `json:"metric_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type FormulaMetricUpdate struct {
+	Definition FormulaMetricDefinition `json:"definition"`
+}
+
+type FormulaMetricValidate struct {
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
+}
+
+type FormulaMetricValidation struct {
+	Valid                bool                      `json:"valid"`
+	ExecutionPerformed   bool                      `json:"execution_performed"`
+	DraftRevision        int64                     `json:"draft_revision"`
+	PublishedVersion     int64                     `json:"published_version"`
+	NormalizedDefinition FormulaMetricDefinition   `json:"normalized_definition"`
+	Dependencies         FormulaDependencyManifest `json:"dependencies"`
+	DefinitionHash       string                    `json:"definition_hash"`
+	DependencyHash       string                    `json:"dependency_hash"`
+	Diff                 []FormulaMetricChange     `json:"diff"`
+	ValidationHash       string                    `json:"validation_hash"`
+}
+
+type FormulaMetricVersion struct {
+	MetricID       string                    `json:"metric_id"`
+	ProjectID      string                    `json:"project_id"`
+	Environment    string                    `json:"environment"`
+	Version        int64                     `json:"version"`
+	DraftRevision  int64                     `json:"draft_revision"`
+	Definition     FormulaMetricDefinition   `json:"definition"`
+	Dependencies   FormulaDependencyManifest `json:"dependencies"`
+	DefinitionHash string                    `json:"definition_hash"`
+	DependencyHash string                    `json:"dependency_hash"`
+	ValidationHash string                    `json:"validation_hash"`
+	CreatedAt      string                    `json:"created_at"`
+	CreatedBy      string                    `json:"created_by"`
+}
+
+type FormulaMetricVersionList struct {
+	Items      []FormulaMetricVersion `json:"items"`
+	NextCursor *string                `json:"next_cursor"`
+}
+
 type LoginInput struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

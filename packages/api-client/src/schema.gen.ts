@@ -1646,6 +1646,137 @@ export interface components {
             metric_id: string;
             version: number;
         };
+        /** @description Restricted typed formula node. constant carries only value, metric carries only an immutable reference, and add/subtract/multiply/divide carry only left and right children. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8. */
+        FormulaExpression: {
+            /** @enum {string} */
+            op: "constant" | "metric" | "add" | "subtract" | "multiply" | "divide";
+            value?: number;
+            metric?: components["schemas"]["MetricReference"];
+            left?: components["schemas"]["FormulaExpression"];
+            right?: components["schemas"]["FormulaExpression"];
+        };
+        /** @description Composite formula and its declared result unit, which must match the unit derived from the operands. Unit labels never convert values. */
+        FormulaDefinition: {
+            expression: components["schemas"]["FormulaExpression"];
+            /** @enum {string} */
+            unit: "event" | "raw_uid" | "anonymous_id" | "distinct_value" | "number" | "millisecond" | "second" | "byte";
+        };
+        /** @description Composite metric definition. It carries no direct event selection or aggregation; every operand is a pinned immutable atomic metric version. Maximum 131072 UTF-8 JSON bytes. */
+        FormulaMetricDefinition: {
+            title: string;
+            description: string;
+            formula: components["schemas"]["FormulaDefinition"];
+        };
+        FormulaMetricDependency: {
+            /** Format: uuid */
+            metric_id: string;
+            version: number;
+            definition_hash: string;
+        };
+        FormulaDependencyManifest: {
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            metrics: components["schemas"]["FormulaMetricDependency"][];
+        };
+        FormulaMetricChange: {
+            /** @enum {string} */
+            category: "definition" | "metadata" | "formula";
+            path: string;
+            before?: unknown;
+            after?: unknown;
+        };
+        FormulaMetricRecord: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            title: string;
+            draft_revision: number;
+            published_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FormulaMetricDraft: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            title: string;
+            draft_revision: number;
+            published_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            definition: components["schemas"]["FormulaMetricDefinition"];
+        };
+        FormulaMetricVersion: {
+            /** Format: uuid */
+            metric_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            version: number;
+            draft_revision: number;
+            definition: components["schemas"]["FormulaMetricDefinition"];
+            dependencies: components["schemas"]["FormulaDependencyManifest"];
+            definition_hash: string;
+            dependency_hash: string;
+            validation_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+        };
+        /** @description Read-only semantic validation of a composite formula metric. No query execution, mutation or audit write occurs. The dependency graph and units are resolved inside the authorizing storage transaction before the validation digests are derived. */
+        FormulaMetricValidation: {
+            /** @constant */
+            valid: true;
+            /** @constant */
+            execution_performed: false;
+            draft_revision: number;
+            published_version: number;
+            normalized_definition: components["schemas"]["FormulaMetricDefinition"];
+            dependencies: components["schemas"]["FormulaDependencyManifest"];
+            definition_hash: string;
+            dependency_hash: string;
+            diff: components["schemas"]["FormulaMetricChange"][];
+            validation_hash: string;
+        };
+        FormulaMetricCreate: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            definition: components["schemas"]["FormulaMetricDefinition"];
+        };
+        FormulaMetricUpdate: {
+            definition: components["schemas"]["FormulaMetricDefinition"];
+        };
+        FormulaMetricValidate: {
+            draft_revision: number;
+            expected_published_version: number;
+        };
+        FormulaMetricPublish: {
+            draft_revision: number;
+            expected_published_version: number;
+            validation_hash: string;
+        };
+        FormulaMetricList: {
+            items: components["schemas"]["FormulaMetricRecord"][];
+            next_cursor: string | null;
+        };
+        FormulaMetricVersionList: {
+            items: components["schemas"]["FormulaMetricVersion"][];
+            next_cursor: string | null;
+        };
         /** @description Stored/read model. At most 131072 UTF-8 encoded JSON bytes. A metric-referencing analysis carries both the metric_ref pin and the query derived from the pinned metric; inline analyses carry only the query. Visualization compatibility is validated without executing the query. */
         SavedAnalysisDefinition: {
             title: string;

@@ -15272,6 +15272,554 @@
         ],
         "description": "Immutable pointer to a published metric version. The exact version is pinned at publication and never resolves to the latest metric."
       },
+      "FormulaExpression": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "constant",
+              "metric",
+              "add",
+              "subtract",
+              "multiply",
+              "divide"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricReference"
+          },
+          "left": {
+            "$ref": "#/components/schemas/FormulaExpression"
+          },
+          "right": {
+            "$ref": "#/components/schemas/FormulaExpression"
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "description": "Restricted typed formula node. constant carries only value, metric carries only an immutable reference, and add/subtract/multiply/divide carry only left and right children. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8."
+      },
+      "FormulaDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expression": {
+            "$ref": "#/components/schemas/FormulaExpression"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "event",
+              "raw_uid",
+              "anonymous_id",
+              "distinct_value",
+              "number",
+              "millisecond",
+              "second",
+              "byte"
+            ]
+          }
+        },
+        "required": [
+          "expression",
+          "unit"
+        ],
+        "description": "Composite formula and its declared result unit, which must match the unit derived from the operands. Unit labels never convert values."
+      },
+      "FormulaMetricDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "formula": {
+            "$ref": "#/components/schemas/FormulaDefinition"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "formula"
+        ],
+        "description": "Composite metric definition. It carries no direct event selection or aggregation; every operand is a pinned immutable atomic metric version. Maximum 131072 UTF-8 JSON bytes."
+      },
+      "FormulaMetricDependency": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "metric_id",
+          "version",
+          "definition_hash"
+        ]
+      },
+      "FormulaDependencyManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/FormulaMetricDependency"
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "environment",
+          "metrics"
+        ]
+      },
+      "FormulaMetricChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "definition",
+              "metadata",
+              "formula"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "before": {},
+          "after": {}
+        },
+        "required": [
+          "category",
+          "path"
+        ]
+      },
+      "FormulaMetricRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "title",
+          "draft_revision",
+          "published_version",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "FormulaMetricDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/FormulaMetricDefinition"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "title",
+          "draft_revision",
+          "published_version",
+          "created_at",
+          "updated_at",
+          "definition"
+        ]
+      },
+      "FormulaMetricVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "definition": {
+            "$ref": "#/components/schemas/FormulaMetricDefinition"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/FormulaDependencyManifest"
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dependency_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "metric_id",
+          "project_id",
+          "environment",
+          "version",
+          "draft_revision",
+          "definition",
+          "dependencies",
+          "definition_hash",
+          "dependency_hash",
+          "validation_hash",
+          "created_at",
+          "created_by"
+        ]
+      },
+      "FormulaMetricValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "execution_performed": {
+            "type": "boolean",
+            "const": false
+          },
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "normalized_definition": {
+            "$ref": "#/components/schemas/FormulaMetricDefinition"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/FormulaDependencyManifest"
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dependency_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "diff": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/FormulaMetricChange"
+            }
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "valid",
+          "execution_performed",
+          "draft_revision",
+          "published_version",
+          "normalized_definition",
+          "dependencies",
+          "definition_hash",
+          "dependency_hash",
+          "diff",
+          "validation_hash"
+        ],
+        "description": "Read-only semantic validation of a composite formula metric. No query execution, mutation or audit write occurs. The dependency graph and units are resolved inside the authorizing storage transaction before the validation digests are derived."
+      },
+      "FormulaMetricCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "definition": {
+            "$ref": "#/components/schemas/FormulaMetricDefinition"
+          }
+        },
+        "required": [
+          "environment",
+          "definition"
+        ]
+      },
+      "FormulaMetricUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/FormulaMetricDefinition"
+          }
+        },
+        "required": [
+          "definition"
+        ]
+      },
+      "FormulaMetricValidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "draft_revision",
+          "expected_published_version"
+        ]
+      },
+      "FormulaMetricPublish": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_published_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "validation_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "draft_revision",
+          "expected_published_version",
+          "validation_hash"
+        ]
+      },
+      "FormulaMetricList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/FormulaMetricRecord"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "FormulaMetricVersionList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/FormulaMetricVersion"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
       "SavedAnalysisDefinition": {
         "type": "object",
         "additionalProperties": false,
