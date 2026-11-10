@@ -13,6 +13,7 @@ type MetadataFieldsProps = SectionControlProps & {
   kind: SavedAnalysisTemplate['kind'];
   visualization: SavedVisualization;
   visualizationError?: string;
+  metricMode?: boolean;
   onTitleChange: (next: string) => void;
   onDescriptionChange: (next: string) => void;
   onKindChange: (next: SavedAnalysisTemplate['kind']) => void;
@@ -25,6 +26,7 @@ export function MetadataFields({
   kind,
   visualization,
   visualizationError,
+  metricMode = false,
   onTitleChange,
   onDescriptionChange,
   onKindChange,
@@ -56,22 +58,24 @@ export function MetadataFields({
           onChange={(event) => onDescriptionChange(event.target.value)}
         />
       </Field>
-      <Field label="分析类型" htmlFor={`${id}-kind`}>
-        <Select
-          id={`${id}-kind`}
-          value={kind}
-          disabled={readOnly || disabled}
-          options={[
-            { value: 'trend', label: '趋势分析' },
-            { value: 'funnel', label: '有序漏斗' },
-          ]}
-          onChange={(event) => onKindChange(event.target.value as SavedAnalysisTemplate['kind'])}
-        />
-      </Field>
+      {!metricMode && (
+        <Field label="分析类型" htmlFor={`${id}-kind`}>
+          <Select
+            id={`${id}-kind`}
+            value={kind}
+            disabled={readOnly || disabled}
+            options={[
+              { value: 'trend', label: '趋势分析' },
+              { value: 'funnel', label: '有序漏斗' },
+            ]}
+            onChange={(event) => onKindChange(event.target.value as SavedAnalysisTemplate['kind'])}
+          />
+        </Field>
+      )}
       <Field label="展示方式" htmlFor={`${id}-visualization`} error={visualizationError}>
         <Select
           id={`${id}-visualization`}
-          disabled={readOnly || disabled}
+          disabled={readOnly || disabled || metricMode}
           value={visualization}
           options={Object.entries(savedVisualizationLabels).map(([value, label]) => ({
             value,

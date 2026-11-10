@@ -1,6 +1,13 @@
 import { useId } from 'react';
+import { Button } from '@evia/design-system';
 import type { Environment, SavedAnalysisDefinition } from '@evia/api-client';
-import { savedDefinitionSummary } from './saved-analysis-model';
+import {
+  isMetricReferenceDefinition,
+  patchMetricReference,
+  savedDefinitionSummary,
+  switchSavedAnalysisSource,
+  type SavedAnalysisSource,
+} from './saved-analysis-model';
 import { AdvancedSection } from './saved-analysis-editor/advanced';
 import { ConfigurationSummary, MetadataFields } from './saved-analysis-editor/configuration-fields';
 import { EditorConfirmations, SectionDialog } from './saved-analysis-editor/editor-dialogs';
@@ -8,6 +15,7 @@ import { EventsSection } from './saved-analysis-editor/events';
 import { FiltersSection } from './saved-analysis-editor/filters';
 import { FunnelSection } from './saved-analysis-editor/funnel';
 import { GroupingSection } from './saved-analysis-editor/grouping';
+import { MetricReferenceSection } from './saved-analysis-editor/metric-reference';
 import { MetricsSection } from './saved-analysis-editor/metrics';
 import { CatalogNotice, useEditorCatalog } from './saved-analysis-editor/use-editor-catalog';
 import { useSectionEditor } from './saved-analysis-editor/use-section-editor';
@@ -55,12 +63,39 @@ export function SavedAnalysisEditor({
     readOnly,
   });
   const query = edit.candidate.query;
+  const metricMode = isMetricReferenceDefinition(value);
+  const metricRef = value.metric_ref;
+  const changeSource = (source: SavedAnalysisSource) => {
+    edit.setTouched(true);
+    onChange(switchSavedAnalysisSource(value, source));
+  };
   return (
     <div className="saved-analysis-editor section-stack">
+      {!readOnly && (
+        <div className="saved-analysis-source inline-actions" role="group" aria-label="数据源">
+          <Button
+            type="button"
+            aria-pressed={!metricMode}
+            disabled={disabled}
+            onClick={() => changeSource('inline')}
+          >
+            内联查询
+          </Button>
+          <Button
+            type="button"
+            aria-pressed={metricMode}
+            disabled={disabled}
+            onClick={() => changeSource('metric')}
+          >
+            指标引用
+          </Button>
+        </div>
+      )}
       <MetadataFields
         id={id}
         readOnly={readOnly}
         disabled={disabled}
+        metricMode={metricMode}
         title={value.title}
         description={value.description ?? ''}
         kind={value.query.kind}
@@ -82,7 +117,24 @@ export function SavedAnalysisEditor({
         }}
       />
       <p className="saved-analysis-editor-help">{savedDefinitionSummary(value)}</p>
-      <ConfigurationSummary query={value.query} disabled={disabled} onOpen={edit.open} />
+      {metricMode && metricRef ? (
+        <MetricReferenceSection
+          projectID={projectID}
+          environment={environment}
+          actorID={actorID}
+          value={metricRef}
+          readOnly={readOnly}
+          disabled={disabled}
+          onChange={(ref) => {
+            edit.setTouched(true);
+            onChange(patchMetricReference(value, ref));
+          }}
+        />
+      ) : (
+        !metricMode && (
+          <ConfigurationSummary query={value.query} disabled={disabled} onOpen={edit.open} />
+        )
+      )}
       {edit.touched && edit.issues.length > 0 && !readOnly && (
         <ul className="saved-analysis-editor-errors" aria-label="待完善配置">
           {edit.issues.slice(0, 4).map((issue) => (
