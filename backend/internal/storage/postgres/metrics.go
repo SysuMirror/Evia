@@ -36,6 +36,10 @@ func scanMetricRecord(row pgx.Row) (reporting.MetricRecord, error) {
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = metricMissing()
 	}
+	// The wire contract pins instants to a trailing Z; normalize the database
+	// session location to UTC so JSON marshaling never emits a local offset.
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
 	return out, e
 }
 func decodeMetric(data []byte, out any) error {
@@ -53,6 +57,8 @@ func readMetricDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (repo
 	if e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
 	e = decodeMetric(data, &out.Definition)
 	return out, e
 }
@@ -69,6 +75,7 @@ func scanMetricVersion(row pgx.Row) (reporting.MetricVersion, error) {
 	if e = decodeMetric(def, &out.Definition); e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
 	e = decodeMetric(deps, &out.Dependencies)
 	return out, e
 }
