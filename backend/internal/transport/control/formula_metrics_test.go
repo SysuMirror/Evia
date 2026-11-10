@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
@@ -23,6 +24,7 @@ const formulaExpression = `{"op":"metric","metric":{"metric_id":"` + metricID + 
 const formulaDefinition = `{"title":"Lesson ratio","description":"","formula":{"expression":` + formulaExpression + `,"unit":"event"}}`
 const formulaCreateBody = `{"environment":"development","definition":` + formulaDefinition + `}`
 const formulaValidateBody = `{"draft_revision":1,"expected_published_version":0}`
+const formulaExecuteBody = `{"time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-02T00:00:00Z"},"timezone":"UTC","interval":"day"}`
 
 type formulaHTTPService struct {
 	reporting.FormulaMetricService
@@ -98,6 +100,10 @@ func (f *formulaHTTPService) GetFormulaMetricVersion(_ context.Context, actor, p
 	f.id, f.version = id, version
 	return formulaVersionFixture(version), f.call(actor, project)
 }
+func (f *formulaHTTPService) EnqueueFormulaMetricVersion(_ context.Context, actor, project, id string, version int64, key string, in reporting.MetricExecute) (analysis.Job, error) {
+	f.id, f.version, f.key = id, version, key
+	return analysis.Job{ID: "77777777-7777-4777-8777-777777777777", State: "queued", CreatedAt: formulaRecord().CreatedAt}, f.call(actor, project)
+}
 
 func formulaHTTP(t *testing.T, f *formulaHTTPService, access AccessService) (http.Handler, *cursor.Codec) {
 	t.Helper()
@@ -132,6 +138,7 @@ func TestFormulaMetricHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"POST", formulaItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, map[string]string{"Idempotency-Key": "publish-key"}, 201, true},
 		{"GET", formulaItem + "/versions", "", nil, 200, false},
 		{"GET", formulaItem + "/versions/1", "", nil, 200, false},
+		{"POST", formulaItem + "/versions/1/queries", formulaExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			before := f.calls
@@ -148,7 +155,7 @@ func TestFormulaMetricHTTPRoutesContractsAndRevisions(t *testing.T) {
 			}
 		})
 	}
-	if f.id != formulaID || f.version != 1 || f.key != "publish-key" || f.revision != 1 {
+	if f.id != formulaID || f.version != 1 || f.key != "execute-key" || f.revision != 1 {
 		t.Fatal("scope or precondition not forwarded", f)
 	}
 }
@@ -175,6 +182,10 @@ func TestFormulaMetricHTTPStrictInputs(t *testing.T) {
 		{"null definition", "POST", formulaBase, `{"environment":"development","definition":null}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"formula unknown op", "POST", formulaBase, `{"environment":"development","definition":{"title":"x","description":"","formula":{"expression":{"op":"pow"},"unit":"event"}}}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"atomic field rejected", "POST", formulaBase, `{"environment":"development","definition":{"title":"x","description":"","formula":{"expression":` + formulaExpression + `,"unit":"event"},"aggregation":{"op":"count"}}}`, map[string]string{"Idempotency-Key": "key"}, 400},
+		{"execute needs key", "POST", formulaItem + "/versions/1/queries", formulaExecuteBody, nil, 400},
+		{"execute invalid interval", "POST", formulaItem + "/versions/1/queries", strings.Replace(formulaExecuteBody, `"interval":"day"`, `"interval":"week"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
+		{"execute invalid version", "POST", formulaItem + "/versions/0/queries", formulaExecuteBody, map[string]string{"Idempotency-Key": "key"}, 400},
+		{"CSRF execution", "POST", formulaItem + "/versions/1/queries", formulaExecuteBody, map[string]string{"X-CSRF-Token": "", "Idempotency-Key": "key"}, 403},
 		{"CSRF validation", "POST", formulaItem + "/validations", formulaValidateBody, map[string]string{"X-CSRF-Token": ""}, 403},
 		{"origin", "POST", formulaBase, formulaCreateBody, map[string]string{"Origin": "https://invalid.example", "Idempotency-Key": "key"}, 403},
 		{"wrong method", "DELETE", formulaItem, "", nil, 405},

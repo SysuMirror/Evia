@@ -33,6 +33,7 @@ func (a *FormulaMetricsAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+base+"/{metric_id}/versions", a.API.projectPermissionAuth(false, access.PermissionMetricsRead, a.versions))
 	mux.HandleFunc("POST "+base+"/{metric_id}/versions", a.API.projectPermissionAuth(true, access.PermissionMetricsPublish, a.publish))
 	mux.HandleFunc("GET "+base+"/{metric_id}/versions/{version}", a.API.projectPermissionAuth(false, access.PermissionMetricsRead, a.version))
+	mux.HandleFunc("POST "+base+"/{metric_id}/versions/{version}/queries", a.API.projectPermissionAuth(true, access.PermissionMetricsRun, a.execute))
 }
 
 func (a *FormulaMetricsAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
@@ -187,6 +188,30 @@ func (a *FormulaMetricsAPI) version(w http.ResponseWriter, r *http.Request, s au
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "FormulaMetricVersion", out)
+}
+
+func (a *FormulaMetricsAPI) execute(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, false)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	key, e := savedIdempotency(r)
+	if e != nil {
+		return e
+	}
+	var in reporting.MetricExecute
+	if e = a.API.Boundary.Decode(w, r, "MetricExecute", &in); e != nil {
+		return e
+	}
+	version, _ := metricVersion(r.PathValue("version"))
+	out, e := a.Service.EnqueueFormulaMetricVersion(r.Context(), s.ID, p, r.PathValue("metric_id"), version, key, in)
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 202, "QueryJob", out)
 }
 
 func (a *FormulaMetricsAPI) list(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
