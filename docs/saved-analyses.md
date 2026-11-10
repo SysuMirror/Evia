@@ -1,6 +1,6 @@
 # Saved analyses
 
-Saved analyses persist named aggregate trend or ordered funnel configurations in one project and environment. A mutable draft becomes an immutable published version after validation; executing an explicit version creates a normal durable query job. Contracts, generated API types/client methods, domain policy, PostgreSQL persistence and HTTP routes are implemented. The console includes structured editing, publication review, version history and execution results. Multi-chart dashboards and scoped machine authentication are implemented; independently versioned metrics/formulas and exports remain planned. See the [feature coverage audit](feature-coverage.md) for the broader delivery boundary.
+Saved analyses persist named aggregate trend or ordered funnel configurations in one project and environment. A mutable draft becomes an immutable published version after validation; executing an explicit version creates a normal durable query job. Contracts, generated API types/client methods, domain policy, PostgreSQL persistence and HTTP routes are implemented. The console includes structured editing, publication review, version history and execution results. Multi-chart dashboards and scoped machine authentication are implemented. A saved analysis can alternatively pin an immutable [metric](metrics.md) version as its source; metric formulas, cross-metric parameters and exports remain planned. See the [feature coverage audit](feature-coverage.md) for the broader delivery boundary.
 
 The authoritative saved-analysis schemas, including `SavedAnalysisTemplate` and `SavedAnalysisDefinition`, are in `contracts/http/openapi.json`; executable query contracts remain under `contracts/query/`. See [analysis semantics](analysis.md), [catalog discovery](reporting-discovery.md) and [verification evidence](verification/saved-analyses-2026-11-09.md). Real integration package times of PostgreSQL **40.548s** and ClickHouse analysis **7.365s** are test durations, not endpoint latency or capacity measurements.
 
@@ -46,6 +46,27 @@ Existing aggregates, scalar/array filters, exact/explicit approximate precision 
 | `funnel` | Funnel                                             |
 
 Creation starts `draft_revision=1` and `published_version=0` (no publication). Every accepted PATCH replaces the full definition and increments only the draft revision. `If-Match` must be one quoted current revision, such as `"1"`; missing/malformed headers return 400 `REVISION_REQUIRED`, and stale revisions return 409 `SAVED_ANALYSIS_REVISION_CONFLICT`. Resource summary `title`/`kind` describe the current draft. Historical versions retain their own immutable names/content.
+
+## Metric references
+
+Instead of an inline `query`, a definition may provide `metric_ref: {metric_id, version}` to pin an immutable [metric](metrics.md) version as its data source. On input the two sources are mutually exclusive: a request cannot carry both `metric_ref` and an inline `query`, and the reference must resolve to a published metric in the same project and environment. The first release renders the referenced metric as one whole-range `metric` card, so `visualization.kind` must be `metric`; adding trend intervals or grouping on top of a referenced metric is a future extension.
+
+The write transaction resolves the reference before persisting anything: it requires `metrics.read`, loads the exact metric version (never a latest pointer), rejects cross-environment or unpublished references, and derives the executable trend query from the metric definition. The stored definition therefore always carries both the `metric_ref` provenance pin and its derived `query`, which keeps every existing read, publication-witness and execution path unchanged. No database migration is required because definitions remain bounded JSON documents.
+
+The dependency manifest adds an optional `metric` pin (`metric_id`, `version`, `definition_hash`) alongside the metric's own event-version dependencies. Inline analyses never carry this pin. At execution the backend re-reads the pinned metric version in the same transaction and fails closed if it is missing, its environment differs or its digest no longer matches (`METRIC_PIN_CONFLICT`), and it re-checks `metrics.read`. Because the pin is an immutable version, republishing or editing the metric never implicitly changes an already published analysis; selecting a newer metric version requires an explicit new saved-analysis publication. Dashboards reference saved-analysis versions, so a metric-backed analysis can be placed on a dashboard without any dashboard schema change and with the same immutable guarantees.
+
+A metric-referencing create body omits `query` and supplies only the pin:
+
+```json
+{
+  "environment": "development",
+  "definition": {
+    "title": "Governed lesson metric",
+    "metric_ref": {"metric_id": "11111111-1111-4111-8111-111111111111", "version": 1},
+    "visualization": {"kind": "metric"}
+  }
+}
+```
 
 ## Validate and publish
 
