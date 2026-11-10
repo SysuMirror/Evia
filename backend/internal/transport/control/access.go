@@ -26,23 +26,24 @@ type AccessService interface {
 	Authorize(context.Context, string, string, bool) error
 }
 type API struct {
-	Boundary      *httpapi.Boundary
-	Access        AccessService
-	Machines      MachineService
-	Memberships   MembershipService
-	Settings      SettingsService
-	AuditLogs     AuditService
-	Catalog       CatalogService
-	Sources       SourceService
-	Analysis      AnalysisService
-	Discovery     reporting.DiscoveryService
-	SavedAnalyses reporting.SavedAnalysisService
-	Metrics       reporting.MetricService
-	Dashboards    reporting.DashboardService
-	Delivery      DeliveryService
-	Cursor        *cursor.Codec
-	Origin        string
-	SecureCookies bool
+	Boundary       *httpapi.Boundary
+	Access         AccessService
+	Machines       MachineService
+	Memberships    MembershipService
+	Settings       SettingsService
+	AuditLogs      AuditService
+	Catalog        CatalogService
+	Sources        SourceService
+	Analysis       AnalysisService
+	Discovery      reporting.DiscoveryService
+	SavedAnalyses  reporting.SavedAnalysisService
+	Metrics        reporting.MetricService
+	FormulaMetrics reporting.FormulaMetricService
+	Dashboards     reporting.DashboardService
+	Delivery       DeliveryService
+	Cursor         *cursor.Codec
+	Origin         string
+	SecureCookies  bool
 }
 type authorizedActor struct {
 	ID      string
@@ -68,6 +69,7 @@ func (a *API) Handler() http.Handler {
 	(&DiscoveryAPI{API: a, Service: a.Discovery}).Register(mux)
 	(&SavedAnalysesAPI{API: a, Service: a.SavedAnalyses}).Register(mux)
 	(&MetricsAPI{API: a, Service: a.Metrics}).Register(mux)
+	(&FormulaMetricsAPI{API: a, Service: a.FormulaMetrics}).Register(mux)
 	(&DashboardsAPI{API: a, Service: a.Dashboards}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {

@@ -168,6 +168,9 @@ func configureAnalysis(api *control.API, store analysisServicesStore, validator 
 	if metrics, ok := store.(reporting.MetricStore); ok {
 		api.Metrics = reporting.NewMetrics(metrics, validator, engine != nil)
 	}
+	if formulaMetrics, ok := store.(reporting.FormulaMetricStore); ok {
+		api.FormulaMetrics = reporting.NewFormulaMetrics(formulaMetrics, validator)
+	}
 	if dashboards, ok := store.(reporting.DashboardStore); ok {
 		api.Dashboards = reporting.NewDashboards(dashboards, validator, engine != nil)
 	}
