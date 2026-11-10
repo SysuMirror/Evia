@@ -119,6 +119,37 @@ test('run execute enforces the half-open 31-day window, limit and filter JSON', 
   expect(withInterval.execute?.interval).toBe('day');
 });
 
+test('run execute emits bounded group_by and rejects bad keys or too many fields', () => {
+  const form = defaultRunForm('UTC', new Date('2026-11-10T12:00:00Z'));
+  const withGroup = buildRunExecute({
+    ...form,
+    groupBy: [{ event_key: 'demo_page', schema_version: '1', key: 'page' }],
+  });
+  expect(withGroup.error).toBeUndefined();
+  expect(withGroup.execute?.group_by).toEqual([
+    { kind: 'property', event_key: 'demo_page', schema_version: 1, key: 'page' },
+  ]);
+
+  const badKey = buildRunExecute({
+    ...form,
+    groupBy: [{ event_key: 'demo_page', schema_version: '1', key: 'Bad-Key' }],
+  });
+  expect(badKey.error).toContain('snake_case');
+
+  const tooMany = buildRunExecute({
+    ...form,
+    groupBy: [1, 2, 3, 4].map((index) => ({
+      event_key: 'demo_page',
+      schema_version: '1',
+      key: `key_${index}`,
+    })),
+  });
+  expect(tooMany.error).toContain('分组');
+
+  const empty = buildRunExecute(form);
+  expect(empty.execute?.group_by).toBeUndefined();
+});
+
 test('change labels and instant formatting stay bounded', () => {
   expect(
     describeChange({

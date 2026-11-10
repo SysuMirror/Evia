@@ -148,4 +148,19 @@ test('owner creates, validates, publishes and runs an atomic metric through the 
   await expect(page.getByText('已完成')).toBeVisible({ timeout: 30_000 });
   // A successful run always renders coverage metadata, even with zero facts.
   await expect(page.getByText(/精度 exact/)).toBeVisible();
+
+  // Add a group-by dimension referencing the pinned event and run again; the
+  // enqueue request must carry the property reference in group_by.
+  await page.getByRole('button', { name: '添加分组' }).click();
+  await page.getByLabel('分组 1 属性名').fill('page');
+  const groupedRequest = page.waitForRequest((request) => {
+    if (!request.url().includes('/versions/1/queries') || request.method() !== 'POST') return false;
+    return JSON.parse(request.postData() ?? '{}').group_by !== undefined;
+  });
+  await page.getByRole('button', { name: '运行 v1' }).click();
+  const grouped = await groupedRequest;
+  expect(JSON.parse(grouped.postData()!).group_by).toEqual([
+    { kind: 'property', event_key: EVENT_KEY, schema_version: releaseRevision, key: 'page' },
+  ]);
+  await expect(page.getByText('已完成')).toBeVisible({ timeout: 30_000 });
 });
