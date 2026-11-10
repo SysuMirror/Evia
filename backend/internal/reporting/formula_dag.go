@@ -28,6 +28,9 @@ type FormulaResolvedMetric struct {
 	Ref MetricReference
 	// Unit is the metric version's declared result unit.
 	Unit string
+	// DefinitionHash is the immutable version's content digest, recorded as the
+	// dependency witness so a later change can be detected before execution.
+	DefinitionHash string
 	// Composite marks a metric version that is itself a formula. Atomic
 	// metrics report false and an empty References list.
 	Composite bool
@@ -109,6 +112,9 @@ func ValidateFormulaDAG(ctx context.Context, self MetricReference, def FormulaDe
 		}
 		if !formulaKnownUnit(resolved.Unit) {
 			return formulaInvalid("INVALID_FORMULA_UNIT", "被引用指标的单位无效", "/formula/expression")
+		}
+		if resolved.DefinitionHash != "" && !savedDigest(resolved.DefinitionHash) {
+			return formulaInvalid("INVALID_ANALYSIS_DEPENDENCIES", "被引用指标的内容摘要无效", "/formula/expression")
 		}
 		graph.resolved[key] = resolved
 		state[key] = formulaVisiting
