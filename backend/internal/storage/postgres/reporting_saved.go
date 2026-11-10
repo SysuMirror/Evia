@@ -35,6 +35,8 @@ func scanSavedAnalysis(row pgx.Row) (reporting.SavedAnalysis, error) {
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = savedMissing()
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
 	return out, e
 }
 func decodeSaved(data []byte, out any) error {
@@ -52,6 +54,8 @@ func readSavedAnalysisDraftTx(ctx context.Context, tx pgx.Tx, project, id string
 	if e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
 	e = decodeSaved(data, &out.Definition)
 	return out, e
 }
@@ -65,6 +69,7 @@ func scanSavedVersion(row pgx.Row) (reporting.SavedAnalysisVersion, error) {
 	if e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
 	if e = decodeSaved(def, &out.Definition); e != nil {
 		return out, e
 	}

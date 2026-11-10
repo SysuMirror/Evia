@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
@@ -44,6 +45,9 @@ func TestSavedAnalysisMetricReferenceResolvesPinsAndPublishes(t *testing.T) {
 	}
 	if created.Definition.MetricRef == nil || created.Definition.MetricRef.MetricID != metric.MetricID || created.Definition.MetricRef.Version != 1 {
 		t.Fatalf("metric reference not retained: %+v", created.Definition.MetricRef)
+	}
+	if created.CreatedAt.Location() != time.UTC || created.UpdatedAt.Location() != time.UTC {
+		t.Fatalf("saved analysis timestamps must serialize as UTC: %s %s", created.CreatedAt, created.UpdatedAt)
 	}
 	q := created.Definition.Query
 	if q.Kind != "trend" || len(q.Metrics) != 1 || q.Metrics[0].Op != "count" || q.Interval != "" || len(q.GroupBy) != 0 {

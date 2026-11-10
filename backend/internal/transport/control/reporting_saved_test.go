@@ -436,6 +436,25 @@ func TestSavedAnalysisHTTPMetricReferenceBoundary(t *testing.T) {
 	if e != nil {
 		t.Fatal("inline analysis response regressed", e)
 	}
+	// The create/get draft response uses the same stored definition shape.
+	var liveDefinition reporting.SavedAnalysisDefinition
+	liveJSON := `{"title":"调试指标引用","description":"","query":{"kind":"trend","event_versions":[{"event_key":"demo_page","schema_version":1}],"subject":"uid","metrics":[{"op":"count","accuracy":"exact"}],"limit":200},"metric_ref":{"metric_id":"4a3c2702-549f-4929-b936-a80f0a8c747a","version":1},"visualization":{"kind":"metric"}}`
+	if e = json.Unmarshal([]byte(liveJSON), &liveDefinition); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = validator.Encode("SavedAnalysisDefinition", liveDefinition); e != nil {
+		t.Fatal("live metric definition failed response contract", e)
+	}
+	metricDraft := reporting.SavedAnalysisDraft{
+		SavedAnalysis: reporting.SavedAnalysis{
+			ID: savedID, ProjectID: projectID, Environment: "development", Title: "Metric card", Kind: "trend",
+			DraftRevision: 1, CreatedAt: savedResource().CreatedAt, UpdatedAt: savedResource().CreatedAt,
+		},
+		Definition: liveDefinition,
+	}
+	if _, e = validator.Encode("SavedAnalysisDraft", metricDraft); e != nil {
+		t.Fatal("metric draft failed response contract", e)
+	}
 	if strings.Contains(string(inline), "metric_ref") {
 		t.Fatalf("inline response must not contain metric_ref: %s", inline)
 	}

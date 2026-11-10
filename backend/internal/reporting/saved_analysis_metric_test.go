@@ -219,3 +219,69 @@ func TestMetricReferenceDiffAndInlineBackwardCompatibility(t *testing.T) {
 		t.Fatalf("inline definition must not serialize metric_ref: %s", encoded)
 	}
 }
+
+func TestSavedDefinitionMarshalJSONPreservesStorageContract(t *testing.T) {
+	mv := MetricVersion{
+		MetricID: testMetricID, ProjectID: "p", Environment: "development", Version: 1,
+		Definition: metricDefinition(),
+	}
+	// A metric write input omits the derived query but must keep the description
+	// key required by the saved_analyses storage check.
+	input := SavedAnalysisDefinition{
+		Title:         "调试",
+		MetricRef:     &MetricReference{MetricID: testMetricID, Version: 1},
+		Visualization: SavedAnalysisVisualization{Kind: "metric"},
+	}
+	rawInput, e := json.Marshal(input)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var inputMap map[string]any
+	if e = json.Unmarshal(rawInput, &inputMap); e != nil {
+		t.Fatal(e)
+	}
+	if _, ok := inputMap["query"]; ok {
+		t.Fatalf("metric write input must omit the query: %s", rawInput)
+	}
+	if _, ok := inputMap["description"]; !ok {
+		t.Fatalf("description key must always be present for the storage check: %s", rawInput)
+	}
+
+	// After resolution the derived query is included alongside the pin.
+	resolved, err := ResolveMetricReference(input, mv)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	resolvedBytes, e := json.Marshal(resolved)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var resolvedMap map[string]any
+	if e = json.Unmarshal(resolvedBytes, &resolvedMap); e != nil {
+		t.Fatal(e)
+	}
+	query, ok := resolvedMap["query"].(map[string]any)
+	if !ok || query["kind"] != "trend" {
+		t.Fatalf("resolved definition must carry the derived query: %s", resolvedBytes)
+	}
+	if _, ok = resolvedMap["metric_ref"]; !ok {
+		t.Fatalf("resolved definition must retain the metric pin: %s", resolvedBytes)
+	}
+
+	// Inline definitions keep the exact same representation (no metric_ref, query present).
+	inline := savedDefinition()
+	inlineBytes, e := json.Marshal(inline)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var inlineMap map[string]any
+	if e = json.Unmarshal(inlineBytes, &inlineMap); e != nil {
+		t.Fatal(e)
+	}
+	if _, ok = inlineMap["metric_ref"]; ok {
+		t.Fatalf("inline definition must not carry a metric_ref: %s", inlineBytes)
+	}
+	if _, ok = inlineMap["query"]; !ok {
+		t.Fatalf("inline definition must carry its query: %s", inlineBytes)
+	}
+}

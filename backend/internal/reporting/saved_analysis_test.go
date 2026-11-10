@@ -294,6 +294,40 @@ func TestSavedServiceValidatesBeforePersistenceAndPreservesBoundedLookahead(t *t
 		t.Fatal("invalid real time reached store")
 	}
 }
+func TestSavedServiceAcceptsMetricReferenceWriteInput(t *testing.T) {
+	store := &savedStoreFake{}
+	service := NewSavedAnalyses(store, savedValidator(t), false)
+	// A metric-reference write input omits the inline query; the value-typed
+	// domain Query must not rematerialize as an empty object during the
+	// service's re-marshal and re-validation.
+	input := SavedAnalysisCreate{
+		Environment: "development",
+		Definition: SavedAnalysisDefinition{
+			Title:         "Metric card",
+			MetricRef:     &MetricReference{MetricID: testMetricID, Version: 1},
+			Visualization: SavedAnalysisVisualization{Kind: "metric"},
+		},
+	}
+	if _, e := service.CreateSavedAnalysis(context.Background(), "actor", "project", "metric-key", input); e != nil {
+		t.Fatalf("metric reference write input rejected: %v", e)
+	}
+	if store.calls != 1 {
+		t.Fatal("valid metric reference did not reach the store")
+	}
+	if store.created.Definition.MetricRef == nil || store.created.Definition.MetricRef.Version != 1 {
+		t.Fatalf("store did not receive the metric pin: %+v", store.created.Definition)
+	}
+	if store.created.Definition.Query.Kind != "" {
+		t.Fatalf("write input must not carry a derived query: %+v", store.created.Definition.Query)
+	}
+	// A metric reference with a non-metric visualization is rejected before the store.
+	bad := input
+	bad.Definition.Visualization = SavedAnalysisVisualization{Kind: "line"}
+	if _, e := service.CreateSavedAnalysis(context.Background(), "actor", "project", "bad-key", bad); e == nil {
+		t.Fatal("non-metric visualization with a metric reference was accepted")
+	}
+}
+
 func TestSavedServiceRejectsMismatchedValidationSnapshot(t *testing.T) {
 	store := &savedStoreFake{snapshot: savedSnapshot(t, savedDefinition())}
 	service := NewSavedAnalyses(store, savedValidator(t), false)

@@ -2,6 +2,7 @@ package reporting
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
@@ -30,6 +31,33 @@ type SavedAnalysisDefinition struct {
 	MetricRef     *MetricReference           `json:"metric_ref,omitempty"`
 	Visualization SavedAnalysisVisualization `json:"visualization"`
 }
+
+// MarshalJSON keeps the stored/read representation byte-identical while
+// omitting the not-yet-derived query for a metric-reference write input. The
+// domain Query is a value type, so without this an omitted write query would
+// rematerialize as an empty object during service re-validation and fail the
+// one-source contract. Stored definitions always carry a non-empty derived or
+// inline query and are therefore unaffected.
+func (d SavedAnalysisDefinition) MarshalJSON() ([]byte, error) {
+	type shape struct {
+		Title         string                     `json:"title"`
+		Description   string                     `json:"description"`
+		Query         *analysis.Template         `json:"query,omitempty"`
+		MetricRef     *MetricReference           `json:"metric_ref,omitempty"`
+		Visualization SavedAnalysisVisualization `json:"visualization"`
+	}
+	out := shape{
+		Title:         d.Title,
+		Description:   d.Description,
+		MetricRef:     d.MetricRef,
+		Visualization: d.Visualization,
+	}
+	if d.Query.Kind != "" {
+		out.Query = &d.Query
+	}
+	return json.Marshal(out)
+}
+
 type SavedAnalysis struct {
 	ID               string    `json:"analysis_id"`
 	ProjectID        string    `json:"project_id"`
