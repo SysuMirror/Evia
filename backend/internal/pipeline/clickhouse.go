@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/pipeline/propertylayout"
 )
 
 type ClickHouseConfig struct {
@@ -80,6 +81,11 @@ type factRow struct {
 	SDKVersion         string  `json:"sdk_version"`
 	ContextJSON        string  `json:"context_json"`
 	PropertiesJSON     string  `json:"properties_json"`
+	// Layout version 1 means PropertyTokens was derived losslessly from
+	// PropertiesJSON and both payloads commit in this one insert. The map
+	// values are the exact JSON tokens; never re-serialize them numerically.
+	PropertyLayoutVersion uint8             `json:"property_layout_version"`
+	PropertyTokens        map[string]string `json:"property_tokens"`
 }
 
 func present(value string) *string {
@@ -113,6 +119,18 @@ func rowFor(record ingestion.Record) (factRow, error) {
 		return factRow{}, e
 	}
 	occurred := r.OccurredAt.Format("2006-01-02 15:04:05.000000000")
+	// Derive the read layout from the normalized document. normalizeRecord
+	// guarantees a JSON object, so a derivation failure means an internal
+	// invariant broke: fail closed instead of persisting a row whose layout
+	// would be silently missing. Tokens keep their exact lexical text.
+	derived, e := propertylayout.DeriveMap(r.PropertiesJSON)
+	if e != nil {
+		return factRow{}, e
+	}
+	propertyTokens := make(map[string]string, len(derived))
+	for encoded, token := range derived {
+		propertyTokens[encoded] = string(token)
+	}
 	return factRow{
 		SourceKind: r.SourceKind, ProjectID: r.ProjectID, Environment: r.Environment, SourceID: r.SourceID, EventID: r.EventID, EventKey: r.EventKey, SchemaVersion: r.SchemaVersion, ReleaseRevision: r.ReleaseRevision,
 		OccurredAt: occurred, EventTime: occurred, OccurredAtPrecise: occurred, EventTimePrecise: occurred, ReceivedAt: r.ReceivedAt.Format("2006-01-02 15:04:05.000000000"), CanonicalHash: hash,
@@ -120,6 +138,7 @@ func rowFor(record ingestion.Record) (factRow, error) {
 		PageViewID: present(r.Context.PageViewID), SourcePageViewID: present(r.Context.SourcePageViewID), NavigationID: present(r.Context.NavigationID), OperationID: present(r.Context.OperationID),
 		RouteName: rawPresent(exact, "route_name"), RouteTemplate: rawPresent(exact, "route_template"), SourceModule: rawPresent(exact, "source_module"), NavigationType: present(r.Context.NavigationType), PreviousPageViewID: present(r.Context.PreviousPageViewID),
 		SDKName: r.SDKName, SDKVersion: r.SDKVersion, ContextJSON: string(r.ContextJSON), PropertiesJSON: string(r.PropertiesJSON),
+		PropertyLayoutVersion: 1, PropertyTokens: propertyTokens,
 	}, nil
 }
 

@@ -126,6 +126,13 @@ func TestClickHousePrecisionPopulatedUpgradeAndReplay(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		applyFactMigration(t, ctx, c, "../../../deploy/clickhouse/003_event_precision.sql")
 	}
+	// Version 006 is an equally mandatory writer precondition: with the
+	// precision columns present but the property layout columns missing, the
+	// writer must still fail closed rather than drop the derived fields.
+	if e = sink.Write(ctx, []ingestion.Record{unmigrated}); !errors.Is(e, ErrSinkUnavailable) {
+		t.Fatal("new writer silently accepted missing property layout migration", e)
+	}
+	applyFactMigration(t, ctx, c, "../../../deploy/clickhouse/006_property_layout.sql")
 	for _, name := range []string{"occurred_at", "event_time"} {
 		data, e := clickhouseQuery(ctx, c, "SELECT type FROM system.columns WHERE database='"+c.Database+"' AND table='event_facts' AND name='"+name+"' FORMAT JSONEachRow")
 		var column struct {
