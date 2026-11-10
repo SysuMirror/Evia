@@ -412,8 +412,11 @@ func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, l
 	}
 	processID := c.InstanceID + "-" + ids.New()
 	tasks := make([]task, 0, c.QueryWorkers)
+	// Route internal formula jobs to a bounded fan-out; ordinary requests pass
+	// through to the ClickHouse engine unchanged.
+	var executionEngine analysis.Engine = reporting.NewCompositeFormulaEngine(engine, store)
 	for i := range c.QueryWorkers {
-		worker := analysis.NewWorker(store, engine, processID+"-"+strconv.Itoa(i))
+		worker := analysis.NewWorker(store, executionEngine, processID+"-"+strconv.Itoa(i))
 		tasks = append(tasks, task{name: fmt.Sprintf("query worker %d", i), run: worker.Run})
 	}
 	logger.Info("query workers starting", "count", c.QueryWorkers)
