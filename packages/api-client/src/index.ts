@@ -95,6 +95,24 @@ export type MetricPublish = components['schemas']['MetricPublish'];
 export type MetricExecute = components['schemas']['MetricExecute'];
 export type MetricPage = { environment: Environment; cursor?: string; limit?: number };
 export type MetricVersionPage = { cursor?: string; limit?: number };
+export type FormulaExpression = components['schemas']['FormulaExpression'];
+export type FormulaDefinition = components['schemas']['FormulaDefinition'];
+export type FormulaMetricDefinition = components['schemas']['FormulaMetricDefinition'];
+export type FormulaMetricDependency = components['schemas']['FormulaMetricDependency'];
+export type FormulaDependencyManifest = components['schemas']['FormulaDependencyManifest'];
+export type FormulaMetricChange = components['schemas']['FormulaMetricChange'];
+export type FormulaMetricRecord = components['schemas']['FormulaMetricRecord'];
+export type FormulaMetricDraft = components['schemas']['FormulaMetricDraft'];
+export type FormulaMetricVersion = components['schemas']['FormulaMetricVersion'];
+export type FormulaMetricValidation = components['schemas']['FormulaMetricValidation'];
+export type FormulaMetricCreate = components['schemas']['FormulaMetricCreate'];
+export type FormulaMetricUpdate = components['schemas']['FormulaMetricUpdate'];
+export type FormulaMetricValidate = components['schemas']['FormulaMetricValidate'];
+export type FormulaMetricPublish = components['schemas']['FormulaMetricPublish'];
+export type FormulaMetricList = components['schemas']['FormulaMetricList'];
+export type FormulaMetricVersionList = components['schemas']['FormulaMetricVersionList'];
+export type FormulaMetricPage = { environment: Environment; cursor?: string; limit?: number };
+export type FormulaMetricVersionPage = { cursor?: string; limit?: number };
 export type ProjectMemberPage = { cursor?: string; limit?: number };
 export type ProjectAuditPage = {
   from: string;
@@ -221,6 +239,8 @@ const machinePrincipalPath = (projectID: string, principalID: string) =>
   `${projectPath(projectID)}/machine-principals/${encodeURIComponent(principalID)}`;
 const metricPath = (projectID: string, metricID: string) =>
   `${projectPath(projectID)}/metrics/${encodeURIComponent(metricID)}`;
+const formulaMetricPath = (projectID: string, metricID: string) =>
+  `${projectPath(projectID)}/formula-metrics/${encodeURIComponent(metricID)}`;
 function catalogQuery(page: CatalogPage): string {
   const query = new URLSearchParams();
   if (page.environment !== undefined) query.set('environment', page.environment);
@@ -475,6 +495,115 @@ export const api = {
   ) =>
     request<QueryJob>(
       `${metricPath(projectID, metricID)}/versions/${encodeURIComponent(String(version))}/queries`,
+      {
+        method: 'POST',
+        body,
+        csrf,
+        signal,
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  listFormulaMetrics: (projectID: string, page: FormulaMetricPage, signal?: AbortSignal) =>
+    request<FormulaMetricList>(`${projectPath(projectID)}/formula-metrics${catalogQuery(page)}`, {
+      signal,
+    }),
+  createFormulaMetric: (
+    projectID: string,
+    body: FormulaMetricCreate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricDraft>(`${projectPath(projectID)}/formula-metrics`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getFormulaMetric: (projectID: string, metricID: string, signal?: AbortSignal) =>
+    request<FormulaMetricRecord>(formulaMetricPath(projectID, metricID), { signal }),
+  getFormulaMetricDraft: (projectID: string, metricID: string, signal?: AbortSignal) =>
+    request<FormulaMetricDraft>(`${formulaMetricPath(projectID, metricID)}/draft`, { signal }),
+  updateFormulaMetricDraft: (
+    projectID: string,
+    metricID: string,
+    revision: number,
+    body: FormulaMetricUpdate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricDraft>(`${formulaMetricPath(projectID, metricID)}/draft`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"` },
+    }),
+  validateFormulaMetric: (
+    projectID: string,
+    metricID: string,
+    body: FormulaMetricValidate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricValidation>(`${formulaMetricPath(projectID, metricID)}/validations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  listFormulaMetricVersions: (
+    projectID: string,
+    metricID: string,
+    page: FormulaMetricVersionPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricVersionList>(
+      `${formulaMetricPath(projectID, metricID)}/versions${catalogQuery({
+        cursor: page.cursor,
+        limit: page.limit,
+      })}`,
+      { signal },
+    ),
+  getFormulaMetricVersion: (
+    projectID: string,
+    metricID: string,
+    version: number,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricVersion>(
+      `${formulaMetricPath(projectID, metricID)}/versions/${encodeURIComponent(String(version))}`,
+      { signal },
+    ),
+  publishFormulaMetric: (
+    projectID: string,
+    metricID: string,
+    body: FormulaMetricPublish,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricVersion>(`${formulaMetricPath(projectID, metricID)}/versions`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  executeFormulaMetricVersion: (
+    projectID: string,
+    metricID: string,
+    version: number,
+    body: MetricExecute,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<QueryJob>(
+      `${formulaMetricPath(projectID, metricID)}/versions/${encodeURIComponent(
+        String(version),
+      )}/queries`,
       {
         method: 'POST',
         body,

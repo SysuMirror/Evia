@@ -8,6 +8,7 @@ import {
   type MachineIssued,
   type MachinePrincipalInput,
   type MetricDefinition,
+  type FormulaMetricDefinition,
 } from './index.js';
 
 afterEach(() => mock.restoreAll());
@@ -248,6 +249,105 @@ test('explicit caller cancellation during successful response body read preserve
     return response;
   });
   await assert.rejects(api.getProject('project', controller.signal), (error) => error === canceled);
+});
+
+test('formula metric reads encode scope and paging', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  await api.listFormulaMetrics('p', { environment: 'development', limit: 20 });
+  await api.getFormulaMetric('p', 'm/1');
+  await api.getFormulaMetricDraft('p', 'm/1');
+  await api.listFormulaMetricVersions('p', 'm/1', { limit: 10 });
+  await api.getFormulaMetricVersion('p', 'm/1', 2);
+  const calls = fetch.mock.calls;
+  assert.equal(
+    calls[0]?.arguments[0],
+    '/api/v1/projects/p/formula-metrics?environment=development&limit=20',
+  );
+  assert.equal(calls[1]?.arguments[0], '/api/v1/projects/p/formula-metrics/m%2F1');
+  assert.equal(calls[2]?.arguments[0], '/api/v1/projects/p/formula-metrics/m%2F1/draft');
+  assert.equal(
+    calls[3]?.arguments[0],
+    '/api/v1/projects/p/formula-metrics/m%2F1/versions?limit=10',
+  );
+  assert.equal(calls[4]?.arguments[0], '/api/v1/projects/p/formula-metrics/m%2F1/versions/2');
+  for (const call of calls) {
+    assert.equal((call.arguments[1] as RequestInit).method, 'GET');
+  }
+});
+
+test('formula metric writes send revision, CSRF and idempotency keys', async () => {
+  const fetch = respond();
+  const definition: FormulaMetricDefinition = {
+    title: 'Lesson ratio',
+    description: '',
+    formula: {
+      expression: {
+        op: 'divide',
+        left: {
+          op: 'metric',
+          metric: { metric_id: '11111111-1111-4111-8111-111111111111', version: 1 },
+        },
+        right: {
+          op: 'metric',
+          metric: { metric_id: '22222222-2222-4222-8222-222222222222', version: 1 },
+        },
+      },
+      unit: 'number',
+    },
+  };
+  await api.createFormulaMetric(
+    'p',
+    { environment: 'development', definition },
+    'create-key',
+    'csrf',
+  );
+  await api.updateFormulaMetricDraft('p', 'm', 3, { definition }, 'csrf');
+  await api.validateFormulaMetric(
+    'p',
+    'm',
+    { draft_revision: 4, expected_published_version: 0 },
+    'csrf',
+  );
+  await api.publishFormulaMetric(
+    'p',
+    'm',
+    { draft_revision: 4, expected_published_version: 0, validation_hash: 'a'.repeat(64) },
+    'publish-key',
+    'csrf',
+  );
+  const calls = fetch.mock.calls;
+  const create = calls[0]?.arguments[1] as RequestInit;
+  assert.equal(calls[0]?.arguments[0], '/api/v1/projects/p/formula-metrics');
+  assert.equal(create.method, 'POST');
+  assert.equal((create.headers as Headers).get('Idempotency-Key'), 'create-key');
+  assert.equal((create.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(create.body as string), { environment: 'development', definition });
+  const update = calls[1]?.arguments[1] as RequestInit;
+  assert.equal(update.method, 'PATCH');
+  assert.equal((update.headers as Headers).get('If-Match'), '"3"');
+  assert.equal(calls[1]?.arguments[0], '/api/v1/projects/p/formula-metrics/m/draft');
+  assert.equal(calls[2]?.arguments[0], '/api/v1/projects/p/formula-metrics/m/validations');
+  const publish = calls[3]?.arguments[1] as RequestInit;
+  assert.equal(publish.method, 'POST');
+  assert.equal((publish.headers as Headers).get('Idempotency-Key'), 'publish-key');
+  assert.equal(calls[3]?.arguments[0], '/api/v1/projects/p/formula-metrics/m/versions');
+});
+
+test('formula metric run enqueues a query job with idempotency key', async () => {
+  const fetch = respond(202, { query_id: '77777777-7777-4777-8777-777777777777', state: 'queued' });
+  const body = {
+    time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' },
+    timezone: 'UTC',
+  };
+  const job = await api.executeFormulaMetricVersion('p', 'm', 1, body, 'run-key', 'csrf');
+  const call = fetch.mock.calls[0]!;
+  assert.equal(call.arguments[0], '/api/v1/projects/p/formula-metrics/m/versions/1/queries');
+  const init = call.arguments[1] as RequestInit;
+  assert.equal(init.method, 'POST');
+  assert.equal((init.headers as Headers).get('Idempotency-Key'), 'run-key');
+  assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(init.body as string), body);
+  assert.equal(job.state, 'queued');
 });
 
 test('empty success responses do not attempt JSON decoding', async () => {
