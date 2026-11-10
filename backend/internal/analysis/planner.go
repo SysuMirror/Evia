@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
 type Plan struct {
@@ -85,18 +87,28 @@ func (p *planner) field(f Field) (fieldSQL, error) {
 	}
 	key := p.bind("String", f.Key)
 	scope := "(event_key=" + p.bind("String", f.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(f.SchemaVersion, 10)) + ")"
-	present := "JSONHas(properties_json," + key + ")"
-	jsonType := "JSONType(properties_json," + key + ")"
+	// Version 1 rows carry the exact value token in property_tokens. Wrap that
+	// token in a one-field document so the existing JSON functions keep their
+	// type and extraction semantics; because the token is byte-identical to the
+	// original document substring, results equal the legacy path. Any other
+	// layout version, old writer or unmaterialized part falls back to the
+	// authoritative document. The user key stays a bound parameter on both paths.
+	encodedKey := p.bind("String", propertylayout.EncodeKey(f.Key))
+	hit := "(property_layout_version=1 AND mapContains(property_tokens," + encodedKey + "))"
+	doc := "if(" + hit + ",concat('{\"f\":',property_tokens[" + encodedKey + "],'}'),properties_json)"
+	keyExpr := "if(" + hit + ",'f'," + key + ")"
+	present := "JSONHas(" + doc + "," + keyExpr + ")"
+	jsonType := "JSONType(" + doc + "," + keyExpr + ")"
 	extract := ""
 	switch f.ResolvedType {
 	case "string":
-		extract = "if(" + jsonType + "='String',JSONExtractString(properties_json," + key + "),NULL)"
+		extract = "if(" + jsonType + "='String',JSONExtractString(" + doc + "," + keyExpr + "),NULL)"
 	case "boolean":
-		extract = "if(" + jsonType + "='Bool',JSONExtractBool(properties_json," + key + "),NULL)"
+		extract = "if(" + jsonType + "='Bool',JSONExtractBool(" + doc + "," + keyExpr + "),NULL)"
 	case "number", "integer":
 		// JSONType names JSON floating-point values Double (not the SQL type
 		// Float64). Keep the numeric guard strict so other JSON kinds are omitted.
-		extract = "if(" + jsonType + " IN ('Int64','UInt64','Double'),JSONExtractFloat(properties_json," + key + "),NULL)"
+		extract = "if(" + jsonType + " IN ('Int64','UInt64','Double'),JSONExtractFloat(" + doc + "," + keyExpr + "),NULL)"
 	case "array:string", "array:boolean", "array:number", "array:integer":
 		item := "String"
 		if f.ResolvedType == "array:boolean" {
@@ -105,7 +117,7 @@ func (p *planner) field(f Field) (fieldSQL, error) {
 		if f.ResolvedType == "array:number" || f.ResolvedType == "array:integer" {
 			item = "Float64"
 		}
-		extract = "JSONExtract(properties_json," + key + ",'Array(" + item + ")')"
+		extract = "JSONExtract(" + doc + "," + keyExpr + ",'Array(" + item + ")')"
 		return fieldSQL{extract, present, scope, jsonType + "='Array'"}, nil
 	default:
 		return fieldSQL{}, Invalid("UNRESOLVED_FIELD", "属性字段尚未解析")

@@ -43,7 +43,11 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 	}
 	if e := WalkFields(&request, func(field *Field) error {
 		if field.Kind == "property" {
+			// The layout columns travel in the same winner tuple so the
+			// planner's property expressions can choose tokens or document
+			// without a second read of the raw table.
 			needed["event_key"], needed["schema_version"], needed["properties_json"] = true, true, true
+			needed["property_layout_version"], needed["property_tokens"] = true, true
 			return nil
 		}
 		if field.Kind == "system" {
@@ -68,6 +72,7 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 		{"uid", "uid"}, {"anonymous_id", "anonymous_id"},
 		{"session_id", "session_id"}, {"page_view_id", "page_view_id"},
 		{"operation_id", "operation_id"}, {"properties_json", "properties_json"},
+		{"property_layout_version", "property_layout_version"}, {"property_tokens", "property_tokens"},
 	}
 	arguments := make([]string, 0, len(columns))
 	// The raw predicate fixes both authorization dimensions for every input
