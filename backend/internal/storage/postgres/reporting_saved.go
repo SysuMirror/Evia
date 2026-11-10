@@ -113,6 +113,28 @@ func savedEnvironment(environment string) error {
 	}
 	return analysis.Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 }
+
+// resolveSavedDefinitionTx expands a metric-referencing saved analysis into its
+// executable query inside the authorized transaction. Inline definitions are
+// returned unchanged. The referenced metric version must be published, belong
+// to the same project and environment, and be readable under metrics.read; the
+// immutable version (never a latest pointer) supplies the derived query.
+func (s *Store) resolveSavedDefinitionTx(ctx context.Context, tx pgx.Tx, actor, project, environment string, in reporting.SavedAnalysisDefinition) (reporting.SavedAnalysisDefinition, error) {
+	if in.MetricRef == nil {
+		return in, nil
+	}
+	metric, e := readMetricVersionTx(ctx, tx, project, in.MetricRef.MetricID, in.MetricRef.Version)
+	if e != nil {
+		return in, e
+	}
+	if metric.Environment != environment {
+		return in, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+	}
+	if e = s.authorizeOperation(ctx, tx, actor, project, metric.Environment, "metrics.read"); e != nil {
+		return in, e
+	}
+	return reporting.ResolveMetricReference(in, metric)
+}
 func (s *Store) CreateSavedAnalysis(ctx context.Context, actor, project, key string, in reporting.SavedAnalysisCreate) (reporting.SavedAnalysisDraft, error) {
 	var out reporting.SavedAnalysisDraft
 	tx, e := s.catalogTx(ctx, actor, project, true)
@@ -130,6 +152,10 @@ func (s *Store) CreateSavedAnalysis(ctx context.Context, actor, project, key str
 		return out, e
 	}
 	in.Definition, e = reporting.NormalizeSavedAnalysisDefinition(in.Definition)
+	if e != nil {
+		return out, e
+	}
+	in.Definition, e = s.resolveSavedDefinitionTx(ctx, tx, actor, project, in.Environment, in.Definition)
 	if e != nil {
 		return out, e
 	}
@@ -256,6 +282,10 @@ func (s *Store) SaveSavedAnalysisDraft(ctx context.Context, actor, project, id s
 	if e != nil {
 		return out, e
 	}
+	in, e = s.resolveSavedDefinitionTx(ctx, tx, actor, project, old.Environment, in)
+	if e != nil {
+		return out, e
+	}
 	data, e := json.Marshal(in)
 	if e != nil {
 		return out, e
@@ -293,7 +323,7 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 		}
 		out.Baseline = &v
 	}
-	out.Draft.Definition, e = reporting.NormalizeSavedAnalysisDefinition(out.Draft.Definition)
+	out.Draft.Definition, e = reporting.NormalizeStoredSavedDefinition(out.Draft.Definition)
 	if e != nil {
 		return out, e
 	}
@@ -340,6 +370,19 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 		a, b := manifest.EventVersions[i], manifest.EventVersions[j]
 		return a.EventKey < b.EventKey || a.EventKey == b.EventKey && a.SchemaVersion < b.SchemaVersion
 	})
+	// A metric-referencing analysis pins the exact immutable metric version. The
+	// metric's own event versions are still recorded above, so the dependency set
+	// stays self-contained; the digest fails closed if the metric is unavailable.
+	if ref := out.Draft.Definition.MetricRef; ref != nil {
+		metric, e := readMetricVersionTx(ctx, tx, project, ref.MetricID, ref.Version)
+		if e != nil {
+			return out, e
+		}
+		if metric.Environment != out.Draft.Environment {
+			return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+		}
+		manifest.Metric = &reporting.MetricDependency{MetricID: metric.MetricID, Version: metric.Version, DefinitionHash: metric.DefinitionHash}
+	}
 	out.Dependencies = manifest
 	return out, nil
 }

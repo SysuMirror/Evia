@@ -15,6 +15,36 @@ func savedQueryExpired() error {
 	return fault.New(fault.Conflict, "QUERY_REQUEST_EXPIRED", "原查询已过期或已删除，请使用新的幂等键提交")
 }
 
+// verifySavedMetricPinTx re-checks an immutable metric reference immediately
+// before running a published saved analysis. It fails closed if the pin is
+// missing, the metric version disappeared, its environment differs or its
+// digest no longer matches, so republishing a metric can never silently change
+// an already published analysis. Inline analyses have no reference and pass.
+func (s *Store) verifySavedMetricPinTx(ctx context.Context, tx pgx.Tx, actor string, snapshot reporting.SavedAnalysisVersion) error {
+	ref := snapshot.Definition.MetricRef
+	if ref == nil {
+		if snapshot.Dependencies.Metric != nil {
+			return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "内联分析不能携带指标依赖")
+		}
+		return nil
+	}
+	pin := snapshot.Dependencies.Metric
+	if pin == nil || pin.MetricID != ref.MetricID || pin.Version != ref.Version {
+		return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "指标固定依赖与引用版本不匹配", "/metric_ref")
+	}
+	metric, e := readMetricVersionTx(ctx, tx, snapshot.ProjectID, pin.MetricID, pin.Version)
+	if e != nil {
+		return e
+	}
+	if metric.Environment != snapshot.Environment {
+		return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+	}
+	if metric.DefinitionHash != pin.DefinitionHash {
+		return fault.New(fault.Conflict, "METRIC_PIN_CONFLICT", "指标固定版本内容已变化，无法运行旧分析")
+	}
+	return s.authorizeOperation(ctx, tx, actor, snapshot.ProjectID, metric.Environment, "metrics.read")
+}
+
 // EnqueueSavedAnalysisVersion binds runtime context to an exact immutable
 // snapshot. Current authorization, replay, admission, audit and provenance all
 // share one transaction; a retry never creates another job or copies results.
@@ -35,6 +65,9 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 	}
 	snapshot, e := readSavedAnalysisVersionTx(ctx, tx, project, id, version)
 	if e != nil {
+		return analysis.Job{}, e
+	}
+	if e = s.verifySavedMetricPinTx(ctx, tx, actor, snapshot); e != nil {
 		return analysis.Job{}, e
 	}
 	request, e := snapshot.Definition.Query.Bind(snapshot.Environment, in.TimeRange, in.Timezone)

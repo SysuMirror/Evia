@@ -250,7 +250,7 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 	if draft.ID == "" || draft.ProjectID == "" || !savedEnvironment(draft.Environment) || draft.DraftRevision < 1 || draft.DraftRevision > analysis.MaxSafeInteger || draft.PublishedVersion < 0 || draft.PublishedVersion > analysis.MaxSafeInteger {
 		return out, analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析快照范围或修订无效")
 	}
-	definition, e := normalizeStoredSavedDefinition(draft.Definition)
+	definition, e := NormalizeStoredSavedDefinition(draft.Definition)
 	if e != nil {
 		return out, e
 	}
@@ -264,7 +264,7 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 		if version == nil || version.AnalysisID != draft.ID || version.ProjectID != draft.ProjectID || version.Environment != draft.Environment || version.Version != draft.PublishedVersion {
 			return out, fault.New(fault.Conflict, "PUBLISHED_VERSION_CONFLICT", "发布基线已变化")
 		}
-		normalized, e := normalizeStoredSavedDefinition(version.Definition)
+		normalized, e := NormalizeStoredSavedDefinition(version.Definition)
 		if e != nil {
 			return out, e
 		}
@@ -302,10 +302,10 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 	return out, e
 }
 
-// normalizeStoredSavedDefinition validates a definition read back from storage.
+// NormalizeStoredSavedDefinition validates a definition read back from storage.
 // Metric-referencing rows already carry their derived query, so they use the
 // resolved normalizer; inline rows keep the strict public normalizer.
-func normalizeStoredSavedDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+func NormalizeStoredSavedDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
 	if in.MetricRef != nil {
 		return normalizeResolvedMetricDefinition(in)
 	}
