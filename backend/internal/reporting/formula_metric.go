@@ -119,6 +119,7 @@ type FormulaMetricStore interface {
 	PublishFormulaMetric(context.Context, string, string, string, string, FormulaMetricPublish) (FormulaMetricVersion, error)
 	ListFormulaMetricVersions(context.Context, string, string, string, int64, int) ([]FormulaMetricVersion, error)
 	GetFormulaMetricVersion(context.Context, string, string, string, int64) (FormulaMetricVersion, error)
+	EnqueueFormulaMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
 }
 
 // NormalizeFormulaMetricDefinition returns an independent canonical composite

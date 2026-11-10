@@ -4,6 +4,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 )
 
 type fakeFormulaMetricStore struct {
@@ -11,6 +14,8 @@ type fakeFormulaMetricStore struct {
 	savedDef  FormulaMetricDefinition
 	snapshot  FormulaMetricSnapshot
 	listLimit int
+	key       string
+	err       error
 }
 
 func (f *fakeFormulaMetricStore) CreateFormulaMetric(_ context.Context, _, _, _ string, in FormulaMetricCreate) (FormulaMetricDraft, error) {
@@ -42,6 +47,10 @@ func (f *fakeFormulaMetricStore) ListFormulaMetricVersions(context.Context, stri
 }
 func (f *fakeFormulaMetricStore) GetFormulaMetricVersion(context.Context, string, string, string, int64) (FormulaMetricVersion, error) {
 	return FormulaMetricVersion{}, nil
+}
+func (f *fakeFormulaMetricStore) EnqueueFormulaMetricVersion(_ context.Context, _, _, _ string, _ int64, key string, in MetricExecute) (analysis.Job, error) {
+	f.key = key
+	return analysis.Job{ID: "formula-job", State: "queued"}, f.err
 }
 
 func formulaServiceDef() FormulaMetricDefinition {
@@ -138,5 +147,42 @@ func TestFormulaMetricServicePublishRejectsBadHash(t *testing.T) {
 	in := FormulaMetricPublish{DraftRevision: 1, ExpectedPublishedVersion: 0, ValidationHash: "nope"}
 	if _, e := svc.PublishFormulaMetric(context.Background(), "actor", "project-one", "formula-one", "publish-key", in); e == nil {
 		t.Fatal("expected validation hash rejection")
+	}
+}
+
+func formulaServiceExecute() MetricExecute {
+	return MetricExecute{TimeRange: analysis.TimeRange{From: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)}, Timezone: "UTC"}
+}
+
+func TestFormulaMetricServiceEnqueueDelegates(t *testing.T) {
+	store := &fakeFormulaMetricStore{}
+	svc := NewFormulaMetrics(store, savedValidator(t))
+	job, e := svc.EnqueueFormulaMetricVersion(context.Background(), "actor", "project-one", "formula-one", 1, "run-key", formulaServiceExecute())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if job.ID != "formula-job" || store.key != "run-key" {
+		t.Fatalf("enqueue delegation failed: %+v", job)
+	}
+}
+
+func TestFormulaMetricServiceEnqueueRejectsBoundaries(t *testing.T) {
+	svc := NewFormulaMetrics(&fakeFormulaMetricStore{}, savedValidator(t))
+	ctx := context.Background()
+	if _, e := svc.EnqueueFormulaMetricVersion(ctx, "actor", "project-one", "formula-one", 1, "", formulaServiceExecute()); e == nil {
+		t.Fatal("expected idempotency key rejection")
+	}
+	if _, e := svc.EnqueueFormulaMetricVersion(ctx, "actor", "project-one", "formula-one", 0, "run-key", formulaServiceExecute()); e == nil {
+		t.Fatal("expected version rejection")
+	}
+	badWindow := formulaServiceExecute()
+	badWindow.TimeRange.To = badWindow.TimeRange.From.Add(32 * 24 * time.Hour)
+	if _, e := svc.EnqueueFormulaMetricVersion(ctx, "actor", "project-one", "formula-one", 1, "run-key", badWindow); e == nil {
+		t.Fatal("expected window rejection")
+	}
+	badInterval := formulaServiceExecute()
+	badInterval.Interval = "week"
+	if _, e := svc.EnqueueFormulaMetricVersion(ctx, "actor", "project-one", "formula-one", 1, "run-key", badInterval); e == nil {
+		t.Fatal("expected interval rejection")
 	}
 }

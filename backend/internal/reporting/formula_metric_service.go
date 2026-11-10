@@ -3,6 +3,7 @@ package reporting
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
@@ -31,6 +32,7 @@ type FormulaMetricService interface {
 	PublishFormulaMetric(context.Context, string, string, string, string, FormulaMetricPublish) (FormulaMetricVersion, error)
 	ListFormulaMetricVersions(context.Context, string, string, string, int64, int) ([]FormulaMetricVersion, error)
 	GetFormulaMetricVersion(context.Context, string, string, string, int64) (FormulaMetricVersion, error)
+	EnqueueFormulaMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
 }
 
 func NewFormulaMetrics(store FormulaMetricStore, validator analysis.Validator) *FormulaMetrics {
@@ -159,4 +161,32 @@ func (s *FormulaMetrics) GetFormulaMetricVersion(ctx context.Context, actor, pro
 		return FormulaMetricVersion{}, analysis.Invalid("INVALID_VERSION", "指标版本无效")
 	}
 	return s.store.GetFormulaMetricVersion(ctx, actor, project, id, version)
+}
+
+// EnqueueFormulaMetricVersion applies the same runtime boundaries as an atomic
+// metric run before delegating to the authorized store, which enqueues the
+// internal formula marker job under the shared query budget.
+func (s *FormulaMetrics) EnqueueFormulaMetricVersion(ctx context.Context, actor, project, id string, version int64, key string, in MetricExecute) (analysis.Job, error) {
+	if e := metricIdempotencyKey(key); e != nil {
+		return analysis.Job{}, e
+	}
+	if e := s.checkInput("MetricExecute", in); e != nil {
+		return analysis.Job{}, e
+	}
+	if version < 1 || version > analysis.MaxSafeInteger {
+		return analysis.Job{}, metricVersion(version)
+	}
+	if in.TimeRange.From.IsZero() || in.TimeRange.To.IsZero() || !in.TimeRange.From.Before(in.TimeRange.To) || in.TimeRange.From.Year() < 1970 || in.TimeRange.To.Year() > 2100 {
+		return analysis.Job{}, analysis.Invalid("INVALID_TIME_RANGE", "时间范围必须为有效的非空半开区间", "/time_range")
+	}
+	if in.TimeRange.To.Sub(in.TimeRange.From) > 31*24*time.Hour {
+		return analysis.Job{}, analysis.Invalid("QUERY_COST_EXCEEDED", "查询时间范围超过预算", "/time_range")
+	}
+	if _, e := time.LoadLocation(in.Timezone); e != nil || len(in.Timezone) > 64 {
+		return analysis.Job{}, analysis.Invalid("INVALID_TIMEZONE", "请选择 IANA 时区", "/timezone")
+	}
+	if in.Interval != "" && in.Interval != "minute" && in.Interval != "hour" && in.Interval != "day" {
+		return analysis.Job{}, analysis.Invalid("INVALID_INTERVAL", "请选择时间粒度", "/interval")
+	}
+	return s.store.EnqueueFormulaMetricVersion(ctx, actor, project, id, version, key, in)
 }
