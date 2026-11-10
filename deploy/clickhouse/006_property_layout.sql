@@ -1,0 +1,35 @@
+-- Version 006: additive lossless property read layout, after version 005.
+-- Apply before deploying the writer that supplies the derived columns. The
+-- original properties_json document stays the authoritative payload; these
+-- columns are a writer-owned derived read layout. No reader switches to them
+-- in this migration, and the event_facts view tuple is intentionally left
+-- unchanged, so applying this file alone cannot alter any served query result.
+--
+-- property_layout_version marks how property_tokens was produced:
+--   0 = no derived layout; the authoritative document is the only source.
+--       Every legacy part and every writer that omits the field reads 0,
+--       because JSONEachRow inserts substitute the type default rather than
+--       evaluating the DEFAULT expression.
+--   1 = property_tokens was derived losslessly in Go from the exact
+--       normalized properties document and committed in the SAME raw-table
+--       insert as that document. There is never a second independently
+--       committed fact write. Readers must treat any value other than 1 as
+--       "fall back to the authoritative document" and must never infer
+--       completeness from an empty map: an empty properties object
+--       legitimately derives version 1 with an empty map.
+--
+-- Map values hold each top-level value's untouched JSON token text, keyed by
+-- p_ plus the uppercase hexadecimal of the UTF-8 property key. Numeric lexical
+-- forms (1e2, 1.00, long decimals, signed zero) never pass through a
+-- ClickHouse JSON extractor, whose normalization is documented in
+-- docs/plans/property-read-layout.md. Encoded keys cannot collide with fixed
+-- columns or dotted JSON paths.
+--
+-- Safe to reapply. Sort and partition keys, the event_facts view and
+-- historical parts are untouched; old parts read the defaults and require no
+-- rewrite. Historical materialization remains a separate, bounded operator
+-- procedure driven by the verified Go deriver rather than a database-side
+-- extractor, and the reader switch stays gated on physical-read verification.
+ALTER TABLE event_facts_raw
+ ADD COLUMN IF NOT EXISTS property_layout_version UInt8 DEFAULT 0,
+ ADD COLUMN IF NOT EXISTS property_tokens Map(String, String) DEFAULT map();
