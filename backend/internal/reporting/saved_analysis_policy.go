@@ -3,6 +3,7 @@ package reporting
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -39,10 +40,25 @@ func ParseSavedAnalysisDefinition(raw []byte, validator analysis.Validator) (Sav
 	return NormalizeSavedAnalysisDefinition(out)
 }
 
-// NormalizeSavedAnalysisDefinition returns independent canonical configuration.
-// It checks structural policy; catalog publication and field types are checked
-// by the authorized transactional adapter, never by fabricated runtime context.
-func NormalizeSavedAnalysisDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+// savedMetricIDPattern matches the canonical lowercase UUID used by ids.New.
+var savedMetricIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func validateMetricReference(ref *MetricReference) error {
+	if ref == nil {
+		return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用不能为空", "/metric_ref")
+	}
+	if !savedMetricIDPattern.MatchString(ref.MetricID) {
+		return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用的标识格式不正确", "/metric_ref/metric_id")
+	}
+	if ref.Version < 1 || ref.Version > analysis.MaxSafeInteger {
+		return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用版本无效", "/metric_ref/version")
+	}
+	return nil
+}
+
+// decodeSavedDefinition round-trips the definition through JSON to obtain an
+// independent canonical copy and enforce the persisted size boundary.
+func decodeSavedDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
 	data, e := json.Marshal(in)
 	if e != nil {
 		return SavedAnalysisDefinition{}, analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析定义必须为有效 JSON")
@@ -57,17 +73,21 @@ func NormalizeSavedAnalysisDefinition(in SavedAnalysisDefinition) (SavedAnalysis
 	if e = decoder.Decode(&out); e != nil {
 		return out, analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析定义字段无效")
 	}
+	return out, nil
+}
+
+func validateSavedDefinitionMeta(in SavedAnalysisDefinition, out *SavedAnalysisDefinition) error {
 	out.Title = strings.TrimSpace(out.Title)
 	if !utf8.ValidString(in.Title) || out.Title == "" || utf8.RuneCountInString(out.Title) > 128 || strings.ContainsRune(out.Title, 0) {
-		return out, analysis.Invalid("INVALID_TITLE", "标题必须为 1 到 128 个字符", "/title")
+		return analysis.Invalid("INVALID_TITLE", "标题必须为 1 到 128 个字符", "/title")
 	}
 	if !utf8.ValidString(in.Description) || utf8.RuneCountInString(out.Description) > 2000 || strings.ContainsRune(out.Description, 0) {
-		return out, analysis.Invalid("INVALID_DESCRIPTION", "描述格式无效或超过长度限制", "/description")
+		return analysis.Invalid("INVALID_DESCRIPTION", "描述格式无效或超过长度限制", "/description")
 	}
-	if e = analysis.ValidateTemplate(&out.Query); e != nil {
-		return out, e
-	}
-	sort.Slice(out.Query.EventVersions, func(i, j int) bool { return out.Query.EventVersions[i].EventKey < out.Query.EventVersions[j].EventKey })
+	return nil
+}
+
+func validateInlineVisualization(out *SavedAnalysisDefinition) error {
 	q := out.Query
 	valid := false
 	switch out.Visualization.Kind {
@@ -83,17 +103,124 @@ func NormalizeSavedAnalysisDefinition(in SavedAnalysisDefinition) (SavedAnalysis
 		valid = q.Kind == "funnel"
 	}
 	if !valid {
-		return out, analysis.Invalid("INVALID_VISUALIZATION", "图表类型与分析配置不兼容", "/visualization/kind")
+		return analysis.Invalid("INVALID_VISUALIZATION", "图表类型与分析配置不兼容", "/visualization/kind")
 	}
+	return nil
+}
+
+func boundSavedDefinition(out SavedAnalysisDefinition) error {
 	// Defaults can expand otherwise valid input. Bound the persisted canonical
 	// configuration as well as the caller's representation, including callers
 	// that invoke this helper directly from a storage transaction.
 	normalized, e := json.Marshal(out)
 	if e != nil {
-		return SavedAnalysisDefinition{}, analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析定义必须为有效 JSON")
+		return analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析定义必须为有效 JSON")
 	}
 	if len(normalized) > MaxSavedAnalysisDefinitionBytes {
-		return SavedAnalysisDefinition{}, analysis.Invalid("BODY_TOO_LARGE", "保存分析定义超过大小限制")
+		return analysis.Invalid("BODY_TOO_LARGE", "保存分析定义超过大小限制")
+	}
+	return nil
+}
+
+// NormalizeSavedAnalysisDefinition returns independent canonical configuration.
+// It checks structural policy; catalog publication and field types are checked
+// by the authorized transactional adapter, never by fabricated runtime context.
+// A metric reference is accepted only without an inline query; the executable
+// query is derived later by ResolveMetricReference inside a storage transaction.
+func NormalizeSavedAnalysisDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+	out, e := decodeSavedDefinition(in)
+	if e != nil {
+		return out, e
+	}
+	if e = validateSavedDefinitionMeta(in, &out); e != nil {
+		return out, e
+	}
+	if out.MetricRef == nil {
+		if e = analysis.ValidateTemplate(&out.Query); e != nil {
+			return out, e
+		}
+		sort.Slice(out.Query.EventVersions, func(i, j int) bool { return out.Query.EventVersions[i].EventKey < out.Query.EventVersions[j].EventKey })
+		if e = validateInlineVisualization(&out); e != nil {
+			return out, e
+		}
+	} else {
+		if e = validateMetricReference(out.MetricRef); e != nil {
+			return out, e
+		}
+		if out.Query.Kind != "" || len(out.Query.EventVersions) > 0 || out.Query.Funnel != nil {
+			return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用与内联查询不能同时提供", "/metric_ref")
+		}
+		// v1 renders a referenced metric as one whole-range metric card. Trend
+		// intervals and grouping on top of a metric remain a future extension.
+		if out.Visualization.Kind != "metric" {
+			return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
+		}
+	}
+	if e = boundSavedDefinition(out); e != nil {
+		return out, e
+	}
+	return out, nil
+}
+
+// ResolveMetricReference derives the executable trend query of a metric-referencing
+// saved analysis from an exact immutable metric version. The storage adapter must
+// authorize and load that version in the same transaction and confirm project and
+// environment ownership before calling this pure function. The derived definition
+// retains the metric reference as provenance and is validated as a metric card.
+func ResolveMetricReference(in SavedAnalysisDefinition, metric MetricVersion) (SavedAnalysisDefinition, error) {
+	normalized, e := NormalizeSavedAnalysisDefinition(in)
+	if e != nil {
+		return SavedAnalysisDefinition{}, e
+	}
+	if normalized.MetricRef == nil {
+		return SavedAnalysisDefinition{}, analysis.Invalid("INVALID_METRIC_REFERENCE", "定义没有指标引用", "/metric_ref")
+	}
+	ref := normalized.MetricRef
+	if metric.ProjectID == "" || metric.MetricID != ref.MetricID || metric.Version != ref.Version {
+		return SavedAnalysisDefinition{}, analysis.Invalid("METRIC_VERSION_NOT_FOUND", "指标版本与引用不匹配", "/metric_ref")
+	}
+	template, e := MetricTemplate(metric.Definition, MetricExecute{})
+	if e != nil {
+		return SavedAnalysisDefinition{}, e
+	}
+	resolved := normalized
+	resolved.Query = template
+	return normalizeResolvedMetricDefinition(resolved)
+}
+
+// normalizeResolvedMetricDefinition validates a definition that already carries
+// both the metric reference and its derived query. It is unreachable from client
+// parsing because NormalizeSavedAnalysisDefinition rejects the combination.
+func normalizeResolvedMetricDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+	out, e := decodeSavedDefinition(in)
+	if e != nil {
+		return out, e
+	}
+	if e = validateSavedDefinitionMeta(in, &out); e != nil {
+		return out, e
+	}
+	if out.MetricRef == nil {
+		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "已解析定义缺少指标引用", "/metric_ref")
+	}
+	if e = validateMetricReference(out.MetricRef); e != nil {
+		return out, e
+	}
+	if out.Query.Kind == "" {
+		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用尚未解析为查询", "/metric_ref")
+	}
+	if e = analysis.ValidateTemplate(&out.Query); e != nil {
+		return out, e
+	}
+	sort.Slice(out.Query.EventVersions, func(i, j int) bool { return out.Query.EventVersions[i].EventKey < out.Query.EventVersions[j].EventKey })
+	if out.Visualization.Kind != "metric" {
+		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
+	}
+	q := out.Query
+	if q.Kind != "trend" || len(q.Metrics) != 1 || len(q.GroupBy) != 0 || q.Interval != "" {
+		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用必须解析为单值指标卡片", "/visualization/kind")
+	}
+	if e = boundSavedDefinition(out); e != nil {
+		return out, e
 	}
 	return out, nil
 }
@@ -123,7 +250,7 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 	if draft.ID == "" || draft.ProjectID == "" || !savedEnvironment(draft.Environment) || draft.DraftRevision < 1 || draft.DraftRevision > analysis.MaxSafeInteger || draft.PublishedVersion < 0 || draft.PublishedVersion > analysis.MaxSafeInteger {
 		return out, analysis.Invalid("INVALID_SAVED_ANALYSIS", "保存分析快照范围或修订无效")
 	}
-	definition, e := NormalizeSavedAnalysisDefinition(draft.Definition)
+	definition, e := normalizeStoredSavedDefinition(draft.Definition)
 	if e != nil {
 		return out, e
 	}
@@ -137,16 +264,21 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 		if version == nil || version.AnalysisID != draft.ID || version.ProjectID != draft.ProjectID || version.Environment != draft.Environment || version.Version != draft.PublishedVersion {
 			return out, fault.New(fault.Conflict, "PUBLISHED_VERSION_CONFLICT", "发布基线已变化")
 		}
-		normalized, e := NormalizeSavedAnalysisDefinition(version.Definition)
+		normalized, e := normalizeStoredSavedDefinition(version.Definition)
 		if e != nil {
 			return out, e
 		}
 		baseline = &normalized
 	}
+	if e = validateMetricDependency(definition, snapshot.Dependencies); e != nil {
+		return out, e
+	}
 	dependencies, e := savedDependencies(draft, definition.Query, snapshot.Dependencies)
 	if e != nil {
 		return out, e
 	}
+	// Carry the validated immutable metric pin; inline analyses always have nil.
+	dependencies.Metric = snapshot.Dependencies.Metric
 	definitionHash, e := savedHash(definition)
 	if e != nil {
 		return out, e
@@ -168,6 +300,37 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 		Diff             []SavedAnalysisChange   `json:"diff"`
 	}{draft.ID, draft.ProjectID, draft.Environment, draft.DraftRevision, draft.PublishedVersion, definition, dependencies, diff})
 	return out, e
+}
+
+// normalizeStoredSavedDefinition validates a definition read back from storage.
+// Metric-referencing rows already carry their derived query, so they use the
+// resolved normalizer; inline rows keep the strict public normalizer.
+func normalizeStoredSavedDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+	if in.MetricRef != nil {
+		return normalizeResolvedMetricDefinition(in)
+	}
+	return NormalizeSavedAnalysisDefinition(in)
+}
+
+// validateMetricDependency enforces that the manifest's metric pin, when
+// required, exactly matches the referenced metric and that inline analyses
+// never carry one. The storage adapter verifies the digest against the live
+// immutable metric version; this checks internal manifest consistency.
+func validateMetricDependency(definition SavedAnalysisDefinition, in DependencyManifest) error {
+	if definition.MetricRef == nil {
+		if in.Metric != nil {
+			return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "内联分析不能携带指标依赖")
+		}
+		return nil
+	}
+	if in.Metric == nil {
+		return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "指标引用分析缺少指标固定依赖")
+	}
+	ref := definition.MetricRef
+	if in.Metric.MetricID != ref.MetricID || in.Metric.Version != ref.Version || !savedDigest(in.Metric.DefinitionHash) {
+		return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "指标依赖与引用版本不匹配")
+	}
+	return nil
 }
 
 func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in DependencyManifest) (DependencyManifest, error) {
@@ -225,6 +388,7 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 	add("interval", "/query/interval", before.Query.Interval, after.Query.Interval)
 	add("funnel", "/query/funnel", before.Query.Funnel, after.Query.Funnel)
 	add("limit", "/query/limit", before.Query.Limit, after.Query.Limit)
+	add("metric_ref", "/metric_ref", before.MetricRef, after.MetricRef)
 	add("visualization", "/visualization", before.Visualization, after.Visualization)
 	return changes
 }

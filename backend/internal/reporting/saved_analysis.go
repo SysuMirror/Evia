@@ -12,10 +12,22 @@ const MaxSavedAnalysisDefinitionBytes = 128 * 1024
 type SavedAnalysisVisualization struct {
 	Kind string `json:"kind"`
 }
+
+// MetricReference pins an immutable metric version as the data source of a
+// saved analysis. The exact version is fixed at publication and never resolves
+// implicitly to the latest metric. It is mutually exclusive with an inline
+// query on input; the storage adapter derives the executable query from the
+// referenced metric version inside the same authorized transaction.
+type MetricReference struct {
+	MetricID string `json:"metric_id"`
+	Version  int64  `json:"version"`
+}
+
 type SavedAnalysisDefinition struct {
 	Title         string                     `json:"title"`
 	Description   string                     `json:"description"`
 	Query         analysis.Template          `json:"query"`
+	MetricRef     *MetricReference           `json:"metric_ref,omitempty"`
 	Visualization SavedAnalysisVisualization `json:"visualization"`
 }
 type SavedAnalysis struct {

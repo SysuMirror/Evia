@@ -94,6 +94,18 @@ type DependencyManifest struct {
 	SelectionMode    string       `json:"selection_mode"`
 	UnfixedEventKeys []string     `json:"unfixed_event_keys"`
 	EventVersions    []Dependency `json:"event_versions"`
+	// Metric is present only for a saved analysis whose source is an immutable
+	// metric version. It pins the exact metric content so republishing the
+	// metric never implicitly changes an already published analysis.
+	Metric *MetricDependency `json:"metric,omitempty"`
+}
+
+// MetricDependency is the immutable metric pin recorded for a metric-referencing
+// saved analysis. DefinitionHash matches the referenced metric version's digest.
+type MetricDependency struct {
+	MetricID       string `json:"metric_id"`
+	Version        int64  `json:"version"`
+	DefinitionHash string `json:"definition_hash"`
 }
 type ResolvedValidation struct {
 	Request         analysis.Request
