@@ -1,5 +1,15 @@
-import type { SavedAnalysisDefinition, SavedAnalysisTemplate } from '@evia/api-client';
-export type { SavedAnalysisDefinition, SavedAnalysisTemplate } from '@evia/api-client';
+import type {
+  MetricReference,
+  SavedAnalysisDefinition,
+  SavedAnalysisDefinitionInput,
+  SavedAnalysisTemplate,
+} from '@evia/api-client';
+export type {
+  MetricReference,
+  SavedAnalysisDefinition,
+  SavedAnalysisDefinitionInput,
+  SavedAnalysisTemplate,
+} from '@evia/api-client';
 import {
   fieldOperators,
   operators,
@@ -41,6 +51,78 @@ export function initialSavedAnalysisDefinition(): SavedAnalysisDefinition {
     },
     visualization: { kind: 'metric' },
   };
+}
+export type SavedAnalysisSource = 'inline' | 'metric';
+/** A metric-backed analysis is recognized solely by the presence of its pin. */
+export function isMetricReferenceDefinition(
+  value: SavedAnalysisDefinition,
+): value is SavedAnalysisDefinition & { metric_ref: MetricReference } {
+  return value.metric_ref !== undefined;
+}
+/** Unselected sentinel: type-valid but rejected by local issues until a metric and version are picked. */
+export function emptyMetricReference(): MetricReference {
+  return { metric_id: '', version: 0 };
+}
+function placeholderMetricQuery(): SavedAnalysisTemplate {
+  return {
+    kind: 'trend',
+    event_versions: [],
+    metrics: [{ op: 'count', accuracy: 'exact' }],
+    limit: 200,
+  };
+}
+/** Switch the data source. Metric mode keeps a placeholder query only to satisfy the stored read type locally. */
+export function switchSavedAnalysisSource(
+  value: SavedAnalysisDefinition,
+  source: SavedAnalysisSource,
+): SavedAnalysisDefinition {
+  if (source === 'metric') {
+    if (isMetricReferenceDefinition(value)) return cloneSavedDefinition(value);
+    return {
+      ...cloneSavedDefinition(value),
+      query: placeholderMetricQuery(),
+      metric_ref: emptyMetricReference(),
+      visualization: { kind: 'metric' },
+    };
+  }
+  if (!isMetricReferenceDefinition(value)) return cloneSavedDefinition(value);
+  const next = cloneSavedDefinition(value);
+  delete next.metric_ref;
+  return next;
+}
+export function patchMetricReference(
+  value: SavedAnalysisDefinition,
+  ref: MetricReference,
+): SavedAnalysisDefinition {
+  return {
+    ...cloneSavedDefinition(value),
+    metric_ref: structuredClone(ref),
+    visualization: { kind: 'metric' },
+  };
+}
+/**
+ * Build the write model. A metric reference omits the inline query because the
+ * server derives it from the pinned immutable metric; inline analyses send the
+ * full definition unchanged.
+ */
+export function toSavedAnalysisInput(value: SavedAnalysisDefinition): SavedAnalysisDefinitionInput {
+  if (isMetricReferenceDefinition(value)) {
+    return {
+      title: value.title,
+      description: value.description,
+      metric_ref: structuredClone(value.metric_ref),
+      visualization: { kind: 'metric' },
+    };
+  }
+  return cloneSavedDefinition(value);
+}
+export function validMetricReference(ref: MetricReference | undefined): boolean {
+  return (
+    !!ref &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(ref.metric_id) &&
+    Number.isSafeInteger(ref.version) &&
+    ref.version >= 1
+  );
 }
 export function cloneSavedDefinition(value: SavedAnalysisDefinition): SavedAnalysisDefinition {
   return structuredClone(value);
@@ -175,6 +257,12 @@ export function savedVisualizationCompatible(
   return !!query.interval || !!query.group_by?.length;
 }
 export function savedDefinitionSummary(value: SavedAnalysisDefinition): string {
+  if (isMetricReferenceDefinition(value)) {
+    const ref = value.metric_ref;
+    return validMetricReference(ref)
+      ? `指标引用：${ref.metric_id} v${ref.version}（整段指标卡片）`
+      : '指标引用：请选择已发布指标与版本';
+  }
   const q = value.query;
   return q.kind === 'funnel'
     ? `${q.funnel?.steps.length ?? 0} 个有序步骤，${q.funnel?.window_seconds ?? 0} 秒窗口`
@@ -252,7 +340,8 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
     eventKey(node.event_key, `${path}/event_key`);
     safe(node.schema_version, 1, Number.MAX_SAFE_INTEGER, `${path}/schema_version`);
   };
-  if (!object(value, ['title', 'description', 'query', 'visualization'], '')) return issues;
+  if (!object(value, ['title', 'description', 'query', 'metric_ref', 'visualization'], ''))
+    return issues;
   if (
     typeof value.title !== 'string' ||
     !value.title.trim() ||
@@ -267,6 +356,22 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
       value.description.includes('\0'))
   )
     add('/description', '描述最多 2000 字。');
+  // A metric-referencing analysis validates only its pin and the metric card;
+  // the derived inline query is server-owned and never edited through this form.
+  if (value.metric_ref !== undefined) {
+    if (value.visualization.kind !== 'metric')
+      add('/visualization/kind', '指标引用仅支持指标卡片。');
+    const ref = value.metric_ref;
+    if (!object(ref, ['metric_id', 'version'], '/metric_ref')) return issues;
+    if (
+      typeof ref.metric_id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(ref.metric_id)
+    )
+      add('/metric_ref/metric_id', '请选择已发布指标。');
+    if (typeof ref.version !== 'number' || !Number.isSafeInteger(ref.version) || ref.version < 1)
+      add('/metric_ref/version', '请选择指标版本。');
+    return issues;
+  }
   const q = value.query;
   if (
     !object(

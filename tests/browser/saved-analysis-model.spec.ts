@@ -1,18 +1,28 @@
 import { expect, test } from '@playwright/test';
-import type { SavedAnalysisDefinition } from '../../apps/console/src/saved-analysis-model';
+import type {
+  MetricReference,
+  SavedAnalysisDefinition,
+} from '../../apps/console/src/saved-analysis-model';
 import {
   cloneSavedDefinition,
+  emptyMetricReference,
   flatSavedFilters,
   initialSavedAnalysisDefinition,
+  isMetricReferenceDefinition,
   parseSavedAnalysisDefinition,
   parseSavedFilterValue,
   parseSavedJSON,
+  patchMetricReference,
   patchSavedQuery,
   replaceSavedKind,
   savedAnalysisIssues,
+  savedDefinitionSummary,
   savedFilterText,
   savedPins,
   savedVisualizationCompatible,
+  switchSavedAnalysisSource,
+  toSavedAnalysisInput,
+  validMetricReference,
 } from '../../apps/console/src/saved-analysis-model';
 
 const score = {
@@ -267,4 +277,82 @@ test('saved visualization compatibility accounts for all metrics, grouping and i
   expect(replaced.query.metrics).toBeUndefined();
   expect(replaced.query.funnel!.steps).toHaveLength(2);
   expect(before.query.kind).toBe('trend');
+});
+
+const metricRef: MetricReference = {
+  metric_id: '11111111-1111-4111-8111-111111111111',
+  version: 2,
+};
+
+test('metric reference source switches cleanly and keeps inline definitions byte-stable', () => {
+  const inline = initialSavedAnalysisDefinition();
+  expect(isMetricReferenceDefinition(inline)).toBe(false);
+
+  const metricMode = switchSavedAnalysisSource(inline, 'metric');
+  expect(isMetricReferenceDefinition(metricMode)).toBe(true);
+  expect(metricMode.metric_ref).toEqual(emptyMetricReference());
+  expect(metricMode.visualization.kind).toBe('metric');
+  // The inline original is not mutated.
+  expect(isMetricReferenceDefinition(inline)).toBe(false);
+  expect(inline.metric_ref).toBeUndefined();
+
+  const backToInline = switchSavedAnalysisSource(metricMode, 'inline');
+  expect(isMetricReferenceDefinition(backToInline)).toBe(false);
+  expect(backToInline.metric_ref).toBeUndefined();
+
+  // Switching an already-metric definition is an idempotent clone.
+  expect(switchSavedAnalysisSource(metricMode, 'metric')).toEqual(metricMode);
+});
+
+test('metric reference validation only checks the pin and metric card', () => {
+  const base = {
+    ...switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric'),
+    title: '指标卡片分析',
+  };
+  // Unselected sentinel is invalid and points at the metric id/version.
+  const unselected = savedAnalysisIssues(base);
+  expect(unselected.some((i) => i.path === '/metric_ref/metric_id')).toBe(true);
+  expect(unselected.some((i) => i.path === '/metric_ref/version')).toBe(true);
+
+  const picked = patchMetricReference(base, metricRef);
+  expect(savedAnalysisIssues(picked)).toHaveLength(0);
+  expect(validMetricReference(picked.metric_ref)).toBe(true);
+
+  // A non-metric visualization is rejected even with a valid pin.
+  const wrongCard = { ...picked, visualization: { kind: 'line' as const } };
+  expect(savedAnalysisIssues(wrongCard).some((i) => i.path === '/visualization/kind')).toBe(true);
+
+  // Inline query requirements are not applied to a metric-backed definition.
+  const emptyEvents = cloneSavedDefinition(picked);
+  emptyEvents.query.event_versions = [];
+  expect(savedAnalysisIssues(emptyEvents)).toHaveLength(0);
+
+  expect(validMetricReference({ metric_id: 'not-uuid', version: 1 })).toBe(false);
+  expect(validMetricReference({ metric_id: metricRef.metric_id, version: 0 })).toBe(false);
+});
+
+test('metric reference write input omits the inline query', () => {
+  const picked = patchMetricReference(
+    switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric'),
+    metricRef,
+  );
+  const input = toSavedAnalysisInput(picked);
+  expect(input.metric_ref).toEqual(metricRef);
+  expect(input.query).toBeUndefined();
+  expect(input.visualization.kind).toBe('metric');
+
+  // Inline analyses keep the full definition and never carry a pin.
+  const inline = definition();
+  const inlineInput = toSavedAnalysisInput(inline);
+  expect(inlineInput.query).toEqual(inline.query);
+  expect(inlineInput.metric_ref).toBeUndefined();
+});
+
+test('metric reference summary describes the pinned version', () => {
+  const empty = switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric');
+  expect(savedDefinitionSummary(empty)).toContain('请选择已发布指标');
+  const picked = patchMetricReference(empty, metricRef);
+  const summary = savedDefinitionSummary(picked);
+  expect(summary).toContain(metricRef.metric_id);
+  expect(summary).toContain('v2');
 });

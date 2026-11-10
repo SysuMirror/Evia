@@ -9,7 +9,11 @@ import {
 } from '@evia/api-client';
 import { useToast } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
-import { initialSavedAnalysisDefinition, savedAnalysisIssues } from '../saved-analysis-model';
+import {
+  initialSavedAnalysisDefinition,
+  savedAnalysisIssues,
+  toSavedAnalysisInput,
+} from '../saved-analysis-model';
 import {
   revisionConflict,
   savedAnalysesKey,
@@ -99,7 +103,7 @@ export function useSavedAnalysisDraft({
     if (!workspace.draft) {
       const next = createAttempt ?? {
         key: crypto.randomUUID(),
-        body: { environment, definition: structuredClone(workspace.definition) },
+        body: { environment, definition: toSavedAnalysisInput(workspace.definition) },
       };
       setCreateAttempt(next);
       void perform(
@@ -120,7 +124,7 @@ export function useSavedAnalysisDraft({
       );
     } else {
       const draft = workspace.draft,
-        definition = structuredClone(workspace.definition);
+        definition = toSavedAnalysisInput(workspace.definition);
       void perform(
         '保存草稿',
         (signal) =>
