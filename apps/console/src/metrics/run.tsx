@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   api,
   ApiError,
@@ -18,7 +19,13 @@ import {
   Select,
   type DataTableColumn,
 } from '@evia/design-system';
-import { buildRunExecute, defaultRunForm, type MetricRunForm } from './model';
+import {
+  buildRunExecute,
+  defaultRunForm,
+  MAX_GROUP_BY,
+  type GroupByInput,
+  type MetricRunForm,
+} from './model';
 
 interface RunPanelProps {
   project: Project;
@@ -37,6 +44,38 @@ export function MetricRunPanel({ project, session, metricID, version, canRun }: 
   const [result, setResult] = useState<QueryResult>();
   const [polling, setPolling] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Group-by fields may only reference events the published metric pins.
+  const metricVersion = useQuery({
+    queryKey: ['metrics', project.id, session.user_id, metricID, 'version', version],
+    queryFn: ({ signal }) => api.getMetricVersion(project.id, metricID, version, signal),
+    enabled: version >= 1,
+  });
+  const pinnedEvents = metricVersion.data?.definition.event_versions ?? [];
+
+  const updateGroupBy = (index: number, changes: Partial<GroupByInput>) =>
+    setForm((current) => ({
+      ...current,
+      groupBy: current.groupBy.map((entry, currentIndex) =>
+        currentIndex === index ? { ...entry, ...changes } : entry,
+      ),
+    }));
+  const addGroupBy = () => {
+    const first = pinnedEvents[0];
+    if (!first || form.groupBy.length >= MAX_GROUP_BY) return;
+    setForm((current) => ({
+      ...current,
+      groupBy: [
+        ...current.groupBy,
+        { event_key: first.event_key, schema_version: String(first.schema_version), key: '' },
+      ],
+    }));
+  };
+  const removeGroupBy = (index: number) =>
+    setForm((current) => ({
+      ...current,
+      groupBy: current.groupBy.filter((_, currentIndex) => currentIndex !== index),
+    }));
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -184,6 +223,45 @@ export function MetricRunPanel({ project, session, metricID, version, canRun }: 
               onChange={(event) => setForm((c) => ({ ...c, filterJSON: event.target.value }))}
             />
           </Field>
+
+          <fieldset className="metric-fieldset">
+            <legend>分组维度（可选，最多 {MAX_GROUP_BY} 个，只能引用已固定事件的属性）</legend>
+            {form.groupBy.map((entry, index) => (
+              <div className="metric-groupby-row" key={index}>
+                <Select
+                  aria-label={`分组 ${index + 1} 事件`}
+                  value={`${entry.event_key}@${entry.schema_version}`}
+                  options={pinnedEvents.map((event) => ({
+                    value: `${event.event_key}@${event.schema_version}`,
+                    label: `${event.event_key} v${event.schema_version}`,
+                  }))}
+                  onChange={(event) => {
+                    const [eventKey, schemaVersion] = event.target.value.split('@');
+                    updateGroupBy(index, {
+                      event_key: eventKey,
+                      schema_version: schemaVersion,
+                    });
+                  }}
+                />
+                <Input
+                  aria-label={`分组 ${index + 1} 属性名`}
+                  placeholder="属性 key，如 page"
+                  value={entry.key}
+                  onChange={(event) => updateGroupBy(index, { key: event.target.value })}
+                />
+                <Button variant="ghost" size="small" onClick={() => removeGroupBy(index)}>
+                  移除
+                </Button>
+              </div>
+            ))}
+            <Button
+              size="small"
+              onClick={addGroupBy}
+              disabled={form.groupBy.length >= MAX_GROUP_BY || pinnedEvents.length === 0}
+            >
+              添加分组
+            </Button>
+          </fieldset>
           {error && (
             <div className="inline-notice">
               <Alert tone="error" title={error} />

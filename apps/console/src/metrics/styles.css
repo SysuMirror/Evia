@@ -37,6 +37,12 @@
 .metric-event-version {
   min-width: 0;
 }
+.metric-groupby-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
 .metric-json {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
@@ -77,7 +83,8 @@
 }
 @media (max-width: 760px) {
   .metric-fields,
-  .metric-event-row {
+  .metric-event-row,
+  .metric-groupby-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

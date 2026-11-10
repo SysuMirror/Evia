@@ -230,6 +230,14 @@ export function describeChange(change: MetricChange): string {
 }
 
 export const MAX_METRIC_RANGE_DAYS = 31;
+export const MAX_GROUP_BY = 3;
+const SNAKE_KEY = /^[a-z][a-z0-9_]{0,63}$/;
+
+export interface GroupByInput {
+  event_key: string;
+  schema_version: string;
+  key: string;
+}
 
 export interface MetricRunForm {
   from: string;
@@ -238,6 +246,7 @@ export interface MetricRunForm {
   interval: '' | 'minute' | 'hour' | 'day';
   limit: string;
   filterJSON: string;
+  groupBy: GroupByInput[];
 }
 
 export function defaultRunForm(timezone: string, now: Date = new Date()): MetricRunForm {
@@ -250,6 +259,7 @@ export function defaultRunForm(timezone: string, now: Date = new Date()): Metric
     interval: '',
     limit: '200',
     filterJSON: '',
+    groupBy: [],
   };
 }
 
@@ -267,6 +277,7 @@ export function buildRunExecute(form: MetricRunForm): {
   const limit = Number(form.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > 500)
     return { error: '结果行数上限需为 1–500 的整数。' };
+  if (form.groupBy.length > MAX_GROUP_BY) return { error: `最多按 ${MAX_GROUP_BY} 个字段分组。` };
 
   const execute: Record<string, unknown> = {
     time_range: { from: from.toISOString(), to: to.toISOString() },
@@ -281,6 +292,24 @@ export function buildRunExecute(form: MetricRunForm): {
       return { error: '运行筛选不是合法 JSON。' };
     }
   }
+  const groupBy = form.groupBy
+    .filter((entry) => entry.key.trim() || entry.event_key.trim())
+    .map((entry) => {
+      const version = Number(entry.schema_version);
+      return {
+        kind: 'property' as const,
+        event_key: entry.event_key.trim(),
+        schema_version: version,
+        key: entry.key.trim(),
+      };
+    });
+  for (const entry of groupBy) {
+    if (!SNAKE_KEY.test(entry.event_key) || entry.schema_version < 1)
+      return { error: '分组字段引用的事件名或版本无效。' };
+    if (!SNAKE_KEY.test(entry.key))
+      return { error: '分组属性名需为小写字母开头的 snake_case 标识。' };
+  }
+  if (groupBy.length) execute.group_by = groupBy;
   return { execute };
 }
 
