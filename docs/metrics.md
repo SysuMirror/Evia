@@ -81,6 +81,6 @@
 
 用新二进制显式执行迁移 `012_metrics.sql`，再启动 API 和工作进程。PostgreSQL 保存指标草稿、不可变版本、事件依赖、事务幂等记录和查询来源引用；ClickHouse 继续执行同一查询计划。迁移扩充机器授权白名单至 24 项，不给现有主体追加权限，不修改历史迁移。
 
-公开接入 [API helper](../integrations/README.md)已允许上述指标路径，凭据仍由 owner 按实际用途签发。指标专用控制台和手写前端客户端方法待交付，生成的 Go/TypeScript 类型已经同步。
+公开接入 [API helper](../integrations/README.md)已允许上述指标路径，凭据仍由 owner 按实际用途签发。指标专用控制台（草稿/校验/发布/版本/运行分区）与手写 TypeScript 客户端方法已交付，生成的 Go/TypeScript 类型保持同步。控制台写操作继续携带会话 CSRF、`If-Match` 修订与幂等键；运行任务复用共享查询预算并按版本轮询结果。
 
 实际验证见[指标服务端记录](verification/metrics-2026-11-09.md)。功能验证不改变现有百万查询矩阵中的失败记录，也不构成千万用户容量证明。
