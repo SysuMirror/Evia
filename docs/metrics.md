@@ -77,9 +77,9 @@
 
 响应沿用查询结果的精度、生成时间、覆盖及水位元数据。当前覆盖仍为 `provisional`，观测到的最晚接收时间不是完整性证明，空桶不能自动解释为业务没有发生。
 
-## 复合指标公式（领域引擎，尚未开放接口）
+## 复合指标公式（管理接口已开放，执行待接入）
 
-公式（复合）指标把多个已发布的不可变指标版本，通过受限的有类型表达式组合成新口径。当前已交付纯领域引擎、执行编排、持久化生命周期（迁移 `013`）、完整 OpenAPI 组件契约与代码生成，以及做契约校验和边界检查的 `FormulaMetrics` 服务，并以真实 PostgreSQL 竞态集成测试和契约正反向用例验证；但 HTTP 路径与控制层适配、查询工作进程的复合执行接入、控制台尚未接通，因此当前仍没有可调用的公式 HTTP API，也不改变现有原子指标与查询路径。单位换算、看板直接引用指标版本仍待交付。现有保存分析可固定引用不可变指标版本，已有看板不会被新指标或指标草稿修改。
+公式（复合）指标把多个已发布的不可变指标版本，通过受限的有类型表达式组合成新口径。当前已交付纯领域引擎、执行编排、持久化生命周期（迁移 `013`）、完整 OpenAPI 契约与代码生成、`FormulaMetrics` 服务以及注册在 `/api/v1/projects/{project_id}/formula-metrics` 的 HTTP 管理接口（草稿、校验、不可变发布、版本读取，复用 `metrics.*` 权限），并以真实 PostgreSQL 竞态集成测试、契约正反向用例和 HTTP 边界测试验证；查询工作进程的复合执行接入与控制台尚未接通，因此复合指标可被创建、校验、发布和读取，但暂不能入队运行，也不改变现有原子指标与查询路径。单位换算、看板直接引用指标版本仍待交付。现有保存分析可固定引用不可变指标版本，已有看板不会被新指标或指标草稿修改。
 
 ### 受限表达式与预算
 
@@ -118,6 +118,22 @@
 - `formula_metric_dependencies` 以关系外键把每个引用固定到 `metric_versions` 的某个不可变原子版本，数据库层即保证被引用版本已发布且属于同项目/环境，无法固定草稿或跨作用域指标。
 
 校验快照在授权事务内通过 PG 版 `FormulaMetricResolver` 完成 DAG 解析（同项目/环境、`metrics.read`、禁止隐式最新版本），再由纯函数 `BuildFormulaMetricValidation` 派生依赖清单、差异与摘要；发布事务重算校验并核对 `validation_hash`，写入版本与依赖见证。创建/发布复用 `metric_idempotency`，操作名以 `formula_` 前缀隔离。当前 v1 仅允许引用原子指标版本（引用复合指标会因找不到原子版本而拒绝），嵌套复合是后续扩展；运行入队、HTTP 与控制台尚未接入。
+
+### HTTP 管理接口
+
+令 `F = /api/v1/projects/{project_id}/formula-metrics`。复合指标是独立资源，与原子指标的 `/metrics` 路径分离，但复用同一组 `metrics.*` 权限，不新增机器授权项：
+
+| 方法与路径 | 行为 | 机器权限 |
+| --- | --- | --- |
+| `GET F` | 按必填 `environment` 分页，`limit` 默认 20、最大 100 | `metrics.read` |
+| `POST F` | 创建草稿，必需 `Idempotency-Key`，返回 201 | `metrics.write` |
+| `GET F/{metric_id}`、`GET F/{metric_id}/draft` | 读取资源或草稿（草稿带 `ETag` 修订） | `metrics.read` |
+| `PATCH F/{metric_id}/draft` | 替换完整 definition，必需 `If-Match: "revision"` | `metrics.write` |
+| `POST F/{metric_id}/validations` | 返回规范化定义、指标依赖、diff 与校验摘要，不执行查询 | `metrics.write` |
+| `GET F/{metric_id}/versions`、`GET F/{metric_id}/versions/{version}` | 读取不可变版本，版本列表最大 50 | `metrics.read` |
+| `POST F/{metric_id}/versions` | 发布指定草稿，必需 `Idempotency-Key`，返回 201 | `metrics.publish` |
+
+写请求继续受 CSRF、未知参数拒绝、严格 JSON（禁重复键/尾随值/未知字段）约束；契约层与服务层双重校验公式形态。当前没有 `.../queries` 执行端点，复合指标的运行入队与查询工作进程扇出执行是下一批工作。
 
 ## 部署与存储
 
