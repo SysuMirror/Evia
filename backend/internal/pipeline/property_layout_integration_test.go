@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
-	"github.com/howtomakeaname/Evia/backend/internal/pipeline/propertylayout"
+	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
 // propertyLayoutDatabase provisions a ClickHouse database with every released

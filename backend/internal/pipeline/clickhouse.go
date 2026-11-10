@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
-	"github.com/howtomakeaname/Evia/backend/internal/pipeline/propertylayout"
+	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
 type ClickHouseConfig struct {

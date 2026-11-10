@@ -25,7 +25,7 @@ Any future native JSON layout needs a finite per-part dynamic-path limit, correc
 
 ## Landed foundation: lossless Go token deriver
 
-The first building block now exists as `backend/internal/pipeline/propertylayout`. It is a pure, side-effect-free package with no writer or reader call sites yet, so it cannot change any stored or served data:
+The first building block now exists as `backend/internal/propertylayout`. It is a pure, side-effect-free package with no writer or reader call sites yet, so it cannot change any stored or served data:
 
 - `EncodeKey`/`DecodeKey` map a decoded top-level key to `p_` plus uppercase hexadecimal of its UTF-8 bytes and back. The transform is reversible and collision-free for dotted, spaced and non-ASCII keys.
 - `DeriveMap` parses a canonical properties object into `map[encodedKey]json.RawMessage`. Values stay as their exact input tokens because `json.RawMessage` is never re-serialized through a numeric Go type; a streaming token pass first rejects duplicate decoded keys, non-objects, trailing data and malformed JSON, and the property cap of 50 is enforced.
