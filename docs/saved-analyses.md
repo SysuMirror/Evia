@@ -68,6 +68,8 @@ A metric-referencing create body omits `query` and supplies only the pin:
 }
 ```
 
+The console saved-analysis editor exposes a data-source switch between 内联查询 (inline query) and 指标引用 (metric reference). In metric mode it hides the inline sections, locks the visualization to the metric card and renders a picker that lists published metrics and their immutable versions; the same write input is submitted, so the browser and API share the one-source contract and validation.
+
 ## Validate and publish
 
 Read the draft, then validate its exact `draft_revision` against the current `expected_published_version` (zero before the first publication). Validation resolves current published field types and returns `valid=true`, `execution_performed=false`, normalized definition, dependencies, definition/dependency hashes, semantic diff and `validation_hash`. It performs no fact scan, creates no job/audit/publication and reserves no queue budget. A successful validation does not predict actual scan cost or execution success.
