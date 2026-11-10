@@ -4,1151 +4,1158 @@ package wire
 import "encoding/json"
 
 type Activation struct {
-Environment string `json:"environment"`
-ActiveReleaseRevision int64 `json:"active_release_revision"`
+	Environment           string `json:"environment"`
+	ActiveReleaseRevision int64  `json:"active_release_revision"`
 }
 
 type ActivationInput struct {
-Environment string `json:"environment"`
-ReleaseID string `json:"release_id"`
-ExpectedActiveRevision int64 `json:"expected_active_revision"`
+	Environment            string `json:"environment"`
+	ReleaseID              string `json:"release_id"`
+	ExpectedActiveRevision int64  `json:"expected_active_revision"`
 }
 
 type AnalysisCapabilities struct {
-ExecutionAvailable bool `json:"execution_available"`
-QueryKinds []string `json:"query_kinds"`
-Aggregations []string `json:"aggregations"`
-ApproximateAggregations []string `json:"approximate_aggregations"`
-Subjects []string `json:"subjects"`
-Intervals []string `json:"intervals"`
-FunnelModes []string `json:"funnel_modes"`
-FieldTypes []AnalysisFieldCapability `json:"field_types"`
-Budgets struct {
-TrendWindowSeconds int64 `json:"trend_window_seconds"`
-OtherWindowSeconds int64 `json:"other_window_seconds"`
-EventSelections int64 `json:"event_selections"`
-GroupFields int64 `json:"group_fields"`
-Metrics int64 `json:"metrics"`
-ResultRows int64 `json:"result_rows"`
-FilterDepth int64 `json:"filter_depth"`
-FilterNodes int64 `json:"filter_nodes"`
-FilterArguments int64 `json:"filter_arguments"`
-FilterValues int64 `json:"filter_values"`
-FunnelSteps int64 `json:"funnel_steps"`
-FunnelWindowSeconds int64 `json:"funnel_window_seconds"`
-ProjectRunningQueries int64 `json:"project_running_queries"`
-ProjectQueuedQueries int64 `json:"project_queued_queries"`
-} `json:"budgets"`
+	ExecutionAvailable      bool                      `json:"execution_available"`
+	QueryKinds              []string                  `json:"query_kinds"`
+	Aggregations            []string                  `json:"aggregations"`
+	ApproximateAggregations []string                  `json:"approximate_aggregations"`
+	Subjects                []string                  `json:"subjects"`
+	Intervals               []string                  `json:"intervals"`
+	FunnelModes             []string                  `json:"funnel_modes"`
+	FieldTypes              []AnalysisFieldCapability `json:"field_types"`
+	Budgets                 struct {
+		TrendWindowSeconds    int64 `json:"trend_window_seconds"`
+		OtherWindowSeconds    int64 `json:"other_window_seconds"`
+		EventSelections       int64 `json:"event_selections"`
+		GroupFields           int64 `json:"group_fields"`
+		Metrics               int64 `json:"metrics"`
+		ResultRows            int64 `json:"result_rows"`
+		FilterDepth           int64 `json:"filter_depth"`
+		FilterNodes           int64 `json:"filter_nodes"`
+		FilterArguments       int64 `json:"filter_arguments"`
+		FilterValues          int64 `json:"filter_values"`
+		FunnelSteps           int64 `json:"funnel_steps"`
+		FunnelWindowSeconds   int64 `json:"funnel_window_seconds"`
+		ProjectRunningQueries int64 `json:"project_running_queries"`
+		ProjectQueuedQueries  int64 `json:"project_queued_queries"`
+	} `json:"budgets"`
 }
 
 type AnalysisCatalog struct {
-Environment string `json:"environment"`
-CatalogRevision int64 `json:"catalog_revision"`
-Items []AnalysisCatalogEvent `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Environment     string                 `json:"environment"`
+	CatalogRevision int64                  `json:"catalog_revision"`
+	Items           []AnalysisCatalogEvent `json:"items"`
+	NextCursor      *string                `json:"next_cursor"`
 }
 
 type AnalysisCatalogEvent struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-DisplayName string `json:"display_name"`
-DefinitionHash string `json:"definition_hash"`
-CreatedAt string `json:"created_at"`
-Published bool `json:"published"`
-Active bool `json:"active"`
-IngestionReady bool `json:"ingestion_ready"`
-Fields []AnalysisCatalogField `json:"fields"`
+	EventKey       string                 `json:"event_key"`
+	SchemaVersion  int64                  `json:"schema_version"`
+	DisplayName    string                 `json:"display_name"`
+	DefinitionHash string                 `json:"definition_hash"`
+	CreatedAt      string                 `json:"created_at"`
+	Published      bool                   `json:"published"`
+	Active         bool                   `json:"active"`
+	IngestionReady bool                   `json:"ingestion_ready"`
+	Fields         []AnalysisCatalogField `json:"fields"`
 }
 
 type AnalysisCatalogField struct {
-Field struct {
-Kind string `json:"kind"`
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-Key string `json:"key"`
-} `json:"field"`
-Type string `json:"type"`
-Required bool `json:"required"`
-Nullable bool `json:"nullable"`
-MissingSemantics string `json:"missing_semantics"`
-NullSemantics string `json:"null_semantics"`
-FilterOperators []string `json:"filter_operators"`
-Groupable bool `json:"groupable"`
-MetricOperations []string `json:"metric_operations"`
-Metadata map[string]any `json:"metadata"`
+	Field struct {
+		Kind          string `json:"kind"`
+		EventKey      string `json:"event_key"`
+		SchemaVersion int64  `json:"schema_version"`
+		Key           string `json:"key"`
+	} `json:"field"`
+	Type             string         `json:"type"`
+	Required         bool           `json:"required"`
+	Nullable         bool           `json:"nullable"`
+	MissingSemantics string         `json:"missing_semantics"`
+	NullSemantics    string         `json:"null_semantics"`
+	FilterOperators  []string       `json:"filter_operators"`
+	Groupable        bool           `json:"groupable"`
+	MetricOperations []string       `json:"metric_operations"`
+	Metadata         map[string]any `json:"metadata"`
 }
 
 type AnalysisFieldCapability struct {
-Type string `json:"type"`
-FilterOperators []string `json:"filter_operators"`
-Groupable bool `json:"groupable"`
-MetricOperations []string `json:"metric_operations"`
+	Type             string   `json:"type"`
+	FilterOperators  []string `json:"filter_operators"`
+	Groupable        bool     `json:"groupable"`
+	MetricOperations []string `json:"metric_operations"`
 }
 
 type ArchiveManifest struct {
-ID string `json:"id"`
-Environment string `json:"environment"`
-TimeRange json.RawMessage `json:"time_range"`
-State string `json:"state"`
-EventCount int64 `json:"event_count"`
-CompressedBytes int64 `json:"compressed_bytes"`
-Checksum string `json:"checksum"`
+	ID              string          `json:"id"`
+	Environment     string          `json:"environment"`
+	TimeRange       json.RawMessage `json:"time_range"`
+	State           string          `json:"state"`
+	EventCount      int64           `json:"event_count"`
+	CompressedBytes int64           `json:"compressed_bytes"`
+	Checksum        string          `json:"checksum"`
 }
 
 type ArchiveManifestList struct {
-Items []ArchiveManifest `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []ArchiveManifest `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
 }
 
 type AuditEntry struct {
-ID string `json:"id"`
-OccurredAt string `json:"occurred_at"`
-ActorID string `json:"actor_id"`
-Action string `json:"action"`
-ResourceID *string `json:"resource_id,omitempty"`
-Result string `json:"result"`
-RequestID string `json:"request_id"`
+	ID         string  `json:"id"`
+	OccurredAt string  `json:"occurred_at"`
+	ActorID    string  `json:"actor_id"`
+	Action     string  `json:"action"`
+	ResourceID *string `json:"resource_id,omitempty"`
+	Result     string  `json:"result"`
+	RequestID  string  `json:"request_id"`
 }
 
 type AuditList struct {
-Items []AuditEntry `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []AuditEntry `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
 }
 
 type BackfillInput struct {
-Environment string `json:"environment"`
-ArchiveManifestIDs []string `json:"archive_manifest_ids"`
-TimeRange json.RawMessage `json:"time_range"`
-Reason string `json:"reason"`
+	Environment        string          `json:"environment"`
+	ArchiveManifestIDs []string        `json:"archive_manifest_ids"`
+	TimeRange          json.RawMessage `json:"time_range"`
+	Reason             string          `json:"reason"`
 }
 
 type BackfillJob struct {
-JobID string `json:"job_id"`
-State string `json:"state"`
-Phase string `json:"phase"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-Error *Problem `json:"error,omitempty"`
-DataVersion *string `json:"data_version,omitempty"`
-CoverageVerified bool `json:"coverage_verified"`
+	JobID            string   `json:"job_id"`
+	State            string   `json:"state"`
+	Phase            string   `json:"phase"`
+	CreatedAt        string   `json:"created_at"`
+	UpdatedAt        string   `json:"updated_at"`
+	Error            *Problem `json:"error,omitempty"`
+	DataVersion      *string  `json:"data_version,omitempty"`
+	CoverageVerified bool     `json:"coverage_verified"`
 }
 
 type BackfillList struct {
-Items []BackfillJob `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []BackfillJob `json:"items"`
+	NextCursor *string       `json:"next_cursor"`
 }
 
 type CollectRequest struct {
-ProtocolVersion int64 `json:"protocol_version"`
-BatchID string `json:"batch_id"`
-WriteKey string `json:"write_key"`
-SentAt string `json:"sent_at"`
-Events []EventEnvelope `json:"events"`
+	ProtocolVersion int64           `json:"protocol_version"`
+	BatchID         string          `json:"batch_id"`
+	WriteKey        string          `json:"write_key"`
+	SentAt          string          `json:"sent_at"`
+	Events          []EventEnvelope `json:"events"`
 }
 
 type CollectResponse struct {
-BatchID string `json:"batch_id"`
-ReceiptID string `json:"receipt_id"`
-Results []json.RawMessage `json:"results"`
+	BatchID   string            `json:"batch_id"`
+	ReceiptID string            `json:"receipt_id"`
+	Results   []json.RawMessage `json:"results"`
 }
 
 type CredentialRotation struct {
-OverlapSeconds int64 `json:"overlap_seconds"`
+	OverlapSeconds int64 `json:"overlap_seconds"`
 }
 
 type Dashboard struct {
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-DashboardID string `json:"dashboard_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	DashboardID      string `json:"dashboard_id"`
 }
 
 type DashboardChange struct {
-Category string `json:"category"`
-Path string `json:"path"`
-Before json.RawMessage `json:"before,omitempty"`
-After json.RawMessage `json:"after,omitempty"`
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
 }
 
 type DashboardCreate struct {
-Environment string `json:"environment"`
-Definition DashboardDefinition `json:"definition"`
+	Environment string              `json:"environment"`
+	Definition  DashboardDefinition `json:"definition"`
 }
 
 type DashboardDefinition struct {
-Title string `json:"title"`
-Description *string `json:"description,omitempty"`
-Widgets []DashboardWidget `json:"widgets"`
+	Title       string            `json:"title"`
+	Description *string           `json:"description,omitempty"`
+	Widgets     []DashboardWidget `json:"widgets"`
 }
 
 type DashboardDependencies struct {
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Analyses []DashboardDependency `json:"analyses"`
+	ProjectID   string                `json:"project_id"`
+	Environment string                `json:"environment"`
+	Analyses    []DashboardDependency `json:"analyses"`
 }
 
 type DashboardDependency struct {
-WidgetID string `json:"widget_id"`
-AnalysisID string `json:"analysis_id"`
-AnalysisVersion int64 `json:"analysis_version"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-ValidationHash string `json:"validation_hash"`
+	WidgetID        string `json:"widget_id"`
+	AnalysisID      string `json:"analysis_id"`
+	AnalysisVersion int64  `json:"analysis_version"`
+	DefinitionHash  string `json:"definition_hash"`
+	DependencyHash  string `json:"dependency_hash"`
+	ValidationHash  string `json:"validation_hash"`
 }
 
 type DashboardDraft struct {
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-DashboardID string `json:"dashboard_id"`
-Definition DashboardDefinition `json:"definition"`
+	ProjectID        string              `json:"project_id"`
+	Environment      string              `json:"environment"`
+	Title            string              `json:"title"`
+	DraftRevision    int64               `json:"draft_revision"`
+	PublishedVersion int64               `json:"published_version"`
+	CreatedAt        string              `json:"created_at"`
+	UpdatedAt        string              `json:"updated_at"`
+	DashboardID      string              `json:"dashboard_id"`
+	Definition       DashboardDefinition `json:"definition"`
 }
 
 type DashboardExecute struct {
-TimeRange json.RawMessage `json:"time_range"`
-Timezone json.RawMessage `json:"timezone"`
-WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	TimeRange     json.RawMessage         `json:"time_range"`
+	Timezone      json.RawMessage         `json:"timezone"`
+	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
 }
 
 type DashboardInput struct {
-Name string `json:"name"`
-ReportIDs []string `json:"report_ids"`
-Layout []map[string]any `json:"layout"`
+	Name      string           `json:"name"`
+	ReportIDs []string         `json:"report_ids"`
+	Layout    []map[string]any `json:"layout"`
 }
 
 type DashboardLayout struct {
-X int64 `json:"x"`
-Y int64 `json:"y"`
-Width int64 `json:"width"`
-Height int64 `json:"height"`
+	X      int64 `json:"x"`
+	Y      int64 `json:"y"`
+	Width  int64 `json:"width"`
+	Height int64 `json:"height"`
 }
 
 type DashboardList struct {
-Items []Dashboard `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Dashboard `json:"items"`
+	NextCursor *string     `json:"next_cursor"`
 }
 
 type DashboardPublish struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
-ValidationHash string `json:"validation_hash"`
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
 }
 
 type DashboardRun struct {
-RunID string `json:"run_id"`
-DashboardID string `json:"dashboard_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Version int64 `json:"version"`
-CreatedBy string `json:"created_by"`
-TimeRange json.RawMessage `json:"time_range"`
-Timezone json.RawMessage `json:"timezone"`
-WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
-State string `json:"state"`
-CreatedAt string `json:"created_at"`
-ExpiresAt string `json:"expires_at"`
-PollAfterMs *int64 `json:"poll_after_ms,omitempty"`
-Widgets []DashboardWidgetRun `json:"widgets"`
+	RunID         string                  `json:"run_id"`
+	DashboardID   string                  `json:"dashboard_id"`
+	ProjectID     string                  `json:"project_id"`
+	Environment   string                  `json:"environment"`
+	Version       int64                   `json:"version"`
+	CreatedBy     string                  `json:"created_by"`
+	TimeRange     json.RawMessage         `json:"time_range"`
+	Timezone      json.RawMessage         `json:"timezone"`
+	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	State         string                  `json:"state"`
+	CreatedAt     string                  `json:"created_at"`
+	ExpiresAt     string                  `json:"expires_at"`
+	PollAfterMs   *int64                  `json:"poll_after_ms,omitempty"`
+	Widgets       []DashboardWidgetRun    `json:"widgets"`
 }
 
 type DashboardUpdate struct {
-Definition DashboardDefinition `json:"definition"`
+	Definition DashboardDefinition `json:"definition"`
 }
 
 type DashboardValidate struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
 }
 
 type DashboardValidation struct {
-Valid bool `json:"valid"`
-ExecutionPerformed bool `json:"execution_performed"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-NormalizedDefinition DashboardDefinition `json:"normalized_definition"`
-Dependencies DashboardDependencies `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-Diff []DashboardChange `json:"diff"`
-ValidationHash string `json:"validation_hash"`
+	Valid                bool                  `json:"valid"`
+	ExecutionPerformed   bool                  `json:"execution_performed"`
+	DraftRevision        int64                 `json:"draft_revision"`
+	PublishedVersion     int64                 `json:"published_version"`
+	NormalizedDefinition DashboardDefinition   `json:"normalized_definition"`
+	Dependencies         DashboardDependencies `json:"dependencies"`
+	DefinitionHash       string                `json:"definition_hash"`
+	DependencyHash       string                `json:"dependency_hash"`
+	Diff                 []DashboardChange     `json:"diff"`
+	ValidationHash       string                `json:"validation_hash"`
 }
 
 type DashboardVersion struct {
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Version int64 `json:"version"`
-DraftRevision int64 `json:"draft_revision"`
-Definition DashboardDefinition `json:"definition"`
-Dependencies DashboardDependencies `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-ValidationHash string `json:"validation_hash"`
-CreatedAt string `json:"created_at"`
-CreatedBy string `json:"created_by"`
-DashboardID string `json:"dashboard_id"`
+	ProjectID      string                `json:"project_id"`
+	Environment    string                `json:"environment"`
+	Version        int64                 `json:"version"`
+	DraftRevision  int64                 `json:"draft_revision"`
+	Definition     DashboardDefinition   `json:"definition"`
+	Dependencies   DashboardDependencies `json:"dependencies"`
+	DefinitionHash string                `json:"definition_hash"`
+	DependencyHash string                `json:"dependency_hash"`
+	ValidationHash string                `json:"validation_hash"`
+	CreatedAt      string                `json:"created_at"`
+	CreatedBy      string                `json:"created_by"`
+	DashboardID    string                `json:"dashboard_id"`
 }
 
 type DashboardVersionList struct {
-Items []DashboardVersion `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []DashboardVersion `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
 }
 
 type DashboardWidget struct {
-WidgetID string `json:"widget_id"`
-AnalysisID string `json:"analysis_id"`
-AnalysisVersion int64 `json:"analysis_version"`
-Title string `json:"title"`
-ReadingOrder int64 `json:"reading_order"`
-Layout DashboardLayout `json:"layout"`
+	WidgetID        string          `json:"widget_id"`
+	AnalysisID      string          `json:"analysis_id"`
+	AnalysisVersion int64           `json:"analysis_version"`
+	Title           string          `json:"title"`
+	ReadingOrder    int64           `json:"reading_order"`
+	Layout          DashboardLayout `json:"layout"`
 }
 
 type DashboardWidgetFilter struct {
-WidgetID string `json:"widget_id"`
-Filter json.RawMessage `json:"filter"`
+	WidgetID string          `json:"widget_id"`
+	Filter   json.RawMessage `json:"filter"`
 }
 
 type DashboardWidgetRun struct {
-WidgetID string `json:"widget_id"`
-AnalysisID string `json:"analysis_id"`
-AnalysisVersion int64 `json:"analysis_version"`
-Query QueryJob `json:"query"`
+	WidgetID        string   `json:"widget_id"`
+	AnalysisID      string   `json:"analysis_id"`
+	AnalysisVersion int64    `json:"analysis_version"`
+	Query           QueryJob `json:"query"`
 }
 
 type Diagnostic struct {
-ID string `json:"id"`
-OccurredAt string `json:"occurred_at"`
-EventKey *string `json:"event_key,omitempty"`
-SchemaVersion *int64 `json:"schema_version,omitempty"`
-Code string `json:"code"`
-FieldPaths []string `json:"field_paths,omitzero"`
-Count *int64 `json:"count,omitempty"`
-Stage string `json:"stage"`
+	ID            string   `json:"id"`
+	OccurredAt    string   `json:"occurred_at"`
+	EventKey      *string  `json:"event_key,omitempty"`
+	SchemaVersion *int64   `json:"schema_version,omitempty"`
+	Code          string   `json:"code"`
+	FieldPaths    []string `json:"field_paths,omitzero"`
+	Count         *int64   `json:"count,omitempty"`
+	Stage         string   `json:"stage"`
 }
 
 type DiagnosticList struct {
-Items []Diagnostic `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Diagnostic `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
 }
 
 type DownloadGrant struct {
-URL string `json:"url"`
-ExpiresAt string `json:"expires_at"`
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 type Draft struct {
-Revision int64 `json:"revision"`
-Definition DraftInput `json:"definition"`
+	Revision   int64      `json:"revision"`
+	Definition DraftInput `json:"definition"`
 }
 
 type DraftInput struct {
-DisplayName *string `json:"display_name,omitempty"`
-Schema map[string]any `json:"schema"`
-FieldMetadata map[string]any `json:"field_metadata,omitzero"`
-Trigger *string `json:"trigger,omitempty"`
-AllowedSourceKinds []string `json:"allowed_source_kinds,omitzero"`
-FactKind *string `json:"fact_kind,omitempty"`
-ExampleProperties map[string]any `json:"example_properties,omitzero"`
+	DisplayName        *string        `json:"display_name,omitempty"`
+	Schema             map[string]any `json:"schema"`
+	FieldMetadata      map[string]any `json:"field_metadata,omitzero"`
+	Trigger            *string        `json:"trigger,omitempty"`
+	AllowedSourceKinds []string       `json:"allowed_source_kinds,omitzero"`
+	FactKind           *string        `json:"fact_kind,omitempty"`
+	ExampleProperties  map[string]any `json:"example_properties,omitzero"`
 }
 
 type ErasureInput json.RawMessage
 
 type ErasureJob struct {
-JobID string `json:"job_id"`
-State string `json:"state"`
-BackupExpiryAt *string `json:"backup_expiry_at,omitempty"`
+	JobID          string  `json:"job_id"`
+	State          string  `json:"state"`
+	BackupExpiryAt *string `json:"backup_expiry_at,omitempty"`
 }
 
 type ErasureList struct {
-Items []ErasureJob `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []ErasureJob `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
 }
 
 type EventDefinition struct {
-EventTypeID int64 `json:"event_type_id"`
-EventKey string `json:"event_key"`
-DisplayName string `json:"display_name"`
-PublishedVersions []int64 `json:"published_versions"`
-LastSeenAt *string `json:"last_seen_at,omitempty"`
+	EventTypeID       int64   `json:"event_type_id"`
+	EventKey          string  `json:"event_key"`
+	DisplayName       string  `json:"display_name"`
+	PublishedVersions []int64 `json:"published_versions"`
+	LastSeenAt        *string `json:"last_seen_at,omitempty"`
 }
 
 type EventDefinitionList struct {
-Items []EventDefinition `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []EventDefinition `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
 }
 
 type EventEnvelope struct {
-EventID string `json:"event_id"`
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-ReleaseRevision int64 `json:"release_revision"`
-OccurredAt string `json:"occurred_at"`
-Identity struct {
-UID *string `json:"uid,omitempty"`
-AnonymousID *string `json:"anonymous_id,omitempty"`
-} `json:"identity"`
-Context struct {
-SessionID *string `json:"session_id,omitempty"`
-TabID *string `json:"tab_id,omitempty"`
-Sequence *int64 `json:"sequence,omitempty"`
-PageViewID *string `json:"page_view_id,omitempty"`
-SourcePageViewID *string `json:"source_page_view_id,omitempty"`
-NavigationID *string `json:"navigation_id,omitempty"`
-OperationID *string `json:"operation_id,omitempty"`
-RouteName *string `json:"route_name,omitempty"`
-RouteTemplate *string `json:"route_template,omitempty"`
-SourceModule *string `json:"source_module,omitempty"`
-NavigationType *string `json:"navigation_type,omitempty"`
-PreviousPageViewID *string `json:"previous_page_view_id,omitempty"`
-} `json:"context"`
-SDK struct {
-Name string `json:"name"`
-Version string `json:"version"`
-} `json:"sdk"`
-Properties map[string]any `json:"properties"`
+	EventID         string `json:"event_id"`
+	EventKey        string `json:"event_key"`
+	SchemaVersion   int64  `json:"schema_version"`
+	ReleaseRevision int64  `json:"release_revision"`
+	OccurredAt      string `json:"occurred_at"`
+	Identity        struct {
+		UID         *string `json:"uid,omitempty"`
+		AnonymousID *string `json:"anonymous_id,omitempty"`
+	} `json:"identity"`
+	Context struct {
+		SessionID          *string `json:"session_id,omitempty"`
+		TabID              *string `json:"tab_id,omitempty"`
+		Sequence           *int64  `json:"sequence,omitempty"`
+		PageViewID         *string `json:"page_view_id,omitempty"`
+		SourcePageViewID   *string `json:"source_page_view_id,omitempty"`
+		NavigationID       *string `json:"navigation_id,omitempty"`
+		OperationID        *string `json:"operation_id,omitempty"`
+		RouteName          *string `json:"route_name,omitempty"`
+		RouteTemplate      *string `json:"route_template,omitempty"`
+		SourceModule       *string `json:"source_module,omitempty"`
+		NavigationType     *string `json:"navigation_type,omitempty"`
+		PreviousPageViewID *string `json:"previous_page_view_id,omitempty"`
+	} `json:"context"`
+	SDK struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"sdk"`
+	Properties map[string]any `json:"properties"`
 }
 
 type EventInput struct {
-EventKey string `json:"event_key"`
-DisplayName string `json:"display_name"`
-Description *string `json:"description,omitempty"`
+	EventKey    string  `json:"event_key"`
+	DisplayName string  `json:"display_name"`
+	Description *string `json:"description,omitempty"`
 }
 
 type EventPlan struct {
-Format string `json:"format"`
-Status string `json:"status"`
-ProjectKey string `json:"project_key"`
-Environment string `json:"environment"`
-ReleaseRevision int64 `json:"release_revision"`
-Description *string `json:"description,omitempty"`
-Source map[string]any `json:"source,omitzero"`
-EnvelopeContract map[string]any `json:"envelope_contract,omitzero"`
-SystemEventReferences []struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-} `json:"system_event_references,omitzero"`
-Events []struct {
-EventKey string `json:"event_key"`
-DisplayName string `json:"display_name"`
-SchemaVersion int64 `json:"schema_version"`
-AllowedSourceKinds []string `json:"allowed_source_kinds"`
-FactKind string `json:"fact_kind"`
-Trigger string `json:"trigger"`
-Schema map[string]any `json:"schema"`
-FieldMetadata map[string]any `json:"field_metadata,omitzero"`
-ExampleProperties map[string]any `json:"example_properties"`
-ImplementationStatus *string `json:"implementation_status,omitempty"`
-} `json:"events"`
-ImplementationNotes []string `json:"implementation_notes,omitzero"`
-Acceptance []string `json:"acceptance,omitzero"`
+	Format                string         `json:"format"`
+	Status                string         `json:"status"`
+	ProjectKey            string         `json:"project_key"`
+	Environment           string         `json:"environment"`
+	ReleaseRevision       int64          `json:"release_revision"`
+	Description           *string        `json:"description,omitempty"`
+	Source                map[string]any `json:"source,omitzero"`
+	EnvelopeContract      map[string]any `json:"envelope_contract,omitzero"`
+	SystemEventReferences []struct {
+		EventKey      string `json:"event_key"`
+		SchemaVersion int64  `json:"schema_version"`
+	} `json:"system_event_references,omitzero"`
+	Events []struct {
+		EventKey             string         `json:"event_key"`
+		DisplayName          string         `json:"display_name"`
+		SchemaVersion        int64          `json:"schema_version"`
+		AllowedSourceKinds   []string       `json:"allowed_source_kinds"`
+		FactKind             string         `json:"fact_kind"`
+		Trigger              string         `json:"trigger"`
+		Schema               map[string]any `json:"schema"`
+		FieldMetadata        map[string]any `json:"field_metadata,omitzero"`
+		ExampleProperties    map[string]any `json:"example_properties"`
+		ImplementationStatus *string        `json:"implementation_status,omitempty"`
+	} `json:"events"`
+	ImplementationNotes []string `json:"implementation_notes,omitzero"`
+	Acceptance          []string `json:"acceptance,omitzero"`
 }
 
 type EventVersion struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-DraftRevision int64 `json:"draft_revision"`
-Definition DraftInput `json:"definition"`
+	EventKey      string     `json:"event_key"`
+	SchemaVersion int64      `json:"schema_version"`
+	DraftRevision int64      `json:"draft_revision"`
+	Definition    DraftInput `json:"definition"`
 }
 
 type ExportInput struct {
-Query QueryRequest `json:"query"`
-Format string `json:"format"`
-MaxRows int64 `json:"max_rows"`
+	Query   QueryRequest `json:"query"`
+	Format  string       `json:"format"`
+	MaxRows int64        `json:"max_rows"`
 }
 
 type ExportJob struct {
-JobID string `json:"job_id"`
-State string `json:"state"`
-Phase string `json:"phase"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-Error *Problem `json:"error,omitempty"`
-RowsWritten int64 `json:"rows_written"`
-ExpiresAt *string `json:"expires_at,omitempty"`
+	JobID       string   `json:"job_id"`
+	State       string   `json:"state"`
+	Phase       string   `json:"phase"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
+	Error       *Problem `json:"error,omitempty"`
+	RowsWritten int64    `json:"rows_written"`
+	ExpiresAt   *string  `json:"expires_at,omitempty"`
 }
 
 type ExportList struct {
-Items []ExportJob `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []ExportJob `json:"items"`
+	NextCursor *string     `json:"next_cursor"`
 }
 
 type LoginInput struct {
-Username string `json:"username"`
-Password string `json:"password"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type MachineCredential struct {
-ID string `json:"id"`
-PrincipalID string `json:"principal_id"`
-CreatedAt string `json:"created_at"`
-ExpiresAt string `json:"expires_at"`
-RevokedAt *string `json:"revoked_at"`
+	ID          string  `json:"id"`
+	PrincipalID string  `json:"principal_id"`
+	CreatedAt   string  `json:"created_at"`
+	ExpiresAt   string  `json:"expires_at"`
+	RevokedAt   *string `json:"revoked_at"`
 }
 
 type MachineCredentialRotation struct {
-ExpiresAt string `json:"expires_at"`
-OverlapSeconds int64 `json:"overlap_seconds"`
+	ExpiresAt      string `json:"expires_at"`
+	OverlapSeconds int64  `json:"overlap_seconds"`
 }
 
 type MachineIdentity struct {
-PrincipalID string `json:"principal_id"`
-CredentialID string `json:"credential_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Name string `json:"name"`
-Permissions []MachinePermission `json:"permissions"`
-ExpiresAt string `json:"expires_at"`
+	PrincipalID  string              `json:"principal_id"`
+	CredentialID string              `json:"credential_id"`
+	ProjectID    string              `json:"project_id"`
+	Environment  string              `json:"environment"`
+	Name         string              `json:"name"`
+	Permissions  []MachinePermission `json:"permissions"`
+	ExpiresAt    string              `json:"expires_at"`
 }
 
 type MachineIssued struct {
-Principal MachinePrincipal `json:"principal"`
-Credential MachineCredential `json:"credential"`
-SecretAvailable bool `json:"secret_available"`
-SecretOnce *string `json:"secret_once,omitempty"`
+	Principal       MachinePrincipal  `json:"principal"`
+	Credential      MachineCredential `json:"credential"`
+	SecretAvailable bool              `json:"secret_available"`
+	SecretOnce      *string           `json:"secret_once,omitempty"`
 }
 
 type MachinePermission string
 
 type MachinePrincipal struct {
-ID string `json:"id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Name string `json:"name"`
-Permissions []MachinePermission `json:"permissions"`
-Revision int64 `json:"revision"`
-CreatedAt string `json:"created_at"`
-RevokedAt *string `json:"revoked_at"`
+	ID          string              `json:"id"`
+	ProjectID   string              `json:"project_id"`
+	Environment string              `json:"environment"`
+	Name        string              `json:"name"`
+	Permissions []MachinePermission `json:"permissions"`
+	Revision    int64               `json:"revision"`
+	CreatedAt   string              `json:"created_at"`
+	RevokedAt   *string             `json:"revoked_at"`
 }
 
 type MachinePrincipalDetail struct {
-Principal MachinePrincipal `json:"principal"`
-Credentials []MachineCredential `json:"credentials"`
+	Principal   MachinePrincipal    `json:"principal"`
+	Credentials []MachineCredential `json:"credentials"`
 }
 
 type MachinePrincipalInput struct {
-Name string `json:"name"`
-Environment string `json:"environment"`
-Permissions []MachinePermission `json:"permissions"`
-ExpiresAt string `json:"expires_at"`
+	Name        string              `json:"name"`
+	Environment string              `json:"environment"`
+	Permissions []MachinePermission `json:"permissions"`
+	ExpiresAt   string              `json:"expires_at"`
 }
 
 type MachinePrincipalList struct {
-Items []MachinePrincipal `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []MachinePrincipal `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
 }
 
 type Member struct {
-UserID string `json:"user_id"`
-Role string `json:"role"`
-Capabilities []string `json:"capabilities"`
-Revision int64 `json:"revision"`
+	UserID       string   `json:"user_id"`
+	Role         string   `json:"role"`
+	Capabilities []string `json:"capabilities"`
+	Revision     int64    `json:"revision"`
 }
 
 type MemberInput struct {
-Role string `json:"role"`
-Capabilities []string `json:"capabilities"`
-ExpectedRevision int64 `json:"expected_revision"`
+	Role             string   `json:"role"`
+	Capabilities     []string `json:"capabilities"`
+	ExpectedRevision int64    `json:"expected_revision"`
 }
 
 type MemberList struct {
-Items []Member `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Member `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
 }
 
 type MetricChange struct {
-Category string `json:"category"`
-Path string `json:"path"`
-Before json.RawMessage `json:"before,omitempty"`
-After json.RawMessage `json:"after,omitempty"`
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
 }
 
 type MetricCreate struct {
-Environment string `json:"environment"`
-Definition MetricDefinition `json:"definition"`
+	Environment string           `json:"environment"`
+	Definition  MetricDefinition `json:"definition"`
 }
 
 type MetricDefinition struct {
-Title string `json:"title"`
-Description *string `json:"description,omitempty"`
-EventVersions json.RawMessage `json:"event_versions"`
-Filter json.RawMessage `json:"filter,omitempty"`
-Subject string `json:"subject"`
-Aggregation json.RawMessage `json:"aggregation"`
-Unit string `json:"unit"`
+	Title         string          `json:"title"`
+	Description   *string         `json:"description,omitempty"`
+	EventVersions json.RawMessage `json:"event_versions"`
+	Filter        json.RawMessage `json:"filter,omitempty"`
+	Subject       string          `json:"subject"`
+	Aggregation   json.RawMessage `json:"aggregation"`
+	Unit          string          `json:"unit"`
 }
 
 type MetricDependency struct {
-MetricID string `json:"metric_id"`
-Version int64 `json:"version"`
-DefinitionHash string `json:"definition_hash"`
+	MetricID       string `json:"metric_id"`
+	Version        int64  `json:"version"`
+	DefinitionHash string `json:"definition_hash"`
 }
 
 type MetricDraft struct {
-MetricID string `json:"metric_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-Definition MetricDefinition `json:"definition"`
+	MetricID         string           `json:"metric_id"`
+	ProjectID        string           `json:"project_id"`
+	Environment      string           `json:"environment"`
+	Title            string           `json:"title"`
+	DraftRevision    int64            `json:"draft_revision"`
+	PublishedVersion int64            `json:"published_version"`
+	CreatedAt        string           `json:"created_at"`
+	UpdatedAt        string           `json:"updated_at"`
+	Definition       MetricDefinition `json:"definition"`
 }
 
 type MetricExecute struct {
-TimeRange json.RawMessage `json:"time_range"`
-Timezone json.RawMessage `json:"timezone"`
-Interval json.RawMessage `json:"interval,omitempty"`
-GroupBy json.RawMessage `json:"group_by,omitempty"`
-Filter json.RawMessage `json:"filter,omitempty"`
-Limit json.RawMessage `json:"limit,omitempty"`
+	TimeRange json.RawMessage `json:"time_range"`
+	Timezone  json.RawMessage `json:"timezone"`
+	Interval  json.RawMessage `json:"interval,omitempty"`
+	GroupBy   json.RawMessage `json:"group_by,omitempty"`
+	Filter    json.RawMessage `json:"filter,omitempty"`
+	Limit     json.RawMessage `json:"limit,omitempty"`
 }
 
 type MetricList struct {
-Items []MetricRecord `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []MetricRecord `json:"items"`
+	NextCursor *string        `json:"next_cursor"`
 }
 
 type MetricPublish struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
-ValidationHash string `json:"validation_hash"`
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
 }
 
 type MetricRecord struct {
-MetricID string `json:"metric_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
+	MetricID         string `json:"metric_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type MetricReference struct {
-MetricID string `json:"metric_id"`
-Version int64 `json:"version"`
+	MetricID string `json:"metric_id"`
+	Version  int64  `json:"version"`
 }
 
 type MetricUpdate struct {
-Definition MetricDefinition `json:"definition"`
+	Definition MetricDefinition `json:"definition"`
 }
 
 type MetricValidate struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
 }
 
 type MetricValidation struct {
-Valid bool `json:"valid"`
-ExecutionPerformed bool `json:"execution_performed"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-NormalizedDefinition MetricDefinition `json:"normalized_definition"`
-Dependencies QueryDependencyManifest `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-Diff []MetricChange `json:"diff"`
-ValidationHash string `json:"validation_hash"`
+	Valid                bool                    `json:"valid"`
+	ExecutionPerformed   bool                    `json:"execution_performed"`
+	DraftRevision        int64                   `json:"draft_revision"`
+	PublishedVersion     int64                   `json:"published_version"`
+	NormalizedDefinition MetricDefinition        `json:"normalized_definition"`
+	Dependencies         QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash       string                  `json:"definition_hash"`
+	DependencyHash       string                  `json:"dependency_hash"`
+	Diff                 []MetricChange          `json:"diff"`
+	ValidationHash       string                  `json:"validation_hash"`
 }
 
 type MetricVersion struct {
-MetricID string `json:"metric_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Version int64 `json:"version"`
-DraftRevision int64 `json:"draft_revision"`
-Definition MetricDefinition `json:"definition"`
-Dependencies QueryDependencyManifest `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-ValidationHash string `json:"validation_hash"`
-CreatedAt string `json:"created_at"`
-CreatedBy string `json:"created_by"`
+	MetricID       string                  `json:"metric_id"`
+	ProjectID      string                  `json:"project_id"`
+	Environment    string                  `json:"environment"`
+	Version        int64                   `json:"version"`
+	DraftRevision  int64                   `json:"draft_revision"`
+	Definition     MetricDefinition        `json:"definition"`
+	Dependencies   QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash string                  `json:"definition_hash"`
+	DependencyHash string                  `json:"dependency_hash"`
+	ValidationHash string                  `json:"validation_hash"`
+	CreatedAt      string                  `json:"created_at"`
+	CreatedBy      string                  `json:"created_by"`
 }
 
 type MetricVersionList struct {
-Items []MetricVersion `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []MetricVersion `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
 }
 
 type Problem struct {
-Code string `json:"code"`
-Message string `json:"message"`
-RequestID string `json:"request_id"`
-Details *ProblemDetails `json:"details,omitempty"`
+	Code      string          `json:"code"`
+	Message   string          `json:"message"`
+	RequestID string          `json:"request_id"`
+	Details   *ProblemDetails `json:"details,omitempty"`
 }
 
 type ProblemDetails struct {
-FieldPaths []string `json:"field_paths,omitzero"`
+	FieldPaths []string `json:"field_paths,omitzero"`
 }
 
 type Project struct {
-ID string `json:"id"`
-Name string `json:"name"`
-Timezone string `json:"timezone"`
-Capabilities []string `json:"capabilities"`
-Permissions []string `json:"permissions"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Timezone     string   `json:"timezone"`
+	Capabilities []string `json:"capabilities"`
+	Permissions  []string `json:"permissions"`
 }
 
 type ProjectAuditEntry struct {
-ID string `json:"id"`
-ProjectID string `json:"project_id"`
-ActorID string `json:"actor_id"`
-ActorKind string `json:"actor_kind"`
-CredentialID *string `json:"credential_id"`
-Action string `json:"action"`
-ResourceKey string `json:"resource_key"`
-OccurredAt string `json:"occurred_at"`
+	ID           string  `json:"id"`
+	ProjectID    string  `json:"project_id"`
+	ActorID      string  `json:"actor_id"`
+	ActorKind    string  `json:"actor_kind"`
+	CredentialID *string `json:"credential_id"`
+	Action       string  `json:"action"`
+	ResourceKey  string  `json:"resource_key"`
+	OccurredAt   string  `json:"occurred_at"`
 }
 
 type ProjectAuditList struct {
-Items []ProjectAuditEntry `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []ProjectAuditEntry `json:"items"`
+	NextCursor *string             `json:"next_cursor"`
 }
 
 type ProjectInput struct {
-Name string `json:"name"`
-Timezone string `json:"timezone"`
+	Name     string `json:"name"`
+	Timezone string `json:"timezone"`
 }
 
 type ProjectList struct {
-Items []Project `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Project `json:"items"`
+	NextCursor *string   `json:"next_cursor"`
 }
 
 type ProjectMember struct {
-UserID string `json:"user_id"`
-Username string `json:"username"`
-DisplayName string `json:"display_name"`
-Role string `json:"role"`
-Disabled bool `json:"disabled"`
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Disabled    bool   `json:"disabled"`
 }
 
 type ProjectMemberAdd struct {
-Username string `json:"username"`
-Role string `json:"role"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 type ProjectMemberList struct {
-Items []ProjectMember `json:"items"`
-NextCursor *string `json:"next_cursor"`
-Revision int64 `json:"revision"`
+	Items      []ProjectMember `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+	Revision   int64           `json:"revision"`
 }
 
 type ProjectMemberResult struct {
-Member ProjectMember `json:"member"`
-Revision int64 `json:"revision"`
+	Member   ProjectMember `json:"member"`
+	Revision int64         `json:"revision"`
 }
 
 type ProjectMemberUpdate struct {
-Role string `json:"role"`
+	Role string `json:"role"`
 }
 
 type ProjectSettings struct {
-ProjectID string `json:"project_id"`
-Name string `json:"name"`
-Timezone string `json:"timezone"`
-Revision int64 `json:"revision"`
+	ProjectID string `json:"project_id"`
+	Name      string `json:"name"`
+	Timezone  string `json:"timezone"`
+	Revision  int64  `json:"revision"`
 }
 
 type ProjectSettingsUpdate struct {
-Name string `json:"name"`
-Timezone string `json:"timezone"`
+	Name     string `json:"name"`
+	Timezone string `json:"timezone"`
 }
 
 type ProjectUpdate struct {
-Name *string `json:"name,omitempty"`
-Timezone *string `json:"timezone,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Timezone *string `json:"timezone,omitempty"`
 }
 
 type PublicConfig struct {
-Format string `json:"format"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-ReleaseRevision int64 `json:"release_revision"`
-Events []struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-Schema map[string]any `json:"schema"`
-} `json:"events"`
+	Format          string `json:"format"`
+	ProjectID       string `json:"project_id"`
+	Environment     string `json:"environment"`
+	ReleaseRevision int64  `json:"release_revision"`
+	Events          []struct {
+		EventKey      string         `json:"event_key"`
+		SchemaVersion int64          `json:"schema_version"`
+		Schema        map[string]any `json:"schema"`
+	} `json:"events"`
 }
 
 type QueryDependency struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-DefinitionHash string `json:"definition_hash"`
+	EventKey       string `json:"event_key"`
+	SchemaVersion  int64  `json:"schema_version"`
+	DefinitionHash string `json:"definition_hash"`
 }
 
 type QueryDependencyManifest struct {
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-SelectionMode string `json:"selection_mode"`
-UnfixedEventKeys []string `json:"unfixed_event_keys"`
-EventVersions []QueryDependency `json:"event_versions"`
-Metric *MetricDependency `json:"metric,omitempty"`
+	ProjectID        string            `json:"project_id"`
+	Environment      string            `json:"environment"`
+	SelectionMode    string            `json:"selection_mode"`
+	UnfixedEventKeys []string          `json:"unfixed_event_keys"`
+	EventVersions    []QueryDependency `json:"event_versions"`
+	Metric           *MetricDependency `json:"metric,omitempty"`
 }
 
 type QueryJob struct {
-QueryID string `json:"query_id"`
-State string `json:"state"`
-CreatedAt string `json:"created_at"`
-FinishedAt *string `json:"finished_at,omitempty"`
-PollAfterMs *int64 `json:"poll_after_ms,omitempty"`
-ResultURL *string `json:"result_url,omitempty"`
-Error *struct {
-Code string `json:"code"`
-Retryable bool `json:"retryable"`
-FieldPaths []string `json:"field_paths,omitzero"`
-} `json:"error,omitempty"`
+	QueryID     string  `json:"query_id"`
+	State       string  `json:"state"`
+	CreatedAt   string  `json:"created_at"`
+	FinishedAt  *string `json:"finished_at,omitempty"`
+	PollAfterMs *int64  `json:"poll_after_ms,omitempty"`
+	ResultURL   *string `json:"result_url,omitempty"`
+	Error       *struct {
+		Code       string   `json:"code"`
+		Retryable  bool     `json:"retryable"`
+		FieldPaths []string `json:"field_paths,omitzero"`
+	} `json:"error,omitempty"`
 }
 
 type QueryRequest struct {
-Kind string `json:"kind"`
-Environment string `json:"environment"`
-TimeRange struct {
-From string `json:"from"`
-To string `json:"to"`
-} `json:"time_range"`
-Timezone string `json:"timezone"`
-EventKeys []string `json:"event_keys,omitzero"`
-Filter json.RawMessage `json:"filter,omitempty"`
-Subject *string `json:"subject,omitempty"`
-IdentityRevision *int64 `json:"identity_revision,omitempty"`
-IdentityFilter *struct {
-UID *string `json:"uid,omitempty"`
-AnonymousID *string `json:"anonymous_id,omitempty"`
-} `json:"identity_filter,omitempty"`
-GroupBy []json.RawMessage `json:"group_by,omitzero"`
-Metrics []struct {
-Op string `json:"op"`
-Field json.RawMessage `json:"field,omitempty"`
-Accuracy *string `json:"accuracy,omitempty"`
-} `json:"metrics,omitzero"`
-Interval *string `json:"interval,omitempty"`
-Funnel *struct {
-Steps []struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-Filter json.RawMessage `json:"filter,omitempty"`
-} `json:"steps"`
-WindowSeconds int64 `json:"window_seconds"`
-Mode string `json:"mode"`
-SameEntity []struct {
-StepIndex int64 `json:"step_index"`
-Field json.RawMessage `json:"field"`
-} `json:"same_entity,omitzero"`
-} `json:"funnel,omitempty"`
-Limit *int64 `json:"limit,omitempty"`
-Cursor *string `json:"cursor,omitempty"`
-EventVersions []struct {
-EventKey string `json:"event_key"`
-SchemaVersion int64 `json:"schema_version"`
-} `json:"event_versions,omitzero"`
+	Kind        string `json:"kind"`
+	Environment string `json:"environment"`
+	TimeRange   struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"time_range"`
+	Timezone         string          `json:"timezone"`
+	EventKeys        []string        `json:"event_keys,omitzero"`
+	Filter           json.RawMessage `json:"filter,omitempty"`
+	Subject          *string         `json:"subject,omitempty"`
+	IdentityRevision *int64          `json:"identity_revision,omitempty"`
+	IdentityFilter   *struct {
+		UID         *string `json:"uid,omitempty"`
+		AnonymousID *string `json:"anonymous_id,omitempty"`
+	} `json:"identity_filter,omitempty"`
+	GroupBy []json.RawMessage `json:"group_by,omitzero"`
+	Metrics []struct {
+		Op       string          `json:"op"`
+		Field    json.RawMessage `json:"field,omitempty"`
+		Accuracy *string         `json:"accuracy,omitempty"`
+	} `json:"metrics,omitzero"`
+	Interval *string `json:"interval,omitempty"`
+	Funnel   *struct {
+		Steps []struct {
+			EventKey      string          `json:"event_key"`
+			SchemaVersion int64           `json:"schema_version"`
+			Filter        json.RawMessage `json:"filter,omitempty"`
+		} `json:"steps"`
+		WindowSeconds int64  `json:"window_seconds"`
+		Mode          string `json:"mode"`
+		SameEntity    []struct {
+			StepIndex int64           `json:"step_index"`
+			Field     json.RawMessage `json:"field"`
+		} `json:"same_entity,omitzero"`
+	} `json:"funnel,omitempty"`
+	Limit         *int64  `json:"limit,omitempty"`
+	Cursor        *string `json:"cursor,omitempty"`
+	EventVersions []struct {
+		EventKey      string `json:"event_key"`
+		SchemaVersion int64  `json:"schema_version"`
+	} `json:"event_versions,omitzero"`
 }
 
 type QueryResult struct {
-QueryID string `json:"query_id"`
-Columns []struct {
-Key string `json:"key"`
-Type string `json:"type"`
-Label *string `json:"label,omitempty"`
-} `json:"columns"`
-Rows []map[string]any `json:"rows"`
-NextCursor *string `json:"next_cursor,omitempty"`
-Metadata struct {
-DataWatermark *string `json:"data_watermark"`
-IdentityRevision *int64 `json:"identity_revision,omitempty"`
-Accuracy string `json:"accuracy"`
-SampleRate float64 `json:"sample_rate"`
-Coverage struct {
-TimeRange struct {
-From string `json:"from"`
-To string `json:"to"`
-} `json:"time_range"`
-State string `json:"state"`
-KnownGaps []string `json:"known_gaps"`
-} `json:"coverage"`
-CacheHit bool `json:"cache_hit"`
-GeneratedAt string `json:"generated_at"`
-} `json:"metadata"`
+	QueryID string `json:"query_id"`
+	Columns []struct {
+		Key   string  `json:"key"`
+		Type  string  `json:"type"`
+		Label *string `json:"label,omitempty"`
+	} `json:"columns"`
+	Rows       []map[string]any `json:"rows"`
+	NextCursor *string          `json:"next_cursor,omitempty"`
+	Metadata   struct {
+		DataWatermark    *string `json:"data_watermark"`
+		IdentityRevision *int64  `json:"identity_revision,omitempty"`
+		Accuracy         string  `json:"accuracy"`
+		SampleRate       float64 `json:"sample_rate"`
+		Coverage         struct {
+			TimeRange struct {
+				From string `json:"from"`
+				To   string `json:"to"`
+			} `json:"time_range"`
+			State     string   `json:"state"`
+			KnownGaps []string `json:"known_gaps"`
+		} `json:"coverage"`
+		CacheHit    bool   `json:"cache_hit"`
+		GeneratedAt string `json:"generated_at"`
+	} `json:"metadata"`
 }
 
 type QueryValidation struct {
-Valid bool `json:"valid"`
-ExecutionPerformed bool `json:"execution_performed"`
-ExecutionAvailable bool `json:"execution_available"`
-CatalogRevision int64 `json:"catalog_revision"`
-NormalizedRequest QueryRequest `json:"normalized_request"`
-QueryHash string `json:"query_hash"`
-Dependencies QueryDependencyManifest `json:"dependencies"`
-DependencyHash string `json:"dependency_hash"`
+	Valid              bool                    `json:"valid"`
+	ExecutionPerformed bool                    `json:"execution_performed"`
+	ExecutionAvailable bool                    `json:"execution_available"`
+	CatalogRevision    int64                   `json:"catalog_revision"`
+	NormalizedRequest  QueryRequest            `json:"normalized_request"`
+	QueryHash          string                  `json:"query_hash"`
+	Dependencies       QueryDependencyManifest `json:"dependencies"`
+	DependencyHash     string                  `json:"dependency_hash"`
 }
 
 type Quota struct {
-EventsPerSecond int64 `json:"events_per_second"`
-RequestsPerSecond int64 `json:"requests_per_second"`
-QueryConcurrency int64 `json:"query_concurrency"`
-QueryScanBytes int64 `json:"query_scan_bytes"`
-ExportMaxRows int64 `json:"export_max_rows"`
-ExportMaxBytes int64 `json:"export_max_bytes"`
-Revision int64 `json:"revision"`
-ApplicationState string `json:"application_state"`
+	EventsPerSecond   int64  `json:"events_per_second"`
+	RequestsPerSecond int64  `json:"requests_per_second"`
+	QueryConcurrency  int64  `json:"query_concurrency"`
+	QueryScanBytes    int64  `json:"query_scan_bytes"`
+	ExportMaxRows     int64  `json:"export_max_rows"`
+	ExportMaxBytes    int64  `json:"export_max_bytes"`
+	Revision          int64  `json:"revision"`
+	ApplicationState  string `json:"application_state"`
 }
 
 type QuotaInput struct {
-EventsPerSecond int64 `json:"events_per_second"`
-RequestsPerSecond int64 `json:"requests_per_second"`
-QueryConcurrency int64 `json:"query_concurrency"`
-QueryScanBytes int64 `json:"query_scan_bytes"`
-ExportMaxRows int64 `json:"export_max_rows"`
-ExportMaxBytes int64 `json:"export_max_bytes"`
+	EventsPerSecond   int64 `json:"events_per_second"`
+	RequestsPerSecond int64 `json:"requests_per_second"`
+	QueryConcurrency  int64 `json:"query_concurrency"`
+	QueryScanBytes    int64 `json:"query_scan_bytes"`
+	ExportMaxRows     int64 `json:"export_max_rows"`
+	ExportMaxBytes    int64 `json:"export_max_bytes"`
 }
 
 type Release struct {
-ReleaseID string `json:"release_id"`
-Revision int64 `json:"revision"`
-Environment string `json:"environment"`
-State string `json:"state"`
-IngestionReady bool `json:"ingestion_ready"`
-AccelerationState string `json:"acceleration_state"`
-ManifestHash *string `json:"manifest_hash,omitempty"`
-Error *Problem `json:"error,omitempty"`
+	ReleaseID         string   `json:"release_id"`
+	Revision          int64    `json:"revision"`
+	Environment       string   `json:"environment"`
+	State             string   `json:"state"`
+	IngestionReady    bool     `json:"ingestion_ready"`
+	AccelerationState string   `json:"acceleration_state"`
+	ManifestHash      *string  `json:"manifest_hash,omitempty"`
+	Error             *Problem `json:"error,omitempty"`
 }
 
 type ReleaseInput struct {
-Environment string `json:"environment"`
-ExpectedActiveRevision int64 `json:"expected_active_revision"`
-Events []struct {
-EventKey string `json:"event_key"`
-DraftRevision int64 `json:"draft_revision"`
-} `json:"events"`
+	Environment            string `json:"environment"`
+	ExpectedActiveRevision int64  `json:"expected_active_revision"`
+	Events                 []struct {
+		EventKey      string `json:"event_key"`
+		DraftRevision int64  `json:"draft_revision"`
+	} `json:"events"`
 }
 
 type ReleaseList struct {
-Items []Release `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Release `json:"items"`
+	NextCursor *string   `json:"next_cursor"`
 }
 
 type Report struct {
-ID string `json:"id"`
-Revision int64 `json:"revision"`
-Name string `json:"name"`
-Query QueryRequest `json:"query"`
+	ID       string       `json:"id"`
+	Revision int64        `json:"revision"`
+	Name     string       `json:"name"`
+	Query    QueryRequest `json:"query"`
 }
 
 type ReportInput struct {
-Name string `json:"name"`
-Query QueryRequest `json:"query"`
+	Name  string       `json:"name"`
+	Query QueryRequest `json:"query"`
 }
 
 type ReportList struct {
-Items []Report `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Report `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
 }
 
 type Retention struct {
-HotDays int64 `json:"hot_days"`
-ArchiveDays int64 `json:"archive_days"`
-AggregateDays int64 `json:"aggregate_days"`
-Revision int64 `json:"revision"`
-ApplicationState string `json:"application_state"`
-EffectiveFrom string `json:"effective_from"`
+	HotDays          int64  `json:"hot_days"`
+	ArchiveDays      int64  `json:"archive_days"`
+	AggregateDays    int64  `json:"aggregate_days"`
+	Revision         int64  `json:"revision"`
+	ApplicationState string `json:"application_state"`
+	EffectiveFrom    string `json:"effective_from"`
 }
 
 type RetentionInput struct {
-HotDays int64 `json:"hot_days"`
-ArchiveDays int64 `json:"archive_days"`
-AggregateDays int64 `json:"aggregate_days"`
+	HotDays       int64 `json:"hot_days"`
+	ArchiveDays   int64 `json:"archive_days"`
+	AggregateDays int64 `json:"aggregate_days"`
 }
 
 type SavedAnalysis struct {
-AnalysisID string `json:"analysis_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-Kind string `json:"kind"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
+	AnalysisID       string `json:"analysis_id"`
+	ProjectID        string `json:"project_id"`
+	Environment      string `json:"environment"`
+	Title            string `json:"title"`
+	Kind             string `json:"kind"`
+	DraftRevision    int64  `json:"draft_revision"`
+	PublishedVersion int64  `json:"published_version"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type SavedAnalysisChange struct {
-Category string `json:"category"`
-Path string `json:"path"`
-Before json.RawMessage `json:"before,omitempty"`
-After json.RawMessage `json:"after,omitempty"`
+	Category string          `json:"category"`
+	Path     string          `json:"path"`
+	Before   json.RawMessage `json:"before,omitempty"`
+	After    json.RawMessage `json:"after,omitempty"`
 }
 
 type SavedAnalysisCreate struct {
-Environment string `json:"environment"`
-Definition SavedAnalysisDefinition `json:"definition"`
+	Environment string                       `json:"environment"`
+	Definition  SavedAnalysisDefinitionInput `json:"definition"`
 }
 
 type SavedAnalysisDefinition struct {
-Title string `json:"title"`
-Description *string `json:"description,omitempty"`
-Query *SavedAnalysisTemplate `json:"query,omitempty"`
-MetricRef *MetricReference `json:"metric_ref,omitempty"`
-Visualization SavedAnalysisVisualization `json:"visualization"`
+	Title         string                     `json:"title"`
+	Description   *string                    `json:"description,omitempty"`
+	Query         SavedAnalysisTemplate      `json:"query"`
+	MetricRef     *MetricReference           `json:"metric_ref,omitempty"`
+	Visualization SavedAnalysisVisualization `json:"visualization"`
+}
+
+type SavedAnalysisDefinitionInput struct {
+	Title         string                     `json:"title"`
+	Description   *string                    `json:"description,omitempty"`
+	Query         *SavedAnalysisTemplate     `json:"query,omitempty"`
+	MetricRef     *MetricReference           `json:"metric_ref,omitempty"`
+	Visualization SavedAnalysisVisualization `json:"visualization"`
 }
 
 type SavedAnalysisDraft struct {
-AnalysisID string `json:"analysis_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Title string `json:"title"`
-Kind string `json:"kind"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-CreatedAt string `json:"created_at"`
-UpdatedAt string `json:"updated_at"`
-Definition SavedAnalysisDefinition `json:"definition"`
+	AnalysisID       string                  `json:"analysis_id"`
+	ProjectID        string                  `json:"project_id"`
+	Environment      string                  `json:"environment"`
+	Title            string                  `json:"title"`
+	Kind             string                  `json:"kind"`
+	DraftRevision    int64                   `json:"draft_revision"`
+	PublishedVersion int64                   `json:"published_version"`
+	CreatedAt        string                  `json:"created_at"`
+	UpdatedAt        string                  `json:"updated_at"`
+	Definition       SavedAnalysisDefinition `json:"definition"`
 }
 
 type SavedAnalysisExecute struct {
-TimeRange json.RawMessage `json:"time_range"`
-Timezone json.RawMessage `json:"timezone"`
+	TimeRange json.RawMessage `json:"time_range"`
+	Timezone  json.RawMessage `json:"timezone"`
 }
 
 type SavedAnalysisList struct {
-Items []SavedAnalysis `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []SavedAnalysis `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
 }
 
 type SavedAnalysisPublish struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
-ValidationHash string `json:"validation_hash"`
+	DraftRevision            int64  `json:"draft_revision"`
+	ExpectedPublishedVersion int64  `json:"expected_published_version"`
+	ValidationHash           string `json:"validation_hash"`
 }
 
 type SavedAnalysisTemplate struct {
-Kind string `json:"kind"`
-EventVersions json.RawMessage `json:"event_versions,omitempty"`
-Filter json.RawMessage `json:"filter,omitempty"`
-Subject json.RawMessage `json:"subject,omitempty"`
-GroupBy json.RawMessage `json:"group_by,omitempty"`
-Metrics json.RawMessage `json:"metrics,omitempty"`
-Interval json.RawMessage `json:"interval,omitempty"`
-Funnel json.RawMessage `json:"funnel,omitempty"`
-Limit json.RawMessage `json:"limit,omitempty"`
+	Kind          string          `json:"kind"`
+	EventVersions json.RawMessage `json:"event_versions,omitempty"`
+	Filter        json.RawMessage `json:"filter,omitempty"`
+	Subject       json.RawMessage `json:"subject,omitempty"`
+	GroupBy       json.RawMessage `json:"group_by,omitempty"`
+	Metrics       json.RawMessage `json:"metrics,omitempty"`
+	Interval      json.RawMessage `json:"interval,omitempty"`
+	Funnel        json.RawMessage `json:"funnel,omitempty"`
+	Limit         json.RawMessage `json:"limit,omitempty"`
 }
 
 type SavedAnalysisUpdate struct {
-Definition SavedAnalysisDefinition `json:"definition"`
+	Definition SavedAnalysisDefinitionInput `json:"definition"`
 }
 
 type SavedAnalysisValidate struct {
-DraftRevision int64 `json:"draft_revision"`
-ExpectedPublishedVersion int64 `json:"expected_published_version"`
+	DraftRevision            int64 `json:"draft_revision"`
+	ExpectedPublishedVersion int64 `json:"expected_published_version"`
 }
 
 type SavedAnalysisValidation struct {
-Valid bool `json:"valid"`
-ExecutionPerformed bool `json:"execution_performed"`
-DraftRevision int64 `json:"draft_revision"`
-PublishedVersion int64 `json:"published_version"`
-NormalizedDefinition SavedAnalysisDefinition `json:"normalized_definition"`
-Dependencies QueryDependencyManifest `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-Diff []SavedAnalysisChange `json:"diff"`
-ValidationHash string `json:"validation_hash"`
+	Valid                bool                    `json:"valid"`
+	ExecutionPerformed   bool                    `json:"execution_performed"`
+	DraftRevision        int64                   `json:"draft_revision"`
+	PublishedVersion     int64                   `json:"published_version"`
+	NormalizedDefinition SavedAnalysisDefinition `json:"normalized_definition"`
+	Dependencies         QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash       string                  `json:"definition_hash"`
+	DependencyHash       string                  `json:"dependency_hash"`
+	Diff                 []SavedAnalysisChange   `json:"diff"`
+	ValidationHash       string                  `json:"validation_hash"`
 }
 
 type SavedAnalysisVersion struct {
-AnalysisID string `json:"analysis_id"`
-ProjectID string `json:"project_id"`
-Environment string `json:"environment"`
-Version int64 `json:"version"`
-DraftRevision int64 `json:"draft_revision"`
-Definition SavedAnalysisDefinition `json:"definition"`
-Dependencies QueryDependencyManifest `json:"dependencies"`
-DefinitionHash string `json:"definition_hash"`
-DependencyHash string `json:"dependency_hash"`
-ValidationHash string `json:"validation_hash"`
-CreatedAt string `json:"created_at"`
-CreatedBy string `json:"created_by"`
+	AnalysisID     string                  `json:"analysis_id"`
+	ProjectID      string                  `json:"project_id"`
+	Environment    string                  `json:"environment"`
+	Version        int64                   `json:"version"`
+	DraftRevision  int64                   `json:"draft_revision"`
+	Definition     SavedAnalysisDefinition `json:"definition"`
+	Dependencies   QueryDependencyManifest `json:"dependencies"`
+	DefinitionHash string                  `json:"definition_hash"`
+	DependencyHash string                  `json:"dependency_hash"`
+	ValidationHash string                  `json:"validation_hash"`
+	CreatedAt      string                  `json:"created_at"`
+	CreatedBy      string                  `json:"created_by"`
 }
 
 type SavedAnalysisVersionList struct {
-Items []SavedAnalysisVersion `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []SavedAnalysisVersion `json:"items"`
+	NextCursor *string                `json:"next_cursor"`
 }
 
 type SavedAnalysisVisualization struct {
-Kind string `json:"kind"`
+	Kind string `json:"kind"`
 }
 
 type Session struct {
-UserID string `json:"user_id"`
-DisplayName string `json:"display_name"`
-CSRFToken string `json:"csrf_token"`
+	UserID      string `json:"user_id"`
+	DisplayName string `json:"display_name"`
+	CSRFToken   string `json:"csrf_token"`
 }
 
 type Source struct {
-ID string `json:"id"`
-Name string `json:"name"`
-Environment string `json:"environment"`
-Kind string `json:"kind"`
-WriteKey string `json:"write_key"`
-Status string `json:"status"`
-Revision int64 `json:"revision"`
-ApplicationState string `json:"application_state"`
-AllowedOrigins []string `json:"allowed_origins"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Environment      string   `json:"environment"`
+	Kind             string   `json:"kind"`
+	WriteKey         string   `json:"write_key"`
+	Status           string   `json:"status"`
+	Revision         int64    `json:"revision"`
+	ApplicationState string   `json:"application_state"`
+	AllowedOrigins   []string `json:"allowed_origins"`
 }
 
 type SourceInput struct {
-Name string `json:"name"`
-Environment string `json:"environment"`
-Kind string `json:"kind"`
-AllowedOrigins []string `json:"allowed_origins,omitzero"`
+	Name           string   `json:"name"`
+	Environment    string   `json:"environment"`
+	Kind           string   `json:"kind"`
+	AllowedOrigins []string `json:"allowed_origins,omitzero"`
 }
 
 type SourceIssued struct {
-ID string `json:"id"`
-Name string `json:"name"`
-Environment string `json:"environment"`
-Kind string `json:"kind"`
-WriteKey string `json:"write_key"`
-Status string `json:"status"`
-Revision int64 `json:"revision"`
-ServerSecretOnce *string `json:"server_secret_once,omitempty"`
-ApplicationState string `json:"application_state"`
-AllowedOrigins []string `json:"allowed_origins"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Environment      string   `json:"environment"`
+	Kind             string   `json:"kind"`
+	WriteKey         string   `json:"write_key"`
+	Status           string   `json:"status"`
+	Revision         int64    `json:"revision"`
+	ServerSecretOnce *string  `json:"server_secret_once,omitempty"`
+	ApplicationState string   `json:"application_state"`
+	AllowedOrigins   []string `json:"allowed_origins"`
 }
 
 type SourceList struct {
-Items []Source `json:"items"`
-NextCursor *string `json:"next_cursor"`
+	Items      []Source `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
 }
 
 type SourceUpdate struct {
-Status *string `json:"status,omitempty"`
-AllowedOrigins []string `json:"allowed_origins,omitzero"`
+	Status         *string  `json:"status,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins,omitzero"`
 }
 
 type ValidationInput struct {
-DraftRevision int64 `json:"draft_revision"`
-SampleProperties map[string]any `json:"sample_properties"`
+	DraftRevision    int64          `json:"draft_revision"`
+	SampleProperties map[string]any `json:"sample_properties"`
 }
 
 type ValidationResult struct {
-Valid bool `json:"valid"`
-Issues []struct {
-Code string `json:"code"`
-Path string `json:"path"`
-Message string `json:"message"`
-} `json:"issues"`
-Compatibility string `json:"compatibility"`
+	Valid  bool `json:"valid"`
+	Issues []struct {
+		Code    string `json:"code"`
+		Path    string `json:"path"`
+		Message string `json:"message"`
+	} `json:"issues"`
+	Compatibility string `json:"compatibility"`
 }
-

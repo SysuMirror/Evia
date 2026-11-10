@@ -1646,14 +1646,22 @@ export interface components {
             metric_id: string;
             version: number;
         };
-        /** @description At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. A metric_ref is mutually exclusive with an inline query on input; the server derives the query from the pinned immutable metric version and returns both. Visualization compatibility is validated without executing the query. */
+        /** @description Stored/read model. At most 131072 UTF-8 encoded JSON bytes. A metric-referencing analysis carries both the metric_ref pin and the query derived from the pinned metric; inline analyses carry only the query. Visualization compatibility is validated without executing the query. */
         SavedAnalysisDefinition: {
+            title: string;
+            description?: string;
+            query: components["schemas"]["saved-analysis-template.schema"];
+            metric_ref?: components["schemas"]["MetricReference"];
+            visualization: components["schemas"]["SavedAnalysisVisualization"];
+        } & (unknown & unknown & unknown & unknown & unknown);
+        /** @description Write model for create and update. Exactly one data source is allowed: an inline query or a metric_ref that pins an immutable metric version. A metric reference requires the metric visualization and omits the query; the server derives and returns the query. */
+        SavedAnalysisDefinitionInput: {
             title: string;
             description?: string;
             query?: components["schemas"]["saved-analysis-template.schema"];
             metric_ref?: components["schemas"]["MetricReference"];
             visualization: components["schemas"]["SavedAnalysisVisualization"];
-        } & (unknown & unknown & unknown & unknown & unknown & unknown);
+        } & (unknown & unknown);
         SavedAnalysis: {
             /** Format: uuid */
             analysis_id: string;
@@ -1726,10 +1734,10 @@ export interface components {
         SavedAnalysisCreate: {
             /** @enum {string} */
             environment: "development" | "staging" | "production";
-            definition: components["schemas"]["SavedAnalysisDefinition"];
+            definition: components["schemas"]["SavedAnalysisDefinitionInput"];
         };
         SavedAnalysisUpdate: {
-            definition: components["schemas"]["SavedAnalysisDefinition"];
+            definition: components["schemas"]["SavedAnalysisDefinitionInput"];
         };
         SavedAnalysisValidate: {
             draft_revision: number;

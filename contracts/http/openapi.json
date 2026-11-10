@@ -15298,9 +15298,10 @@
         },
         "required": [
           "title",
+          "query",
           "visualization"
         ],
-        "description": "At most 131072 UTF-8 encoded JSON bytes. Server normalization trims title and defaults description. A metric_ref is mutually exclusive with an inline query on input; the server derives the query from the pinned immutable metric version and returns both. Visualization compatibility is validated without executing the query.",
+        "description": "Stored/read model. At most 131072 UTF-8 encoded JSON bytes. A metric-referencing analysis carries both the metric_ref pin and the query derived from the pinned metric; inline analyses carry only the query. Visualization compatibility is validated without executing the query.",
         "allOf": [
           {
             "if": {
@@ -15321,20 +15322,6 @@
                   ]
                 }
               }
-            }
-          },
-          {
-            "if": {
-              "not": {
-                "required": [
-                  "metric_ref"
-                ]
-              }
-            },
-            "then": {
-              "required": [
-                "query"
-              ]
             }
           },
           {
@@ -15462,6 +15449,78 @@
                   }
                 }
               }
+            }
+          }
+        ]
+      },
+      "SavedAnalysisDefinitionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "query": {
+            "$ref": "#/components/schemas/SavedAnalysisTemplate"
+          },
+          "metric_ref": {
+            "$ref": "#/components/schemas/MetricReference"
+          },
+          "visualization": {
+            "$ref": "#/components/schemas/SavedAnalysisVisualization"
+          }
+        },
+        "required": [
+          "title",
+          "visualization"
+        ],
+        "description": "Write model for create and update. Exactly one data source is allowed: an inline query or a metric_ref that pins an immutable metric version. A metric reference requires the metric visualization and omits the query; the server derives and returns the query.",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "metric_ref"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "query"
+                ]
+              },
+              "properties": {
+                "visualization": {
+                  "properties": {
+                    "kind": {
+                      "const": "metric"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "not": {
+                "required": [
+                  "metric_ref"
+                ]
+              }
+            },
+            "then": {
+              "required": [
+                "query"
+              ]
             }
           }
         ]
@@ -15802,7 +15861,7 @@
             ]
           },
           "definition": {
-            "$ref": "#/components/schemas/SavedAnalysisDefinition"
+            "$ref": "#/components/schemas/SavedAnalysisDefinitionInput"
           }
         },
         "required": [
@@ -15815,7 +15874,7 @@
         "additionalProperties": false,
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/SavedAnalysisDefinition"
+            "$ref": "#/components/schemas/SavedAnalysisDefinitionInput"
           }
         },
         "required": [
