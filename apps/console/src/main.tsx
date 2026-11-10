@@ -71,6 +71,11 @@ const GovernancePage = lazy(() =>
 const MetricsPage = lazy(() =>
   import('./metrics/metrics').then((module) => ({ default: module.MetricsPage })),
 );
+const FormulaMetricsPage = lazy(() =>
+  import('./formula-metrics/formula-metrics').then((module) => ({
+    default: module.FormulaMetricsPage,
+  })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
@@ -212,7 +217,14 @@ function Workspace({ session }: { session: Session }) {
       ? [{ path: 'governance' as const, label: '项目治理', component: GovernancePage }]
       : []),
     ...(project.data?.permissions.includes('metrics.read')
-      ? [{ path: 'metrics' as const, label: '独立指标', component: MetricsPage }]
+      ? [
+          { path: 'metrics' as const, label: '独立指标', component: MetricsPage },
+          {
+            path: 'formula-metrics' as const,
+            label: '复合公式指标',
+            component: FormulaMetricsPage,
+          },
+        ]
       : []),
   ];
   const navigationItems = projectID

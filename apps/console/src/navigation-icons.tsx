@@ -9,9 +9,17 @@ export type WorkspaceSection =
   | 'dashboards'
   | 'machine-access'
   | 'governance'
-  | 'metrics';
+  | 'metrics'
+  | 'formula-metrics';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  'formula-metrics': (
+    <>
+      <path d="M4 7h7M15 7h5M4 17h5M13 17h7" />
+      <circle cx="13" cy="7" r="2.2" />
+      <circle cx="11" cy="17" r="2.2" />
+    </>
+  ),
   governance: (
     <>
       <circle cx="12" cy="8" r="3.2" />
