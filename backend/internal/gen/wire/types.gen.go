@@ -584,6 +584,12 @@ Aggregation json.RawMessage `json:"aggregation"`
 Unit string `json:"unit"`
 }
 
+type MetricDependency struct {
+MetricID string `json:"metric_id"`
+Version int64 `json:"version"`
+DefinitionHash string `json:"definition_hash"`
+}
+
 type MetricDraft struct {
 MetricID string `json:"metric_id"`
 ProjectID string `json:"project_id"`
@@ -788,6 +794,7 @@ Environment string `json:"environment"`
 SelectionMode string `json:"selection_mode"`
 UnfixedEventKeys []string `json:"unfixed_event_keys"`
 EventVersions []QueryDependency `json:"event_versions"`
+Metric *MetricDependency `json:"metric,omitempty"`
 }
 
 type QueryJob struct {

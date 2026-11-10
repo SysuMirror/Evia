@@ -15115,6 +15115,31 @@
           }
         }
       },
+      "MetricDependency": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric_id",
+          "version",
+          "definition_hash"
+        ],
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "definition_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "description": "Immutable pin to the metric version backing a metric-referencing saved analysis."
+      },
       "QueryDependencyManifest": {
         "type": "object",
         "additionalProperties": false,
@@ -15152,6 +15177,9 @@
             "items": {
               "$ref": "#/components/schemas/QueryDependency"
             }
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricDependency"
           }
         }
       },

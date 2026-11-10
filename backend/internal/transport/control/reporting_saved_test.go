@@ -375,3 +375,68 @@ func TestSavedAnalysisHTTPListDefaultsBoundsAndResponseContract(t *testing.T) {
 		t.Fatal("invalid resource leaked through response boundary")
 	}
 }
+
+const metricRefID = "11111111-1111-4111-8111-111111111111"
+
+func TestSavedAnalysisHTTPMetricReferenceBoundary(t *testing.T) {
+	metricOnly := `{"environment":"development","definition":{"title":"Metric card","metric_ref":{"metric_id":"` + metricRefID + `","version":1},"visualization":{"kind":"metric"}}}`
+	lineViz := `{"environment":"development","definition":{"title":"Metric card","metric_ref":{"metric_id":"` + metricRefID + `","version":1},"visualization":{"kind":"line"}}}`
+	noSource := `{"environment":"development","definition":{"title":"No source","visualization":{"kind":"metric"}}}`
+
+	// A metric-only reference is accepted and decoded into the domain model.
+	f := &savedHTTPService{}
+	h, _ := savedHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	before := f.calls
+	catalogStatus(t, catalogRequest(h, "POST", savedBase, metricOnly, map[string]string{"Idempotency-Key": "metric-create"}), 201)
+	if f.calls != before+1 {
+		t.Fatal("valid metric reference did not reach the service")
+	}
+
+	// Structural misuse is rejected at the boundary before the service runs.
+	for _, body := range []string{lineViz, noSource} {
+		reject := &savedHTTPService{}
+		handler, _ := savedHTTP(t, reject, &catalogAccess{fakeAccess: &fakeAccess{}})
+		catalogStatus(t, catalogRequest(handler, "POST", savedBase, body, map[string]string{"Idempotency-Key": "bad"}), 400)
+		if reject.calls != 0 {
+			t.Fatal("invalid metric reference reached the service")
+		}
+	}
+
+	// A stored metric analysis carries both the pin and its derived query, and
+	// that resolved representation must satisfy the response contract.
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	metricVersion := reporting.SavedAnalysisVersion{
+		AnalysisID: savedID, ProjectID: projectID, Environment: "development", Version: 1, DraftRevision: 1,
+		Definition: reporting.SavedAnalysisDefinition{
+			Title:         "Metric card",
+			Query:         analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count", Accuracy: "exact"}}, Limit: 200},
+			MetricRef:     &reporting.MetricReference{MetricID: metricRefID, Version: 1},
+			Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"},
+		},
+		Dependencies: reporting.DependencyManifest{
+			ProjectID: projectID, Environment: "development", SelectionMode: "event_versions", UnfixedEventKeys: []string{},
+			EventVersions: []reporting.Dependency{{EventKey: "page_opened", SchemaVersion: 1, DefinitionHash: strings.Repeat("a", 64)}},
+			Metric:        &reporting.MetricDependency{MetricID: metricRefID, Version: 1, DefinitionHash: strings.Repeat("a", 64)},
+		},
+		DefinitionHash: strings.Repeat("b", 64), DependencyHash: strings.Repeat("c", 64), ValidationHash: strings.Repeat("d", 64),
+		CreatedAt: savedResource().CreatedAt, CreatedBy: userID,
+	}
+	encoded, e := validator.Encode("SavedAnalysisVersion", metricVersion)
+	if e != nil {
+		t.Fatal("resolved metric analysis failed response contract", e)
+	}
+	if !strings.Contains(string(encoded), `"metric_ref":{"metric_id":"`+metricRefID+`","version":1}`) {
+		t.Fatalf("response lost the metric pin: %s", encoded)
+	}
+	// Inline analyses remain valid and never serialize a metric reference.
+	inline, e := validator.Encode("SavedAnalysisVersion", savedVersionFixture(1))
+	if e != nil {
+		t.Fatal("inline analysis response regressed", e)
+	}
+	if strings.Contains(string(inline), "metric_ref") {
+		t.Fatalf("inline response must not contain metric_ref: %s", inline)
+	}
+}

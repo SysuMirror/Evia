@@ -1606,6 +1606,13 @@ export interface components {
             schema_version: number;
             definition_hash: string;
         };
+        /** @description Immutable pin to the metric version backing a metric-referencing saved analysis. */
+        MetricDependency: {
+            /** Format: uuid */
+            metric_id: string;
+            version: number;
+            definition_hash: string;
+        };
         QueryDependencyManifest: {
             project_id: string;
             environment: string;
@@ -1613,6 +1620,7 @@ export interface components {
             selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events";
             unfixed_event_keys: string[];
             event_versions: components["schemas"]["QueryDependency"][];
+            metric?: components["schemas"]["MetricDependency"];
         };
         /** @description Read-only dry validation; no query job, scan or result is created. execution_available reports runtime configuration, not proven capacity or execution success. Unfixed event_keys/all_events remain unfixed; only manifest event_versions are immutable dependencies. Execution reauthorizes and revalidates. */
         QueryValidation: {
