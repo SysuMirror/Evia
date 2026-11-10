@@ -78,6 +78,21 @@ export type ProjectMemberResult = components['schemas']['ProjectMemberResult'];
 export type ProjectMemberList = components['schemas']['ProjectMemberList'];
 export type ProjectAuditEntry = components['schemas']['ProjectAuditEntry'];
 export type ProjectAuditList = components['schemas']['ProjectAuditList'];
+export type MetricDefinition = components['schemas']['MetricDefinition'];
+export type MetricDraft = components['schemas']['MetricDraft'];
+export type MetricVersion = components['schemas']['MetricVersion'];
+export type MetricValidation = components['schemas']['MetricValidation'];
+export type MetricChange = components['schemas']['MetricChange'];
+export type MetricRecord = components['schemas']['MetricRecord'];
+export type MetricList = components['schemas']['MetricList'];
+export type MetricVersionList = components['schemas']['MetricVersionList'];
+export type MetricCreate = components['schemas']['MetricCreate'];
+export type MetricUpdate = components['schemas']['MetricUpdate'];
+export type MetricValidate = components['schemas']['MetricValidate'];
+export type MetricPublish = components['schemas']['MetricPublish'];
+export type MetricExecute = components['schemas']['MetricExecute'];
+export type MetricPage = { environment: Environment; cursor?: string; limit?: number };
+export type MetricVersionPage = { cursor?: string; limit?: number };
 export type ProjectMemberPage = { cursor?: string; limit?: number };
 export type ProjectAuditPage = {
   from: string;
@@ -202,6 +217,8 @@ const savedAnalysisPath = (projectID: string, analysisID: string) =>
   `${projectPath(projectID)}/saved-analyses/${encodeURIComponent(analysisID)}`;
 const machinePrincipalPath = (projectID: string, principalID: string) =>
   `${projectPath(projectID)}/machine-principals/${encodeURIComponent(principalID)}`;
+const metricPath = (projectID: string, metricID: string) =>
+  `${projectPath(projectID)}/metrics/${encodeURIComponent(metricID)}`;
 function catalogQuery(page: CatalogPage): string {
   const query = new URLSearchParams();
   if (page.environment !== undefined) query.set('environment', page.environment);
@@ -364,6 +381,106 @@ export const api = {
     request<ProjectAuditList>(`${projectPath(projectID)}/audit-logs${auditQuery(page)}`, {
       signal,
     }),
+  listMetrics: (projectID: string, page: MetricPage, signal?: AbortSignal) =>
+    request<MetricList>(`${projectPath(projectID)}/metrics${catalogQuery(page)}`, { signal }),
+  createMetric: (
+    projectID: string,
+    body: MetricCreate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MetricDraft>(`${projectPath(projectID)}/metrics`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getMetric: (projectID: string, metricID: string, signal?: AbortSignal) =>
+    request<MetricDraft>(metricPath(projectID, metricID), { signal }),
+  getMetricDraft: (projectID: string, metricID: string, signal?: AbortSignal) =>
+    request<MetricDraft>(`${metricPath(projectID, metricID)}/draft`, { signal }),
+  updateMetricDraft: (
+    projectID: string,
+    metricID: string,
+    revision: number,
+    body: MetricUpdate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MetricDraft>(`${metricPath(projectID, metricID)}/draft`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': `"${revision}"` },
+    }),
+  validateMetric: (
+    projectID: string,
+    metricID: string,
+    body: MetricValidate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MetricValidation>(`${metricPath(projectID, metricID)}/validations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  listMetricVersions: (
+    projectID: string,
+    metricID: string,
+    page: MetricVersionPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<MetricVersionList>(
+      `${metricPath(projectID, metricID)}/versions${catalogQuery({
+        cursor: page.cursor,
+        limit: page.limit,
+      })}`,
+      { signal },
+    ),
+  getMetricVersion: (projectID: string, metricID: string, version: number, signal?: AbortSignal) =>
+    request<MetricVersion>(
+      `${metricPath(projectID, metricID)}/versions/${encodeURIComponent(String(version))}`,
+      { signal },
+    ),
+  publishMetric: (
+    projectID: string,
+    metricID: string,
+    body: MetricPublish,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<MetricVersion>(`${metricPath(projectID, metricID)}/versions`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  executeMetricVersion: (
+    projectID: string,
+    metricID: string,
+    version: number,
+    body: MetricExecute,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<QueryJob>(
+      `${metricPath(projectID, metricID)}/versions/${encodeURIComponent(String(version))}/queries`,
+      {
+        method: 'POST',
+        body,
+        csrf,
+        signal,
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
   getActivation: (projectID: string, environment: Environment, signal?: AbortSignal) =>
     request<Activation>(
       `${projectPath(projectID)}/release-activations${catalogQuery({ environment })}`,

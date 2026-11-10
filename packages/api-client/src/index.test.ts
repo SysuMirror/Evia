@@ -7,6 +7,7 @@ import {
   subscribeProjectAccessDenied,
   type MachineIssued,
   type MachinePrincipalInput,
+  type MetricDefinition,
 } from './index.js';
 
 afterEach(() => mock.restoreAll());
@@ -740,4 +741,89 @@ test('governance writes pin revisions and idempotency while member removal sends
     }
     assert.equal(init.signal?.aborted, true);
   });
+});
+
+test('metric reads encode environment scope and write calls pin revisions and idempotency', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const definition: MetricDefinition = {
+    title: '页面登录访客',
+    event_versions: [{ event_key: 'page_opened', schema_version: 1 }],
+    subject: 'uid',
+    aggregation: { op: 'unique', accuracy: 'exact' },
+    unit: 'raw_uid',
+  };
+  await api.listMetrics(
+    'p/q',
+    { environment: 'staging', cursor: 'c', limit: 5 },
+    controller.signal,
+  );
+  await api.getMetric('p/q', 'm/1', controller.signal);
+  await api.getMetricDraft('p/q', 'm/1', controller.signal);
+  await api.listMetricVersions('p/q', 'm/1', { limit: 2 }, controller.signal);
+  await api.createMetric(
+    'p/q',
+    { environment: 'development', definition },
+    'create-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.updateMetricDraft('p/q', 'm/1', 3, { definition }, 'csrf', controller.signal);
+  await api.validateMetric(
+    'p/q',
+    'm/1',
+    { draft_revision: 3, expected_published_version: 1 },
+    'csrf',
+    controller.signal,
+  );
+  await api.publishMetric(
+    'p/q',
+    'm/1',
+    { draft_revision: 3, expected_published_version: 1, validation_hash: 'a'.repeat(64) },
+    'publish-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.executeMetricVersion(
+    'p/q',
+    'm/1',
+    2,
+    {
+      time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' },
+      timezone: 'UTC',
+    },
+    'run-key',
+    'csrf',
+    controller.signal,
+  );
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/metrics?environment=staging&cursor=c&limit=5',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/draft',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/versions?limit=2',
+      '/api/v1/projects/p%2Fq/metrics',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/draft',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/validations',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/versions',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/versions/2/queries',
+    ],
+  );
+  const draft = fetch.mock.calls[5]!.arguments[1] as RequestInit;
+  assert.equal(draft.method, 'PATCH');
+  assert.equal((draft.headers as Headers).get('If-Match'), '"3"');
+  assert.equal((draft.headers as Headers).get('Idempotency-Key'), null);
+  for (const [index, key] of [
+    [4, 'create-key'],
+    [7, 'publish-key'],
+    [8, 'run-key'],
+  ] as const) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal((init.headers as Headers).get('Idempotency-Key'), key);
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  }
+  controller.abort();
+  for (const call of fetch.mock.calls)
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
