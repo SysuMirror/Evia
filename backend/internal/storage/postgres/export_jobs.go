@@ -108,10 +108,8 @@ func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (export
 	if e = s.exportAuthority(ctx, tx, in.ActorID, in.ProjectID, in.Environment); e != nil {
 		return exporting.Job{}, false, e
 	}
-	var existing exporting.Job
-	e = tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs
- WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3`, in.ProjectID, in.ActorID, in.IdempotencyKey).
-		Scan(scanArgsExport(&existing)...)
+	existing, e := scanExportJob(tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs
+ WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3`, in.ProjectID, in.ActorID, in.IdempotencyKey))
 	if e == nil {
 		if existing.RequestHash != in.RequestHash {
 			return exporting.Job{}, false, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于其他请求")
@@ -142,17 +140,6 @@ func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (export
 	return job, true, tx.Commit(ctx)
 }
 
-func scanArgsExport(j *exporting.Job) []any {
-	var rawRequest []byte
-	if j.Request.Kind != "" {
-		rawRequest, _ = json.Marshal(j.Request)
-	}
-	return []any{&j.JobID, &j.ProjectID, &j.Environment, &j.ActorID, &j.Name, &j.Format, &rawRequest,
-		&j.State, &j.IdempotencyKey, &j.RequestHash, &j.ErrorCode, &j.Attempts, &j.LeaseGeneration,
-		&j.LeaseOwner, &j.LeaseUntil, &j.ArtifactPath, &j.ArtifactSHA256, &j.ArtifactBytes,
-		&j.ResultRows, &j.ExpiresAt, &j.CreatedAt, &j.UpdatedAt, &j.FinishedAt}
-}
-
 func (s *Store) GetExportJob(ctx context.Context, actor, project, jobID string) (exporting.Job, error) {
 	if !exportUUIDPattern.MatchString(jobID) {
 		return exporting.Job{}, fault.New(fault.Invalid, "INVALID_EXPORT_JOB", "导出作业标识格式不正确")
@@ -162,9 +149,7 @@ func (s *Store) GetExportJob(ctx context.Context, actor, project, jobID string) 
 		return exporting.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
-	var j exporting.Job
-	e = tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2`, jobID, project).
-		Scan(scanArgsExport(&j)...)
+	j, e := scanExportJob(tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2`, jobID, project))
 	if errors.Is(e, pgx.ErrNoRows) {
 		return exporting.Job{}, fault.New(fault.NotFound, "EXPORT_JOB_NOT_FOUND", "导出作业不存在或不可见")
 	}
@@ -181,9 +166,7 @@ func (s *Store) GetSystemExportJob(ctx context.Context, project, jobID string) (
 	if !exportUUIDPattern.MatchString(jobID) {
 		return exporting.Job{}, fault.New(fault.Invalid, "INVALID_EXPORT_JOB", "导出作业标识格式不正确")
 	}
-	var j exporting.Job
-	e := s.Pool.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2`, jobID, project).
-		Scan(scanArgsExport(&j)...)
+	j, e := scanExportJob(s.Pool.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2`, jobID, project))
 	if errors.Is(e, pgx.ErrNoRows) {
 		return exporting.Job{}, fault.New(fault.NotFound, "EXPORT_JOB_NOT_FOUND", "导出作业不存在")
 	}
@@ -253,9 +236,7 @@ func (s *Store) CancelExportJob(ctx context.Context, actor, project, jobID strin
 		return exporting.Job{}, e
 	}
 	defer tx.Rollback(context.Background())
-	var j exporting.Job
-	e = tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2 FOR UPDATE`, jobID, project).
-		Scan(scanArgsExport(&j)...)
+	j, e := scanExportJob(tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs WHERE id=$1 AND project_id=$2 FOR UPDATE`, jobID, project))
 	if errors.Is(e, pgx.ErrNoRows) {
 		return exporting.Job{}, fault.New(fault.NotFound, "EXPORT_JOB_NOT_FOUND", "导出作业不存在或不可见")
 	}
@@ -268,8 +249,8 @@ func (s *Store) CancelExportJob(ctx context.Context, actor, project, jobID strin
 	if j.State != exporting.StateQueued {
 		return exporting.Job{}, fault.New(fault.Conflict, "EXPORT_NOT_CANCELLABLE", "只有排队中的导出作业可以取消")
 	}
-	e = tx.QueryRow(ctx, `UPDATE export_jobs SET state='cancelled',finished_at=clock_timestamp(),updated_at=clock_timestamp()
- WHERE id=$1 RETURNING `+exportJobColumns, jobID).Scan(scanArgsExport(&j)...)
+	j, e = scanExportJob(tx.QueryRow(ctx, `UPDATE export_jobs SET state='cancelled',finished_at=clock_timestamp(),updated_at=clock_timestamp()
+ WHERE id=$1 RETURNING `+exportJobColumns, jobID))
 	if e != nil {
 		return exporting.Job{}, e
 	}
@@ -301,12 +282,11 @@ func (s *Store) ClaimExportJob(ctx context.Context, worker string, lease time.Du
  AND lease_until<=clock_timestamp() AND attempts<$1 LIMIT 100 FOR UPDATE SKIP LOCKED)`, exporting.MaxAttempts); e != nil {
 		return nil, e
 	}
-	var job exporting.Job
-	e = tx.QueryRow(ctx, `UPDATE export_jobs SET state='running',lease_owner=$1,
+	job, e := scanExportJob(tx.QueryRow(ctx, `UPDATE export_jobs SET state='running',lease_owner=$1,
  lease_until=clock_timestamp()+$2::double precision*interval '1 second',
  lease_generation=lease_generation+1,attempts=attempts+1,updated_at=clock_timestamp()
  WHERE id=(SELECT id FROM export_jobs WHERE state='queued' ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED)
- RETURNING `+exportJobColumns, worker, lease.Seconds()).Scan(scanArgsExport(&job)...)
+ RETURNING `+exportJobColumns, worker, lease.Seconds()))
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, tx.Commit(ctx)
 	}
