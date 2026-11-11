@@ -21,11 +21,19 @@ type FactDeleter interface {
 // completed lifecycle. A step error parks the job as failed; a lost lease is
 // left to the claim expiry machinery rather than overwritten by this worker.
 type Worker struct {
-	Store   Store
-	Deleter FactDeleter
-	ID      string
-	Lease   time.Duration
-	Logger  *slog.Logger
+	Store    Store
+	Deleter  FactDeleter
+	Observer ErasureObserver
+	ID       string
+	Lease    time.Duration
+	Logger   *slog.Logger
+}
+
+func (w *Worker) observer() ErasureObserver {
+	if w.Observer == nil {
+		return NoopErasureObserver{}
+	}
+	return w.Observer
 }
 
 const defaultPollInterval = 250 * time.Millisecond
@@ -57,13 +65,22 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if w.Deleter == nil {
 		return false, fault.New(fault.Unavailable, "ERASURE_STORAGE_UNAVAILABLE", "删除执行器尚未配置")
 	}
+	observer := w.observer()
 	claim, e := w.Store.ClaimJob(ctx, w.ID, w.Lease)
-	if e != nil || claim == nil {
+	if e != nil {
+		observer.ClaimPollCompleted(ClaimOutcomeError)
 		return false, e
 	}
+	if claim == nil {
+		observer.ClaimPollCompleted(ClaimOutcomeEmpty)
+		return false, nil
+	}
+	observer.ClaimPollCompleted(ClaimOutcomeClaimed)
+	started := time.Now()
 	if e = w.process(ctx, claim); e != nil {
 		if isLeaseLost(e) {
 			w.warn("erasure job lease lost; leaving job to expiry handling", claim, e)
+			observer.JobProcessed(JobOutcomeLeaseLost, "", time.Since(started))
 			return true, nil
 		}
 		code := "ERASURE_STEP_FAILED"
@@ -73,10 +90,14 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		}
 		if failErr := w.Store.Fail(ctx, *claim, code); failErr != nil {
 			w.warn("erasure job failure could not be recorded", claim, failErr)
+			observer.JobProcessed(JobOutcomeFailureRecordFail, code, time.Since(started))
 			return true, failErr
 		}
 		w.warn("erasure job failed", claim, e)
+		observer.JobProcessed(JobOutcomeFailed, code, time.Since(started))
+		return true, nil
 	}
+	observer.JobProcessed(JobOutcomeCompleted, "", time.Since(started))
 	return true, nil
 }
 

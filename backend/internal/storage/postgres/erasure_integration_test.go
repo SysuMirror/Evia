@@ -257,12 +257,14 @@ func TestErasureWorkerDrivesJobToCompletionOnPostgres(t *testing.T) {
 		t.Fatal(e, created)
 	}
 	deleter := &stubFactDeleter{}
+	observer := &integrationErasureObserver{}
 	worker := &erasure.Worker{
-		Store:   f.s,
-		Deleter: deleter,
-		ID:      "erasure-worker-it",
-		Lease:   time.Minute,
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Store:    f.s,
+		Deleter:  deleter,
+		Observer: observer,
+		ID:       "erasure-worker-it",
+		Lease:    time.Minute,
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	worked, e := worker.RunOnce(ctx)
 	if e != nil || !worked {
@@ -288,4 +290,31 @@ func TestErasureWorkerDrivesJobToCompletionOnPostgres(t *testing.T) {
 	if e != nil || worked {
 		t.Fatal("drained queue should report no work", worked, e)
 	}
+
+	// Telemetry must reflect one claimed/completed job followed by an empty poll.
+	wantClaims := []string{erasure.ClaimOutcomeClaimed, erasure.ClaimOutcomeEmpty}
+	if len(observer.claims) != 2 || observer.claims[0] != wantClaims[0] || observer.claims[1] != wantClaims[1] {
+		t.Fatalf("claim telemetry wrong: %+v", observer.claims)
+	}
+	if len(observer.jobs) != 1 || observer.jobs[0].outcome != erasure.JobOutcomeCompleted {
+		t.Fatalf("job telemetry wrong: %+v", observer.jobs)
+	}
+}
+
+type integrationErasureJobEvent struct {
+	outcome string
+	code    string
+}
+
+type integrationErasureObserver struct {
+	claims []string
+	jobs   []integrationErasureJobEvent
+}
+
+func (o *integrationErasureObserver) ClaimPollCompleted(outcome string) {
+	o.claims = append(o.claims, outcome)
+}
+
+func (o *integrationErasureObserver) JobProcessed(outcome, code string, _ time.Duration) {
+	o.jobs = append(o.jobs, integrationErasureJobEvent{outcome: outcome, code: code})
 }
