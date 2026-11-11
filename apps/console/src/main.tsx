@@ -71,6 +71,9 @@ const GovernancePage = lazy(() =>
 const ErasurePage = lazy(() =>
   import('./erasure/erasure').then((module) => ({ default: module.ErasurePage })),
 );
+const RetentionPage = lazy(() =>
+  import('./retention/retention').then((module) => ({ default: module.RetentionPage })),
+);
 const MetricsPage = lazy(() =>
   import('./metrics/metrics').then((module) => ({ default: module.MetricsPage })),
 );
@@ -221,6 +224,9 @@ function Workspace({ session }: { session: Session }) {
       : []),
     ...(project.data?.permissions.includes('data.erasure')
       ? [{ path: 'erasure' as const, label: '数据删除', component: ErasurePage }]
+      : []),
+    ...(project.data?.permissions.includes('settings.write')
+      ? [{ path: 'retention' as const, label: '数据保留', component: RetentionPage }]
       : []),
     ...(project.data?.permissions.includes('metrics.read')
       ? [

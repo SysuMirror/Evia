@@ -10,10 +10,17 @@ export type WorkspaceSection =
   | 'machine-access'
   | 'governance'
   | 'erasure'
+  | 'retention'
   | 'metrics'
   | 'formula-metrics';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  retention: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
   erasure: (
     <>
       <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 1.8h6a2 2 0 0 0 2-1.8L18 7M10 11v6M14 11v6" />
