@@ -237,7 +237,7 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 				permissions := out["permissions"].([]any)
 				expected := 4
 				if tc.role == "owner" {
-					expected = 12
+					expected = 13
 				} else if tc.role == "editor" {
 					expected = 7
 				}
