@@ -48,7 +48,10 @@ verification; reverse proxies must preserve the intended request origin and must
 not expose the local development listeners publicly.
 
 Process health is `/healthz`; database reachability is `/readyz`. Neither endpoint
-proves event-pipeline readiness or disaster recovery. Operational metrics are
+proves event-pipeline readiness or disaster recovery. The `export-worker` command
+runs bounded data exports: it requires `EVIA_EXPORT_DIR` (an absolute, operator-owned
+writable directory; `serve` reads the same optional variable to register the
+one-time capability download route) and only loads PostgreSQL plus ClickHouse. Operational metrics are
 served unauthenticated at `/metrics` in Prometheus text format; `serve` exposes
 them on `EVIA_LISTEN`, while each worker opens a dedicated administrative
 listener only when `EVIA_METRICS_LISTEN=host:port` is configured (also serving

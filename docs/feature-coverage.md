@@ -38,7 +38,7 @@
 
 基线 `0da560b` 的 [OpenAPI](../contracts/http/openapi.json)包含一些未接入运行时的规划操作。实际已注册接口以 [control.Handler](../backend/internal/transport/control/access.go)、各 `Register`/注册函数及[运行时装配](../backend/cmd/evia/runtime.go)为准，持久化则核对 [PostgreSQL 迁移](../backend/internal/storage/postgres/migrations)和 [ClickHouse 迁移](../deploy/clickhouse)。条件开启的模块还必须具备对应配置、依赖与工作进程。
 
-下表保留这些未实现操作的需求去向。令 `P = /api/v1/projects/{project_id}`；每个列出的 HTTP 方法均代表一项操作，原先共 30 项。设置、成员和审计对应的 6 项早期操作现已由正式接口交付或替代，删除任务的 3 项操作也已由 `erasure-jobs` 正式接口交付，保留策略的读取与写入（`GET`/`PUT P/retention-policy`，以 PUT 替代早期 PATCH）2 项已由正式接口交付，下表保留其余 19 项。这些未实现规划操作已从当前 OpenAPI 移除，使可调用接口声明与实际运行时一致；本表继续保留全部原始需求。未来交付时，应依据真实领域、权限和版本规则重新设计契约，不保证沿用这些早期路径和请求模型。
+下表保留这些未实现操作的需求去向。令 `P = /api/v1/projects/{project_id}`；每个列出的 HTTP 方法均代表一项操作，原先共 30 项。设置、成员和审计对应的 6 项早期操作现已由正式接口交付或替代，删除任务的 3 项操作也已由 `erasure-jobs` 正式接口交付，保留策略的读取与写入（`GET`/`PUT P/retention-policy`，以 PUT 替代早期 PATCH）2 项已由正式接口交付，下表保留其余 14 项。这些未实现规划操作已从当前 OpenAPI 移除，使可调用接口声明与实际运行时一致；本表继续保留全部原始需求。未来交付时，应依据真实领域、权限和版本规则重新设计契约，不保证沿用这些早期路径和请求模型。
 
 | 尚无运行时的 HTTP 方法与路径                                                                           | 必须保留的交付范围                                                                        |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
@@ -46,13 +46,12 @@
 | `GET P/diagnostics`                                                                                    | 接收拒绝、配置和管道问题的受权诊断                                                        |
 | `GET`、`POST P/reports`；`GET`、`PATCH`、`DELETE P/reports/{resource_id}`                              | 可管理的报告资源；需与已交付 saved-analyses、独立指标及看板的职责统一，不能发布重名空接口 |
 | `GET`、`PATCH P/quotas`                                                                                | 可管理配额与运行时策略一致性                                                              |
-| `GET`、`POST P/exports`；`GET`、`DELETE P/exports/{job_id}`；`POST P/exports/{job_id}/download-grants` | 导出任务、取消、授权下载与审计                                                            |
 | `GET`、`POST P/backfills`；`GET`、`DELETE P/backfills/{job_id}`                                        | 可控回补、状态、取消和去重/删除边界                                                       |
 | `GET P/archive-manifests`                                                                              | 归档清单、完整性和恢复关联                                                                |
 
 看板单独处理：旧 `GET`/`PATCH`/`DELETE P/dashboards/{resource_id}` 已移除，实际新资源读取使用 `{dashboard_id}`。新的草稿、校验、版本发布和运行接口已装配；未实现的通用 PATCH/DELETE 没有保留为可调用操作。
 
-当前手写 API 客户端没有上述 19 项的调用方法，运行时也没有对应处理器；生成文件中的类型不能作为实现证据。客户端仍通用导出 `components`/`paths`，修改契约时必须同步生成的 Go 类型/离线 schema 与 TypeScript 类型。看板已使用新的领域模型，移除占位路径没有删除新看板依赖或其他接口共用的 schema。
+当前手写 API 客户端没有上述 14 项的调用方法，运行时也没有对应处理器；生成文件中的类型不能作为实现证据。客户端仍通用导出 `components`/`paths`，修改契约时必须同步生成的 Go 类型/离线 schema 与 TypeScript 类型。看板已使用新的领域模型，移除占位路径没有删除新看板依赖或其他接口共用的 schema。
 
 后续功能继续按以下规则更新本表：先核对契约、领域、存储、真实路由和迁移，再增加真实依赖/公开 HTTP 证据，最后记录控制台与实际接入结果。新建文件、生成类型、单元测试通过或设计文档中的接口列表都不能单独将状态改为“已实现”。
 

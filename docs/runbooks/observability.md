@@ -155,7 +155,7 @@ tuning policy and verification commands are documented in the
 
 ## Scope and follow-up work
 
-All five process roles now expose the same process and Go runtime metrics, and
+All six process roles (serve, ingest, query, erasure, retention, export) now expose the same process and Go runtime metrics, and
 `serve` additionally reports HTTP traffic instruments. Every worker reports
 domain instruments through an observer port defined in its own domain package,
 keeping all domain packages free of the metrics implementation:
