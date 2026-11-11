@@ -36,14 +36,14 @@ func TestErasureJobLifecycleAuthorityAndIdempotency(t *testing.T) {
 	in := erasureInput(f, "erase-1", erasure.SubjectUID, "user-to-erase")
 
 	// Non-owners are rejected before any job row exists.
-	_, e := f.s.CreateJob(ctx, func() erasure.Input {
+	_, _, e := f.s.CreateJob(ctx, func() erasure.Input {
 		blocked := in
 		blocked.ActorID = f.viewer
 		blocked.IdempotencyKey = "viewer-denied"
 		return blocked
 	}())
 	faultCodeErasure(t, e, "ERASURE_FORBIDDEN")
-	_, e = f.s.CreateJob(ctx, func() erasure.Input {
+	_, _, e = f.s.CreateJob(ctx, func() erasure.Input {
 		blocked := in
 		blocked.ActorID = f.outsider
 		blocked.IdempotencyKey = "outsider-denied"
@@ -51,24 +51,24 @@ func TestErasureJobLifecycleAuthorityAndIdempotency(t *testing.T) {
 	}())
 	faultCodeErasure(t, e, "PROJECT_NOT_FOUND")
 
-	job, e := f.s.CreateJob(ctx, in)
-	if e != nil || job.State != erasure.StateQueued || job.JobID == "" || job.Attempts != 0 {
-		t.Fatal(job, e)
+	job, created, e := f.s.CreateJob(ctx, in)
+	if e != nil || job.State != erasure.StateQueued || job.JobID == "" || job.Attempts != 0 || !created {
+		t.Fatal(job, e, created)
 	}
 	// Identical replay returns the same accepted snapshot.
-	replay, e := f.s.CreateJob(ctx, in)
-	if e != nil || replay.JobID != job.JobID {
-		t.Fatal("idempotent replay changed", replay, e)
+	replay, replayed, e := f.s.CreateJob(ctx, in)
+	if e != nil || replay.JobID != job.JobID || replayed {
+		t.Fatal("idempotent replay changed", replay, e, replayed)
 	}
 	// Same key, different request body must conflict.
 	diverged := in
 	diverged.RequestHash = strings.Repeat("b", 64)
-	_, e = f.s.CreateJob(ctx, diverged)
+	_, _, e = f.s.CreateJob(ctx, diverged)
 	faultCodeErasure(t, e, "IDEMPOTENCY_CONFLICT")
 	// A second in-flight job for the same target identity is rejected.
 	second := in
 	second.IdempotencyKey = "erase-2"
-	_, e = f.s.CreateJob(ctx, second)
+	_, _, e = f.s.CreateJob(ctx, second)
 	faultCodeErasure(t, e, "ERASURE_JOB_ACTIVE")
 
 	// Read paths enforce the same owner-only authority.
@@ -90,9 +90,9 @@ func TestErasureClaimTombstoneBarrierAndStateMachine(t *testing.T) {
 	ctx := context.Background()
 	anonymous := ids.New()
 	in := erasureInput(f, "erase-anon", erasure.SubjectAnonymousID, anonymous)
-	job, e := f.s.CreateJob(ctx, in)
-	if e != nil {
-		t.Fatal(e)
+	job, created, e := f.s.CreateJob(ctx, in)
+	if e != nil || !created {
+		t.Fatal(e, created)
 	}
 	claim, e := f.s.ClaimJob(ctx, "erasure-worker-1", time.Minute)
 	if e != nil || claim == nil || claim.JobID != job.JobID || claim.State != erasure.StateHiding || claim.Attempts != 1 {
@@ -135,9 +135,9 @@ func TestErasureClaimTombstoneBarrierAndStateMachine(t *testing.T) {
 	retry := in
 	retry.IdempotencyKey = "erase-anon-retry"
 	retry.RequestHash = strings.Repeat("c", 64)
-	retryJob, e := f.s.CreateJob(ctx, retry)
-	if e != nil {
-		t.Fatal(e)
+	retryJob, retryCreated, e := f.s.CreateJob(ctx, retry)
+	if e != nil || !retryCreated {
+		t.Fatal(e, retryCreated)
 	}
 	retryClaim, e := f.s.ClaimJob(ctx, "erasure-worker-1", time.Minute)
 	if e != nil || retryClaim.JobID != retryJob.JobID {
@@ -158,9 +158,9 @@ func TestErasureLeaseExpiryRequeueAndAttemptCap(t *testing.T) {
 	f := catalogDB(t)
 	ctx := context.Background()
 	in := erasureInput(f, "erase-lease", erasure.SubjectUID, "lease-user")
-	job, e := f.s.CreateJob(ctx, in)
-	if e != nil {
-		t.Fatal(e)
+	job, created, e := f.s.CreateJob(ctx, in)
+	if e != nil || !created {
+		t.Fatal(e, created)
 	}
 	claim, e := f.s.ClaimJob(ctx, "erasure-worker-2", time.Minute)
 	if e != nil || claim.JobID != job.JobID {
@@ -198,9 +198,9 @@ func TestErasureFailKeepsTombstoneAndBarrierSetEmptyInput(t *testing.T) {
 		t.Fatal(set, e)
 	}
 	in := erasureInput(f, "erase-fail", erasure.SubjectUID, "fail-user")
-	job, e := f.s.CreateJob(ctx, in)
-	if e != nil {
-		t.Fatal(e)
+	job, created, e := f.s.CreateJob(ctx, in)
+	if e != nil || !created {
+		t.Fatal(e, created)
 	}
 	claim, e := f.s.ClaimJob(ctx, "erasure-worker-4", time.Minute)
 	if e != nil {

@@ -103,17 +103,17 @@ func isErasureActiveConflict(e error) bool {
 	return errors.As(e, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "erasure_jobs_active_target"
 }
 
-func (s *Store) CreateJob(ctx context.Context, in erasure.Input) (erasure.Job, error) {
+func (s *Store) CreateJob(ctx context.Context, in erasure.Input) (erasure.Job, bool, error) {
 	if e := validateErasureInput(in); e != nil {
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
 	tx, e := s.Pool.Begin(ctx)
 	if e != nil {
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
 	defer tx.Rollback(context.Background())
 	if e = s.erasureAuthority(ctx, tx, in.ActorID, in.ProjectID, in.Environment); e != nil {
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
 	// Idempotent replay returns the originally accepted snapshot when the
 	// request hash matches; a reused key with a different body conflicts.
@@ -123,12 +123,12 @@ func (s *Store) CreateJob(ctx context.Context, in erasure.Input) (erasure.Job, e
 		Scan(scanArgs(&existing)...)
 	if e == nil {
 		if existing.RequestHash != in.RequestHash {
-			return erasure.Job{}, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于其他请求")
+			return erasure.Job{}, false, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于其他请求")
 		}
-		return existing, tx.Commit(ctx)
+		return existing, false, tx.Commit(ctx)
 	}
 	if !errors.Is(e, pgx.ErrNoRows) {
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
 	jobID := ids.New()
 	var backup any
@@ -143,15 +143,15 @@ func (s *Store) CreateJob(ctx context.Context, in erasure.Input) (erasure.Job, e
 	job, e := scanErasureJob(row)
 	if e != nil {
 		if isErasureActiveConflict(e) {
-			return erasure.Job{}, fault.New(fault.Conflict, "ERASURE_JOB_ACTIVE", "该身份已有进行中的删除作业")
+			return erasure.Job{}, false, fault.New(fault.Conflict, "ERASURE_JOB_ACTIVE", "该身份已有进行中的删除作业")
 		}
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key)
  VALUES($1,$2,'data.erasure_requested',$3)`, in.ProjectID, in.ActorID, jobID); e != nil {
-		return erasure.Job{}, e
+		return erasure.Job{}, false, e
 	}
-	return job, tx.Commit(ctx)
+	return job, true, tx.Commit(ctx)
 }
 
 // scanArgs adapts the fixed column list to the pgx Scan signature.

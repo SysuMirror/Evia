@@ -105,8 +105,8 @@ func (s ErasedSet) Contains(kind, value string) bool {
 type Store interface {
 	// CreateJob records a queued job or replays the accepted snapshot for the
 	// same actor + idempotency key. A second in-flight job for the same target
-	// identity conflicts.
-	CreateJob(ctx context.Context, in Input) (Job, error)
+	// identity conflicts. The boolean reports whether a new row was inserted.
+	CreateJob(ctx context.Context, in Input) (Job, bool, error)
 	GetJob(ctx context.Context, actor, project, jobID string) (Job, error)
 	ListJobs(ctx context.Context, actor, project string, filter ListFilter) (Page, error)
 	// ClaimJob leases the oldest queued job using SKIP LOCKED semantics.

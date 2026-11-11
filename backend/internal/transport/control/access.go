@@ -41,6 +41,7 @@ type API struct {
 	FormulaMetrics reporting.FormulaMetricService
 	Dashboards     reporting.DashboardService
 	Delivery       DeliveryService
+	Erasure        ErasureService
 	Cursor         *cursor.Codec
 	Origin         string
 	SecureCookies  bool
@@ -71,6 +72,7 @@ func (a *API) Handler() http.Handler {
 	(&MetricsAPI{API: a, Service: a.Metrics}).Register(mux)
 	(&FormulaMetricsAPI{API: a, Service: a.FormulaMetrics}).Register(mux)
 	(&DashboardsAPI{API: a, Service: a.Dashboards}).Register(mux)
+	(&ErasureAPI{API: a, Service: a.Erasure}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.
