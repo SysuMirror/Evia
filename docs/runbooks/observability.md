@@ -56,6 +56,16 @@ enum development/staging/production; `mode` is `dry-run` or `enforce`;
 | `evia_retention_sweep_candidates_total` | counter | `environment`, `mode` | Expired rows counted (dry-run) or deleted (enforcement); zero-candidate scopes emit no series. |
 | `evia_retention_sweep_duration_seconds` | histogram | `environment`, `result` | Per-scope sweep duration. |
 
+Erasure worker domain instruments, emitted by `erasure-worker` from job
+lifecycle events. The `outcome` and claim `outcome` labels are fixed enums and
+`code` is the durable fault vocabulary, so cardinality stays bounded:
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `evia_erasure_claim_polls_total` | counter | `outcome` | Claim attempts: `claimed`, `empty` (no queued job) or `error`. |
+| `evia_erasure_jobs_total` | counter | `outcome`, `code` | Terminal job handling: `completed`, `failed` (with failure code), `lease-lost` or `failure-record-error`. |
+| `evia_erasure_job_duration_seconds` | histogram | `outcome` | Wall-clock duration from claim to terminal handling. |
+
 Process and Go runtime samples are emitted by every process and computed at
 each scrape:
 
@@ -102,13 +112,14 @@ curl -fsS http://127.0.0.1:18091/metrics | grep evia_process_info
 
 All five process roles now expose the same process and Go runtime metrics, and
 `serve` additionally reports HTTP traffic instruments. The `retention-worker`
-also reports the sweep domain instruments listed above through a
-`SweepObserver` domain port, keeping the retention package free of the metrics
-implementation. Domain instruments for the other workers — Kafka consumer lag
-and batch outcomes for `ingest-worker`, query job lease and execution counts
-for `query-worker`, and erasure state transitions for `erasure-worker` — are
-not yet recorded; they must follow the same observer-port pattern and reuse the
-`observe` package so exposition stays consistent. No alerting rules,
+reports sweep instruments through the `SweepObserver` domain port and the
+`erasure-worker` reports claim/job lifecycle instruments through the
+`ErasureObserver` port, keeping both domain packages free of the metrics
+implementation. Domain instruments for the remaining workers — Kafka consumer
+lag and batch outcomes for `ingest-worker`, and query job lease and execution
+counts for `query-worker` — are not yet recorded; they must follow the same
+observer-port pattern and reuse the `observe` package so exposition stays
+consistent. No alerting rules,
 dashboards, SLO definitions or backup/restore drill automation ship in this
 repository yet. The endpoints report process health and traffic shape; they do
 not prove event-pipeline readiness, ClickHouse capacity or disaster recovery,
