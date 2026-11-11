@@ -39,13 +39,17 @@ func (s *Service) Result(ctx context.Context, actor, project, id string) (Result
 }
 
 type Worker struct {
-	store  JobStore
-	engine Engine
-	id     string
+	store    JobStore
+	engine   Engine
+	observer QueryObserver
+	id       string
 }
 
-func NewWorker(store JobStore, engine Engine, workerID string) *Worker {
-	return &Worker{store: store, engine: engine, id: workerID}
+func NewWorker(store JobStore, engine Engine, workerID string, observer QueryObserver) *Worker {
+	if observer == nil {
+		observer = NoopQueryObserver{}
+	}
+	return &Worker{store: store, engine: engine, observer: observer, id: workerID}
 }
 func (w *Worker) Run(ctx context.Context) error {
 	for {
@@ -75,9 +79,16 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return false, fault.New(fault.Unavailable, "QUERY_STORAGE_UNAVAILABLE", "分析存储尚未配置")
 	}
 	claim, e := w.store.ClaimQuery(ctx, w.id, 45*time.Second)
-	if e != nil || claim == nil {
+	if e != nil {
+		w.observer.ClaimPollCompleted(ClaimOutcomeError)
 		return false, e
 	}
+	if claim == nil {
+		w.observer.ClaimPollCompleted(ClaimOutcomeEmpty)
+		return false, nil
+	}
+	w.observer.ClaimPollCompleted(ClaimOutcomeClaimed)
+	started := time.Now()
 	execution, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	monitorDone := make(chan struct{})
@@ -131,5 +142,10 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer finishCancel()
-	return true, w.store.CompleteQuery(finishCtx, *claim, outcome)
+	if e := w.store.CompleteQuery(finishCtx, *claim, outcome); e != nil {
+		return true, e
+	}
+	w.observer.QueryProcessed(queryResultCode(outcome),
+		outcome.Error != nil && outcome.Error.Retryable, time.Since(started))
+	return true, nil
 }

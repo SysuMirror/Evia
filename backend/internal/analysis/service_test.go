@@ -10,13 +10,14 @@ import (
 
 type workerStore struct {
 	claim       *Claim
+	claimErr    error
 	valid       bool
 	outcome     *Outcome
 	completions int
 }
 
 func (s *workerStore) ClaimQuery(context.Context, string, time.Duration) (*Claim, error) {
-	return s.claim, nil
+	return s.claim, s.claimErr
 }
 func (s *workerStore) QueryLeaseValid(context.Context, Claim) (bool, error) { return s.valid, nil }
 func (s *workerStore) CompleteQuery(_ context.Context, _ Claim, outcome Outcome) error {
@@ -40,7 +41,7 @@ func TestWorkerPersistsBoundedResultsAndLeaseCancellation(t *testing.T) {
 		}
 		return Result{Rows: []map[string]any{{"value": 0, "enabled": false}}}, nil
 	})
-	if worked, e := NewWorker(store, engine, "worker").RunOnce(context.Background()); e != nil || !worked || store.outcome == nil || store.outcome.Result.QueryID != "query" {
+	if worked, e := NewWorker(store, engine, "worker", NoopQueryObserver{}).RunOnce(context.Background()); e != nil || !worked || store.outcome == nil || store.outcome.Result.QueryID != "query" {
 		t.Fatal(worked, e, store.outcome)
 	}
 	store = &workerStore{claim: claim, valid: false}
@@ -50,14 +51,14 @@ func TestWorkerPersistsBoundedResultsAndLeaseCancellation(t *testing.T) {
 		stopped = true
 		return Result{}, ctx.Err()
 	})
-	if _, e := NewWorker(store, engine, "worker").RunOnce(context.Background()); e != nil || !stopped || store.outcome.Error == nil {
+	if _, e := NewWorker(store, engine, "worker", NoopQueryObserver{}).RunOnce(context.Background()); e != nil || !stopped || store.outcome.Error == nil {
 		t.Fatal("revoked lease failed to interrupt engine", e)
 	}
 	store = &workerStore{claim: claim, valid: true}
 	engine = engineFunc(func(context.Context, Scope, Request) (Result, error) {
 		return Result{Rows: []map[string]any{{"large": strings.Repeat("a", 2*1024*1024)}}}, nil
 	})
-	if _, e := NewWorker(store, engine, "worker").RunOnce(context.Background()); e != nil || store.outcome.Error == nil || store.outcome.Error.Code != "QUERY_RESULT_LIMIT_EXCEEDED" {
+	if _, e := NewWorker(store, engine, "worker", NoopQueryObserver{}).RunOnce(context.Background()); e != nil || store.outcome.Error == nil || store.outcome.Error.Code != "QUERY_RESULT_LIMIT_EXCEEDED" {
 		t.Fatal("oversized result left running", store.outcome, e)
 	}
 }
@@ -65,7 +66,7 @@ func TestWorkerShutdownDoesNotPublishCanceledResult(t *testing.T) {
 	store := &workerStore{claim: &Claim{Request: Request{}}, valid: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	engine := engineFunc(func(context.Context, Scope, Request) (Result, error) { cancel(); return Result{}, context.Canceled })
-	if _, e := NewWorker(store, engine, "worker").RunOnce(ctx); !errors.Is(e, context.Canceled) || store.completions != 0 {
+	if _, e := NewWorker(store, engine, "worker", NoopQueryObserver{}).RunOnce(ctx); !errors.Is(e, context.Canceled) || store.completions != 0 {
 		t.Fatal("shutdown published a terminal result instead of leaving a recoverable lease", e, store.completions)
 	}
 }
