@@ -101,6 +101,22 @@ test('owner configures per-environment retention policy with optimistic revision
   const missing = await page.request.get(`/api/v1/projects/${projectID}/retention-policy`);
   expect(missing.status()).toBe(400);
 
+  // The sweep history read path returns a bounded list for the owner.
+  const sweeps = await page.request.get(
+    `/api/v1/projects/${projectID}/retention-sweeps?environment=development&limit=20`,
+  );
+  expect(sweeps.status()).toBe(200);
+  const sweepBody = await sweeps.json();
+  expect(Array.isArray(sweepBody.items)).toBe(true);
+  // Invalid limit is rejected at the transport boundary.
+  const badLimit = await page.request.get(
+    `/api/v1/projects/${projectID}/retention-sweeps?limit=101`,
+  );
+  expect(badLimit.status()).toBe(400);
+
+  // The workspace renders the cleanup history surface for the selected scope.
+  await expect(page.locator('section[aria-label="清理历史"]')).toBeVisible();
+
   if (testInfo.errors.length === 0) {
     await page.screenshot({
       path: testInfo.outputPath('retention-policy-desktop.png'),

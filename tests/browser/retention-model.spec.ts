@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { ApiError, type RetentionPolicy } from '../../packages/api-client/src/index';
+import {
+  ApiError,
+  type RetentionPolicy,
+  type RetentionSweep,
+} from '../../packages/api-client/src/index';
 import {
   buildRetentionInput,
   defaultRetentionForm,
@@ -7,11 +11,15 @@ import {
   environmentOptions,
   formFromPolicy,
   formatPolicyInstant,
+  formatSweepInstant,
   isRevisionConflict,
   isUncertainWrite,
   retentionSummary,
   RETENTION_MAX_DAYS,
   RETENTION_MIN_DAYS,
+  sweepModeLabel,
+  sweepStatusLabel,
+  sweepStatusTone,
   validateRetentionForm,
   type RetentionFormState,
 } from '../../apps/console/src/retention/model';
@@ -78,4 +86,38 @@ test('timestamps and summaries never fabricate configuration', () => {
   expect(formatPolicyInstant('2026-12-01T00:00:00Z')).toContain('2026-12-01');
   expect(retentionSummary(null)).toContain('未配置');
   expect(retentionSummary(90)).toContain('90');
+});
+
+function sweep(overrides: Partial<RetentionSweep> = {}): RetentionSweep {
+  return {
+    sweep_id: '33333333-3333-4333-8333-333333333333',
+    project_id: 'p',
+    environment: 'production',
+    retention_days: 90,
+    cutoff_at: '2026-08-13T10:00:00Z',
+    dry_run: true,
+    rows_candidates: 7,
+    status: 'succeeded',
+    detail: '',
+    created_at: '2026-11-11T10:00:00Z',
+    completed_at: '2026-11-11T10:00:00Z',
+    ...overrides,
+  };
+}
+
+test('sweep status maps to deterministic labels and badge tones', () => {
+  expect(sweepStatusLabel('succeeded')).toBe('成功');
+  expect(sweepStatusTone('succeeded')).toBe('success');
+  expect(sweepStatusLabel('failed')).toBe('失败');
+  expect(sweepStatusTone('failed')).toBe('error');
+  expect(sweepStatusLabel('planned')).toBe('已计划');
+  expect(sweepStatusTone('planned')).toBe('neutral');
+});
+
+test('sweep mode distinguishes dry-run from enforcement and formats instants', () => {
+  expect(sweepModeLabel(sweep().dry_run)).toContain('演练');
+  expect(sweepModeLabel(sweep({ dry_run: false }).dry_run)).toContain('强制');
+  expect(formatSweepInstant(sweep().created_at)).toContain('2026-11-11');
+  expect(formatSweepInstant(sweep({ completed_at: null }).completed_at)).toBe('—');
+  expect(formatSweepInstant(undefined)).toBe('—');
 });

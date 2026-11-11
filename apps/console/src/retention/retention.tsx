@@ -6,17 +6,22 @@ import {
   type Environment,
   type Project,
   type RetentionPolicy,
+  type RetentionSweep,
   type Session,
 } from '@evia/api-client';
 import {
   Alert,
+  Badge,
   Button,
   DataSurface,
+  DataTable,
+  EmptyPanel,
   Field,
   Input,
   PageHeading,
   Select,
   useToast,
+  type DataTableColumn,
 } from '@evia/design-system';
 import {
   buildRetentionInput,
@@ -24,11 +29,15 @@ import {
   environmentOptions,
   formFromPolicy,
   formatPolicyInstant,
+  formatSweepInstant,
   isRevisionConflict,
   isUncertainWrite,
   retentionSummary,
   RETENTION_MAX_DAYS,
   RETENTION_MIN_DAYS,
+  sweepModeLabel,
+  sweepStatusLabel,
+  sweepStatusTone,
   type RetentionEnvironment,
   type RetentionFormState,
 } from './model';
@@ -69,6 +78,13 @@ export function RetentionPage({ project, session, environment }: PageProps) {
   const policy = useQuery({
     queryKey,
     queryFn: ({ signal }) => api.getRetentionPolicy(project.id, selectedEnv, signal),
+    enabled: allowed,
+  });
+
+  const sweeps = useQuery({
+    queryKey: ['retention-sweeps', project.id, selectedEnv],
+    queryFn: ({ signal }) =>
+      api.listRetentionSweeps(project.id, { environment: selectedEnv, limit: 20 }, signal),
     enabled: allowed,
   });
 
@@ -181,6 +197,41 @@ export function RetentionPage({ project, session, environment }: PageProps) {
     persist(intent);
   };
 
+  const sweepColumns: DataTableColumn<RetentionSweep>[] = [
+    {
+      key: 'created_at',
+      header: '执行时间',
+      render: (row) => formatSweepInstant(row.created_at),
+    },
+    {
+      key: 'mode',
+      header: '模式',
+      render: (row) => sweepModeLabel(row.dry_run),
+    },
+    {
+      key: 'status',
+      header: '状态',
+      render: (row) => (
+        <Badge tone={sweepStatusTone(row.status)}>{sweepStatusLabel(row.status)}</Badge>
+      ),
+    },
+    {
+      key: 'cutoff_at',
+      header: '清理截止点',
+      render: (row) => formatSweepInstant(row.cutoff_at),
+    },
+    {
+      key: 'rows_candidates',
+      header: '涉及行数',
+      render: (row) => String(row.rows_candidates),
+    },
+    {
+      key: 'detail',
+      header: '说明',
+      render: (row) => row.detail || '—',
+    },
+  ];
+
   return (
     <>
       <PageHeading title="数据保留" />
@@ -279,6 +330,30 @@ export function RetentionPage({ project, session, environment }: PageProps) {
               </span>
             </div>
           </form>
+        )}
+      </DataSurface>
+
+      <DataSurface label="清理历史">
+        {sweeps.isError ? (
+          <Alert
+            tone="error"
+            title="无法读取清理历史"
+            action={<Button onClick={() => void sweeps.refetch()}>重试</Button>}
+          >
+            {sweeps.error instanceof ApiError ? sweeps.error.message : '请稍后再试。'}
+          </Alert>
+        ) : (
+          <DataTable
+            caption="数据保留清理执行历史"
+            columns={sweepColumns}
+            rows={sweeps.data?.items ?? []}
+            rowKey={(row) => row.sweep_id}
+            minWidth={640}
+            loading={sweeps.isFetching}
+            empty={
+              <EmptyPanel description="还没有清理记录；retention-worker 运行后会在此显示演练或强制执行结果。" />
+            }
+          />
         )}
       </DataSurface>
     </>

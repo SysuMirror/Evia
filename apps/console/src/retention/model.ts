@@ -1,4 +1,9 @@
-import { ApiError, type Environment, type RetentionPolicy } from '@evia/api-client';
+import {
+  ApiError,
+  type Environment,
+  type RetentionPolicy,
+  type RetentionSweep,
+} from '@evia/api-client';
 
 export const RETENTION_MIN_DAYS = 30;
 export const RETENTION_MAX_DAYS = 3650;
@@ -91,4 +96,40 @@ export function formatPolicyInstant(value: string | null | undefined): string {
 export function retentionSummary(days: number | null | undefined): string {
   if (days == null) return '当前未配置自动清理，事实将长期保留。';
   return `保留最近 ${days} 天的事实数据；超出窗口的历史数据由后续清理执行器按策略回收。`;
+}
+
+export type SweepStatusTone = 'neutral' | 'success' | 'error';
+
+const sweepStatusLabels: Record<RetentionSweep['status'], string> = {
+  planned: '已计划',
+  succeeded: '成功',
+  failed: '失败',
+};
+
+const sweepStatusTones: Record<RetentionSweep['status'], SweepStatusTone> = {
+  planned: 'neutral',
+  succeeded: 'success',
+  failed: 'error',
+};
+
+export function sweepStatusLabel(status: RetentionSweep['status']): string {
+  return sweepStatusLabels[status] ?? status;
+}
+
+export function sweepStatusTone(status: RetentionSweep['status']): SweepStatusTone {
+  return sweepStatusTones[status] ?? 'neutral';
+}
+
+export function sweepModeLabel(dryRun: boolean): string {
+  return dryRun ? '演练（不删除）' : '强制执行';
+}
+
+export function formatSweepInstant(value: string | null | undefined): string {
+  if (!value) return '—';
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return value;
+  return instant
+    .toISOString()
+    .replace('T', ' ')
+    .replace(/\.\d+Z$/, ' UTC');
 }
