@@ -200,7 +200,9 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Settings = access.NewSettings(store)
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Erasure = store
-	api.Retention = retention.NewService(store)
+	retentionService := retention.NewServiceWithSweepReader(store, store)
+	api.Retention = retentionService
+	api.RetentionSweeps = retentionService
 	mux := http.NewServeMux()
 	probes := []func(context.Context) error{store.Pool.Ping}
 	client := httpClient()

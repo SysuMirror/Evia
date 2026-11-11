@@ -18,6 +18,11 @@ type RetentionService interface {
 	Put(ctx context.Context, in retention.Input, expectedRevision int64) (retention.Policy, error)
 }
 
+// RetentionSweepService is the read-only port for sweep audit history.
+type RetentionSweepService interface {
+	ListSweeps(ctx context.Context, actor, project string, filter retention.SweepFilter, limit int) ([]retention.SweepView, error)
+}
+
 // RetentionAPI shares management authentication. Retention is owner-only human
 // governance: the service and its PostgreSQL transaction reject machines and
 // non-owners, so routes use the session project authorizer rather than a
@@ -25,6 +30,7 @@ type RetentionService interface {
 type RetentionAPI struct {
 	API     *API
 	Service RetentionService
+	Sweeps  RetentionSweepService
 }
 
 var retentionETag = regexp.MustCompile(`^"[0-9]{1,16}"$`)
@@ -50,6 +56,9 @@ func (a *RetentionAPI) Register(mux *http.ServeMux) {
 	const base = "/api/v1/projects/{project_id}/retention-policy"
 	mux.HandleFunc("GET "+base, a.API.projectAuth(false, a.get))
 	mux.HandleFunc("PUT "+base, a.API.projectAuth(true, a.put))
+	if a.Sweeps != nil {
+		mux.HandleFunc("GET /api/v1/projects/{project_id}/retention-sweeps", a.API.projectAuth(false, a.listSweeps))
+	}
 }
 
 func retentionWire(p retention.Policy, configured bool, project, environment string) wire.RetentionPolicy {
