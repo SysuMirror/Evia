@@ -87,10 +87,74 @@ groups:
             rules.write_text(broken, encoding="utf-8")
             with mock.patch.object(gate, "RULES_FILE", rules), mock.patch.object(
                 gate, "RULE_TEST_FILE", Path(tmp) / "missing.test.yaml"
-            ), mock.patch.object(gate, "DASHBOARD_FILE", Path(tmp) / "missing.json"):
+            ), mock.patch.object(gate, "DASHBOARD_FILE", Path(tmp) / "missing.json"), mock.patch.object(
+                gate, "ALERTMANAGER_FILE", Path(tmp) / "missing-am.yml"
+            ):
                 with self.assertRaises(SystemExit) as caught:
                     gate.main()
         self.assertEqual(caught.exception.code, 1)
+
+
+class AlertmanagerGateTest(unittest.TestCase):
+    def base_config(self):
+        return {
+            "route": {
+                "receiver": "evia-warning-chat",
+                "group_by": ["alertname", "job"],
+                "routes": [
+                    {"receiver": "evia-critical-pager", "matchers": ['severity="critical"']},
+                    {"receiver": "evia-warning-chat", "matchers": ['severity="warning"']},
+                ],
+            },
+            "inhibit_rules": [
+                {"source_matchers": ['alertname="EviaScrapeTargetDown"'],
+                 "target_matchers": ['severity="critical"'], "equal": ["job"]}
+            ],
+            "receivers": [
+                {"name": "evia-critical-pager", "webhook_configs": [{"url": "http://pager.internal:5001/x"}]},
+                {"name": "evia-warning-chat", "webhook_configs": [{"url": "http://chat.internal:5002/x"}]},
+            ],
+            "templates": ["templates/evia-notifications.tmpl"],
+        }
+
+    def write_config(self, tmp, document):
+        target = Path(tmp) / "alertmanager.yml"
+        target.write_text(yaml.safe_dump(document), encoding="utf-8")
+        template_dir = Path(tmp) / "templates"
+        template_dir.mkdir()
+        (template_dir / "evia-notifications.tmpl").write_text('{{ define "x" }}{{ end }}', encoding="utf-8")
+        return target
+
+    def test_shipped_config_passes(self):
+        self.assertEqual(gate._check_alertmanager({"EviaScrapeTargetDown", "EviaErasureJobFailed"}), [])
+
+    def test_unknown_receiver_and_unreachable_receiver(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            document = self.base_config()
+            document["route"]["routes"][0]["receiver"] = "ghost"
+            with mock.patch.object(gate, "ALERTMANAGER_FILE", self.write_config(tmp, document)):
+                failures = gate._check_alertmanager({"EviaScrapeTargetDown"})
+        self.assertTrue(any("unknown receiver" in item and "ghost" in item for item in failures))
+
+    def test_inhibit_unknown_alert_and_bad_severity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            document = self.base_config()
+            document["inhibit_rules"][0]["source_matchers"] = ['alertname="EviaDoesNotExist"']
+            document["route"]["routes"][1]["matchers"] = ['severity="page"']
+            with mock.patch.object(gate, "ALERTMANAGER_FILE", self.write_config(tmp, document)):
+                failures = gate._check_alertmanager({"EviaScrapeTargetDown"})
+        self.assertTrue(any("alert not defined" in item for item in failures))
+        self.assertTrue(any("severity" in item for item in failures))
+
+    def test_missing_template_and_embedded_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            document = self.base_config()
+            document["templates"] = ["templates/missing.tmpl"]
+            document["receivers"][0]["webhook_configs"][0]["url"] = "http://user:secret@pager.internal:5001/x"
+            with mock.patch.object(gate, "ALERTMANAGER_FILE", self.write_config(tmp, document)):
+                failures = gate._check_alertmanager({"EviaScrapeTargetDown"})
+        self.assertTrue(any("template" in item and "missing" in item for item in failures))
+        self.assertTrue(any("embeds credentials" in item for item in failures))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import re
 import sys
+import urllib.parse
 
 import yaml
 
@@ -17,6 +18,10 @@ MONITORING_DIR = ROOT / "deploy" / "monitoring"
 RULES_FILE = MONITORING_DIR / "prometheus-rules.yaml"
 RULE_TEST_FILE = MONITORING_DIR / "prometheus-rules.test.yaml"
 DASHBOARD_FILE = MONITORING_DIR / "grafana-dashboard.json"
+ALERTMANAGER_FILE = MONITORING_DIR / "alertmanager" / "alertmanager.yml"
+MATCHER_RE = re.compile(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(=~|!~|=|!=)\s*"([^"]*)"\s*$')
+AM_SEVERITIES = {"critical", "warning"}
+AM_EQUAL_LABELS = {"job", "alertname", "severity"}
 
 INSTRUMENT_RE = re.compile(r"\.(?:Counter|Gauge|Histogram)\(\s*\"([a-zA-Z_:][a-zA-Z0-9_:]*)\"")
 HISTOGRAM_RE = re.compile(r"\.Histogram\(\s*\"([a-zA-Z_:][a-zA-Z0-9_:]*)\"")
@@ -168,6 +173,8 @@ def main():
         failures += _check_rule_test(alert_names, allowlist)
     if DASHBOARD_FILE.exists():
         failures += _check_dashboard(allowlist, rule_names)
+    if ALERTMANAGER_FILE.exists():
+        failures += _check_alertmanager(alert_names)
 
     _finish(failures)
 
@@ -221,6 +228,76 @@ def _check_dashboard(allowlist, rule_names):
     for expr in _walk_exprs(dashboard):
         for metric in sorted(referenced_metrics(expr) - allowlist - rule_names):
             failures.append(f"dashboard expression references metric {metric!r} that no Evia process emits")
+    return failures
+
+
+def _iter_routes(route):
+    """Yield every node of an Alertmanager route tree depth-first."""
+    if not isinstance(route, dict):
+        return
+    yield route
+    for child in route.get("routes") or []:
+        yield from _iter_routes(child)
+
+
+def _check_matchers(matchers, context, alert_names, failures):
+    for raw in matchers or []:
+        match = MATCHER_RE.match(raw)
+        if not match:
+            failures.append(f"{context}: unparseable alertmanager matcher {raw!r}")
+            continue
+        label, operator, value = match.groups()
+        if label == "severity" and operator in ("=", "=~") and value not in AM_SEVERITIES:
+            failures.append(f"{context}: matcher {raw!r} uses severity outside {sorted(AM_SEVERITIES)}")
+        if label == "alertname" and operator in ("=", "=~"):
+            if operator == "=":
+                matched = value in alert_names
+            else:
+                matched = any(re.fullmatch(value, name) for name in alert_names)
+            if not matched:
+                failures.append(f"{context}: matcher {raw!r} references an alert not defined in the Prometheus rules")
+
+
+def _check_alertmanager(alert_names):
+    failures = []
+    document = yaml.safe_load(ALERTMANAGER_FILE.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or not isinstance(document.get("route"), dict):
+        return ["alertmanager config needs a top-level route tree"]
+    receivers = {entry["name"] for entry in document.get("receivers", []) if entry.get("name")}
+    if not receivers:
+        failures.append("alertmanager config defines no receivers")
+
+    referenced = set()
+    for route in _iter_routes(document["route"]):
+        name = route.get("receiver")
+        if not name:
+            failures.append("an alertmanager route is missing a receiver")
+        elif name not in receivers:
+            failures.append(f"alertmanager route references unknown receiver {name!r}")
+        referenced.add(name)
+        _check_matchers(route.get("matchers"), f"route receiver={name!r}", alert_names, failures)
+    for unused in sorted(receivers - referenced):
+        failures.append(f"alertmanager receiver {unused!r} is not reachable from the route tree")
+
+    for template in document.get("templates", []):
+        if not list(ALERTMANAGER_FILE.parent.glob(template)):
+            failures.append(f"alertmanager template {template!r} does not exist on disk")
+
+    for index, rule in enumerate(document.get("inhibit_rules", [])):
+        context = f"inhibit rule {index}"
+        _check_matchers(rule.get("source_matchers"), context + " source", alert_names, failures)
+        _check_matchers(rule.get("target_matchers"), context + " target", alert_names, failures)
+        for label in rule.get("equal", []):
+            if label not in AM_EQUAL_LABELS:
+                failures.append(f"{context}: equal label {label!r} is outside {sorted(AM_EQUAL_LABELS)}")
+
+    for entry in document.get("receivers", []):
+        for webhook in entry.get("webhook_configs") or []:
+            parsed = urllib.parse.urlparse(webhook.get("url", ""))
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                failures.append(f"receiver {entry.get('name')!r} has an invalid webhook url")
+            if parsed.username or parsed.password:
+                failures.append(f"receiver {entry.get('name')!r} embeds credentials in its webhook url")
     return failures
 
 
