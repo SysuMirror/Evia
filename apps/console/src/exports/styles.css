@@ -1,0 +1,20 @@
+.export-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.export-fields > :last-child {
+  grid-column: 1 / -1;
+}
+
+.export-submit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.export-polling {
+  margin: 0 0 8px;
+}
