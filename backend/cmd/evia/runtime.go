@@ -358,11 +358,13 @@ func cleanup(ctx context.Context, store *postgres.Store) error {
 // worker process when EVIA_METRICS_LISTEN is configured, and nil otherwise.
 // Workers have no business HTTP listener, so this is their only liveness and
 // observability endpoint; the role label distinguishes processes in scrapes.
-func metricsTasks(c config.Config, role string) []task {
+// The same registry is shared with domain workers so their instruments appear
+// on the worker's own scrape endpoint.
+func metricsTasks(c config.Config, role string, registry *observe.Registry) []task {
 	if c.MetricsListen == "" {
 		return nil
 	}
-	server := observe.NewServer(c.MetricsListen, observe.NewRegistry(role))
+	server := observe.NewServer(c.MetricsListen, registry)
 	return []task{{name: role + " metrics listener", run: func(ctx context.Context) error {
 		return observe.RunServer(ctx, server)
 	}}}
@@ -427,7 +429,7 @@ func ingestWorker(ctx context.Context, c config.Config, store *postgres.Store, l
 	worker := &pipeline.Worker{Reader: reader, Sink: guardedSink, Quarantine: producer, BatchSize: 128, BatchTimeout: 30 * time.Second, Logger: logger}
 	logger.Info("ingestion worker starting", "delivery_enabled", c.DeliveryEnabled)
 	tasks = append(tasks, task{"fact ingestion worker", worker.Run})
-	return supervise(ctx, append(metricsTasks(c, "ingest-worker"), tasks...), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "ingest-worker", observe.NewRegistry("ingest-worker")), tasks...), 15*time.Second)
 }
 
 func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
@@ -453,7 +455,7 @@ func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, l
 		tasks = append(tasks, task{name: fmt.Sprintf("query worker %d", i), run: worker.Run})
 	}
 	logger.Info("query workers starting", "count", c.QueryWorkers)
-	return supervise(ctx, append(metricsTasks(c, "query-worker"), tasks...), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "query-worker", observe.NewRegistry("query-worker")), tasks...), 15*time.Second)
 }
 
 func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
@@ -477,7 +479,7 @@ func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.
 		Logger:  logger,
 	}
 	logger.Info("erasure worker starting")
-	return supervise(ctx, append(metricsTasks(c, "erasure-worker"), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "erasure-worker", observe.NewRegistry("erasure-worker")), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
 }
 
 func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
@@ -497,7 +499,8 @@ func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgre
 	if c.RetentionEnforcement {
 		mode = "enforcement"
 	}
-	worker := retention.NewSweepWorker(store, executor, c.RetentionEnforcement, c.RetentionSweepInterval, logger)
+	registry := observe.NewRegistry("retention-worker")
+	worker := retention.NewSweepWorker(store, executor, c.RetentionEnforcement, c.RetentionSweepInterval, logger, newRetentionSweepObserver(registry))
 	logger.Info("retention worker starting", "mode", mode, "interval", c.RetentionSweepInterval.String())
-	return supervise(ctx, append(metricsTasks(c, "retention-worker"), task{name: "retention worker", run: worker.Run}), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "retention-worker", registry), task{name: "retention worker", run: worker.Run}), 15*time.Second)
 }

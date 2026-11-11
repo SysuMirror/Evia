@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/config"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
 )
 
 func TestSupervisorPropagatesFailureAndJoinsSibling(t *testing.T) {
@@ -104,12 +105,13 @@ func TestInvalidCommandAndDisabledWorkersFailBeforeDatabase(t *testing.T) {
 }
 
 func TestMetricsTasksDisabledByDefaultAndRoleNamedWhenEnabled(t *testing.T) {
-	if tasks := metricsTasks(config.Config{}, "retention-worker"); tasks != nil {
+	registry := observe.NewRegistry("retention-worker")
+	if tasks := metricsTasks(config.Config{}, "retention-worker", registry); tasks != nil {
 		t.Fatalf("worker without EVIA_METRICS_LISTEN must not open a listener: %+v", tasks)
 	}
 	enabled := config.Config{MetricsListen: "127.0.0.1:19090"}
 	for _, role := range []string{"ingest-worker", "query-worker", "erasure-worker", "retention-worker"} {
-		tasks := metricsTasks(enabled, role)
+		tasks := metricsTasks(enabled, role, observe.NewRegistry(role))
 		if len(tasks) != 1 || tasks[0].name != role+" metrics listener" || tasks[0].run == nil {
 			t.Fatalf("metrics task for %s wired incorrectly: %+v", role, tasks)
 		}
