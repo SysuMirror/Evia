@@ -103,6 +103,19 @@ func TestInvalidCommandAndDisabledWorkersFailBeforeDatabase(t *testing.T) {
 	}
 }
 
+func TestMetricsTasksDisabledByDefaultAndRoleNamedWhenEnabled(t *testing.T) {
+	if tasks := metricsTasks(config.Config{}, "retention-worker"); tasks != nil {
+		t.Fatalf("worker without EVIA_METRICS_LISTEN must not open a listener: %+v", tasks)
+	}
+	enabled := config.Config{MetricsListen: "127.0.0.1:19090"}
+	for _, role := range []string{"ingest-worker", "query-worker", "erasure-worker", "retention-worker"} {
+		tasks := metricsTasks(enabled, role)
+		if len(tasks) != 1 || tasks[0].name != role+" metrics listener" || tasks[0].run == nil {
+			t.Fatalf("metrics task for %s wired incorrectly: %+v", role, tasks)
+		}
+	}
+}
+
 func TestReadinessKafkaStreamIsSeparateAndBounded(t *testing.T) {
 	c := config.Config{InstanceID: "instance", Kafka: config.Kafka{Brokers: []string{"127.0.0.1:19092"}, Topic: "evia.events", DeadLetterTopic: "evia.quarantine", Group: strings.Repeat("g", 64), ProbeTopic: "evia.readiness", TLSEnabled: true}}
 	probe := probeKafkaConfig(c, "readiness-worker")

@@ -19,7 +19,7 @@ func render(t *testing.T, registry *Registry) string {
 }
 
 func TestCounterAccumulatesAndIsolatesLabelSeries(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	counter := registry.Counter("evia_test_events_total", "test counter", "kind")
 	counter.Inc("alpha")
 	counter.Add(2, "alpha")
@@ -39,7 +39,7 @@ func TestCounterAccumulatesAndIsolatesLabelSeries(t *testing.T) {
 }
 
 func TestGaugeSetIncAndDec(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	gauge := registry.Gauge("evia_test_depth", "test gauge")
 	gauge.Set(5)
 	gauge.Inc()
@@ -53,7 +53,7 @@ func TestGaugeSetIncAndDec(t *testing.T) {
 }
 
 func TestHistogramBucketsAreCumulativeWithInfinity(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	histogram := registry.Histogram("evia_test_latency_seconds", "test histogram", []float64{1, 2, 5})
 	for _, value := range []float64{0.5, 1, 1.5, 2, 6, 6} {
 		histogram.Observe(value)
@@ -77,7 +77,7 @@ func TestHistogramBucketsAreCumulativeWithInfinity(t *testing.T) {
 }
 
 func TestHistogramRoutesNaNToInfinityBucket(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	histogram := registry.Histogram("evia_test_nan_seconds", "nan histogram", []float64{1})
 	histogram.Observe(math.NaN())
 	histogram.Observe(0.5)
@@ -95,7 +95,7 @@ func TestHistogramRoutesNaNToInfinityBucket(t *testing.T) {
 }
 
 func TestHistogramPreservesLabelSeriesAndSum(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	histogram := registry.Histogram("evia_test_split_seconds", "split histogram", []float64{1}, "route")
 	histogram.Observe(0.5, "a")
 	histogram.Observe(2, "a")
@@ -117,7 +117,7 @@ func TestHistogramPreservesLabelSeriesAndSum(t *testing.T) {
 }
 
 func TestRenderingEscapesHelpAndLabelText(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	counter := registry.Counter("evia_test_escaped_total", `line one\nline "two"`, "note")
 	counter.Inc(`a"b\c`)
 
@@ -135,7 +135,7 @@ func TestRenderingEscapesHelpAndLabelText(t *testing.T) {
 }
 
 func TestRenderingIsDeterministicAcrossScrapes(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	counter := registry.Counter("evia_test_order_total", "ordering", "kind")
 	counter.Inc("zeta")
 	counter.Inc("alpha")
@@ -167,7 +167,7 @@ func TestRenderingIsDeterministicAcrossScrapes(t *testing.T) {
 }
 
 func TestInstrumentMisusePanics(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	counter := registry.Counter("evia_test_misuse_total", "misuse", "kind")
 	gauge := registry.Gauge("evia_test_misuse_depth", "misuse")
 	histogram := registry.Histogram("evia_test_misuse_seconds", "misuse", []float64{1})
@@ -197,7 +197,7 @@ func TestInstrumentMisusePanics(t *testing.T) {
 }
 
 func TestConcurrentIncrementsAreRaceFreeAndExact(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	counter := registry.Counter("evia_test_concurrent_total", "concurrent", "kind")
 	const goroutines = 16
 	const iterations = 200
@@ -221,12 +221,12 @@ func TestConcurrentIncrementsAreRaceFreeAndExact(t *testing.T) {
 }
 
 func TestEmptyRegistryStillRendersRuntimeMetrics(t *testing.T) {
-	output := render(t, NewRegistry())
+	output := render(t, NewRegistry("test"))
 	for _, name := range []string{
 		"# TYPE go_goroutines gauge",
 		"# TYPE process_uptime_seconds gauge",
-		"# TYPE evia_build_info gauge",
-		`evia_build_info{goversion="`,
+		"# TYPE evia_process_info gauge",
+		`evia_process_info{role="test",goversion="`,
 	} {
 		if !strings.Contains(output, name) {
 			t.Fatalf("runtime metric missing %q:\n%s", name, output)

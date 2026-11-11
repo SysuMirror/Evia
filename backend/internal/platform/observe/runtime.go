@@ -26,7 +26,7 @@ type labeledValue struct {
 // captured at scrape time rather than cached, so each /metrics response
 // reflects the live process. ReadMemStats pauses the world briefly; the scrape
 // path is operator-initiated and the metric set stays intentionally small.
-func runtimeSamples(startedAt time.Time) (scalars []namedValue, labeled []labeledValue) {
+func runtimeSamples(startedAt time.Time, role string) (scalars []namedValue, labeled []labeledValue) {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	uptime := time.Since(startedAt).Seconds()
@@ -46,18 +46,21 @@ func runtimeSamples(startedAt time.Time) (scalars []namedValue, labeled []labele
 	}
 	labeled = []labeledValue{
 		{
-			name:   "evia_build_info",
-			help:   "Constant build metadata for the running Evia process.",
-			kind:   "gauge",
-			labels: [][2]string{{"goversion", runtime.Version()}},
-			value:  1,
+			name: "evia_process_info",
+			help: "Constant identity metadata for the running Evia process.",
+			kind: "gauge",
+			labels: [][2]string{
+				{"role", role},
+				{"goversion", runtime.Version()},
+			},
+			value: 1,
 		},
 	}
 	return scalars, labeled
 }
 
-func writeRuntime(w *countingWriter, startedAt time.Time) {
-	scalars, labeled := runtimeSamples(startedAt)
+func writeRuntime(w *countingWriter, startedAt time.Time, role string) {
+	scalars, labeled := runtimeSamples(startedAt, role)
 	for _, sample := range scalars {
 		writeHeader(w, sample.name, sample.help, sample.kind)
 		w.write(sample.name + " " + formatFloat(sample.value) + "\n")

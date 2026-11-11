@@ -29,7 +29,7 @@ func nestedMux() http.Handler {
 }
 
 func TestMiddlewareRecordsRouteTemplateStatusAndLatency(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	instrumenter := NewInstrumenter(registry)
 	server := httptest.NewServer(instrumenter.Middleware(nestedMux()))
 	defer server.Close()
@@ -78,7 +78,7 @@ func TestMiddlewareRecordsRouteTemplateStatusAndLatency(t *testing.T) {
 }
 
 func TestMiddlewareReturnsInFlightGaugeToZero(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	instrumenter := NewInstrumenter(registry)
 	release := make(chan struct{})
 	started := make(chan struct{})
@@ -106,7 +106,7 @@ func TestMiddlewareReturnsInFlightGaugeToZero(t *testing.T) {
 }
 
 func TestMetricsEndpointExcludesItselfAndServesTextFormat(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	instrumenter := NewInstrumenter(registry)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /metrics", MetricsHandler(registry))
@@ -142,7 +142,7 @@ func TestMetricsEndpointExcludesItselfAndServesTextFormat(t *testing.T) {
 }
 
 func TestMetricsHandlerRejectsNonGetMethods(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/metrics", nil)
 	MetricsHandler(registry).ServeHTTP(recorder, request)
@@ -152,7 +152,7 @@ func TestMetricsHandlerRejectsNonGetMethods(t *testing.T) {
 }
 
 func TestRouteLabelBoundedForUnmatchedRequests(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	instrumenter := NewInstrumenter(registry)
 	handler := instrumenter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -167,7 +167,7 @@ func TestRouteLabelBoundedForUnmatchedRequests(t *testing.T) {
 }
 
 func TestConcurrentRequestsDoNotDuplicateSeries(t *testing.T) {
-	registry := NewRegistry()
+	registry := NewRegistry("test")
 	instrumenter := NewInstrumenter(registry)
 	handler := instrumenter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

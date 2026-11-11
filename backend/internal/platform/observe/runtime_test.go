@@ -8,7 +8,7 @@ import (
 
 func TestRuntimeSamplesCoverRequiredMetrics(t *testing.T) {
 	startedAt := time.Now().Add(-2 * time.Second)
-	scalars, labeled := runtimeSamples(startedAt)
+	scalars, labeled := runtimeSamples(startedAt, "retention-worker")
 
 	required := map[string]string{
 		"process_start_time_seconds":    "gauge",
@@ -43,17 +43,24 @@ func TestRuntimeSamplesCoverRequiredMetrics(t *testing.T) {
 			t.Fatalf("required runtime metric %q not emitted", name)
 		}
 	}
-	if len(labeled) != 1 || labeled[0].name != "evia_build_info" || labeled[0].value != 1 {
-		t.Fatalf("build info sample wrong: %+v", labeled)
+	if len(labeled) != 1 || labeled[0].name != "evia_process_info" || labeled[0].value != 1 {
+		t.Fatalf("process info sample wrong: %+v", labeled)
 	}
-	if labeled[0].labels[0][0] != "goversion" || labeled[0].labels[0][1] == "" {
-		t.Fatalf("build info goversion label missing: %+v", labeled[0].labels)
+	labels := map[string]string{}
+	for _, pair := range labeled[0].labels {
+		labels[pair[0]] = pair[1]
+	}
+	if labels["role"] != "retention-worker" {
+		t.Fatalf("process role label missing: %+v", labeled[0].labels)
+	}
+	if labels["goversion"] == "" {
+		t.Fatalf("goversion label missing: %+v", labeled[0].labels)
 	}
 }
 
 func TestUptimeAdvancesBetweenScrapes(t *testing.T) {
 	startedAt := time.Now().Add(-time.Second)
-	first, _ := runtimeSamples(startedAt)
+	first, _ := runtimeSamples(startedAt, "serve")
 	time.Sleep(10 * time.Millisecond)
 	second, _ := labeledUptime(t, startedAt)
 
@@ -70,7 +77,7 @@ func TestUptimeAdvancesBetweenScrapes(t *testing.T) {
 
 func labeledUptime(t *testing.T, startedAt time.Time) (float64, []labeledValue) {
 	t.Helper()
-	scalars, labeled := runtimeSamples(startedAt)
+	scalars, labeled := runtimeSamples(startedAt, "serve")
 	for _, sample := range scalars {
 		if sample.name == "process_uptime_seconds" {
 			return sample.value, labeled
@@ -81,7 +88,7 @@ func labeledUptime(t *testing.T, startedAt time.Time) (float64, []labeledValue) 
 }
 
 func TestRuntimeExpositionUsesTextFormat(t *testing.T) {
-	output := render(t, NewRegistry())
+	output := render(t, NewRegistry("test"))
 	if !strings.Contains(output, "# TYPE go_gc_cycles_total counter") {
 		t.Fatalf("GC counter header missing:\n%s", output)
 	}

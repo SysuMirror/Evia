@@ -234,9 +234,11 @@ func (h *Histogram) Observe(value float64, values ...string) {
 }
 
 // Registry owns instrument registration order and scrapes every instrument in
-// a deterministic render order.
+// a deterministic render order. Role identifies the hosting process (for
+// example "serve" or "retention-worker") and is reported on evia_process_info.
 type Registry struct {
 	mu         sync.RWMutex
+	role       string
 	startedAt  time.Time
 	counters   []*Counter
 	gauges     []*Gauge
@@ -244,9 +246,10 @@ type Registry struct {
 	names      map[string]string
 }
 
-// NewRegistry records process start time for uptime metrics.
-func NewRegistry() *Registry {
-	return &Registry{startedAt: time.Now(), names: make(map[string]string)}
+// NewRegistry records process start time for uptime metrics and binds the
+// given process role to the evia_process_info identity sample.
+func NewRegistry(role string) *Registry {
+	return &Registry{role: role, startedAt: time.Now(), names: make(map[string]string)}
 }
 
 func (r *Registry) claim(name, kind string, labels []string) {
@@ -432,6 +435,6 @@ func (r *Registry) WriteTo(target io.Writer) (int64, error) {
 	for _, histogram := range r.histograms {
 		writeHistogram(writer, histogram)
 	}
-	writeRuntime(writer, r.startedAt)
+	writeRuntime(writer, r.startedAt, r.role)
 	return writer.count, writer.err
 }
