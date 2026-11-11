@@ -961,3 +961,57 @@ test('erasure jobs encode scope, idempotency keys and signed cursors', async () 
     assert.equal(init.signal?.aborted, true);
   }
 });
+
+test('retention policy reads encode environment and writes send revision, CSRF and idempotency', async () => {
+  const fetch = respond(200, {
+    project_id: 'p',
+    environment: 'production',
+    retention_days: 365,
+    revision: 2,
+    created_at: '2026-11-01T00:00:00Z',
+    updated_at: '2026-11-11T00:00:00Z',
+  });
+  const controller = new AbortController();
+  await api.getRetentionPolicy('p', 'production', controller.signal);
+  const body = { environment: 'production' as const, retention_days: 365 };
+  await api.putRetentionPolicy('p', body, 2, 'retention-key', 'csrf', controller.signal);
+  const calls = fetch.mock.calls;
+  assert.equal(
+    calls[0]?.arguments[0],
+    '/api/v1/projects/p/retention-policy?environment=production',
+  );
+  assert.equal(calls[1]?.arguments[0], '/api/v1/projects/p/retention-policy');
+  const put = calls[1]?.arguments[1] as RequestInit;
+  assert.equal(put.method, 'PUT');
+  assert.equal((put.headers as Headers).get('If-Match'), '"2"');
+  assert.equal((put.headers as Headers).get('Idempotency-Key'), 'retention-key');
+  assert.equal((put.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(put.body as string), body);
+  controller.abort();
+  for (const call of calls) {
+    const init = call.arguments[1] as RequestInit;
+    assert.equal(init.signal?.aborted, true);
+  }
+});
+
+test('retention policy create sends the expect-absent zero revision', async () => {
+  const fetch = respond(200, {
+    project_id: 'p',
+    environment: 'development',
+    retention_days: 90,
+    revision: 1,
+    created_at: null,
+    updated_at: null,
+  });
+  const policy = await api.putRetentionPolicy(
+    'p',
+    { environment: 'development', retention_days: 90 },
+    0,
+    'create-key',
+    'csrf',
+  );
+  const put = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal((put.headers as Headers).get('If-Match'), '"0"');
+  assert.equal(policy.revision, 1);
+  assert.equal(policy.retention_days, 90);
+});

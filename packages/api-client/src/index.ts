@@ -34,6 +34,8 @@ export type MachineIssued = components['schemas']['MachineIssued'];
 export type ErasureInput = components['schemas']['ErasureInput'];
 export type ErasureJob = components['schemas']['ErasureJob'];
 export type ErasureList = components['schemas']['ErasureList'];
+export type RetentionPolicy = components['schemas']['RetentionPolicy'];
+export type RetentionPolicyInput = components['schemas']['RetentionPolicyInput'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1002,4 +1004,31 @@ export const api = {
     ),
   getErasureJob: (projectID: string, jobID: string, signal?: AbortSignal) =>
     request<ErasureJob>(erasureJobPath(projectID, jobID), { signal }),
+  getRetentionPolicy: (
+    projectID: string,
+    environment: RetentionPolicyInput['environment'],
+    signal?: AbortSignal,
+  ) =>
+    request<RetentionPolicy>(
+      `${projectPath(projectID)}/retention-policy?environment=${encodeURIComponent(environment)}`,
+      { signal },
+    ),
+  putRetentionPolicy: (
+    projectID: string,
+    body: RetentionPolicyInput,
+    expectedRevision: number,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<RetentionPolicy>(`${projectPath(projectID)}/retention-policy`, {
+      method: 'PUT',
+      body,
+      csrf,
+      signal,
+      headers: {
+        'If-Match': `"${expectedRevision}"`,
+        'Idempotency-Key': idempotencyKey,
+      },
+    }),
 };
