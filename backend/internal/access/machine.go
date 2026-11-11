@@ -39,6 +39,7 @@ const (
 	PermissionDashboardsPublish       = "dashboards.publish"
 	PermissionDashboardsRun           = "dashboards.run"
 	PermissionDataErasure             = "data.erasure"
+	PermissionDataExport              = "data.export"
 )
 
 var machinePermissions = map[string]bool{
@@ -50,6 +51,7 @@ var machinePermissions = map[string]bool{
 	PermissionMetricsRead: true, PermissionMetricsWrite: true, PermissionMetricsPublish: true, PermissionMetricsRun: true,
 	PermissionDashboardsRead: true, PermissionDashboardsWrite: true, PermissionDashboardsPublish: true, PermissionDashboardsRun: true,
 	PermissionDataErasure: true,
+	PermissionDataExport:  true,
 }
 
 func KnownMachinePermission(permission string) bool { return machinePermissions[permission] }
