@@ -6,9 +6,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/retention"
 )
 
@@ -122,4 +124,89 @@ func faultPublicCode(e error) string {
 		return ""
 	}
 	return fault.Public(e).Code
+}
+
+func TestRetentionWorkerStoreListsPoliciesAndRecordsSweeps(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	svc := retention.NewService(f.s)
+
+	// Two independent scopes across projects/environments.
+	first, e := svc.Put(ctx, retentionInput(f, "w1", "production", 90), retention.CreateRevision)
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, otherOwner := catalogFixtureProject(t, f.s)
+	secondInput := retentionInput(f, "w2", "staging", 180)
+	secondInput.ProjectID = other
+	secondInput.ActorID = otherOwner
+	second, e := svc.Put(ctx, secondInput, retention.CreateRevision)
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	policies, e := f.s.ListRetentionPolicies(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	seen := map[string]int{}
+	for _, p := range policies {
+		seen[p.ProjectID+"|"+p.Environment] = p.RetentionDays
+	}
+	if seen[first.ProjectID+"|production"] != 90 || seen[other+"|staging"] != 180 {
+		t.Fatalf("worker policy list missing scopes: %+v", seen)
+	}
+
+	now := time.Now().UTC()
+	cutoff := now.AddDate(0, 0, -90)
+	completed := now
+	record := retention.SweepRecord{
+		ID: ids.New(), ProjectID: first.ProjectID, Environment: "production",
+		RetentionDays: 90, Cutoff: cutoff, DryRun: true, RowsCandidates: 7,
+		Status: retention.SweepSucceeded, CreatedAt: now, CompletedAt: &completed,
+	}
+	if e = f.s.RecordSweep(ctx, record); e != nil {
+		t.Fatal(e)
+	}
+	var stored struct {
+		dryRun        bool
+		candidates    uint64
+		status        string
+		retentionDays int
+	}
+	row := f.s.Pool.QueryRow(ctx, `SELECT dry_run,rows_candidates,status,retention_days FROM retention_sweeps WHERE id=$1`, record.ID)
+	if e = row.Scan(&stored.dryRun, &stored.candidates, &stored.status, &stored.retentionDays); e != nil {
+		t.Fatal(e)
+	}
+	if !stored.dryRun || stored.candidates != 7 || stored.status != retention.SweepSucceeded || stored.retentionDays != 90 {
+		t.Fatalf("sweep row mismatch: %+v", stored)
+	}
+
+	// A failed sweep is also persisted for operator review.
+	failed := retention.SweepRecord{
+		ID: ids.New(), ProjectID: second.ProjectID, Environment: "staging",
+		RetentionDays: 180, Cutoff: cutoff, DryRun: false, Status: retention.SweepFailed,
+		Detail: "delete expired facts failed", CreatedAt: now,
+	}
+	if e = f.s.RecordSweep(ctx, failed); e != nil {
+		t.Fatal(e)
+	}
+	var failedCount int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM retention_sweeps WHERE status='failed'`).Scan(&failedCount); e != nil || failedCount != 1 {
+		t.Fatalf("failed sweep count=%d err=%v", failedCount, e)
+	}
+}
+
+func catalogFixtureProject(t *testing.T, s *Store) (project, owner string) {
+	t.Helper()
+	ctx := context.Background()
+	project = ids.New()
+	owner = ids.New()
+	if _, e := s.Pool.Exec(ctx, `INSERT INTO accounts(id,username,display_name,password_hash) VALUES($1,$2,'Retention worker','unused')`, owner, "rt-worker-"+project[:8]); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.CreateProject(ctx, owner, access.Project{ID: project, Name: "Retention worker project", Timezone: "UTC"}); e != nil {
+		t.Fatal(e)
+	}
+	return project, owner
 }

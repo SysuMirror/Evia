@@ -146,3 +146,35 @@ func (s *Store) PutPolicy(ctx context.Context, in retention.Input, expectedRevis
 	}
 	return p, tx.Commit(ctx)
 }
+
+// ListRetentionPolicies is a worker-scoped read with no human actor or owner
+// re-check. The retention worker runs as a system process and must see every
+// configured project/environment scope.
+func (s *Store) ListRetentionPolicies(ctx context.Context) ([]retention.Policy, error) {
+	rows, e := s.Pool.Query(ctx, `SELECT `+policyColumns+` FROM retention_policies ORDER BY project_id, environment`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	policies := make([]retention.Policy, 0)
+	for rows.Next() {
+		p, err := scanPolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, p)
+	}
+	return policies, rows.Err()
+}
+
+// RecordSweep persists one sweep audit row. It is worker-scoped and therefore
+// does not carry an idempotency key: every evaluation is a distinct audit event.
+func (s *Store) RecordSweep(ctx context.Context, record retention.SweepRecord) error {
+	_, e := s.Pool.Exec(ctx, `INSERT INTO retention_sweeps
+ (id,project_id,environment,retention_days,cutoff_at,dry_run,rows_candidates,status,detail,created_at,completed_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		record.ID, record.ProjectID, record.Environment, record.RetentionDays,
+		record.Cutoff, record.DryRun, record.RowsCandidates, record.Status, record.Detail,
+		record.CreatedAt, record.CompletedAt)
+	return e
+}
