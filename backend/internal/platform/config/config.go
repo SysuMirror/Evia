@@ -32,7 +32,12 @@ type Config struct {
 	Kafka                                                                          Kafka
 	ClickHouse                                                                     ClickHouse
 	QueryWorkers                                                                   int
-	InstanceID                                                                     string
+	// RetentionEnforcement gates destructive age-based deletion. The default
+	// false makes the retention worker a safe dry-run that only counts expired
+	// facts; an operator must explicitly opt in to actually delete them.
+	RetentionEnforcement   bool
+	RetentionSweepInterval time.Duration
+	InstanceID             string
 }
 
 var (
@@ -47,7 +52,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -97,11 +102,23 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		}
 	}
 	c.DeliveryEnabled = c.CollectionEnabled && c.Kafka.ProbeTopic != ""
-	// The erasure worker only needs PostgreSQL plus the ClickHouse executor;
-	// it deliberately loads neither Kafka nor the Redis admission budget.
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" {
+	// The erasure and retention workers only need PostgreSQL plus the
+	// ClickHouse executor; they deliberately load neither Kafka nor the Redis
+	// admission budget.
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "retention-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
+		}
+	}
+	if command == "retention-worker" {
+		if c.RetentionEnforcement, err = boolean(get, "EVIA_RETENTION_ENFORCEMENT_ENABLED", false); err != nil {
+			return c, err
+		}
+		c.RetentionSweepInterval = 6 * time.Hour
+		if raw := get("EVIA_RETENTION_SWEEP_INTERVAL"); raw != "" {
+			if c.RetentionSweepInterval, err = time.ParseDuration(raw); err != nil || c.RetentionSweepInterval < time.Minute || c.RetentionSweepInterval > 24*time.Hour {
+				return c, errors.New("EVIA_RETENTION_SWEEP_INTERVAL must be between 1m and 24h")
+			}
 		}
 	}
 	if command == "query-worker" {

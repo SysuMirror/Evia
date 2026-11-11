@@ -453,3 +453,25 @@ func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.
 	logger.Info("erasure worker starting")
 	return supervise(ctx, []task{{name: "erasure worker", run: worker.Run}}, 15*time.Second)
 }
+
+func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("retention worker startup", err)
+	}
+	executor, err := pipeline.NewRetentionExecutor(sinkConfig(c, client), client)
+	if err != nil {
+		return stageError("retention executor configuration", err)
+	}
+	mode := "dry-run"
+	if c.RetentionEnforcement {
+		mode = "enforcement"
+	}
+	worker := retention.NewSweepWorker(store, executor, c.RetentionEnforcement, c.RetentionSweepInterval, logger)
+	logger.Info("retention worker starting", "mode", mode, "interval", c.RetentionSweepInterval.String())
+	return supervise(ctx, []task{{name: "retention worker", run: worker.Run}}, 15*time.Second)
+}

@@ -78,7 +78,7 @@ jobs:
         run: |
           python tooling/verification/browser_runtime.py run "$RUNNER_TEMP/evia-browser.env" -- bash -eu -c '
             umask 077
-            for command in serve ingest-worker query-worker erasure-worker; do
+            for command in serve ingest-worker query-worker erasure-worker retention-worker; do
               "$RUNNER_TEMP/evia" "$command" > "$RUNNER_TEMP/evia-$command.log" 2>&1 &
               echo "$!" > "$RUNNER_TEMP/evia-$command.pid"
             done
@@ -90,7 +90,7 @@ jobs:
           import urllib.error
           import urllib.request
           for attempt in range(120):
-              for command in ('serve', 'ingest-worker', 'query-worker', 'erasure-worker'):
+              for command in ('serve', 'ingest-worker', 'query-worker', 'erasure-worker', 'retention-worker'):
                   pid = int((Path(os.environ['RUNNER_TEMP']) / f'evia-{command}.pid').read_text())
                   try:
                       os.kill(pid, 0)
@@ -115,7 +115,7 @@ jobs:
       - name: Stop CI runtime processes and remove dependency containers
         if: always()
         run: |
-          for command in serve ingest-worker query-worker erasure-worker; do
+          for command in serve ingest-worker query-worker erasure-worker retention-worker; do
             if [ -f "$RUNNER_TEMP/evia-$command.pid" ]; then
               kill "$(cat "$RUNNER_TEMP/evia-$command.pid")" 2>/dev/null || true
             fi

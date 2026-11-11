@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSecureConfiguration(t *testing.T) {
@@ -88,6 +89,47 @@ func TestErasureWorkerOnlyNeedsPostgresAndClickHouse(t *testing.T) {
 	}
 	if c.ClickHouse.URL == "" || c.ClickHouse.Database == "" {
 		t.Fatal("erasure worker lost its ClickHouse executor configuration")
+	}
+}
+
+func TestRetentionWorkerDefaultsToSafeDryRun(t *testing.T) {
+	values := runtimeValues()
+	delete(values, "EVIA_PUBLIC_ORIGIN")
+	delete(values, "EVIA_CURSOR_KEY")
+	delete(values, "EVIA_KAFKA_BROKERS")
+	delete(values, "EVIA_REDIS_URL")
+	delete(values, "EVIA_COLLECTION_ENABLED")
+	delete(values, "EVIA_ANALYSIS_ENABLED")
+
+	// Default: no enforcement flag means dry-run and a bounded interval.
+	c, err := ReadFor("retention-worker", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatalf("retention worker rejected minimal config: %v", err)
+	}
+	if c.RetentionEnforcement {
+		t.Fatal("retention worker must default to non-destructive dry-run")
+	}
+	if c.RetentionSweepInterval != 6*time.Hour || c.ClickHouse.URL == "" {
+		t.Fatalf("retention worker defaults wrong: interval=%s ch=%q", c.RetentionSweepInterval, c.ClickHouse.URL)
+	}
+
+	// Explicit opt-in enables destructive enforcement.
+	values["EVIA_RETENTION_ENFORCEMENT_ENABLED"] = "true"
+	values["EVIA_RETENTION_SWEEP_INTERVAL"] = "2h"
+	enforced, err := ReadFor("retention-worker", func(k string) string { return values[k] })
+	if err != nil || !enforced.RetentionEnforcement || enforced.RetentionSweepInterval != 2*time.Hour {
+		t.Fatalf("enforcement opt-in not honored: %+v err=%v", enforced, err)
+	}
+
+	// Non-boolean flags and out-of-range intervals are rejected.
+	values["EVIA_RETENTION_ENFORCEMENT_ENABLED"] = "yes"
+	if _, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("non-boolean enforcement flag accepted")
+	}
+	values["EVIA_RETENTION_ENFORCEMENT_ENABLED"] = "true"
+	values["EVIA_RETENTION_SWEEP_INTERVAL"] = "500ms"
+	if _, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("sub-minute sweep interval accepted")
 	}
 }
 

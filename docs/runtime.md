@@ -10,6 +10,7 @@ The executable separates API serving, event materialization and durable query ex
 | evia ingest-worker | Acknowledged Kafka records to ClickHouse facts, then explicit Kafka offset commits        | EVIA_COLLECTION_ENABLED=true |
 | evia query-worker  | A bounded pool claiming durable PostgreSQL analysis jobs and executing ClickHouse queries | EVIA_ANALYSIS_ENABLED=true   |
 | evia erasure-worker | Claims durable erasure jobs, writes the resurrection tombstone before issuing synchronous ClickHouse ALTER DELETE mutations and verifies zero rows remain | None (uses ClickHouse + PostgreSQL) |
+| evia retention-worker | Evaluates every configured retention policy on an interval and records an audit row per scope. Defaults to dry-run (counts expired facts only); with `EVIA_RETENTION_ENFORCEMENT_ENABLED=true` it issues bounded, time-scoped ClickHouse ALTER DELETE mutations | None (uses ClickHouse + PostgreSQL) |
 | evia migrate       | Explicitly apply embedded PostgreSQL migrations                                           | None                         |
 | evia bootstrap     | Create the initial synthetic or operator-provided administrator once                      | None                         |
 
@@ -22,6 +23,7 @@ For API serving, EVIA_PUBLIC_ORIGIN is a single ASCII http(s) origin with no pat
 - EVIA_SOURCE_SECRET_KEY is a stable 32-byte encryption key encoded as 64 hexadecimal characters. Providing it enables source-management endpoints independently of collection; omitting it leaves those routes disabled. Keep it private and backed up. Do not generate a different key on each restart. Existing collector credentials can be resolved without enabling source CRUD.
 - EVIA_COLLECTION_ENABLED=true registers /v1/collect with the real cached source resolver, Redis admission budget and acknowledged Kafka producer. It requires Redis and Kafka settings. Invalid or absent feature flags never imply an unlimited collector or a mock queue.
 - EVIA_ANALYSIS_ENABLED=true registers management query routes backed by PostgreSQL jobs and the real ClickHouse engine. The API only enqueues work; run query-worker separately to execute it.
+- EVIA_RETENTION_ENFORCEMENT_ENABLED=true switches retention-worker from the default dry-run (count only, no deletion) to enforcement that actually deletes expired facts. Leave it unset until the dry-run audit rows in `retention_sweeps` confirm the candidate counts. EVIA_RETENTION_SWEEP_INTERVAL bounds the evaluation cadence to between `1m` and `24h` (default `6h`).
 
 The source cache is bounded and has a two-second successful-entry lifetime. Local source mutations clear it immediately. The collector also bounds cached manifests and source/cache misses. These bounds do not establish production request capacity.
 
