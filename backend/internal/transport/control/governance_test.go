@@ -503,7 +503,7 @@ func TestGovernanceProjectPermissions(t *testing.T) {
 		if !has["settings.read"] {
 			t.Fatal("human member cannot discover settings read")
 		}
-		for _, permission := range []string{"settings.write", "members.manage", "audit.read"} {
+		for _, permission := range []string{"settings.write", "members.manage", "audit.read", "data.erasure"} {
 			if has[permission] != (role == "owner") {
 				t.Fatal(role, permission, permissions)
 			}
