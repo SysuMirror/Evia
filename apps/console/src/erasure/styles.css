@@ -1,0 +1,28 @@
+.erasure-intro {
+  margin-bottom: 16px;
+}
+
+.erasure-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.erasure-fields > :last-child {
+  grid-column: 1 / -1;
+}
+
+.erasure-submit {
+  margin-top: 12px;
+  align-items: center;
+}
+
+.erasure-polling {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 720px) {
+  .erasure-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

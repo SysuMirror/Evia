@@ -68,6 +68,9 @@ const MachineAccessPage = lazy(() =>
 const GovernancePage = lazy(() =>
   import('./governance/governance').then((module) => ({ default: module.GovernancePage })),
 );
+const ErasurePage = lazy(() =>
+  import('./erasure/erasure').then((module) => ({ default: module.ErasurePage })),
+);
 const MetricsPage = lazy(() =>
   import('./metrics/metrics').then((module) => ({ default: module.MetricsPage })),
 );
@@ -215,6 +218,9 @@ function Workspace({ session }: { session: Session }) {
       : []),
     ...(project.data?.permissions.includes('settings.read')
       ? [{ path: 'governance' as const, label: '项目治理', component: GovernancePage }]
+      : []),
+    ...(project.data?.permissions.includes('data.erasure')
+      ? [{ path: 'erasure' as const, label: '数据删除', component: ErasurePage }]
       : []),
     ...(project.data?.permissions.includes('metrics.read')
       ? [

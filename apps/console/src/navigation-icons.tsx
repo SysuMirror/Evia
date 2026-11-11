@@ -9,10 +9,16 @@ export type WorkspaceSection =
   | 'dashboards'
   | 'machine-access'
   | 'governance'
+  | 'erasure'
   | 'metrics'
   | 'formula-metrics';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  erasure: (
+    <>
+      <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 1.8h6a2 2 0 0 0 2-1.8L18 7M10 11v6M14 11v6" />
+    </>
+  ),
   'formula-metrics': (
     <>
       <path d="M4 7h7M15 7h5M4 17h5M13 17h7" />
