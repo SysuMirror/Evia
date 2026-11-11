@@ -36,6 +36,8 @@ export type ErasureJob = components['schemas']['ErasureJob'];
 export type ErasureList = components['schemas']['ErasureList'];
 export type RetentionPolicy = components['schemas']['RetentionPolicy'];
 export type RetentionPolicyInput = components['schemas']['RetentionPolicyInput'];
+export type RetentionSweep = components['schemas']['RetentionSweep'];
+export type RetentionSweepList = components['schemas']['RetentionSweepList'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1031,4 +1033,18 @@ export const api = {
         'Idempotency-Key': idempotencyKey,
       },
     }),
+  listRetentionSweeps: (
+    projectID: string,
+    options: { environment?: RetentionPolicyInput['environment']; limit?: number } = {},
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams();
+    if (options.environment) params.set('environment', options.environment);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    const query = params.toString();
+    return request<RetentionSweepList>(
+      `${projectPath(projectID)}/retention-sweeps${query ? `?${query}` : ''}`,
+      { signal },
+    );
+  },
 };

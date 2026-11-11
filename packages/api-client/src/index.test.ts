@@ -994,6 +994,36 @@ test('retention policy reads encode environment and writes send revision, CSRF a
   }
 });
 
+test('retention sweep reads encode environment and limit query params', async () => {
+  const fetch = respond(200, {
+    items: [
+      {
+        sweep_id: '33333333-3333-4333-8333-333333333333',
+        project_id: 'p',
+        environment: 'production',
+        retention_days: 90,
+        cutoff_at: '2026-08-13T10:00:00Z',
+        dry_run: true,
+        rows_candidates: 7,
+        status: 'succeeded',
+        detail: '',
+        created_at: '2026-11-11T10:00:00Z',
+        completed_at: '2026-11-11T10:00:00Z',
+      },
+    ],
+  });
+  const controller = new AbortController();
+  await api.listRetentionSweeps('p', { environment: 'production', limit: 50 }, controller.signal);
+  await api.listRetentionSweeps('p');
+  const urls = fetch.mock.calls.map((call) => call.arguments[0]);
+  assert.equal(urls[0], '/api/v1/projects/p/retention-sweeps?environment=production&limit=50');
+  assert.equal(urls[1], '/api/v1/projects/p/retention-sweeps');
+  const init = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(init.method, 'GET');
+  controller.abort();
+  assert.equal(init.signal?.aborted, true);
+});
+
 test('retention policy create sends the expect-absent zero revision', async () => {
   const fetch = respond(200, {
     project_id: 'p',
