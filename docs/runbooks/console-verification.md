@@ -46,9 +46,12 @@ python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.en
 In separate terminals, start each process with that same private configuration:
 
 ```bash
-python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.env -- ./bin/evia serve
+# serve additionally needs EVIA_EXPORT_DIR so the one-time capability
+# download route is registered against the same directory export-worker writes.
+EVIA_EXPORT_DIR=/tmp/evia-export-artifacts python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.env -- ./bin/evia serve
 python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.env -- ./bin/evia ingest-worker
 python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.env -- ./bin/evia query-worker
+EVIA_EXPORT_DIR=/tmp/evia-export-artifacts python3 tooling/verification/browser_runtime.py run /tmp/evia-console-runtime.env -- ./bin/evia export-worker
 ```
 
 Wait for `/readyz` on `http://127.0.0.1:8080` to return 204. Keep processes running
