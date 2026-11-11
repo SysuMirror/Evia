@@ -471,15 +471,17 @@ func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.
 	if err != nil {
 		return stageError("erasure executor configuration", err)
 	}
+	registry := observe.NewRegistry("erasure-worker")
 	worker := &erasure.Worker{
-		Store:   store,
-		Deleter: executor,
-		ID:      c.InstanceID + "-" + ids.New(),
-		Lease:   2 * time.Minute,
-		Logger:  logger,
+		Store:    store,
+		Deleter:  executor,
+		Observer: newErasureMetricsObserver(registry),
+		ID:       c.InstanceID + "-" + ids.New(),
+		Lease:    2 * time.Minute,
+		Logger:   logger,
 	}
 	logger.Info("erasure worker starting")
-	return supervise(ctx, append(metricsTasks(c, "erasure-worker", observe.NewRegistry("erasure-worker")), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "erasure-worker", registry), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
 }
 
 func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
