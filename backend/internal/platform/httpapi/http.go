@@ -54,6 +54,16 @@ func (b *Boundary) Handler(fn Endpoint) http.HandlerFunc {
 		if err := fn(w, r); err != nil {
 			if errors.Is(err, context.DeadlineExceeded) && r.Context().Err() != nil {
 				err = fault.New(fault.Unavailable, "REQUEST_TIMEOUT", "请求处理超时，请稍后重试")
+			} else if errors.Is(err, context.Canceled) && errors.Is(r.Context().Err(), context.Canceled) {
+				// The peer abandoned the request before a response was committed
+				// (closed tab, navigation, aborted fetch). A client disconnect is
+				// not a server fault: mapping it to 500 would corrupt error-rate
+				// alerts and SLOs. The socket is already closed, so record one
+				// structured warning instead of attempting an unwritable problem body.
+				// Cancellation internal to a dependency while the request context is
+				// still live does not match and keeps its real fault classification.
+				b.Logger.Warn("request canceled by client", "request_id", RequestID(r.Context()), "path", r.URL.Path)
+				return
 			}
 			b.Error(w, r, err)
 		}
