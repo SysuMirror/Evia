@@ -41,7 +41,11 @@ type Config struct {
 	// facts; an operator must explicitly opt in to actually delete them.
 	RetentionEnforcement   bool
 	RetentionSweepInterval time.Duration
-	InstanceID             string
+	// IngestLagInterval controls consumer lag sampling on the ingest worker.
+	// The default 30s keeps scrape noise low; an explicit zero disables the
+	// lag monitor. Other commands leave the field unused.
+	IngestLagInterval time.Duration
+	InstanceID        string
 }
 
 var (
@@ -134,6 +138,15 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	if command == "query-worker" {
 		if c.QueryWorkers, err = integer(get, "EVIA_QUERY_WORKERS", 2, 1, 16); err != nil {
 			return c, err
+		}
+	}
+	if command == "ingest-worker" {
+		c.IngestLagInterval = 30 * time.Second
+		if raw := get("EVIA_INGEST_LAG_INTERVAL"); raw != "" {
+			if c.IngestLagInterval, err = time.ParseDuration(raw); err != nil ||
+				(c.IngestLagInterval != 0 && (c.IngestLagInterval < 5*time.Second || c.IngestLagInterval > 10*time.Minute)) {
+				return c, errors.New("EVIA_INGEST_LAG_INTERVAL must be zero or between 5s and 10m")
+			}
 		}
 	}
 	return c, nil

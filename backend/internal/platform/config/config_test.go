@@ -133,6 +133,43 @@ func TestRetentionWorkerDefaultsToSafeDryRun(t *testing.T) {
 	}
 }
 
+func TestIngestWorkerLagInterval(t *testing.T) {
+	values := runtimeValues()
+	c, err := ReadFor("ingest-worker", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatalf("ingest worker rejected baseline config: %v", err)
+	}
+	if c.IngestLagInterval != 30*time.Second {
+		t.Fatalf("default lag interval = %s, want 30s", c.IngestLagInterval)
+	}
+
+	values["EVIA_INGEST_LAG_INTERVAL"] = "2m"
+	custom, err := ReadFor("ingest-worker", func(k string) string { return values[k] })
+	if err != nil || custom.IngestLagInterval != 2*time.Minute {
+		t.Fatalf("custom lag interval not honored: %s err=%v", custom.IngestLagInterval, err)
+	}
+
+	// Zero explicitly disables the lag monitor.
+	values["EVIA_INGEST_LAG_INTERVAL"] = "0s"
+	disabled, err := ReadFor("ingest-worker", func(k string) string { return values[k] })
+	if err != nil || disabled.IngestLagInterval != 0 {
+		t.Fatalf("zero lag interval should disable sampling: %s err=%v", disabled.IngestLagInterval, err)
+	}
+
+	for _, raw := range []string{"1s", "11m", "soon"} {
+		values["EVIA_INGEST_LAG_INTERVAL"] = raw
+		if _, err := ReadFor("ingest-worker", func(k string) string { return values[k] }); err == nil {
+			t.Fatalf("lag interval %q must be rejected", raw)
+		}
+	}
+
+	// The setting is ingest-worker specific; other commands keep the zero value.
+	serve, err := ReadFor("serve", func(k string) string { return runtimeValues()[k] })
+	if err != nil || serve.IngestLagInterval != 0 {
+		t.Fatalf("serve must not inherit ingest lag interval: %s err=%v", serve.IngestLagInterval, err)
+	}
+}
+
 func TestRuntimeConfigurationRejectsUnsafeSettings(t *testing.T) {
 	tests := []struct{ name, command, key, value string }{
 		{"collection flag", "serve", "EVIA_COLLECTION_ENABLED", "yes"},

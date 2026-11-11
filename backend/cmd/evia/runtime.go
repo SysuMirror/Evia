@@ -438,6 +438,15 @@ func ingestWorker(ctx context.Context, c config.Config, store *postgres.Store, l
 	}
 	logger.Info("ingestion worker starting", "delivery_enabled", c.DeliveryEnabled)
 	tasks = append(tasks, task{"fact ingestion worker", worker.Run})
+	if c.IngestLagInterval > 0 {
+		lagMonitor := &pipeline.LagMonitor{
+			Reader:   reader,
+			Observer: newIngestLagObserver(registry),
+			Interval: c.IngestLagInterval,
+			Logger:   logger,
+		}
+		tasks = append(tasks, task{"consumer lag monitor", lagMonitor.Run})
+	}
 	return supervise(ctx, append(metricsTasks(c, "ingest-worker", registry), tasks...), 15*time.Second)
 }
 
