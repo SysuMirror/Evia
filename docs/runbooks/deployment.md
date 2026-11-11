@@ -59,8 +59,10 @@ warning alert policy ship under `deploy/monitoring/` with promtool unit tests;
 load them into the monitoring Prometheus (scrape jobs must use `evia*` names)
 and follow the [SLO and alerting runbook](slo.md) for objectives and response
 guidance. A Grafana 11 dashboard JSON is included in the same directory and is
-imported through the datasource template variable; Alertmanager routing remains
-site-specific. Use UTC timestamps for storage and IANA project
+imported through the datasource template variable. Alertmanager routing,
+inhibition rules and notification templates ship under
+`deploy/monitoring/alertmanager/`; only the receiver webhook URLs remain
+site-specific gateways. Use UTC timestamps for storage and IANA project
 timezones such as `Asia/Shanghai` for business reporting boundaries. The Go
 binary embeds timezone data.
 

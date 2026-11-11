@@ -18,8 +18,8 @@ rule_files:
 Scrape jobs must be named with the `evia` prefix (for example `evia-serve`,
 `evia-workers`) because several selectors use `job=~"evia.*"` to avoid matching
 unrelated targets. Rule groups evaluate every 30 seconds. Alert routing into
-paging or chat systems is an Alertmanager concern and is not part of this
-repository.
+paging or chat systems is configured through the Alertmanager routing tree
+in `deploy/monitoring/alertmanager/` (see the Alertmanager section below).
 
 ## SLO definitions
 
@@ -88,6 +88,37 @@ UID. The monitoring gate walks every dashboard expression with the same
 emitted-metric allowlist as the rules, so a panel referencing a renamed or
 nonexistent metric fails `make check`.
 
+
+## Alertmanager routing
+
+[`deploy/monitoring/alertmanager/alertmanager.yml`](../../deploy/monitoring/alertmanager/alertmanager.yml)
+maps the rule labels onto two webhook receivers and ships shared notification
+templates in `templates/evia-notifications.tmpl`:
+
+| Receiver | Match | Purpose |
+| --- | --- | --- |
+| `evia-critical-pager` | `severity="critical"` | On-call paging gateway; `send_resolved` keeps incident timelines complete. |
+| `evia-warning-chat` | `severity="warning"` and the root default | Chat/notification gateway; alerts without a severity label never get dropped. |
+
+Grouping is `alertname, job, severity` with 30 s group wait, 5 m group
+interval and 4 h repeat interval. Two inhibition rules prevent notification
+storms: an `EviaScrapeTargetDown` root cause suppresses other critical alerts
+for the same job, and any firing critical alert holds back warnings for the
+same job. Receiver URLs are internal placeholders (`*.internal`) without
+credentials; each site must point them at its own gateways. The monitoring
+gate cross-checks every receiver reference, severity/alertname matcher,
+inhibition label and template path against the Prometheus rule set and fails
+`make check` on drift. Verify locally with amtool:
+
+```sh
+amtool check-config deploy/monitoring/alertmanager/alertmanager.yml
+amtool config routes test --config.file deploy/monitoring/alertmanager/alertmanager.yml \
+  --verify.receivers=evia-critical-pager alertname=EviaErasureJobFailed severity=critical job=evia-erasure
+```
+
+amtool is not a runtime dependency; install it with the pinned Go toolchain,
+for example `go install github.com/prometheus/alertmanager/cmd/amtool@v0.35.0`.
+
 ## Verification
 
 Two independent gates protect the rules:
@@ -118,8 +149,8 @@ when the module proxy mirrors that version.
 
 The rules and dashboard detect process, pipeline and compliance failures. They
 do not prove ClickHouse capacity at the target scale (see the query capacity
-report) and do not replace the scheduled [backup/restore drills](backup-restore.md);
-no Alertmanager routing/notification tree ships in this repository. SLO compliance reporting
+report) and do not replace the scheduled [backup/restore drills](backup-restore.md).
+SLO compliance reporting
 over 30-day windows requires the Prometheus retention policy to cover at least
 that window; recording rules here are short-window SLIs, not long-term
 compliance archives.

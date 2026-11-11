@@ -167,7 +167,9 @@ the same observer-port pattern and reuse the `observe` package so exposition
 stays consistent, and any new alert must reference an emitted metric to pass
 the monitoring gate. A Grafana 11 dashboard ships alongside the rules under
 `deploy/monitoring/grafana-dashboard.json` and is covered by the same metric
-allowlist gate; Alertmanager routing still does not ship in this repository.
+allowlist gate. Alertmanager routing, inhibition and notification templates
+ship under `deploy/monitoring/alertmanager/` and are covered by the same gate;
+see the [SLO and alerting runbook](slo.md#alertmanager-routing).
 Automated PostgreSQL backup/restore drills are covered by the
 [backup/restore runbook](backup-restore.md). The endpoints and rules report process health,
 traffic shape and failure burns; they do not prove event-pipeline readiness,
