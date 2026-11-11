@@ -155,3 +155,32 @@ tests:
             exp_annotations:
               summary: 'ingest-worker evia-ingest quarantining more than 5% of records'
               description: 'Over 5% of incoming records are undecodable and sent to quarantine for 30 minutes, with at least 0.1 records/s of traffic. Inspect producer schemas and dead-letter diagnostics.'
+
+  # Consumer lag above the 1000-message threshold must wait for the 10-minute
+  # for-window before warning; healthy lag stays silent.
+  - interval: 30s
+    input_series:
+      - series: 'evia_ingest_consumer_lag{job="evia-ingest",topic="evia.events",partition="0"}'
+        values: '1500+0x24'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: EviaConsumerLagHigh
+      - eval_time: 11m
+        alertname: EviaConsumerLagHigh
+        exp_alerts:
+          - exp_labels:
+              job: evia-ingest
+              topic: evia.events
+              partition: '0'
+              severity: warning
+            exp_annotations:
+              summary: 'ingest-worker evia-ingest lag above 1000 on evia.events/0'
+              description: 'The consumer group position has stayed over 1000 messages behind the broker log end for 10 minutes on the labeled partition. Check ingestion throughput, ClickHouse write health and whether the worker is replaying a backlog; the committed and log end offset gauges show the exact positions.'
+
+  - interval: 30s
+    input_series:
+      - series: 'evia_ingest_consumer_lag{job="evia-ingest",topic="evia.events",partition="0"}'
+        values: '12+0x24'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: EviaConsumerLagHigh

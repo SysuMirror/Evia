@@ -71,6 +71,15 @@ groups:
           summary: "ingest-worker {{ $labels.job }} has durable batch failures"
           description: "At least one Kafka batch failed durably in every 5-minute window for 5 minutes; failed batches retry but sustained failure blocks the event pipeline. Check Kafka, ClickHouse and the quarantine/dead-letter path."
 
+      - alert: EviaConsumerLagHigh
+        expr: evia_ingest_consumer_lag > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ingest-worker {{ $labels.job }} lag above 1000 on {{ $labels.topic }}/{{ $labels.partition }}"
+          description: "The consumer group position has stayed over 1000 messages behind the broker log end for 10 minutes on the labeled partition. Check ingestion throughput, ClickHouse write health and whether the worker is replaying a backlog; the committed and log end offset gauges show the exact positions."
+
       - alert: EviaQueryRetryableFailureBurn
         expr: evia:slo_query_retryable_failures:rate5m > 0
         for: 10m
