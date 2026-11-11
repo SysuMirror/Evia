@@ -87,7 +87,8 @@ real cycles and record the change here.
 * Backups: nightly logical backup, retained for at least 14 days with a
   weekly copy held off-host for 90 days.
 * Drill: run `drill` against a staging cluster at least weekly and after every
-  PostgreSQL major-version upgrade; archive the report.
+  PostgreSQL major-version upgrade; archive the report. Run the ClickHouse
+  `drill` on the same cadence against a staging ClickHouse node.
 * RPO target: 24 hours for control metadata (bounded by the backup interval).
 * RTO target: 4 hours from declaring a recovery event to a verified restore.
 
@@ -105,23 +106,60 @@ real cycles and record the change here.
 
 ## ClickHouse event data
 
-Event facts are derived data and the automated drill deliberately covers
-PostgreSQL only. For ClickHouse, use the server's native backup feature on a
-maintenance window:
+Event facts are derived analytics state, but losing them means rebuilding the
+whole event history from Kafka. `tooling/backup/clickhouse_drill.py` automates
+the native ClickHouse backup engine with the same audit model as the
+PostgreSQL drill:
 
-```sql
-BACKUP TABLE evia.event_facts, evia.event_facts_raw
-TO File('evia-facts-<UTC stamp>') SETTINGS compression_method='zstd';
--- On the replacement cluster:
-RESTORE TABLE evia.event_facts, evia.event_facts_raw
-FROM File('evia-facts-<UTC stamp>');
+* `backup`   - `BACKUP DATABASE ... TO File`, streamed off the server into a
+  host-side `backup.tar` plus a signed manifest (per-file sha256 and per-table
+  row count/`cityHash64` fingerprints).
+* `snapshot` - emit the fingerprint table of one database as JSON.
+* `restore`  - stream the tar back and `RESTORE DATABASE ... AS <scratch>`
+  under an allowlisted scratch name; the source database is never overwritten.
+* `verify`   - compare two databases table-by-table on row counts and content
+  hashes; any difference exits 1.
+* `drill`    - backup -> scratch restore -> verify -> drop scratch, with full
+  cleanup on both the server and the host unless `--keep` is passed.
+
+```sh
+export EVIA_CH_USERNAME=evia
+export EVIA_CH_PASSWORD='...'            # passed via CLICKHOUSE_PASSWORD, never argv
+# Default transport targets the development container; override for native hosts:
+# export EVIA_CH_CLIENT='clickhouse-client --host ch.example'
+
+# Full automated drill (scratch database created and dropped automatically).
+python3 tooling/backup/clickhouse_drill.py drill \
+  --database evia --output /var/backups/evia-ch
+
+# Retained backup plus independent restore/verify.
+python3 tooling/backup/clickhouse_drill.py backup \
+  --database evia --output /var/backups/evia-ch
+python3 tooling/backup/clickhouse_drill.py restore \
+  --artifact /var/backups/evia-ch/evia_ch_backup_* \
+  --database evia --scratch evia_ch_restore_drill_abcdef012345
+python3 tooling/backup/clickhouse_drill.py verify \
+  --database evia --restored-database evia_ch_restore_drill_abcdef012345
 ```
 
-Object storage (`S3`/`GCS` destinations) replaces `File` in multi-node
-deployments; automate and drill this separately when the ClickHouse topology
-is finalized. Erasure tombstones live in PostgreSQL, so a verified PG restore
-always preserves the resurrection barrier even when event facts are rebuilt
-from Kafka rather than restored.
+Safety and transport notes:
+
+* The development container keeps `/var/lib/clickhouse` on a tmpfs mount that
+  `docker cp` cannot read from the daemon; the tool therefore streams
+  artifacts through `docker exec tar` over the exec socket. Native
+  deployments point `EVIA_CH_CLIENT` at a local `clickhouse-client` and must
+  share the backup filesystem path used by the restore step.
+* Scratch databases must match `evia_ch_restore_drill_<6-32 hex>`; backup names
+  are generated internally (`evia_ch_backup_<UTC>_<hex>`) and free-form names
+  are rejected before reaching SQL. All database/table identifiers pass a
+  strict snake_case allowlist.
+* The in-server File copy is removed after each host transfer so the bounded
+  tmpfs cannot fill up; the host tar plus manifest is the durable artifact.
+* Object storage (`S3`/`GCS` backup destinations) replaces `File` plus tar in
+  multi-node deployments and must be automated separately once the ClickHouse
+  topology is finalized. Erasure tombstones live in PostgreSQL, so a verified
+  PG restore always preserves the resurrection barrier even when event facts
+  are rebuilt from Kafka rather than restored.
 
 ## Local container verification
 
