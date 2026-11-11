@@ -1103,6 +1103,24 @@ type RetentionPolicyInput struct {
 	RetentionDays int64  `json:"retention_days"`
 }
 
+type RetentionSweep struct {
+	SweepID        string  `json:"sweep_id"`
+	ProjectID      string  `json:"project_id"`
+	Environment    string  `json:"environment"`
+	RetentionDays  int64   `json:"retention_days"`
+	CutoffAt       string  `json:"cutoff_at"`
+	DryRun         bool    `json:"dry_run"`
+	RowsCandidates int64   `json:"rows_candidates"`
+	Status         string  `json:"status"`
+	Detail         string  `json:"detail"`
+	CreatedAt      string  `json:"created_at"`
+	CompletedAt    *string `json:"completed_at"`
+}
+
+type RetentionSweepList struct {
+	Items []RetentionSweep `json:"items"`
+}
+
 type SavedAnalysis struct {
 	AnalysisID       string `json:"analysis_id"`
 	ProjectID        string `json:"project_id"`
