@@ -42,10 +42,18 @@ type Worker struct {
 	Reader       Reader
 	Sink         Sink
 	Quarantine   Quarantiner
+	Observer     IngestObserver
 	BatchSize    int
 	RetryInitial time.Duration
 	RetryMax     time.Duration
 	Logger       *slog.Logger
+}
+
+func (w *Worker) observer() IngestObserver {
+	if w.Observer == nil {
+		return NoopIngestObserver{}
+	}
+	return w.Observer
 }
 
 // Run holds each polled batch through durable fact and quarantine writes, then
@@ -101,12 +109,19 @@ func (w *Worker) Run(ctx context.Context) error {
 		if len(messages) > batch {
 			return errors.New("reader exceeded bounded batch")
 		}
+		w.observer().MessagesPolled(len(messages))
+		batchStart := time.Now()
 		batchCtx, cancelBatch := context.WithTimeout(ctx, batchTimeout)
 		e = w.process(batchCtx, messages, initial, max)
 		cancelBatch()
 		if e != nil {
+			// Shutdown cancellation is not an operational batch failure.
+			if ctx.Err() == nil {
+				w.observer().BatchProcessed(false, time.Since(batchStart))
+			}
 			return e
 		}
+		w.observer().BatchProcessed(true, time.Since(batchStart))
 
 		w.Reader.AllowRebalance()
 	}
@@ -167,11 +182,13 @@ func (w *Worker) process(ctx context.Context, messages []Message, initial, max t
 		if e := w.retryStage(ctx, initial, max, "facts", func() error { return w.Sink.Write(ctx, records) }); e != nil {
 			return e
 		}
+		w.observer().RecordsIngested(len(records))
 	}
 	if len(poison) > 0 {
 		if e := w.retryStage(ctx, initial, max, "quarantine", func() error { return w.Quarantine.Quarantine(ctx, poison) }); e != nil {
 			return e
 		}
+		w.observer().RecordsQuarantined(len(poison))
 	}
 	if e := w.retryStage(ctx, initial, max, "offset_commit", func() error { return w.Reader.Commit(ctx, messages) }); e != nil {
 		return e

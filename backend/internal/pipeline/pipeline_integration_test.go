@@ -24,6 +24,27 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// integrationIngestObserver records pipeline telemetry during the real
+// Kafka/ClickHouse integration run.
+type integrationIngestObserver struct {
+	polled      int
+	ingested    int
+	quarantined int
+	batchOK     int
+	batchFailed int
+}
+
+func (o *integrationIngestObserver) MessagesPolled(count int) { o.polled += count }
+func (o *integrationIngestObserver) BatchProcessed(succeeded bool, _ time.Duration) {
+	if succeeded {
+		o.batchOK++
+	} else {
+		o.batchFailed++
+	}
+}
+func (o *integrationIngestObserver) RecordsIngested(count int)    { o.ingested += count }
+func (o *integrationIngestObserver) RecordsQuarantined(count int) { o.quarantined += count }
+
 func integrationConfig(t *testing.T) (KafkaConfig, ClickHouseConfig) {
 	t.Helper()
 	brokers := os.Getenv("EVIA_TEST_KAFKA_BROKERS")
@@ -218,7 +239,8 @@ func TestKafkaClickHouseDurableReplayAndQuarantine(t *testing.T) {
 	observed := &observingReader{Reader: reader, offset: poison.Offset, committed: make(chan struct{})}
 	runCtx, stop := context.WithCancel(ctx)
 	done := make(chan error, 1)
-	worker := &Worker{Reader: observed, Sink: &ambiguousSink{Sink: sink}, Quarantine: producer, BatchSize: 2, RetryInitial: time.Millisecond, RetryMax: 10 * time.Millisecond}
+	observer := &integrationIngestObserver{}
+	worker := &Worker{Reader: observed, Sink: &ambiguousSink{Sink: sink}, Quarantine: producer, Observer: observer, BatchSize: 2, RetryInitial: time.Millisecond, RetryMax: 10 * time.Millisecond}
 	go func() { done <- worker.Run(runCtx) }()
 	select {
 	case <-observed.committed:
@@ -228,6 +250,17 @@ func TestKafkaClickHouseDurableReplayAndQuarantine(t *testing.T) {
 	stop()
 	if e = <-done; !errors.Is(e, context.Canceled) {
 		t.Fatal(e)
+	}
+	// The observer must reflect the real durable batch mix: valid facts
+	// ingested, the poison message quarantined, no failed batch.
+	if observer.batchFailed != 0 || observer.batchOK == 0 {
+		t.Fatalf("batch telemetry wrong: %+v", observer)
+	}
+	if observer.ingested == 0 || observer.quarantined == 0 {
+		t.Fatalf("record telemetry must count both ingested facts and quarantine: %+v", observer)
+	}
+	if observer.polled == 0 {
+		t.Fatalf("poll telemetry missing: %+v", observer)
 	}
 	rawCount := integrationCount(t, ctx, chConfig, "event_facts_raw")
 	if rawCount <= 5 {
