@@ -1089,6 +1089,20 @@ type RetentionInput struct {
 	AggregateDays int64 `json:"aggregate_days"`
 }
 
+type RetentionPolicy struct {
+	ProjectID     string  `json:"project_id"`
+	Environment   string  `json:"environment"`
+	RetentionDays *int64  `json:"retention_days"`
+	Revision      int64   `json:"revision"`
+	CreatedAt     *string `json:"created_at"`
+	UpdatedAt     *string `json:"updated_at"`
+}
+
+type RetentionPolicyInput struct {
+	Environment   string `json:"environment"`
+	RetentionDays int64  `json:"retention_days"`
+}
+
 type SavedAnalysis struct {
 	AnalysisID       string `json:"analysis_id"`
 	ProjectID        string `json:"project_id"`
