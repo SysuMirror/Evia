@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,26 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
+
+// stubFactDeleter stands in for the ClickHouse executor: it records the
+// worker's delete/verify scope and always reports zero remaining rows.
+type stubFactDeleter struct {
+	deleteCalls int
+	verifyCalls int
+	lastScope   [4]string
+}
+
+func (d *stubFactDeleter) DeleteIdentity(_ context.Context, project, environment, kind, value string) error {
+	d.deleteCalls++
+	d.lastScope = [4]string{project, environment, kind, value}
+	return nil
+}
+
+func (d *stubFactDeleter) RemainingIdentityRows(_ context.Context, project, environment, kind, value string) (uint64, error) {
+	d.verifyCalls++
+	d.lastScope = [4]string{project, environment, kind, value}
+	return 0, nil
+}
 
 func erasureInput(f catalogFixture, idempotencyKey, subjectKind, subject string) erasure.Input {
 	return erasure.Input{
@@ -220,5 +242,50 @@ func TestErasureFailKeepsTombstoneAndBarrierSetEmptyInput(t *testing.T) {
 	set, e = f.s.ErasedSubjects(ctx, f.project, "development", []string{"fail-user"}, nil)
 	if e != nil || !set.Contains(erasure.SubjectUID, "fail-user") {
 		t.Fatal("tombstone lost after job failure", set, e)
+	}
+}
+
+// TestErasureWorkerDrivesJobToCompletionOnPostgres pins the worker/store state
+// contract end to end: claim.State must still hold the current lifecycle state
+// when Advance is called, and only adopt the next state after it succeeds.
+func TestErasureWorkerDrivesJobToCompletionOnPostgres(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	in := erasureInput(f, "erase-worker", erasure.SubjectUID, "worker-user")
+	job, created, e := f.s.CreateJob(ctx, in)
+	if e != nil || !created {
+		t.Fatal(e, created)
+	}
+	deleter := &stubFactDeleter{}
+	worker := &erasure.Worker{
+		Store:   f.s,
+		Deleter: deleter,
+		ID:      "erasure-worker-it",
+		Lease:   time.Minute,
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	worked, e := worker.RunOnce(ctx)
+	if e != nil || !worked {
+		t.Fatal(worked, e)
+	}
+	finished, e := f.s.GetJob(ctx, f.owner, f.project, job.JobID)
+	if e != nil || finished.State != erasure.StateCompleted || finished.FinishedAt == nil || finished.ErrorCode != nil {
+		t.Fatal(finished, e)
+	}
+	if deleter.deleteCalls != 1 || deleter.verifyCalls != 1 {
+		t.Fatalf("deleter call counts wrong: %+v", deleter)
+	}
+	if deleter.lastScope != [4]string{f.project, "development", erasure.SubjectUID, "worker-user"} {
+		t.Fatalf("deleter scope wrong: %v", deleter.lastScope)
+	}
+	// The durable barrier remains in place after successful completion.
+	set, e := f.s.ErasedSubjects(ctx, f.project, "development", []string{"worker-user"}, nil)
+	if e != nil || !set.Contains(erasure.SubjectUID, "worker-user") {
+		t.Fatal("tombstone missing after worker completion", set, e)
+	}
+	// The queue is now drained.
+	worked, e = worker.RunOnce(ctx)
+	if e != nil || worked {
+		t.Fatal("drained queue should report no work", worked, e)
 	}
 }
