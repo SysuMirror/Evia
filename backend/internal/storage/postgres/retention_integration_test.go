@@ -197,6 +197,80 @@ func TestRetentionWorkerStoreListsPoliciesAndRecordsSweeps(t *testing.T) {
 	}
 }
 
+func TestRetentionSweepHistoryReadsAndAuthorization(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	svc := retention.NewServiceWithSweepReader(f.s, f.s)
+	// Fixed microsecond-clean instants survive the timestamptz round-trip exactly.
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2026, 8, 13, 10, 0, 0, 0, time.UTC)
+	completed := now
+
+	records := []retention.SweepRecord{
+		{ID: ids.New(), ProjectID: f.project, Environment: "production", RetentionDays: 90,
+			Cutoff: cutoff, DryRun: true, RowsCandidates: 5, Status: retention.SweepSucceeded,
+			CreatedAt: now.Add(-2 * time.Hour), CompletedAt: &completed},
+		{ID: ids.New(), ProjectID: f.project, Environment: "production", RetentionDays: 90,
+			Cutoff: cutoff, DryRun: false, RowsCandidates: 5, Status: retention.SweepSucceeded,
+			CreatedAt: now.Add(-time.Hour), CompletedAt: &completed},
+		{ID: ids.New(), ProjectID: f.project, Environment: "staging", RetentionDays: 60,
+			Cutoff: cutoff, DryRun: true, RowsCandidates: 0, Status: retention.SweepFailed,
+			Detail: "delete expired facts failed", CreatedAt: now},
+	}
+	for _, record := range records {
+		if e := f.s.RecordSweep(ctx, record); e != nil {
+			t.Fatal(e)
+		}
+	}
+
+	// Owner sees every scope, most recent first, bounded by the limit.
+	all, e := svc.ListSweeps(ctx, f.owner, f.project, retention.SweepFilter{}, 10)
+	if e != nil || len(all) != 3 {
+		t.Fatalf("list sweeps: count=%d err=%v", len(all), e)
+	}
+	if all[0].Environment != "staging" || !all[0].CreatedAt.After(all[1].CreatedAt) {
+		t.Fatalf("sweeps not ordered newest first: %+v", all)
+	}
+	// Environment filter returns only matching scopes.
+	prod, e := svc.ListSweeps(ctx, f.owner, f.project, retention.SweepFilter{Environment: "production"}, 10)
+	if e != nil || len(prod) != 2 {
+		t.Fatalf("environment filter: count=%d err=%v", len(prod), e)
+	}
+	for _, view := range prod {
+		if view.Environment != "production" {
+			t.Fatal("filter leaked another environment")
+		}
+	}
+	// Limit is honored.
+	limited, e := svc.ListSweeps(ctx, f.owner, f.project, retention.SweepFilter{}, 1)
+	if e != nil || len(limited) != 1 {
+		t.Fatalf("limit: count=%d err=%v", len(limited), e)
+	}
+	// Non-owner and outsider are rejected before any rows are returned.
+	if _, e = svc.ListSweeps(ctx, f.viewer, f.project, retention.SweepFilter{}, 10); e == nil || faultPublicCode(e) != "RETENTION_FORBIDDEN" {
+		t.Fatalf("viewer read must be forbidden, got %v", e)
+	}
+	if _, e = svc.ListSweeps(ctx, f.outsider, f.project, retention.SweepFilter{}, 10); e == nil || faultPublicCode(e) != "PROJECT_NOT_FOUND" {
+		t.Fatalf("outsider read must be invisible, got %v", e)
+	}
+	// Round-trip fields survive the read projection. The newest row is the
+	// failed staging sweep, which legitimately has no completion timestamp.
+	failedView := all[0]
+	if failedView.RetentionDays != 60 || failedView.Status != retention.SweepFailed ||
+		failedView.Detail == "" || failedView.CompletedAt != nil || !failedView.Cutoff.Equal(cutoff) {
+		t.Fatalf("failed sweep projection wrong: %+v", failedView)
+	}
+	var succeeded *retention.SweepView
+	for i := range all {
+		if all[i].Status == retention.SweepSucceeded && all[i].Environment == "production" {
+			succeeded = &all[i]
+		}
+	}
+	if succeeded == nil || succeeded.CompletedAt == nil || succeeded.RowsCandidates != 5 {
+		t.Fatalf("succeeded sweep projection wrong: %+v", succeeded)
+	}
+}
+
 func catalogFixtureProject(t *testing.T, s *Store) (project, owner string) {
 	t.Helper()
 	ctx := context.Background()

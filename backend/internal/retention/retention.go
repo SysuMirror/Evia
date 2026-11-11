@@ -54,8 +54,13 @@ type Store interface {
 	PutPolicy(ctx context.Context, in Input, expectedRevision int64) (Policy, error)
 }
 
-// Service holds domain validation independent of transport and storage.
-type Service struct{ store Store }
+// Service holds domain validation independent of transport and storage. The
+// optional reader exposes retention sweep history and is nil when only the
+// policy management surface is wired.
+type Service struct {
+	store  Store
+	reader SweepReader
+}
 
 func NewService(store Store) *Service { return &Service{store: store} }
 

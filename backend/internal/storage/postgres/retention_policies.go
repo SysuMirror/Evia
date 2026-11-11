@@ -178,3 +178,47 @@ func (s *Store) RecordSweep(ctx context.Context, record retention.SweepRecord) e
 		record.CreatedAt, record.CompletedAt)
 	return e
 }
+
+// Compile-time assertion that the store satisfies the human sweep reader port.
+var _ retention.SweepReader = (*Store)(nil)
+
+const sweepViewColumns = `id::text,project_id::text,environment,retention_days,cutoff_at,dry_run,rows_candidates,status,detail,created_at,completed_at`
+
+func scanSweepView(row queryScanner) (retention.SweepView, error) {
+	var view retention.SweepView
+	if e := row.Scan(&view.ID, &view.ProjectID, &view.Environment, &view.RetentionDays,
+		&view.Cutoff, &view.DryRun, &view.RowsCandidates, &view.Status, &view.Detail,
+		&view.CreatedAt, &view.CompletedAt); e != nil {
+		return retention.SweepView{}, e
+	}
+	return view, nil
+}
+
+// ListSweeps returns the most recent sweep evaluations for a project, optionally
+// narrowed to one environment. It re-authorizes the human owner like policy reads.
+func (s *Store) ListSweeps(ctx context.Context, actor, project string, filter retention.SweepFilter, limit int) ([]retention.SweepView, error) {
+	tx, e := s.Pool.Begin(ctx)
+	if e != nil {
+		return nil, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = retentionOwnerTx(ctx, tx, actor, project); e != nil {
+		return nil, e
+	}
+	rows, e := tx.Query(ctx, `SELECT `+sweepViewColumns+` FROM retention_sweeps
+ WHERE project_id=$1 AND ($2='' OR environment=$2)
+ ORDER BY created_at DESC, id DESC LIMIT $3`, project, filter.Environment, limit)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	views := make([]retention.SweepView, 0, limit)
+	for rows.Next() {
+		view, err := scanSweepView(rows)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
+	}
+	return views, rows.Err()
+}
