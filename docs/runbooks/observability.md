@@ -66,6 +66,16 @@ lifecycle events. The `outcome` and claim `outcome` labels are fixed enums and
 | `evia_erasure_jobs_total` | counter | `outcome`, `code` | Terminal job handling: `completed`, `failed` (with failure code), `lease-lost` or `failure-record-error`. |
 | `evia_erasure_job_duration_seconds` | histogram | `outcome` | Wall-clock duration from claim to terminal handling. |
 
+Ingest worker domain instruments, emitted by `ingest-worker` from Kafka batch
+processing. Labels are fixed enums, so cardinality is independent of traffic:
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `evia_ingest_messages_polled_total` | counter | none | Kafka messages delivered in non-empty polls. |
+| `evia_ingest_batches_total` | counter | `result` | Durable batch outcomes (`succeeded`/`failed`); shutdown cancellation is not counted. |
+| `evia_ingest_records_total` | counter | `outcome` | Valid facts written (`ingested`) versus undecodable messages sent to quarantine (`quarantined`). |
+| `evia_ingest_batch_duration_seconds` | histogram | `result` | Wall-clock duration of one durable batch. |
+
 Query worker domain instruments, emitted by `query-worker` from query job
 lifecycle events. One registry is shared by the whole worker pool, so counters
 aggregate across every configured query worker. The `code` label is `ok` or
@@ -122,16 +132,16 @@ curl -fsS http://127.0.0.1:18091/metrics | grep evia_process_info
 ## Scope and follow-up work
 
 All five process roles now expose the same process and Go runtime metrics, and
-`serve` additionally reports HTTP traffic instruments. The `retention-worker`
-reports sweep instruments through the `SweepObserver` domain port, the
-`erasure-worker` reports claim/job lifecycle instruments through the
-`ErasureObserver` port, and the `query-worker` reports claim/query lifecycle
-instruments through the `QueryObserver` port, keeping all three domain
-packages free of the metrics implementation. The only remaining worker without
-domain instruments is `ingest-worker` (Kafka consumer lag and batch outcomes);
-it must follow the same observer-port pattern and reuse the `observe` package
-so exposition stays consistent. No alerting rules,
-dashboards, SLO definitions or backup/restore drill automation ship in this
-repository yet. The endpoints report process health and traffic shape; they do
-not prove event-pipeline readiness, ClickHouse capacity or disaster recovery,
-which still require the evidence listed in the deployment runbook.
+`serve` additionally reports HTTP traffic instruments. Every worker reports
+domain instruments through an observer port defined in its own domain package,
+keeping all domain packages free of the metrics implementation:
+`SweepObserver` (retention-worker), `ErasureObserver` (erasure-worker),
+`QueryObserver` (query-worker, shared registry across the worker pool) and
+`IngestObserver` (ingest-worker). Worker domain metric coverage is therefore
+complete; future extensions (for example Kafka consumer lag gauges) must follow
+the same observer-port pattern and reuse the `observe` package so exposition
+stays consistent. No alerting rules, dashboards, SLO definitions or
+backup/restore drill automation ship in this repository yet. The endpoints
+report process health and traffic shape; they do not prove event-pipeline
+readiness, ClickHouse capacity or disaster recovery, which still require the
+evidence listed in the deployment runbook.
