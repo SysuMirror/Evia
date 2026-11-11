@@ -27,6 +27,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/howtomakeaname/Evia/backend/internal/retention"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
@@ -277,6 +278,14 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	if err != nil {
 		return stageError("runtime dependency startup", err)
 	}
+	// The registry and instrumenter are process-local; worker role metrics are
+	// a separate slice because they need domain-level queue and lease instruments.
+	registry := observe.NewRegistry()
+	instrumenter := observe.NewInstrumenter(registry)
+	// Registered without a method prefix so the handler can return an explicit
+	// 405 for non-GET methods; a GET-only pattern would fall through to the API
+	// catch-all and surface as 404 instead.
+	mux.HandleFunc("/metrics", observe.MetricsHandler(registry))
 	mux.Handle("/", api.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -288,10 +297,11 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	instrumented := instrumenter.Middleware(mux)
 	bounded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		request, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 		defer cancel()
-		mux.ServeHTTP(w, r.WithContext(request))
+		instrumented.ServeHTTP(w, r.WithContext(request))
 	})
 	server := httpapi.Server(c.Listen, bounded)
 	logger.Info("API starting", "listen", c.Listen, "collection_enabled", c.CollectionEnabled, "analysis_enabled", c.AnalysisEnabled, "delivery_enabled", c.DeliveryEnabled, "sources_enabled", len(c.SourceSecretKey) > 0)
