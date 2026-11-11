@@ -24,8 +24,8 @@ func TestMachineMetricPermissionsAreExplicitlyGrantable(t *testing.T) {
 	for permission := range machinePermissions {
 		all = append(all, permission)
 	}
-	if len(all) != 24 {
-		t.Fatalf("expected 24 explicit grants, got %d", len(all))
+	if len(all) != 25 {
+		t.Fatalf("expected 25 explicit grants, got %d", len(all))
 	}
 	for _, permissions := range append([][]string{all}, []string{PermissionMetricsRead}, []string{PermissionMetricsWrite}, []string{PermissionMetricsPublish}, []string{PermissionMetricsRun}) {
 		store := &machineGrantStore{}
