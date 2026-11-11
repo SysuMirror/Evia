@@ -141,6 +141,8 @@ func TestRuntimeConfigurationRejectsUnsafeSettings(t *testing.T) {
 		{"invalid source key", "serve", "EVIA_SOURCE_SECRET_KEY", "not-a-secret-key"},
 		{"short source key", "serve", "EVIA_SOURCE_SECRET_KEY", "ab"},
 		{"listen port", "serve", "EVIA_LISTEN", "127.0.0.1:65536"},
+		{"metrics listen malformed", "retention-worker", "EVIA_METRICS_LISTEN", "127.0.0.1"},
+		{"metrics listen bad port", "retention-worker", "EVIA_METRICS_LISTEN", "127.0.0.1:70000"},
 		{"origin port", "serve", "EVIA_PUBLIC_ORIGIN", "https://evia.example:65536"},
 		{"redis plaintext default", "serve", "EVIA_REDIS_URL", "redis://127.0.0.1:6379"},
 		{"redis query override", "serve", "EVIA_REDIS_URL", "rediss://redis.example?read_timeout=-1"},
@@ -186,6 +188,22 @@ func TestRuntimeConfigurationRejectsUnsafeSettings(t *testing.T) {
 				t.Fatal("unsafe runtime setting accepted")
 			}
 		})
+	}
+}
+
+func TestMetricsListenIsOptionalAndValidated(t *testing.T) {
+	// Unset means disabled, so existing worker deployments keep no HTTP listener.
+	values := runtimeValues()
+	if c, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err != nil || c.MetricsListen != "" {
+		t.Fatalf("default metrics listener should be disabled: %+v err=%v", c, err)
+	}
+	// A well-formed loopback address is accepted for every runtime command.
+	values["EVIA_METRICS_LISTEN"] = "127.0.0.1:19090"
+	for _, command := range []string{"serve", "ingest-worker", "query-worker", "erasure-worker", "retention-worker"} {
+		c, err := ReadFor(command, func(k string) string { return values[k] })
+		if err != nil || c.MetricsListen != "127.0.0.1:19090" {
+			t.Fatalf("metrics listener not accepted for %s: %+v err=%v", command, c, err)
+		}
 	}
 }
 

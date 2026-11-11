@@ -23,7 +23,11 @@ type Kafka struct {
 }
 type ClickHouse struct{ URL, Database, Username, Password string }
 type Config struct {
-	DatabaseURL, Listen, Origin                                                    string
+	DatabaseURL, Listen, Origin string
+	// MetricsListen optionally exposes /metrics and /healthz on a dedicated
+	// administrative listener. Empty disables it; worker processes have no other
+	// HTTP server, so this is their only observability and liveness endpoint.
+	MetricsListen                                                                  string
 	CursorKey                                                                      []byte
 	SecureCookies                                                                  bool
 	SourceSecretKey                                                                []byte
@@ -73,6 +77,12 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	}
 	if !instancePattern.MatchString(c.InstanceID) {
 		return c, errors.New("EVIA_INSTANCE_ID must be a bounded ASCII instance name")
+	}
+	c.MetricsListen = get("EVIA_METRICS_LISTEN")
+	if c.MetricsListen != "" {
+		if _, port, err := net.SplitHostPort(c.MetricsListen); err != nil || !validPort(port) {
+			return c, errors.New("EVIA_METRICS_LISTEN must be host:port with a valid TCP port or empty to disable")
+		}
 	}
 	if command == "serve" {
 		if err = c.readHTTP(get); err != nil {
