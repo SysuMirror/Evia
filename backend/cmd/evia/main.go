@@ -28,10 +28,10 @@ func main() {
 
 func execute(ctx context.Context, args []string, get func(string) string, logger *slog.Logger) error {
 	if len(args) != 1 {
-		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | retention-worker | migrate | bootstrap | account-create")
+		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | retention-worker | export-worker | migrate | bootstrap | account-create")
 	}
 	command := args[0]
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" {
 		return errors.New("unknown command")
 	}
 	var cfg config.Config
@@ -90,6 +90,8 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 		return erasureWorkerRuntime(ctx, cfg, store, logger)
 	case "retention-worker":
 		return retentionWorkerRuntime(ctx, cfg, store, logger)
+	case "export-worker":
+		return exportWorkerRuntime(ctx, cfg, store, logger)
 	}
 	return errors.New("unknown command")
 }

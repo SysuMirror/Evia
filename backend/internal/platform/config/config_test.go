@@ -170,6 +170,28 @@ func TestIngestWorkerLagInterval(t *testing.T) {
 	}
 }
 
+
+func TestExportWorkerRequiresArtifactDirectory(t *testing.T) {
+	values := runtimeValues()
+	values["EVIA_EXPORT_DIR"] = "/var/lib/evia/exports"
+	c, err := ReadFor("export-worker", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatalf("export worker rejected valid config: %v", err)
+	}
+	if c.ExportDir != "/var/lib/evia/exports" {
+		t.Fatalf("export dir = %q", c.ExportDir)
+	}
+	delete(values, "EVIA_EXPORT_DIR")
+	if _, err := ReadFor("export-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("export worker without EVIA_EXPORT_DIR must be rejected")
+	}
+	// Other commands must not inherit the export directory requirement.
+	serve, err := ReadFor("serve", func(k string) string { return runtimeValues()[k] })
+	if err != nil || serve.ExportDir != "" {
+		t.Fatalf("serve must not require export dir: %q err=%v", serve.ExportDir, err)
+	}
+}
+
 func TestRuntimeConfigurationRejectsUnsafeSettings(t *testing.T) {
 	tests := []struct{ name, command, key, value string }{
 		{"collection flag", "serve", "EVIA_COLLECTION_ENABLED", "yes"},

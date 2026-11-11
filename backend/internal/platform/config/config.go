@@ -45,7 +45,9 @@ type Config struct {
 	// The default 30s keeps scrape noise low; an explicit zero disables the
 	// lag monitor. Other commands leave the field unused.
 	IngestLagInterval time.Duration
-	InstanceID        string
+	// ExportDir holds materialized export artifacts; required for export-worker.
+	ExportDir  string
+	InstanceID string
 }
 
 var (
@@ -60,7 +62,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -119,7 +121,7 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	// The erasure and retention workers only need PostgreSQL plus the
 	// ClickHouse executor; they deliberately load neither Kafka nor the Redis
 	// admission budget.
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "retention-worker" {
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "retention-worker" || command == "export-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
@@ -147,6 +149,12 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 				(c.IngestLagInterval != 0 && (c.IngestLagInterval < 5*time.Second || c.IngestLagInterval > 10*time.Minute)) {
 				return c, errors.New("EVIA_INGEST_LAG_INTERVAL must be zero or between 5s and 10m")
 			}
+		}
+	}
+	if command == "export-worker" {
+		c.ExportDir = get("EVIA_EXPORT_DIR")
+		if c.ExportDir == "" {
+			return c, errors.New("export-worker requires EVIA_EXPORT_DIR")
 		}
 	}
 	return c, nil

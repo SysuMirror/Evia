@@ -31,7 +31,8 @@ const (
 	MaxResultRows    = 10000
 	MaxArtifactBytes = 32 * 1024 * 1024
 	// GrantTTL is the lifetime of a one-time download grant.
-	GrantTTL = 15 * time.Minute
+	GrantTTL      = 15 * time.Minute
+	LeaseLostCode = "EXPORT_LEASE_LOST"
 )
 
 // Job is the durable export lifecycle record.

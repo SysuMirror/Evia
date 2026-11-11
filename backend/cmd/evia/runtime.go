@@ -19,6 +19,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
+	"github.com/howtomakeaname/Evia/backend/internal/exporting"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
@@ -504,6 +505,36 @@ func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.
 	}
 	logger.Info("erasure worker starting")
 	return supervise(ctx, append(metricsTasks(c, "erasure-worker", registry), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
+}
+
+func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("export worker startup", err)
+	}
+	engine, err := queryEngine(c, client)
+	if err != nil {
+		return err
+	}
+	artifacts, err := exporting.NewFileArtifactStore(c.ExportDir)
+	if err != nil {
+		return stageError("export artifact store", err)
+	}
+	registry := observe.NewRegistry("export-worker")
+	worker := &exporting.Worker{
+		Store:     store,
+		Engine:    engine,
+		Artifacts: artifacts,
+		ID:        c.InstanceID + "-" + ids.New(),
+		Lease:     2 * time.Minute,
+		Logger:    logger,
+	}
+	logger.Info("export worker starting", "artifact_dir", c.ExportDir)
+	return supervise(ctx, append(metricsTasks(c, "export-worker", registry), task{name: "export worker", run: worker.Run}), 15*time.Second)
 }
 
 func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
