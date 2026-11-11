@@ -47,7 +47,8 @@ class LibpqEnvTest(unittest.TestCase):
         self.assertEqual(env["PGPASSWORD"], "secret")
         self.assertEqual(env["PGDATABASE"], "evia_test")
         self.assertEqual(env["PGHOST"], "db.example")
-        for cmd in (drill.pg_dump_command(Path("x.dump")), drill.pg_restore_command(Path("x.dump")),
+        for cmd in (drill.pg_dump_command(Path("x.dump")),
+                    drill.pg_restore_command(Path("x.dump"), "evia_restore_drill_ab12cd34ef56"),
                     drill.psql_command("SELECT 1")):
             self.assertFalse(any("secret" in part for part in cmd))
 
@@ -75,9 +76,12 @@ class CommandBuilderTest(unittest.TestCase):
         self.assertEqual(cmd[-2:], ["--file", "/tmp/backup.dump"])
 
     def test_pg_restore_exit_on_error(self):
-        cmd = drill.pg_restore_command(Path("/tmp/backup.dump"))
+        cmd = drill.pg_restore_command(Path("/tmp/backup.dump"), "evia_restore_drill_ab12cd34ef56")
         self.assertIn("--exit-on-error", cmd)
+        self.assertEqual(cmd[-3:-1], ["-d", "evia_restore_drill_ab12cd34ef56"])
         self.assertEqual(cmd[-1], "/tmp/backup.dump")
+        with self.assertRaises(ValueError):
+            drill.pg_restore_command(Path("/tmp/backup.dump"), "evia; DROP TABLE accounts")
 
     def test_identifier_guards(self):
         with self.assertRaises(ValueError):

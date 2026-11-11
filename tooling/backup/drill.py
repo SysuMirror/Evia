@@ -125,14 +125,19 @@ def pg_dump_command(artifact: Path, schema: str = DEFAULT_SCHEMA) -> list[str]:
     ]
 
 
-def pg_restore_command(artifact: Path) -> list[str]:
+def pg_restore_command(artifact: Path, dbname: str) -> list[str]:
     # --exit-on-error makes any DDL/data failure visible instead of warning-only;
-    # the scratch database is brand new, so --clean has nothing to remove.
+    # the scratch database is brand new, so --clean has nothing to remove. The
+    # target is explicit so the restore never depends on ambient environment.
+    if not IDENTIFIER_PATTERN.fullmatch(dbname):
+        raise ValueError(f"invalid restore database name {dbname!r}")
     return [
         "pg_restore",
         "--exit-on-error",
         "--no-owner",
         "--no-privileges",
+        "-d",
+        dbname,
         str(artifact),
     ]
 
@@ -302,7 +307,7 @@ def do_restore(target_dsn: str, artifact: Path, manifest: dict | None = None) ->
     validate_scratch_database_name(info.dbname)
     if manifest is not None:
         verify_artifact(manifest, artifact)
-    run_command(pg_restore_command(artifact), libpq_env(info))
+    run_command(pg_restore_command(artifact, info.dbname), libpq_env(info))
 
 
 def do_verify(source_dsn: str, target_dsn: str, schema: str) -> dict:
