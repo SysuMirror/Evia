@@ -6,15 +6,19 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 )
 
@@ -222,8 +226,84 @@ func (r *KafkaReader) Commit(ctx context.Context, messages []Message) error {
 func (r *KafkaReader) AllowRebalance() { r.client.AllowRebalance() }
 func (r *KafkaReader) Close()          { r.client.CloseAllowingRebalance() }
 
+// SampleLag reports one lag sample per partition currently assigned to this
+// reader. It combines the consumer group's in-memory consume position (updated
+// on group join — including the reset start position before the first commit —
+// and on every successful commit) with broker log end offsets fetched with
+// ReadCommitted isolation to match the fetch path. Partitions with an unknown
+// position are skipped; results are sorted deterministically.
+func (r *KafkaReader) SampleLag(ctx context.Context) ([]PartitionLag, error) {
+	committed := r.client.CommittedOffsets()
+	if len(committed) == 0 {
+		return nil, nil
+	}
+	topics := make([]string, 0, len(committed))
+	for topic := range committed {
+		topics = append(topics, topic)
+	}
+	sort.Strings(topics)
+	request := kmsg.NewPtrListOffsetsRequest()
+	request.ReplicaID = -1
+	request.IsolationLevel = 1 // ReadCommitted, matching kgo.FetchIsolationLevel.
+	for _, topic := range topics {
+		partitions := make([]int32, 0, len(committed[topic]))
+		for partition := range committed[topic] {
+			partitions = append(partitions, partition)
+		}
+		sort.Slice(partitions, func(i, j int) bool { return partitions[i] < partitions[j] })
+		entry := kmsg.ListOffsetsRequestTopic{Topic: topic}
+		for _, partition := range partitions {
+			// Timestamp -1 requests the latest (log end) offset.
+			entry.Partitions = append(entry.Partitions, kmsg.ListOffsetsRequestTopicPartition{Partition: partition, Timestamp: -1})
+		}
+		request.Topics = append(request.Topics, entry)
+	}
+	response, err := r.client.Request(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	offsets, ok := response.(*kmsg.ListOffsetsResponse)
+	if !ok {
+		return nil, errors.New("unexpected Kafka list offsets response type")
+	}
+	out := make([]PartitionLag, 0)
+	for _, topicEntry := range offsets.Topics {
+		for _, partitionEntry := range topicEntry.Partitions {
+			if partitionEntry.ErrorCode != 0 {
+				return nil, fmt.Errorf("Kafka list offsets failed for %s partition %d: %w",
+					topicEntry.Topic, partitionEntry.Partition, kerr.ErrorForCode(partitionEntry.ErrorCode))
+			}
+			position, ok := committed[topicEntry.Topic][partitionEntry.Partition]
+			if !ok || position.Offset < 0 {
+				continue
+			}
+			lag := partitionEntry.Offset - position.Offset
+			if lag < 0 {
+				// A log truncation can briefly move the log end before the
+				// committed position; clamp instead of emitting a negative.
+				lag = 0
+			}
+			out = append(out, PartitionLag{
+				Topic:           topicEntry.Topic,
+				Partition:       partitionEntry.Partition,
+				CommittedOffset: position.Offset,
+				LogEndOffset:    partitionEntry.Offset,
+				Lag:             lag,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Topic != out[j].Topic {
+			return out[i].Topic < out[j].Topic
+		}
+		return out[i].Partition < out[j].Partition
+	})
+	return out, nil
+}
+
 var _ ingestion.Queue = (*KafkaProducer)(nil)
 var _ Reader = (*KafkaReader)(nil)
+var _ LagReader = (*KafkaReader)(nil)
 var _ Quarantiner = (*KafkaProducer)(nil)
 
 // admit fails immediately when the bounded set of unresolved publications is

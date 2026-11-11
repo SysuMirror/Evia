@@ -35,7 +35,7 @@ func (NoopLagObserver) PartitionLagObserved(PartitionLag) {}
 
 // LagReader reports lag for the partitions currently assigned to this
 // process. An empty slice with no error means the group holds no assignment
-// with a known committed position yet, for example right after a rebalance.
+// yet, for example before the first group join completes.
 type LagReader interface {
 	SampleLag(ctx context.Context) ([]PartitionLag, error)
 }
