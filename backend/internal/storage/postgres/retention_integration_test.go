@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -194,6 +196,78 @@ func TestRetentionWorkerStoreListsPoliciesAndRecordsSweeps(t *testing.T) {
 	var failedCount int
 	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM retention_sweeps WHERE status='failed'`).Scan(&failedCount); e != nil || failedCount != 1 {
 		t.Fatalf("failed sweep count=%d err=%v", failedCount, e)
+	}
+}
+
+// integrationFactSweeper is a deterministic ClickHouse stand-in for worker
+// tests that run against real PostgreSQL but no ClickHouse instance.
+type integrationFactSweeper struct {
+	candidates uint64
+}
+
+func (s integrationFactSweeper) CountExpired(context.Context, string, string, time.Time) (uint64, error) {
+	return s.candidates, nil
+}
+
+func (s integrationFactSweeper) DeleteExpired(context.Context, string, string, time.Time) (uint64, error) {
+	return s.candidates, nil
+}
+
+type integrationScopeTelemetry struct {
+	environment string
+	mode        string
+	succeeded   bool
+	candidates  uint64
+}
+
+type integrationSweepObserver struct {
+	passOK  int
+	passBad int
+	scopes  []integrationScopeTelemetry
+}
+
+func (o *integrationSweepObserver) SweepPassCompleted(succeeded bool, _ time.Duration) {
+	if succeeded {
+		o.passOK++
+	} else {
+		o.passBad++
+	}
+}
+
+func (o *integrationSweepObserver) ScopeSwept(environment, mode string, succeeded bool, candidates uint64, _ time.Duration) {
+	o.scopes = append(o.scopes, integrationScopeTelemetry{
+		environment: environment, mode: mode, succeeded: succeeded, candidates: candidates,
+	})
+}
+
+func discardRetentionLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func TestRetentionWorkerEmitsObserverEventsOverRealStore(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	svc := retention.NewService(f.s)
+	if _, e := svc.Put(ctx, retentionInput(f, "observer-1", "production", 90), retention.CreateRevision); e != nil {
+		t.Fatal(e)
+	}
+
+	observer := &integrationSweepObserver{}
+	worker := retention.NewSweepWorker(f.s, integrationFactSweeper{candidates: 11},
+		false, time.Minute, discardRetentionLogger(), observer)
+	if _, e := worker.RunOnce(ctx); e != nil {
+		t.Fatal(e)
+	}
+
+	if observer.passOK != 1 || observer.passBad != 0 {
+		t.Fatalf("pass telemetry wrong: %+v", observer)
+	}
+	if len(observer.scopes) != 1 {
+		t.Fatalf("expected one scope event, got %+v", observer.scopes)
+	}
+	scope := observer.scopes[0]
+	if scope.environment != "production" || scope.mode != retention.ModeDryRun || !scope.succeeded || scope.candidates != 11 {
+		t.Fatalf("scope telemetry wrong: %+v", scope)
 	}
 }
 

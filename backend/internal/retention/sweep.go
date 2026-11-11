@@ -88,6 +88,7 @@ type SweepStore interface {
 type SweepWorker struct {
 	store    SweepStore
 	sweeper  FactSweeper
+	observer SweepObserver
 	enforce  bool
 	interval time.Duration
 	now      func() time.Time
@@ -100,6 +101,7 @@ func NewSweepWorker(
 	enforce bool,
 	interval time.Duration,
 	logger *slog.Logger,
+	observer SweepObserver,
 ) *SweepWorker {
 	if interval <= 0 {
 		interval = time.Hour
@@ -107,9 +109,13 @@ func NewSweepWorker(
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if observer == nil {
+		observer = NoopSweepObserver{}
+	}
 	return &SweepWorker{
 		store:    store,
 		sweeper:  sweeper,
+		observer: observer,
 		enforce:  enforce,
 		interval: interval,
 		now:      func() time.Time { return time.Now().UTC() },
@@ -128,26 +134,35 @@ type SweepResult struct {
 // RunOnce evaluates every configured policy exactly once. It is the unit used
 // both by the periodic Run loop and by tests that need deterministic control.
 func (w *SweepWorker) RunOnce(ctx context.Context) ([]SweepResult, error) {
+	passStart := time.Now()
 	policies, err := w.store.ListRetentionPolicies(ctx)
 	if err != nil {
+		w.observer.SweepPassCompleted(false, time.Since(passStart))
 		return nil, err
 	}
 	results := make([]SweepResult, 0, len(policies))
 	for _, policy := range policies {
 		if ctx.Err() != nil {
+			// Shutdown cancellation is not an operational pass failure.
 			return results, ctx.Err()
 		}
 		results = append(results, w.sweepOne(ctx, policy))
 	}
+	w.observer.SweepPassCompleted(true, time.Since(passStart))
 	return results, nil
 }
 
 func (w *SweepWorker) sweepOne(ctx context.Context, policy Policy) SweepResult {
+	scopeStart := time.Now()
 	now := w.now()
 	plan := PlanSweep(policy, now)
 	dryRun := !w.enforce
 	record := newRecord(plan, dryRun, now)
 	result := SweepResult{Plan: plan, DryRun: dryRun}
+	defer func() {
+		w.observer.ScopeSwept(plan.Environment, sweepMode(dryRun),
+			result.Err == nil, result.Candidates, time.Since(scopeStart))
+	}()
 
 	candidates, countErr := w.sweeper.CountExpired(ctx, plan.ProjectID, plan.Environment, plan.Cutoff)
 	if countErr != nil {

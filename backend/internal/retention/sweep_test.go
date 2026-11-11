@@ -75,7 +75,7 @@ func TestPlanSweepCutoffIsWindowBeforeNow(t *testing.T) {
 func TestDryRunCountsButNeverDeletesAndRecordsSucceeded(t *testing.T) {
 	store := &fakeSweepStore{policies: []Policy{testPolicy("p1", "development", 30)}}
 	sweeper := &fakeFactSweeper{expired: map[string]uint64{key("p1", "development"): 7}}
-	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger())
+	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger(), NoopSweepObserver{})
 
 	results, err := worker.RunOnce(context.Background())
 	if err != nil || len(results) != 1 {
@@ -101,7 +101,7 @@ func TestDryRunCountsButNeverDeletesAndRecordsSucceeded(t *testing.T) {
 func TestEnforcementDeletesAndPersistsActualCount(t *testing.T) {
 	store := &fakeSweepStore{policies: []Policy{testPolicy("p1", "production", 365)}}
 	sweeper := &fakeFactSweeper{expired: map[string]uint64{key("p1", "production"): 42}}
-	worker := NewSweepWorker(store, sweeper, true, time.Minute, discardLogger())
+	worker := NewSweepWorker(store, sweeper, true, time.Minute, discardLogger(), NoopSweepObserver{})
 
 	results, err := worker.RunOnce(context.Background())
 	if err != nil || results[0].Err != nil || results[0].Candidates != 42 || results[0].DryRun {
@@ -132,7 +132,7 @@ func TestSingleScopeFailureIsRecordedAndDoesNotAbortOthers(t *testing.T) {
 		failProject: "p-bad",
 		failErr:     errors.New("clickhouse unavailable"),
 	}
-	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger())
+	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger(), NoopSweepObserver{})
 
 	results, err := worker.RunOnce(context.Background())
 	if err != nil || len(results) != 2 {
@@ -152,7 +152,7 @@ func TestSingleScopeFailureIsRecordedAndDoesNotAbortOthers(t *testing.T) {
 func TestRunOncePropagatesContextCancellation(t *testing.T) {
 	store := &fakeSweepStore{policies: []Policy{testPolicy("p1", "development", 30), testPolicy("p2", "development", 30)}}
 	sweeper := &fakeFactSweeper{expired: map[string]uint64{}}
-	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger())
+	worker := NewSweepWorker(store, sweeper, false, time.Minute, discardLogger(), NoopSweepObserver{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := worker.RunOnce(ctx); !errors.Is(err, context.Canceled) {
@@ -162,7 +162,7 @@ func TestRunOncePropagatesContextCancellation(t *testing.T) {
 
 func TestListFailureSurfacesFromRunOnce(t *testing.T) {
 	store := &fakeSweepStore{listErr: errors.New("pg unavailable")}
-	worker := NewSweepWorker(store, &fakeFactSweeper{}, false, time.Minute, discardLogger())
+	worker := NewSweepWorker(store, &fakeFactSweeper{}, false, time.Minute, discardLogger(), NoopSweepObserver{})
 	if _, err := worker.RunOnce(context.Background()); err == nil {
 		t.Fatal("listing failure must surface")
 	}
