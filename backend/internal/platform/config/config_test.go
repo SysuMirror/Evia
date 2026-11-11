@@ -70,6 +70,27 @@ func TestFeatureOptInAndWorkerIndependence(t *testing.T) {
 	}
 }
 
+func TestErasureWorkerOnlyNeedsPostgresAndClickHouse(t *testing.T) {
+	values := runtimeValues()
+	// Browser-only and streaming settings must not gate the erasure process.
+	delete(values, "EVIA_PUBLIC_ORIGIN")
+	delete(values, "EVIA_CURSOR_KEY")
+	delete(values, "EVIA_KAFKA_BROKERS")
+	delete(values, "EVIA_REDIS_URL")
+	delete(values, "EVIA_COLLECTION_ENABLED")
+	delete(values, "EVIA_ANALYSIS_ENABLED")
+	c, err := ReadFor("erasure-worker", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatalf("erasure worker rejected a minimal configuration: %v", err)
+	}
+	if c.CollectionEnabled || c.AnalysisEnabled || len(c.CursorKey) != 0 || len(c.SourceSecretKey) != 0 {
+		t.Fatal("erasure worker pulled in unrelated runtime configuration")
+	}
+	if c.ClickHouse.URL == "" || c.ClickHouse.Database == "" {
+		t.Fatal("erasure worker lost its ClickHouse executor configuration")
+	}
+}
+
 func TestRuntimeConfigurationRejectsUnsafeSettings(t *testing.T) {
 	tests := []struct{ name, command, key, value string }{
 		{"collection flag", "serve", "EVIA_COLLECTION_ENABLED", "yes"},

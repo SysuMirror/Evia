@@ -47,7 +47,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -97,7 +97,9 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		}
 	}
 	c.DeliveryEnabled = c.CollectionEnabled && c.Kafka.ProbeTopic != ""
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" {
+	// The erasure worker only needs PostgreSQL plus the ClickHouse executor;
+	// it deliberately loads neither Kafka nor the Redis admission budget.
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
