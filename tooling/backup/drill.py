@@ -131,8 +131,13 @@ def pg_restore_command(artifact: Path, dbname: str) -> list[str]:
     # target is explicit so the restore never depends on ambient environment.
     if not IDENTIFIER_PATTERN.fullmatch(dbname):
         raise ValueError(f"invalid restore database name {dbname!r}")
+    # --clean/--if-exists make the restore idempotent: a fresh scratch database
+    # already carries a public schema, and re-runs must replace every object.
+    # The scratch name allowlist guarantees this never targets a real database.
     return [
         "pg_restore",
+        "--clean",
+        "--if-exists",
         "--exit-on-error",
         "--no-owner",
         "--no-privileges",

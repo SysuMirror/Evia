@@ -78,6 +78,8 @@ class CommandBuilderTest(unittest.TestCase):
     def test_pg_restore_exit_on_error(self):
         cmd = drill.pg_restore_command(Path("/tmp/backup.dump"), "evia_restore_drill_ab12cd34ef56")
         self.assertIn("--exit-on-error", cmd)
+        self.assertIn("--clean", cmd)
+        self.assertIn("--if-exists", cmd)
         self.assertEqual(cmd[-3:-1], ["-d", "evia_restore_drill_ab12cd34ef56"])
         self.assertEqual(cmd[-1], "/tmp/backup.dump")
         with self.assertRaises(ValueError):
