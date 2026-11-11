@@ -5,6 +5,7 @@ import {
   ApiError,
   subscribeUnauthorized,
   subscribeProjectAccessDenied,
+  type ErasureInput,
   type MachineIssued,
   type MachinePrincipalInput,
   type MetricDefinition,
@@ -926,4 +927,37 @@ test('metric reads encode environment scope and write calls pin revisions and id
   controller.abort();
   for (const call of fetch.mock.calls)
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
+
+test('erasure jobs encode scope, idempotency keys and signed cursors', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  const input: ErasureInput = {
+    environment: 'production',
+    uid: 'user-to-erase',
+    reason: 'customer right to erasure',
+  };
+  await api.createErasureJob('p/q', input, 'erase-key', 'csrf', controller.signal);
+  await api.listErasureJobs('p/q', { cursor: 'a+/=', limit: 25 }, controller.signal);
+  await api.listErasureJobs('p/q');
+  await api.getErasureJob('p/q', '77777777-7777-4777-8777-777777777777', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/erasure-jobs',
+      '/api/v1/projects/p%2Fq/erasure-jobs?cursor=a%2B%2F%3D&limit=25',
+      '/api/v1/projects/p%2Fq/erasure-jobs',
+      '/api/v1/projects/p%2Fq/erasure-jobs/77777777-7777-4777-8777-777777777777',
+    ],
+  );
+  const post = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(post.method, 'POST');
+  assert.equal((post.headers as Headers).get('Idempotency-Key'), 'erase-key');
+  assert.equal((post.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(post.body as string), input);
+  controller.abort();
+  for (const index of [0, 1, 3]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.signal?.aborted, true);
+  }
 });

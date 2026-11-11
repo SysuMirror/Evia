@@ -31,6 +31,9 @@ export type MachinePrincipalList = components['schemas']['MachinePrincipalList']
 export type MachinePrincipalInput = components['schemas']['MachinePrincipalInput'];
 export type MachineCredentialRotation = components['schemas']['MachineCredentialRotation'];
 export type MachineIssued = components['schemas']['MachineIssued'];
+export type ErasureInput = components['schemas']['ErasureInput'];
+export type ErasureJob = components['schemas']['ErasureJob'];
+export type ErasureList = components['schemas']['ErasureList'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -237,6 +240,8 @@ const savedAnalysisPath = (projectID: string, analysisID: string) =>
   `${projectPath(projectID)}/saved-analyses/${encodeURIComponent(analysisID)}`;
 const machinePrincipalPath = (projectID: string, principalID: string) =>
   `${projectPath(projectID)}/machine-principals/${encodeURIComponent(principalID)}`;
+const erasureJobPath = (projectID: string, jobID: string) =>
+  `${projectPath(projectID)}/erasure-jobs/${encodeURIComponent(jobID)}`;
 const metricPath = (projectID: string, metricID: string) =>
   `${projectPath(projectID)}/metrics/${encodeURIComponent(metricID)}`;
 const formulaMetricPath = (projectID: string, metricID: string) =>
@@ -972,4 +977,29 @@ export const api = {
       `${projectPath(projectID)}/queries/${encodeURIComponent(queryID)}/result`,
       { signal },
     ),
+  createErasureJob: (
+    projectID: string,
+    body: ErasureInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ErasureJob>(`${projectPath(projectID)}/erasure-jobs`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  listErasureJobs: (
+    projectID: string,
+    page: { cursor?: string; limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    request<ErasureList>(
+      `${projectPath(projectID)}/erasure-jobs${catalogQuery({ cursor: page.cursor, limit: page.limit })}`,
+      { signal },
+    ),
+  getErasureJob: (projectID: string, jobID: string, signal?: AbortSignal) =>
+    request<ErasureJob>(erasureJobPath(projectID, jobID), { signal }),
 };
