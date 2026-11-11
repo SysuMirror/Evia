@@ -446,16 +446,20 @@ func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, l
 		return stageError("query worker startup", err)
 	}
 	processID := c.InstanceID + "-" + ids.New()
+	// One registry and observer are shared by the whole pool so counters
+	// aggregate across every configured query worker.
+	registry := observe.NewRegistry("query-worker")
+	observer := newQueryMetricsObserver(registry)
 	tasks := make([]task, 0, c.QueryWorkers)
 	// Route internal formula jobs to a bounded fan-out; ordinary requests pass
 	// through to the ClickHouse engine unchanged.
 	var executionEngine analysis.Engine = reporting.NewCompositeFormulaEngine(engine, store)
 	for i := range c.QueryWorkers {
-		worker := analysis.NewWorker(store, executionEngine, processID+"-"+strconv.Itoa(i))
+		worker := analysis.NewWorker(store, executionEngine, processID+"-"+strconv.Itoa(i), observer)
 		tasks = append(tasks, task{name: fmt.Sprintf("query worker %d", i), run: worker.Run})
 	}
 	logger.Info("query workers starting", "count", c.QueryWorkers)
-	return supervise(ctx, append(metricsTasks(c, "query-worker", observe.NewRegistry("query-worker")), tasks...), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "query-worker", registry), tasks...), 15*time.Second)
 }
 
 func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
