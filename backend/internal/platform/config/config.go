@@ -157,6 +157,11 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 			return c, errors.New("export-worker requires EVIA_EXPORT_DIR")
 		}
 	}
+	if command == "serve" {
+		// Optional: when unset, export job APIs still enqueue work but the
+		// capability download route is not registered.
+		c.ExportDir = get("EVIA_EXPORT_DIR")
+	}
 	return c, nil
 }
 

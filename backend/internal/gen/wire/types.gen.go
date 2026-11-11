@@ -457,21 +457,33 @@ type EventVersion struct {
 	Definition    DraftInput `json:"definition"`
 }
 
+type ExportGrant struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+}
+
 type ExportInput struct {
-	Query   QueryRequest `json:"query"`
-	Format  string       `json:"format"`
-	MaxRows int64        `json:"max_rows"`
+	Name             string       `json:"name"`
+	Environment      string       `json:"environment"`
+	Query            QueryRequest `json:"query"`
+	ArtifactExpiryAt *string      `json:"artifact_expiry_at,omitempty"`
 }
 
 type ExportJob struct {
-	JobID       string   `json:"job_id"`
-	State       string   `json:"state"`
-	Phase       string   `json:"phase"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
-	Error       *Problem `json:"error,omitempty"`
-	RowsWritten int64    `json:"rows_written"`
-	ExpiresAt   *string  `json:"expires_at,omitempty"`
+	JobID          string  `json:"job_id"`
+	ProjectID      string  `json:"project_id"`
+	Environment    string  `json:"environment"`
+	Name           string  `json:"name"`
+	Format         string  `json:"format"`
+	State          string  `json:"state"`
+	ErrorCode      *string `json:"error_code"`
+	ResultRows     *int64  `json:"result_rows"`
+	ArtifactBytes  *int64  `json:"artifact_bytes"`
+	ArtifactSha256 *string `json:"artifact_sha256"`
+	ExpiresAt      *string `json:"expires_at"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
+	FinishedAt     *string `json:"finished_at"`
 }
 
 type ExportList struct {

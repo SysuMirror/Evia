@@ -6,6 +6,7 @@ import {
   subscribeUnauthorized,
   subscribeProjectAccessDenied,
   type ErasureInput,
+  type ExportInput,
   type MachineIssued,
   type MachinePrincipalInput,
   type MetricDefinition,
@@ -960,6 +961,55 @@ test('erasure jobs encode scope, idempotency keys and signed cursors', async () 
     const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
     assert.equal(init.signal?.aborted, true);
   }
+});
+
+test('export jobs encode scope, lifecycle actions and grant redemption path', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  // The generated inline query reference retains its JSON Schema $defs key;
+  // the exported QueryRequest alias omits it, so cast the full wire document.
+  const input = {
+    name: 'weekly export',
+    environment: 'production',
+    query: {
+      kind: 'trend',
+      environment: 'production',
+      time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-12T00:00:00Z' },
+      timezone: 'UTC',
+    },
+  } as unknown as ExportInput;
+  await api.createExportJob('p/q', input, 'export-key', 'csrf', controller.signal);
+  await api.listExportJobs('p/q', { cursor: 'a+/=', limit: 25 }, controller.signal);
+  await api.getExportJob('p/q', '88888888-8888-4888-8888-888888888888', controller.signal);
+  await api.cancelExportJob(
+    'p/q',
+    '88888888-8888-4888-8888-888888888888',
+    'csrf',
+    controller.signal,
+  );
+  await api.createExportDownloadGrant(
+    'p/q',
+    '88888888-8888-4888-8888-888888888888',
+    'csrf',
+    controller.signal,
+  );
+  assert.equal(api.exportDownloadPath('tok en'), '/api/v1/exports/downloads/tok%20en');
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/exports',
+      '/api/v1/projects/p%2Fq/exports?cursor=a%2B%2F%3D&limit=25',
+      '/api/v1/projects/p%2Fq/exports/88888888-8888-4888-8888-888888888888',
+      '/api/v1/projects/p%2Fq/exports/88888888-8888-4888-8888-888888888888',
+      '/api/v1/projects/p%2Fq/exports/88888888-8888-4888-8888-888888888888/download-grants',
+    ],
+  );
+  const post = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(post.method, 'POST');
+  assert.equal((post.headers as Headers).get('Idempotency-Key'), 'export-key');
+  assert.equal((post.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(post.body as string), input);
+  controller.abort();
 });
 
 test('retention policy reads encode environment and writes send revision, CSRF and idempotency', async () => {

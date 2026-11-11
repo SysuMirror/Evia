@@ -170,7 +170,6 @@ func TestIngestWorkerLagInterval(t *testing.T) {
 	}
 }
 
-
 func TestExportWorkerRequiresArtifactDirectory(t *testing.T) {
 	values := runtimeValues()
 	values["EVIA_EXPORT_DIR"] = "/var/lib/evia/exports"

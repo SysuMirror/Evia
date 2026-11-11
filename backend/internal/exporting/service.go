@@ -75,12 +75,26 @@ func (s *Service) GetJob(ctx context.Context, actor, project, jobID string) (Job
 	return s.store.GetExportJob(ctx, actor, project, jobID)
 }
 
+// Export-prefixed aliases satisfy the transport surface while keeping the
+// persistence vocabulary consistent across worker and HTTP callers.
+func (s *Service) GetExportJob(ctx context.Context, actor, project, jobID string) (Job, error) {
+	return s.GetJob(ctx, actor, project, jobID)
+}
+
 func (s *Service) ListJobs(ctx context.Context, actor, project string, filter ListFilter) (Page, error) {
 	return s.store.ListExportJobs(ctx, actor, project, filter)
 }
 
+func (s *Service) ListExportJobs(ctx context.Context, actor, project string, filter ListFilter) (Page, error) {
+	return s.ListJobs(ctx, actor, project, filter)
+}
+
 func (s *Service) CancelJob(ctx context.Context, actor, project, jobID string) (Job, error) {
 	return s.store.CancelExportJob(ctx, actor, project, jobID)
+}
+
+func (s *Service) CancelExportJob(ctx context.Context, actor, project, jobID string) (Job, error) {
+	return s.CancelJob(ctx, actor, project, jobID)
 }
 
 // MintGrant creates a one-time download token for a completed job. The

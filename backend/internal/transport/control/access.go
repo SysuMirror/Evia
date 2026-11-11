@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/exporting"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -42,6 +44,9 @@ type API struct {
 	Dashboards      reporting.DashboardService
 	Delivery        DeliveryService
 	Erasure         ErasureService
+	Exports         ExportService
+	ExportDownloads exporting.ArtifactStore
+	ExportValidator analysis.Validator
 	Retention       RetentionService
 	RetentionSweeps RetentionSweepService
 	Cursor          *cursor.Codec
@@ -75,6 +80,7 @@ func (a *API) Handler() http.Handler {
 	(&FormulaMetricsAPI{API: a, Service: a.FormulaMetrics}).Register(mux)
 	(&DashboardsAPI{API: a, Service: a.Dashboards}).Register(mux)
 	(&ErasureAPI{API: a, Service: a.Erasure}).Register(mux)
+	(&ExportAPI{API: a, Service: a.Exports, Validator: a.ExportValidator, Downloads: a.ExportDownloads}).Register(mux)
 	(&RetentionAPI{API: a, Service: a.Retention, Sweeps: a.RetentionSweeps}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {

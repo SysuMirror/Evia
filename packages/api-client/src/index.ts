@@ -34,6 +34,10 @@ export type MachineIssued = components['schemas']['MachineIssued'];
 export type ErasureInput = components['schemas']['ErasureInput'];
 export type ErasureJob = components['schemas']['ErasureJob'];
 export type ErasureList = components['schemas']['ErasureList'];
+export type ExportInput = components['schemas']['ExportInput'];
+export type ExportJob = components['schemas']['ExportJob'];
+export type ExportList = components['schemas']['ExportList'];
+export type ExportGrant = components['schemas']['ExportGrant'];
 export type RetentionPolicy = components['schemas']['RetentionPolicy'];
 export type RetentionPolicyInput = components['schemas']['RetentionPolicyInput'];
 export type RetentionSweep = components['schemas']['RetentionSweep'];
@@ -246,6 +250,8 @@ const machinePrincipalPath = (projectID: string, principalID: string) =>
   `${projectPath(projectID)}/machine-principals/${encodeURIComponent(principalID)}`;
 const erasureJobPath = (projectID: string, jobID: string) =>
   `${projectPath(projectID)}/erasure-jobs/${encodeURIComponent(jobID)}`;
+const exportJobPath = (projectID: string, jobID: string) =>
+  `${projectPath(projectID)}/exports/${encodeURIComponent(jobID)}`;
 const metricPath = (projectID: string, metricID: string) =>
   `${projectPath(projectID)}/metrics/${encodeURIComponent(metricID)}`;
 const formulaMetricPath = (projectID: string, metricID: string) =>
@@ -1047,4 +1053,45 @@ export const api = {
       { signal },
     );
   },
+  createExportJob: (
+    projectID: string,
+    body: ExportInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ExportJob>(`${projectPath(projectID)}/exports`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  listExportJobs: (
+    projectID: string,
+    page: { cursor?: string; limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    request<ExportList>(
+      `${projectPath(projectID)}/exports${catalogQuery({ cursor: page.cursor, limit: page.limit })}`,
+      { signal },
+    ),
+  getExportJob: (projectID: string, jobID: string, signal?: AbortSignal) =>
+    request<ExportJob>(exportJobPath(projectID, jobID), { signal }),
+  cancelExportJob: (projectID: string, jobID: string, csrf: string, signal?: AbortSignal) =>
+    request<ExportJob>(exportJobPath(projectID, jobID), { method: 'DELETE', csrf, signal }),
+  createExportDownloadGrant: (
+    projectID: string,
+    jobID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ExportGrant>(`${exportJobPath(projectID, jobID)}/download-grants`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
+  // Relative capability path; callers resolve it against their API origin and
+  // fetch it directly with the one-time token, without session headers.
+  exportDownloadPath: (token: string) => `/api/v1/exports/downloads/${encodeURIComponent(token)}`,
 };

@@ -205,6 +205,19 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	retentionService := retention.NewServiceWithSweepReader(store, store)
 	api.Retention = retentionService
 	api.RetentionSweeps = retentionService
+	exportValidator, err := contract.New()
+	if err != nil {
+		return stageError("export contract compilation", err)
+	}
+	api.ExportValidator = exportValidator
+	api.Exports = exporting.NewService(store)
+	if c.ExportDir != "" {
+		artifactStore, err := exporting.NewFileArtifactStore(c.ExportDir)
+		if err != nil {
+			return stageError("export artifact store", err)
+		}
+		api.ExportDownloads = artifactStore
+	}
 	mux := http.NewServeMux()
 	probes := []func(context.Context) error{store.Pool.Ping}
 	client := httpClient()
