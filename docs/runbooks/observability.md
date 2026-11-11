@@ -75,6 +75,19 @@ processing. Labels are fixed enums, so cardinality is independent of traffic:
 | `evia_ingest_batches_total` | counter | `result` | Durable batch outcomes (`succeeded`/`failed`); shutdown cancellation is not counted. |
 | `evia_ingest_records_total` | counter | `outcome` | Valid facts written (`ingested`) versus undecodable messages sent to quarantine (`quarantined`). |
 | `evia_ingest_batch_duration_seconds` | histogram | `result` | Wall-clock duration of one durable batch. |
+| `evia_ingest_consumer_lag` | gauge | `topic`, `partition` | Messages between the group consume position and the broker log end offset per assigned partition. |
+| `evia_ingest_consumer_committed_offset` | gauge | `topic`, `partition` | Group consume position (next offset to read); before the first commit this is the reset start position. |
+| `evia_ingest_consumer_log_end_offset` | gauge | `topic`, `partition` | Broker log end offset (high watermark) for the consumed partition. |
+
+The three lag gauges are sampled by a `LagMonitor` task inside `ingest-worker`,
+defaulting to one sample every 30 seconds via `EVIA_INGEST_LAG_INTERVAL`
+(allowed values: zero to disable, or `5s`..`10m`). Sampling combines the
+in-process group position with a broker `ListOffsets` request; transient
+sampling failures are logged and retried on the next tick and never stop
+ingestion. Label cardinality is bounded by the Kafka partition count. Gauge
+series for a revoked partition retain their last value until the process
+restarts, so the lag alert uses the current per-partition samples rather than
+derivative assumptions.
 
 Query worker domain instruments, emitted by `query-worker` from query job
 lifecycle events. One registry is shared by the whole worker pool, so counters

@@ -63,6 +63,7 @@ floor so a single failure on a near-idle job does not page.
 | --- | --- | --- |
 | `EviaHTTPLatencyHigh` | Worst-route p99 above 2 s for 15 minutes | Compare per-route latency and in-flight requests before capacity changes. |
 | `EviaQuarantineRatioHigh` | Over 5% quarantined records for 30 minutes above 0.1 records/s | Inspect producer schemas and dead-letter diagnostic reasons. |
+| `EviaConsumerLagHigh` | Any partition lag above 1000 messages for 10 minutes | Check ingest throughput, ClickHouse write health and backlog replay; the lag/committed/log-end gauges identify the partition. |
 | `EviaQueryClientRejectionBurn` | Over 10% non-retryable client rejections for 30 minutes | Adjust client workloads or review query capacity assumptions; not an SLO breach. |
 | `EviaProcessRestarted` | `process_start_time_seconds` changed within 15 minutes | Check supervisor logs and decide whether the restart was planned. |
 | `EviaGoroutineLeak` | Over 500 goroutines for 15 minutes | Correlate with `go_threads` and heap growth; look for blocked dependency calls. |
@@ -77,9 +78,10 @@ policy.
 [`deploy/monitoring/grafana-dashboard.json`](../../deploy/monitoring/grafana-dashboard.json)
 is a Grafana 11 dashboard covering six rows: control API (availability,
 request rate, p99 latency, in-flight), ingest (success ratio, record outcomes,
-batch results, batch p95), query (success ratio, codes, job p95), erasure
-(jobs per hour, claim polls), retention (sweeps and candidates) and process
-health (scrape state, goroutines, OS memory, uptime). Import it through
+batch results, batch p95, per-partition consumer lag), query (success ratio,
+codes, job p95), erasure (jobs per hour, claim polls), retention (sweeps and
+candidates) and process health (scrape state, goroutines, OS memory, uptime).
+Import it through
 Dashboards → New → Import and select the Prometheus datasource when prompted
 for the `DS_PROMETHEUS` variable; the dashboard contains no hardcoded datasource
 UID. The monitoring gate walks every dashboard expression with the same
