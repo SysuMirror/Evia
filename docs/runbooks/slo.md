@@ -72,14 +72,29 @@ for N minutes"): legitimate low-traffic deployments must not produce false
 pages. Add such alerts as site-specific rules rather than changing the shared
 policy.
 
+## Grafana dashboard
+
+[`deploy/monitoring/grafana-dashboard.json`](../../deploy/monitoring/grafana-dashboard.json)
+is a Grafana 11 dashboard covering six rows: control API (availability,
+request rate, p99 latency, in-flight), ingest (success ratio, record outcomes,
+batch results, batch p95), query (success ratio, codes, job p95), erasure
+(jobs per hour, claim polls), retention (sweeps and candidates) and process
+health (scrape state, goroutines, OS memory, uptime). Import it through
+Dashboards → New → Import and select the Prometheus datasource when prompted
+for the `DS_PROMETHEUS` variable; the dashboard contains no hardcoded datasource
+UID. The monitoring gate walks every dashboard expression with the same
+emitted-metric allowlist as the rules, so a panel referencing a renamed or
+nonexistent metric fails `make check`.
+
 ## Verification
 
 Two independent gates protect the rules:
 
 1. Repository-native static gate, wired into `make check` via
-   `tooling/check_monitoring.py`: every metric referenced by an expression must
-   be registered in non-test Go sources (or be the Prometheus built-in `up` or
-   a recording rule defined in the same file), alerts must carry a severity and
+   `tooling/check_monitoring.py`: every metric referenced by an expression — in
+   the rule file, the promtool test or the Grafana dashboard — must be
+   registered in non-test Go sources (or be the Prometheus built-in `up` or a
+   recording rule defined in the rule file), alerts must carry a severity and
    summary/description annotations, and the rule test may only reference real
    metrics and alerts. The gate ships with Python self-tests in
    `tooling/test_check_monitoring.py`.
@@ -99,10 +114,10 @@ when the module proxy mirrors that version.
 
 ## Scope and non-goals
 
-The rules detect process, pipeline and compliance failures. They do not prove
-ClickHouse capacity at the target scale (see the query capacity report), do not
-replace backup/restore drills, and no Grafana dashboard or Alertmanager
-routing/notification tree ships in this repository yet. SLO compliance reporting
+The rules and dashboard detect process, pipeline and compliance failures. They
+do not prove ClickHouse capacity at the target scale (see the query capacity
+report), do not replace backup/restore drills, and no Alertmanager
+routing/notification tree ships in this repository. SLO compliance reporting
 over 30-day windows requires the Prometheus retention policy to cover at least
 that window; recording rules here are short-window SLIs, not long-term
 compliance archives.
