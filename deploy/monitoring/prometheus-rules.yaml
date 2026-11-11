@@ -1,0 +1,179 @@
+# Prometheus recording and alerting rules for Evia.
+#
+# Every referenced metric is emitted by the zero-dependency
+# internal/platform/observe package; tooling/check_monitoring.py fails the
+# build if an expression references a metric that no process actually exposes.
+# Scrape jobs must be named with the "evia" prefix (see the observability
+# runbook) so the job-level selectors only match Evia targets.
+groups:
+  # SLI recording rules. Ratios are NaN while the denominator is zero, which
+  # intentionally prevents burn alerts from firing on idle processes.
+  - name: evia-slo-recording
+    interval: 30s
+    rules:
+      - record: evia:slo_http_requests:rate5m
+        expr: sum by (job) (rate(evia_http_requests_total[5m]))
+      - record: evia:slo_http_server_errors:rate5m
+        expr: sum by (job) (rate(evia_http_requests_total{code=~"5.."}[5m]))
+      - record: evia:slo_http_availability:ratio5m
+        expr: clamp_max(1 - (evia:slo_http_server_errors:rate5m / evia:slo_http_requests:rate5m), 1)
+      - record: evia:slo_http_latency_p99:seconds5m
+        expr: histogram_quantile(0.99, sum by (job, route, le) (rate(evia_http_request_duration_seconds_bucket[5m])))
+      - record: evia:slo_ingest_batches:rate5m
+        expr: sum by (job) (rate(evia_ingest_batches_total[5m]))
+      - record: evia:slo_ingest_batch_failures:rate5m
+        expr: sum by (job) (rate(evia_ingest_batches_total{result="failed"}[5m]))
+      - record: evia:slo_ingest_success:ratio5m
+        expr: clamp_max(1 - (evia:slo_ingest_batch_failures:rate5m / evia:slo_ingest_batches:rate5m), 1)
+      - record: evia:slo_ingest_records:rate5m
+        expr: sum by (job) (rate(evia_ingest_records_total[5m]))
+      - record: evia:slo_ingest_quarantine:ratio5m
+        expr: sum by (job) (rate(evia_ingest_records_total{outcome="quarantined"}[5m])) / evia:slo_ingest_records:rate5m
+      - record: evia:slo_query_jobs:rate5m
+        expr: sum by (job) (rate(evia_query_jobs_total[5m]))
+      - record: evia:slo_query_retryable_failures:rate5m
+        expr: sum by (job) (rate(evia_query_jobs_total{retryable="true"}[5m]))
+      # Client-caused rejections (for example QUERY_COST_EXCEEDED) are excluded
+      # from the query SLO; they are watched by a separate warning alert.
+      - record: evia:slo_query_success:ratio5m
+        expr: clamp_max(1 - (evia:slo_query_retryable_failures:rate5m / evia:slo_query_jobs:rate5m), 1)
+
+  - name: evia-alerts
+    interval: 30s
+    rules:
+      # --- Critical: data path and compliance failures ---
+      - alert: EviaScrapeTargetDown
+        expr: up{job=~"evia.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Evia scrape target {{ $labels.job }}/{{ $labels.instance }} is unreachable"
+          description: "Prometheus has failed to scrape the target for 5 minutes. Check the process health and the monitoring network path; the worker admin listener may be disabled when EVIA_METRICS_LISTEN is unset."
+
+      - alert: EviaHTTPServerErrorBurn
+        expr: |
+          (evia:slo_http_server_errors:rate5m / evia:slo_http_requests:rate5m > 0.05)
+          and on (job) (evia:slo_http_requests:rate5m > 0.2)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Control API {{ $labels.job }} server error rate above 5%"
+          description: "More than 5% of HTTP requests returned 5xx for 10 minutes with at least 0.2 req/s traffic. Inspect serve logs by request_id and check PostgreSQL/Redis reachability via /readyz."
+
+      - alert: EviaIngestBatchFailureBurn
+        expr: evia:slo_ingest_batch_failures:rate5m > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ingest-worker {{ $labels.job }} has durable batch failures"
+          description: "At least one Kafka batch failed durably in every 5-minute window for 5 minutes; failed batches retry but sustained failure blocks the event pipeline. Check Kafka, ClickHouse and the quarantine/dead-letter path."
+
+      - alert: EviaQueryRetryableFailureBurn
+        expr: evia:slo_query_retryable_failures:rate5m > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "query-worker {{ $labels.job }} has retryable storage failures"
+          description: "Queries keep failing with retryable JobError codes for 10 minutes, indicating ClickHouse or PostgreSQL trouble rather than client input. Check storage health and the query memory budget (fault code 241)."
+
+      - alert: EviaErasureJobFailed
+        expr: sum by (job) (increase(evia_erasure_jobs_total{outcome="failed"}[1h])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "erasure-worker {{ $labels.job }} failed a data erasure job"
+          description: "A data erasure job reached the failed terminal state. The tombstone stays active and writes remain blocked until the job is resolved; inspect the durable failure code and the erasure runbook before retrying."
+
+      - alert: EviaRetentionSweepFailed
+        expr: sum by (job) (increase(evia_retention_sweeps_total{result="failed"}[6h])) > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "retention-worker {{ $labels.job }} failed a retention sweep"
+          description: "A per-scope retention sweep failed within the last 6 hours. Expired data may remain past its policy; inspect retention_sweeps audit rows and the ClickHouse mutation status."
+
+      - alert: EviaRetentionSweepPassFailed
+        expr: sum by (job) (increase(evia_retention_sweep_passes_total{result="failed"}[6h])) > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "retention-worker {{ $labels.job }} failed a full sweep pass"
+          description: "The worker could not even evaluate the retention policy list, so no scope was enforced during this pass. Check PostgreSQL connectivity and the retention worker lease."
+
+      - alert: EviaErasureClaimPollErrors
+        expr: sum by (job) (rate(evia_erasure_claim_polls_total{outcome="error"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "erasure-worker {{ $labels.job }} claim polls are failing"
+          description: "Polling the erasure job queue has errored continuously for 10 minutes; queued erasure requests are not progressing. Check PostgreSQL connectivity and worker permissions."
+
+      - alert: EviaQueryClaimPollErrors
+        expr: sum by (job) (rate(evia_query_claim_polls_total{outcome="error"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "query-worker {{ $labels.job }} claim polls are failing"
+          description: "Polling the query job queue has errored continuously for 10 minutes; submitted analyses are not being picked up. Check PostgreSQL connectivity and worker permissions."
+
+      # --- Warning: degradation requiring attention but not immediate paging ---
+      - alert: EviaHTTPLatencyHigh
+        expr: max by (job) (evia:slo_http_latency_p99:seconds5m) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Control API {{ $labels.job }} p99 latency above 2 seconds"
+          description: "The worst-route 99th percentile latency has exceeded 2 seconds for 15 minutes. Compare per-route latency and in-flight requests before capacity grows."
+
+      - alert: EviaQuarantineRatioHigh
+        expr: |
+          (evia:slo_ingest_quarantine:ratio5m > 0.05)
+          and on (job) (evia:slo_ingest_records:rate5m > 0.1)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ingest-worker {{ $labels.job }} quarantining more than 5% of records"
+          description: "Over 5% of incoming records are undecodable and sent to quarantine for 30 minutes, with at least 0.1 records/s of traffic. Inspect producer schemas and dead-letter diagnostics."
+
+      - alert: EviaQueryClientRejectionBurn
+        expr: |
+          (
+            sum by (job) (rate(evia_query_jobs_total{retryable="false",code!="ok"}[30m]))
+            / sum by (job) (rate(evia_query_jobs_total[30m])) > 0.1
+          )
+          and on (job) (sum by (job) (rate(evia_query_jobs_total[30m])) > 0.1)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "query-worker {{ $labels.job }} rejecting over 10% of client queries"
+          description: "Non-retryable rejections such as QUERY_COST_EXCEEDED exceed 10% of completed queries for 30 minutes. Client workloads need adjustment or the query capacity assumptions need review."
+
+      - alert: EviaProcessRestarted
+        expr: changes(process_start_time_seconds{job=~"evia.*"}[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Evia process {{ $labels.job }}/{{ $labels.instance }} restarted"
+          description: "process_start_time_seconds changed within 15 minutes, indicating a restart or crash recovery. Check supervisor logs and whether the restart was planned."
+
+      - alert: EviaGoroutineLeak
+        expr: go_goroutines{job=~"evia.*"} > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Evia process {{ $labels.job }}/{{ $labels.instance }} holds over 500 goroutines"
+          description: "Goroutine count has stayed above 500 for 15 minutes, which may indicate a leaked worker loop or blocked dependency call. Correlate with go_threads and heap growth."
