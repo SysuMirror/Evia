@@ -28,6 +28,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
+	"github.com/howtomakeaname/Evia/backend/internal/retention"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
 	"github.com/howtomakeaname/Evia/backend/internal/transport/control"
 )
@@ -199,6 +200,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Settings = access.NewSettings(store)
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Erasure = store
+	api.Retention = retention.NewService(store)
 	mux := http.NewServeMux()
 	probes := []func(context.Context) error{store.Pool.Ping}
 	client := httpClient()
