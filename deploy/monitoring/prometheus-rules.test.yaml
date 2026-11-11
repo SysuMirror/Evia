@@ -1,0 +1,157 @@
+# promtool rule unit tests for deploy/monitoring/prometheus-rules.yaml.
+# Run with:
+#   promtool test rules deploy/monitoring/prometheus-rules.test.yaml
+# Synthetic series model each alert family; healthy cases assert silence.
+rule_files:
+  - prometheus-rules.yaml
+
+tests:
+  # Scrape target down: healthy window stays silent, 5 minutes of failures pages.
+  - interval: 30s
+    input_series:
+      - series: 'up{job="evia-serve",instance="serve:18090"}'
+        values: '1+0x10 0+0x14'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: EviaScrapeTargetDown
+      - eval_time: 11m
+        alertname: EviaScrapeTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: evia-serve
+              instance: 'serve:18090'
+              severity: critical
+            exp_annotations:
+              summary: 'Evia scrape target evia-serve/serve:18090 is unreachable'
+              description: 'Prometheus has failed to scrape the target for 5 minutes. Check the process health and the monitoring network path; the worker admin listener may be disabled when EVIA_METRICS_LISTEN is unset.'
+
+  # 5xx burn above 5% with sufficient traffic; the availability SLI is checked
+  # against the same synthetic counters.
+  - interval: 30s
+    input_series:
+      - series: 'evia_http_requests_total{job="evia-serve",method="GET",route="/healthz",code="200"}'
+        values: '20+20x40'
+      - series: 'evia_http_requests_total{job="evia-serve",method="POST",route="/api/v1/events",code="500"}'
+        values: '2+2x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: EviaHTTPServerErrorBurn
+        exp_alerts:
+          - exp_labels:
+              job: evia-serve
+              severity: critical
+            exp_annotations:
+              summary: 'Control API evia-serve server error rate above 5%'
+              description: 'More than 5% of HTTP requests returned 5xx for 10 minutes with at least 0.2 req/s traffic. Inspect serve logs by request_id and check PostgreSQL/Redis reachability via /readyz.'
+    promql_expr_test:
+      - expr: evia:slo_http_availability:ratio5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'evia:slo_http_availability:ratio5m{job="evia-serve"}'
+            value: 0.9090909090909091
+
+  # Healthy traffic must not page despite being evaluated on the same rules.
+  - interval: 30s
+    input_series:
+      - series: 'evia_http_requests_total{job="evia-serve",method="GET",route="/healthz",code="200"}'
+        values: '20+20x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: EviaHTTPServerErrorBurn
+
+  # Durable ingest batch failures burn for 5 minutes.
+  - interval: 30s
+    input_series:
+      - series: 'evia_ingest_batches_total{job="evia-ingest",result="succeeded"}'
+        values: '10+10x40'
+      - series: 'evia_ingest_batches_total{job="evia-ingest",result="failed"}'
+        values: '1+1x40'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: EviaIngestBatchFailureBurn
+        exp_alerts:
+          - exp_labels:
+              job: evia-ingest
+              severity: critical
+            exp_annotations:
+              summary: 'ingest-worker evia-ingest has durable batch failures'
+              description: 'At least one Kafka batch failed durably in every 5-minute window for 5 minutes; failed batches retry but sustained failure blocks the event pipeline. Check Kafka, ClickHouse and the quarantine/dead-letter path.'
+    promql_expr_test:
+      - expr: evia:slo_ingest_success:ratio5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'evia:slo_ingest_success:ratio5m{job="evia-ingest"}'
+            value: 0.9090909090909091
+
+  # Retryable query failures indicate storage trouble and page critically.
+  - interval: 30s
+    input_series:
+      - series: 'evia_query_jobs_total{job="evia-query",code="ok",retryable="false"}'
+        values: '10+10x40'
+      - series: 'evia_query_jobs_total{job="evia-query",code="STORAGE_UNAVAILABLE",retryable="true"}'
+        values: '1+1x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: EviaQueryRetryableFailureBurn
+        exp_alerts:
+          - exp_labels:
+              job: evia-query
+              severity: critical
+            exp_annotations:
+              summary: 'query-worker evia-query has retryable storage failures'
+              description: 'Queries keep failing with retryable JobError codes for 10 minutes, indicating ClickHouse or PostgreSQL trouble rather than client input. Check storage health and the query memory budget (fault code 241).'
+
+  # Any failed erasure job pages immediately because of the compliance impact.
+  - interval: 30s
+    input_series:
+      - series: 'evia_erasure_jobs_total{job="evia-erasure",outcome="failed",code="INVALID_ERASURE_INPUT"}'
+        values: '0+0x20 1+0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: EviaErasureJobFailed
+      - eval_time: 11m
+        alertname: EviaErasureJobFailed
+        exp_alerts:
+          - exp_labels:
+              job: evia-erasure
+              severity: critical
+            exp_annotations:
+              summary: 'erasure-worker evia-erasure failed a data erasure job'
+              description: 'A data erasure job reached the failed terminal state. The tombstone stays active and writes remain blocked until the job is resolved; inspect the durable failure code and the erasure runbook before retrying.'
+
+  # A changed process_start_time_seconds warns about a restart.
+  - interval: 30s
+    input_series:
+      - series: 'process_start_time_seconds{job="evia-serve",instance="serve:18090"}'
+        values: '1000+0x20 2000+0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: EviaProcessRestarted
+      - eval_time: 11m
+        alertname: EviaProcessRestarted
+        exp_alerts:
+          - exp_labels:
+              job: evia-serve
+              instance: 'serve:18090'
+              severity: warning
+            exp_annotations:
+              summary: 'Evia process evia-serve/serve:18090 restarted'
+              description: 'process_start_time_seconds changed within 15 minutes, indicating a restart or crash recovery. Check supervisor logs and whether the restart was planned.'
+
+  # Quarantine ratio above 5% with enough volume warns after 30 minutes.
+  - interval: 30s
+    input_series:
+      - series: 'evia_ingest_records_total{job="evia-ingest",outcome="ingested"}'
+        values: '20+20x80'
+      - series: 'evia_ingest_records_total{job="evia-ingest",outcome="quarantined"}'
+        values: '2+2x80'
+    alert_rule_test:
+      - eval_time: 36m
+        alertname: EviaQuarantineRatioHigh
+        exp_alerts:
+          - exp_labels:
+              job: evia-ingest
+              severity: warning
+            exp_annotations:
+              summary: 'ingest-worker evia-ingest quarantining more than 5% of records'
+              description: 'Over 5% of incoming records are undecodable and sent to quarantine for 30 minutes, with at least 0.1 records/s of traffic. Inspect producer schemas and dead-letter diagnostics.'
