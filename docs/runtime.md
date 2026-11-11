@@ -4,15 +4,15 @@ The executable separates API serving, event materialization and durable query ex
 
 ## Commands
 
-| Command            | Responsibility                                                                            | Required feature flag        |
-| ------------------ | ----------------------------------------------------------------------------------------- | ---------------------------- |
-| evia serve         | Management HTTP API, optionally source CRUD, collection and analysis routes               | Flags below, default false   |
-| evia ingest-worker | Acknowledged Kafka records to ClickHouse facts, then explicit Kafka offset commits        | EVIA_COLLECTION_ENABLED=true |
-| evia query-worker  | A bounded pool claiming durable PostgreSQL analysis jobs and executing ClickHouse queries | EVIA_ANALYSIS_ENABLED=true   |
-| evia erasure-worker | Claims durable erasure jobs, writes the resurrection tombstone before issuing synchronous ClickHouse ALTER DELETE mutations and verifies zero rows remain | None (uses ClickHouse + PostgreSQL) |
+| Command               | Responsibility                                                                                                                                                                                                                                                  | Required feature flag               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| evia serve            | Management HTTP API, optionally source CRUD, collection and analysis routes                                                                                                                                                                                     | Flags below, default false          |
+| evia ingest-worker    | Acknowledged Kafka records to ClickHouse facts, then explicit Kafka offset commits                                                                                                                                                                              | EVIA_COLLECTION_ENABLED=true        |
+| evia query-worker     | A bounded pool claiming durable PostgreSQL analysis jobs and executing ClickHouse queries                                                                                                                                                                       | EVIA_ANALYSIS_ENABLED=true          |
+| evia erasure-worker   | Claims durable erasure jobs, writes the resurrection tombstone before issuing synchronous ClickHouse ALTER DELETE mutations and verifies zero rows remain                                                                                                       | None (uses ClickHouse + PostgreSQL) |
 | evia retention-worker | Evaluates every configured retention policy on an interval and records an audit row per scope. Defaults to dry-run (counts expired facts only); with `EVIA_RETENTION_ENFORCEMENT_ENABLED=true` it issues bounded, time-scoped ClickHouse ALTER DELETE mutations | None (uses ClickHouse + PostgreSQL) |
-| evia migrate       | Explicitly apply embedded PostgreSQL migrations                                           | None                         |
-| evia bootstrap     | Create the initial synthetic or operator-provided administrator once                      | None                         |
+| evia migrate          | Explicitly apply embedded PostgreSQL migrations                                                                                                                                                                                                                 | None                                |
+| evia bootstrap        | Create the initial synthetic or operator-provided administrator once                                                                                                                                                                                            | None                                |
 
 Every process needs EVIA_DATABASE_URL. Workers deliberately do not require the browser origin, cookie key or source encryption key. Apply the matching PostgreSQL migrations before serving or starting workers. Apply the reviewed ClickHouse schema in deploy/clickhouse before materialization/query use, and provision Kafka topics explicitly. The executable does not silently create topics, execute DDL or activate releases. Release readiness is established only by the explicit verified activation flow described below.
 
