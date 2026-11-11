@@ -34,11 +34,19 @@ func (s *fakeWorkerStore) ListJobs(context.Context, string, string, ListFilter) 
 func (s *fakeWorkerStore) ClaimJob(context.Context, string, time.Duration) (*Claim, error) {
 	return s.claim, s.claimErr
 }
-func (s *fakeWorkerStore) BeginHiding(context.Context, Claim) error {
+func (s *fakeWorkerStore) BeginHiding(_ context.Context, claim Claim) error {
+	// Mirror the PostgreSQL pre-check so worker/store state contracts cannot drift.
+	if claim.State != StateHiding {
+		return fault.New(fault.Invalid, "INVALID_ERASURE_INPUT", "作业状态不允许写入删除屏障")
+	}
 	s.begun++
 	return s.beginErr
 }
-func (s *fakeWorkerStore) Advance(_ context.Context, _ Claim, state string) error {
+func (s *fakeWorkerStore) Advance(_ context.Context, claim Claim, state string) error {
+	expected := map[string]string{StatePurging: StateHiding, StateRebuilding: StatePurging}[state]
+	if claim.State != expected {
+		return fault.New(fault.Invalid, "INVALID_ERASURE_INPUT", "删除作业当前状态不允许该流转")
+	}
 	s.transitions = append(s.transitions, state)
 	return s.advanceErr
 }

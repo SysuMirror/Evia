@@ -89,15 +89,17 @@ func (w *Worker) process(ctx context.Context, claim *Claim) error {
 	if e := w.Deleter.DeleteIdentity(ctx, claim.ProjectID, claim.Environment, claim.SubjectKind, claim.SubjectValue); e != nil {
 		return fault.New(fault.Unavailable, "ERASURE_DELETE_FAILED", "事实删除执行失败")
 	}
-	claim.State = StatePurging
+	// Advance owns the hiding -> purging guard; only adopt the new state after
+	// the durable transition succeeds so retries present the current state.
 	if e := w.Store.Advance(ctx, *claim, StatePurging); e != nil {
 		return e
 	}
+	claim.State = StatePurging
 	// 3. Rebuilding: verify the identity no longer appears in the fact store.
-	claim.State = StateRebuilding
 	if e := w.Store.Advance(ctx, *claim, StateRebuilding); e != nil {
 		return e
 	}
+	claim.State = StateRebuilding
 	remaining, e := w.Deleter.RemainingIdentityRows(ctx, claim.ProjectID, claim.Environment, claim.SubjectKind, claim.SubjectValue)
 	if e != nil {
 		return fault.New(fault.Unavailable, "ERASURE_VERIFY_FAILED", "删除结果校验失败")
