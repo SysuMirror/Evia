@@ -49,11 +49,14 @@ not expose the local development listeners publicly.
 
 Process health is `/healthz`; database reachability is `/readyz`. Neither endpoint
 proves event-pipeline readiness or disaster recovery. Operational metrics are
-served unauthenticated at `/metrics` in Prometheus text format; restrict that
-path to the monitoring network and follow the [observability runbook](observability.md)
-for the metric inventory and scrape configuration. Use UTC timestamps for
-storage and IANA project timezones such as `Asia/Shanghai` for business reporting
-boundaries. The Go binary embeds timezone data.
+served unauthenticated at `/metrics` in Prometheus text format; `serve` exposes
+them on `EVIA_LISTEN`, while each worker opens a dedicated administrative
+listener only when `EVIA_METRICS_LISTEN=host:port` is configured (also serving
+its own `/healthz`). Restrict every metrics path to the monitoring network and
+follow the [observability runbook](observability.md) for the metric inventory
+and scrape configuration. Use UTC timestamps for storage and IANA project
+timezones such as `Asia/Shanghai` for business reporting boundaries. The Go
+binary embeds timezone data.
 
 ## ClickHouse read-layout upgrades
 
