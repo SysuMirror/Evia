@@ -393,7 +393,10 @@ func ingestWorker(ctx context.Context, c config.Config, store *postgres.Store, l
 	if err != nil {
 		return stageError("Kafka reader configuration", err)
 	}
-	worker := &pipeline.Worker{Reader: reader, Sink: sink, Quarantine: producer, BatchSize: 128, BatchTimeout: 30 * time.Second, Logger: logger}
+	// The tombstone barrier wraps only the fact sink; the readiness probe
+	// worker above intentionally keeps its unfiltered sink.
+	guardedSink := pipeline.NewBarrierSink(sink, store)
+	worker := &pipeline.Worker{Reader: reader, Sink: guardedSink, Quarantine: producer, BatchSize: 128, BatchTimeout: 30 * time.Second, Logger: logger}
 	logger.Info("ingestion worker starting", "delivery_enabled", c.DeliveryEnabled)
 	tasks = append(tasks, task{"fact ingestion worker", worker.Run})
 	return supervise(ctx, tasks, 15*time.Second)
