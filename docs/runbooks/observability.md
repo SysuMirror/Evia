@@ -66,6 +66,17 @@ lifecycle events. The `outcome` and claim `outcome` labels are fixed enums and
 | `evia_erasure_jobs_total` | counter | `outcome`, `code` | Terminal job handling: `completed`, `failed` (with failure code), `lease-lost` or `failure-record-error`. |
 | `evia_erasure_job_duration_seconds` | histogram | `outcome` | Wall-clock duration from claim to terminal handling. |
 
+Query worker domain instruments, emitted by `query-worker` from query job
+lifecycle events. One registry is shared by the whole worker pool, so counters
+aggregate across every configured query worker. The `code` label is `ok` or
+the durable `JobError` vocabulary and `retryable` is a boolean enum:
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `evia_query_claim_polls_total` | counter | `outcome` | Claim attempts: `claimed`, `empty` or `error`. |
+| `evia_query_jobs_total` | counter | `code`, `retryable` | Durably completed queries; non-retryable codes such as `QUERY_COST_EXCEEDED` distinguish rejected requests from transient storage faults. |
+| `evia_query_job_duration_seconds` | histogram | `code` | Wall-clock duration from claim to durable completion. |
+
 Process and Go runtime samples are emitted by every process and computed at
 each scrape:
 
@@ -112,14 +123,14 @@ curl -fsS http://127.0.0.1:18091/metrics | grep evia_process_info
 
 All five process roles now expose the same process and Go runtime metrics, and
 `serve` additionally reports HTTP traffic instruments. The `retention-worker`
-reports sweep instruments through the `SweepObserver` domain port and the
+reports sweep instruments through the `SweepObserver` domain port, the
 `erasure-worker` reports claim/job lifecycle instruments through the
-`ErasureObserver` port, keeping both domain packages free of the metrics
-implementation. Domain instruments for the remaining workers — Kafka consumer
-lag and batch outcomes for `ingest-worker`, and query job lease and execution
-counts for `query-worker` — are not yet recorded; they must follow the same
-observer-port pattern and reuse the `observe` package so exposition stays
-consistent. No alerting rules,
+`ErasureObserver` port, and the `query-worker` reports claim/query lifecycle
+instruments through the `QueryObserver` port, keeping all three domain
+packages free of the metrics implementation. The only remaining worker without
+domain instruments is `ingest-worker` (Kafka consumer lag and batch outcomes);
+it must follow the same observer-port pattern and reuse the `observe` package
+so exposition stays consistent. No alerting rules,
 dashboards, SLO definitions or backup/restore drill automation ship in this
 repository yet. The endpoints report process health and traffic shape; they do
 not prove event-pipeline readiness, ClickHouse capacity or disaster recovery,
