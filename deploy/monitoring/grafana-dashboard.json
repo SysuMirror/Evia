@@ -1,0 +1,309 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Evia service health: control API, worker pipelines and process runtime. Every PromQL expression references metrics emitted by internal/platform/observe; tooling/check_monitoring.py enforces this on every commit.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["evia"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "label": "Prometheus datasource",
+        "name": "DS_PROMETHEUS",
+        "query": "prometheus",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Evia service overview",
+  "uid": "evia-service-overview",
+  "version": 1,
+  "weekStart": "",
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Control API (serve)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "evia:slo_http_availability:ratio5m", "legendFormat": "{{job}}", "refId": "A" }
+      ],
+      "title": "Availability (non-5xx ratio, 5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 1 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (code) (rate(evia_http_requests_total[5m]))", "legendFormat": "{{code}}", "refId": "A" }
+      ],
+      "title": "Request rate by status code",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 1 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "evia:slo_http_latency_p99:seconds5m", "legendFormat": "{{job}} {{route}}", "refId": "A" }
+      ],
+      "title": "p99 latency by route",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 8 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "evia_http_requests_in_flight", "legendFormat": "{{job}}", "refId": "A" }
+      ],
+      "title": "In-flight requests",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 10,
+      "title": "Ingest worker",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 16 },
+      "id": 11,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "evia:slo_ingest_success:ratio5m", "legendFormat": "{{job}}", "refId": "A" }
+      ],
+      "title": "Durable batch success ratio (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 16 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (outcome) (rate(evia_ingest_records_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A" }
+      ],
+      "title": "Records per second by outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 16 },
+      "id": 13,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(evia_ingest_batch_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" }
+      ],
+      "title": "Batch duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 23 },
+      "id": 14,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (result) (rate(evia_ingest_batches_total[5m]))", "legendFormat": "{{result}}", "refId": "A" }
+      ],
+      "title": "Batches per second by durable result",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 20,
+      "title": "Query worker",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 31 },
+      "id": 21,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "evia:slo_query_success:ratio5m", "legendFormat": "{{job}}", "refId": "A" }
+      ],
+      "title": "Query success ratio excluding client rejections (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 31 },
+      "id": 22,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (code) (rate(evia_query_jobs_total[5m]))", "legendFormat": "{{code}} retryable={{retryable}}", "refId": "A" }
+      ],
+      "title": "Completed queries per second by code",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 31 },
+      "id": 23,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(evia_query_job_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" }
+      ],
+      "title": "Query job duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "id": 30,
+      "title": "Erasure worker",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 39 },
+      "id": 31,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (outcome) (increase(evia_erasure_jobs_total[1h]))", "legendFormat": "{{outcome}}", "refId": "A" }
+      ],
+      "title": "Erasure jobs per hour by outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 39 },
+      "id": 32,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (outcome) (rate(evia_erasure_claim_polls_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A" }
+      ],
+      "title": "Erasure claim polls per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "id": 40,
+      "title": "Retention worker",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 47 },
+      "id": 41,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (environment, mode, result) (increase(evia_retention_sweeps_total[6h]))", "legendFormat": "{{environment}} {{mode}} {{result}}", "refId": "A" }
+      ],
+      "title": "Retention sweeps per 6h by scope and result",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 47 },
+      "id": 42,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum by (environment, mode) (rate(evia_retention_sweep_candidates_total[5m]))", "legendFormat": "{{environment}} {{mode}}", "refId": "A" }
+      ],
+      "title": "Expired candidate rows per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 54 },
+      "id": 50,
+      "title": "Process health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 55 },
+      "id": 51,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "up{job=~\"evia.*\"}", "legendFormat": "{{job}} {{instance}}", "refId": "A" }
+      ],
+      "title": "Scrape targets",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 55 },
+      "id": 52,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "go_goroutines{job=~\"evia.*\"}", "legendFormat": "{{job}} {{instance}}", "refId": "A" }
+      ],
+      "title": "Goroutines",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 55 },
+      "id": 53,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "go_memstats_sys_bytes{job=~\"evia.*\"}", "legendFormat": "{{job}} {{instance}}", "refId": "A" }
+      ],
+      "title": "Go memory obtained from OS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 55 },
+      "id": 54,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "process_uptime_seconds{job=~\"evia.*\"}", "legendFormat": "{{job}} {{instance}}", "refId": "A" }
+      ],
+      "title": "Process uptime",
+      "type": "timeseries"
+    }
+  ]
+}

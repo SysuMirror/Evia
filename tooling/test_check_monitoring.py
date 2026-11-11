@@ -1,9 +1,12 @@
 """Self-tests for the Prometheus rule gate; run via python3 tooling/test_check_monitoring.py."""
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 from unittest import mock
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -40,6 +43,33 @@ class EmittedMetricsTest(unittest.TestCase):
         self.assertNotIn("evia_test_events_total", names)
 
 
+class DashboardTest(unittest.TestCase):
+    def test_walk_finds_nested_exprs(self):
+        tree = {"panels": [{"targets": [{"expr": "rate(up[5m])"}]}, {"rows": [{"expr": "evia_test"}]}]}
+        self.assertEqual(sorted(gate._walk_exprs(tree)), ["evia_test", "rate(up[5m])"])
+
+    def test_shipped_dashboard_passes(self):
+        names = gate.emitted_metrics()
+        document = yaml.safe_load(gate.RULES_FILE.read_text(encoding="utf-8"))
+        record_names = {
+            rule["record"]
+            for group in document["groups"]
+            for rule in group["rules"]
+            if "record" in rule
+        }
+        self.assertEqual(gate._check_dashboard(names, record_names), [])
+
+    def test_unknown_dashboard_metric_fails(self):
+        names = gate.emitted_metrics()
+        broken = {"title": "x", "panels": [{"id": 1, "title": "t", "type": "stat", "targets": [{"expr": "evia_missing_total"}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            dashboard = Path(tmp) / "dashboard.json"
+            dashboard.write_text(json.dumps(broken), encoding="utf-8")
+            with mock.patch.object(gate, "DASHBOARD_FILE", dashboard):
+                failures = gate._check_dashboard(names, set())
+        self.assertTrue(any("evia_missing_total" in item for item in failures))
+
+
 class GateEndToEndTest(unittest.TestCase):
     def test_current_rules_pass(self):
         gate.main()
@@ -57,7 +87,7 @@ groups:
             rules.write_text(broken, encoding="utf-8")
             with mock.patch.object(gate, "RULES_FILE", rules), mock.patch.object(
                 gate, "RULE_TEST_FILE", Path(tmp) / "missing.test.yaml"
-            ):
+            ), mock.patch.object(gate, "DASHBOARD_FILE", Path(tmp) / "missing.json"):
                 with self.assertRaises(SystemExit) as caught:
                     gate.main()
         self.assertEqual(caught.exception.code, 1)

@@ -6,14 +6,17 @@ sources (or be a Prometheus built-in / a recording rule defined in the same
 file). The check is dependency-free beyond PyYAML and runs as part of make check.
 """
 from pathlib import Path
+import json
 import re
 import sys
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RULES_FILE = ROOT / "deploy" / "monitoring" / "prometheus-rules.yaml"
-RULE_TEST_FILE = ROOT / "deploy" / "monitoring" / "prometheus-rules.test.yaml"
+MONITORING_DIR = ROOT / "deploy" / "monitoring"
+RULES_FILE = MONITORING_DIR / "prometheus-rules.yaml"
+RULE_TEST_FILE = MONITORING_DIR / "prometheus-rules.test.yaml"
+DASHBOARD_FILE = MONITORING_DIR / "grafana-dashboard.json"
 
 INSTRUMENT_RE = re.compile(r"\.(?:Counter|Gauge|Histogram)\(\s*\"([a-zA-Z_:][a-zA-Z0-9_:]*)\"")
 HISTOGRAM_RE = re.compile(r"\.Histogram\(\s*\"([a-zA-Z_:][a-zA-Z0-9_:]*)\"")
@@ -163,6 +166,8 @@ def main():
 
     if RULE_TEST_FILE.exists():
         failures += _check_rule_test(alert_names, allowlist)
+    if DASHBOARD_FILE.exists():
+        failures += _check_dashboard(allowlist, rule_names)
 
     _finish(failures)
 
@@ -181,6 +186,41 @@ def _check_rule_test(alert_names, allowlist):
         for check in case.get("alert_rule_test", []):
             if check["alertname"] not in alert_names:
                 failures.append(f"rule test expects unknown alert {check['alertname']}")
+    return failures
+
+
+def _walk_exprs(node):
+    """Yield every PromQL expr embedded in a Grafana dashboard JSON tree."""
+    if isinstance(node, dict):
+        expr = node.get("expr")
+        if isinstance(expr, str) and expr.strip():
+            yield expr
+        for value in node.values():
+            yield from _walk_exprs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_exprs(item)
+
+
+def _check_dashboard(allowlist, rule_names):
+    failures = []
+    try:
+        dashboard = json.loads(DASHBOARD_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        return [f"dashboard {DASHBOARD_FILE.name} is not valid JSON: {error}"]
+    if not dashboard.get("title") or not isinstance(dashboard.get("panels"), list):
+        failures.append("dashboard needs a title and a panels list")
+    panel_ids = set()
+    for panel in dashboard.get("panels", []):
+        panel_id = panel.get("id")
+        if panel_id in panel_ids:
+            failures.append(f"dashboard panel id {panel_id} is duplicated")
+        panel_ids.add(panel_id)
+        if not panel.get("title") or not panel.get("type"):
+            failures.append(f"dashboard panel {panel!r} needs id, title and type")
+    for expr in _walk_exprs(dashboard):
+        for metric in sorted(referenced_metrics(expr) - allowlist - rule_names):
+            failures.append(f"dashboard expression references metric {metric!r} that no Evia process emits")
     return failures
 
 
