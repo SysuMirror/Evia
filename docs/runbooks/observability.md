@@ -43,6 +43,19 @@ listener has no business mux), recorded by middleware around the full mux:
 | `evia_http_request_duration_seconds` | histogram | `method`, `route` | Handler latency with buckets from 5 ms to 25 s, plus `_sum`/`_count`. |
 | `evia_http_requests_in_flight` | gauge | none | Requests currently being handled. |
 
+Retention worker domain instruments, emitted by `retention-worker` from sweep
+domain events. Labels use fixed enums only (`environment` is the policy
+enum development/staging/production; `mode` is `dry-run` or `enforce`;
+`result` is `succeeded` or `failed`), so cardinality stays bounded:
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `evia_retention_sweep_passes_total` | counter | `result` | Complete RunOnce evaluations over every policy; a failed policy listing is the only failed pass. |
+| `evia_retention_sweep_pass_duration_seconds` | histogram | none | Wall-clock duration of one full sweep pass. |
+| `evia_retention_sweeps_total` | counter | `environment`, `mode`, `result` | Per-scope sweep outcomes. |
+| `evia_retention_sweep_candidates_total` | counter | `environment`, `mode` | Expired rows counted (dry-run) or deleted (enforcement); zero-candidate scopes emit no series. |
+| `evia_retention_sweep_duration_seconds` | histogram | `environment`, `result` | Per-scope sweep duration. |
+
 Process and Go runtime samples are emitted by every process and computed at
 each scrape:
 
@@ -88,13 +101,15 @@ curl -fsS http://127.0.0.1:18091/metrics | grep evia_process_info
 ## Scope and follow-up work
 
 All five process roles now expose the same process and Go runtime metrics, and
-`serve` additionally reports HTTP traffic instruments. Domain-level worker
-instruments — Kafka consumer lag and batch outcomes for `ingest-worker`,
-query job lease and execution counts for `query-worker`, erasure state
-transitions for `erasure-worker`, and sweep/mutation counters for
-`retention-worker` — are not yet recorded; they must reuse the same `observe`
-package so exposition stays consistent. No alerting rules, dashboards, SLO
-definitions or backup/restore drill automation ship in this repository yet.
-The endpoints report process health and traffic shape; they do not prove
-event-pipeline readiness, ClickHouse capacity or disaster recovery, which still
-require the evidence listed in the deployment runbook.
+`serve` additionally reports HTTP traffic instruments. The `retention-worker`
+also reports the sweep domain instruments listed above through a
+`SweepObserver` domain port, keeping the retention package free of the metrics
+implementation. Domain instruments for the other workers — Kafka consumer lag
+and batch outcomes for `ingest-worker`, query job lease and execution counts
+for `query-worker`, and erasure state transitions for `erasure-worker` — are
+not yet recorded; they must follow the same observer-port pattern and reuse the
+`observe` package so exposition stays consistent. No alerting rules,
+dashboards, SLO definitions or backup/restore drill automation ship in this
+repository yet. The endpoints report process health and traffic shape; they do
+not prove event-pipeline readiness, ClickHouse capacity or disaster recovery,
+which still require the evidence listed in the deployment runbook.
