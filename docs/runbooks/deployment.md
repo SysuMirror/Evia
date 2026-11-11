@@ -54,7 +54,11 @@ them on `EVIA_LISTEN`, while each worker opens a dedicated administrative
 listener only when `EVIA_METRICS_LISTEN=host:port` is configured (also serving
 its own `/healthz`). Restrict every metrics path to the monitoring network and
 follow the [observability runbook](observability.md) for the metric inventory
-and scrape configuration. Use UTC timestamps for storage and IANA project
+and scrape configuration. Prometheus SLO recording rules and the critical/
+warning alert policy ship under `deploy/monitoring/` with promtool unit tests;
+load them into the monitoring Prometheus (scrape jobs must use `evia*` names)
+and follow the [SLO and alerting runbook](slo.md) for objectives and response
+guidance. Alertmanager routing and Grafana dashboards remain site-specific. Use UTC timestamps for storage and IANA project
 timezones such as `Asia/Shanghai` for business reporting boundaries. The Go
 binary embeds timezone data.
 

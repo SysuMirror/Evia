@@ -129,6 +129,17 @@ A minimal manual check against a local worker started with
 curl -fsS http://127.0.0.1:18091/metrics | grep evia_process_info
 ```
 
+## Alerting and SLO policy
+
+Prometheus recording rules (short-window SLI ratios and p99 latency) and the
+full critical/warning alert policy ship in
+[`deploy/monitoring/prometheus-rules.yaml`](../../deploy/monitoring/prometheus-rules.yaml)
+with promtool unit tests beside them. Every expression references only
+instruments listed above; `tooling/check_monitoring.py` fails `make check` if a
+rule drifts onto a metric no process emits. The SLO targets, alert inventory,
+tuning policy and verification commands are documented in the
+[SLO and alerting runbook](slo.md).
+
 ## Scope and follow-up work
 
 All five process roles now expose the same process and Go runtime metrics, and
@@ -140,8 +151,9 @@ keeping all domain packages free of the metrics implementation:
 `IngestObserver` (ingest-worker). Worker domain metric coverage is therefore
 complete; future extensions (for example Kafka consumer lag gauges) must follow
 the same observer-port pattern and reuse the `observe` package so exposition
-stays consistent. No alerting rules, dashboards, SLO definitions or
-backup/restore drill automation ship in this repository yet. The endpoints
-report process health and traffic shape; they do not prove event-pipeline
-readiness, ClickHouse capacity or disaster recovery, which still require the
-evidence listed in the deployment runbook.
+stays consistent, and any new alert must reference an emitted metric to pass
+the monitoring gate. Grafana dashboards, Alertmanager routing and
+backup/restore drill automation still do not ship in this repository. The
+endpoints and rules report process health, traffic shape and failure burns;
+they do not prove event-pipeline readiness, ClickHouse capacity or disaster
+recovery, which still require the evidence listed in the deployment runbook.
