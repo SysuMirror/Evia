@@ -426,10 +426,19 @@ func ingestWorker(ctx context.Context, c config.Config, store *postgres.Store, l
 	// The tombstone barrier wraps only the fact sink; the readiness probe
 	// worker above intentionally keeps its unfiltered sink.
 	guardedSink := pipeline.NewBarrierSink(sink, store)
-	worker := &pipeline.Worker{Reader: reader, Sink: guardedSink, Quarantine: producer, BatchSize: 128, BatchTimeout: 30 * time.Second, Logger: logger}
+	registry := observe.NewRegistry("ingest-worker")
+	worker := &pipeline.Worker{
+		Reader:       reader,
+		Sink:         guardedSink,
+		Quarantine:   producer,
+		Observer:     newIngestMetricsObserver(registry),
+		BatchSize:    128,
+		BatchTimeout: 30 * time.Second,
+		Logger:       logger,
+	}
 	logger.Info("ingestion worker starting", "delivery_enabled", c.DeliveryEnabled)
 	tasks = append(tasks, task{"fact ingestion worker", worker.Run})
-	return supervise(ctx, append(metricsTasks(c, "ingest-worker", observe.NewRegistry("ingest-worker")), tasks...), 15*time.Second)
+	return supervise(ctx, append(metricsTasks(c, "ingest-worker", registry), tasks...), 15*time.Second)
 }
 
 func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
