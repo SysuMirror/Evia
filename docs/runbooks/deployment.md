@@ -87,8 +87,12 @@ PostgreSQL and browser commands in the development runbook, and verify schema
 checksums before serving. Record the exact application revision, dependency
 versions, environment, test results and remaining limitations. A safe upgrade
 process also needs backups/restores tested against the intended storage, explicit
-migration compatibility decisions and a reviewed rollback or forward-repair plan;
-none is supplied as an automated production workflow today.
+migration compatibility decisions and a reviewed rollback or forward-repair plan.
+Automated PostgreSQL backup, scratch-restore and three-axis verification
+(per-table counts, content hashes, migration ledger) ship in
+`tooling/backup/drill.py` with the [backup/restore runbook](backup-restore.md)
+and a recorded real-container drill; ClickHouse backup remains a documented
+manual procedure.
 
 Public business-integration skills and their release packaging are a separate
 future deliverable. A public package needs an explicit file allowlist, versioning

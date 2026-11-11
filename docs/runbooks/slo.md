@@ -118,8 +118,8 @@ when the module proxy mirrors that version.
 
 The rules and dashboard detect process, pipeline and compliance failures. They
 do not prove ClickHouse capacity at the target scale (see the query capacity
-report), do not replace backup/restore drills, and no Alertmanager
-routing/notification tree ships in this repository. SLO compliance reporting
+report) and do not replace the scheduled [backup/restore drills](backup-restore.md);
+no Alertmanager routing/notification tree ships in this repository. SLO compliance reporting
 over 30-day windows requires the Prometheus retention policy to cover at least
 that window; recording rules here are short-window SLIs, not long-term
 compliance archives.
