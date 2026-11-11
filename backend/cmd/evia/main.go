@@ -28,10 +28,10 @@ func main() {
 
 func execute(ctx context.Context, args []string, get func(string) string, logger *slog.Logger) error {
 	if len(args) != 1 {
-		return errors.New("usage: evia serve | ingest-worker | query-worker | migrate | bootstrap | account-create")
+		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | migrate | bootstrap | account-create")
 	}
 	command := args[0]
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" {
 		return errors.New("unknown command")
 	}
 	var cfg config.Config
@@ -86,6 +86,8 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 		return ingestWorker(ctx, cfg, store, logger)
 	case "query-worker":
 		return queryWorkers(ctx, cfg, store, logger)
+	case "erasure-worker":
+		return erasureWorkerRuntime(ctx, cfg, store, logger)
 	}
 	return errors.New("unknown command")
 }

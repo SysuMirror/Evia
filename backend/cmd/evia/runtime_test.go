@@ -89,7 +89,7 @@ func TestClickHouseProbeRequiresAuthorizedExactResponse(t *testing.T) {
 }
 func TestInvalidCommandAndDisabledWorkersFailBeforeDatabase(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	for _, args := range [][]string{nil, {"unknown"}, {"serve", "extra"}, {"ingest-worker"}, {"query-worker"}} {
+	for _, args := range [][]string{nil, {"unknown"}, {"serve", "extra"}, {"ingest-worker"}, {"query-worker"}, {"erasure-worker"}} {
 		get := func(name string) string {
 			if name == "EVIA_DATABASE_URL" {
 				return "postgres://synthetic-sensitive-value@unreachable"

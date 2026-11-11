@@ -9,6 +9,7 @@ The executable separates API serving, event materialization and durable query ex
 | evia serve         | Management HTTP API, optionally source CRUD, collection and analysis routes               | Flags below, default false   |
 | evia ingest-worker | Acknowledged Kafka records to ClickHouse facts, then explicit Kafka offset commits        | EVIA_COLLECTION_ENABLED=true |
 | evia query-worker  | A bounded pool claiming durable PostgreSQL analysis jobs and executing ClickHouse queries | EVIA_ANALYSIS_ENABLED=true   |
+| evia erasure-worker | Claims durable erasure jobs, writes the resurrection tombstone before issuing synchronous ClickHouse ALTER DELETE mutations and verifies zero rows remain | None (uses ClickHouse + PostgreSQL) |
 | evia migrate       | Explicitly apply embedded PostgreSQL migrations                                           | None                         |
 | evia bootstrap     | Create the initial synthetic or operator-provided administrator once                      | None                         |
 

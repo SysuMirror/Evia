@@ -18,6 +18,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
+	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
@@ -422,4 +423,28 @@ func queryWorkers(ctx context.Context, c config.Config, store *postgres.Store, l
 	}
 	logger.Info("query workers starting", "count", c.QueryWorkers)
 	return supervise(ctx, tasks, 15*time.Second)
+}
+
+func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("erasure worker startup", err)
+	}
+	executor, err := pipeline.NewErasureExecutor(sinkConfig(c, client), client)
+	if err != nil {
+		return stageError("erasure executor configuration", err)
+	}
+	worker := &erasure.Worker{
+		Store:   store,
+		Deleter: executor,
+		ID:      c.InstanceID + "-" + ids.New(),
+		Lease:   2 * time.Minute,
+		Logger:  logger,
+	}
+	logger.Info("erasure worker starting")
+	return supervise(ctx, []task{{name: "erasure worker", run: worker.Run}}, 15*time.Second)
 }
