@@ -1,0 +1,33 @@
+{{/* Shared Evia notification formatting.
+
+   Webhook receivers post the full Alertmanager payload as JSON; site-specific
+   gateways (chat, paging, email) can render these helpers instead of
+   re-implementing the alert vocabulary. Every Evia rule ships summary and
+   description annotations, so the helpers degrade gracefully when optional
+   runbook/fingerprint fields are absent. */}}
+
+{{ define "evia.title" -}}
+[{{ .CommonLabels.severity | toUpper }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.job }})
+{{- end }}
+
+{{ define "evia.message" -}}
+{{ range .Alerts }}
+{{ if eq .Status "firing" }}FIRING{{ else }}RESOLVED{{ end }}:
+  alert:    {{ .Labels.alertname }}
+  severity: {{ .Labels.severity }}
+  job:      {{ .Labels.job }}
+  instance: {{ or .Labels.instance "-" }}
+  summary:  {{ .Annotations.summary }}
+  detail:   {{ .Annotations.description }}
+  started:  {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+{{ if .EndsAt }}  ended:    {{ .EndsAt.Format "2006-01-02 15:04:05 UTC" }}
+{{ end }}{{ end }}
+{{- end }}
+
+{{ define "evia.slack.title" -}}
+{{ template "evia.title" . }}
+{{- end }}
+
+{{ define "evia.slack.text" -}}
+{{ template "evia.message" . }}
+{{- end }}

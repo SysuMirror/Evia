@@ -1,0 +1,60 @@
+# Alertmanager routing and notification policy for Evia.
+#
+# The Prometheus rules in ../prometheus-rules.yaml label every alert with
+# severity=critical or severity=warning. This file maps those labels onto two
+# webhook receivers and defines inhibition so a root cause does not page for
+# every downstream symptom. Receiver URLs are internal placeholders: each site
+# must point them at its own paging/chat gateway before going live. No
+# credentials or external hostnames are committed.
+global:
+  # Firing alerts whose series disappear are marked resolved after this window.
+  resolve_timeout: 5m
+
+templates:
+  - templates/evia-notifications.tmpl
+
+route:
+  # Safe default: an alert without a severity label still reaches a human
+  # instead of being silently dropped.
+  receiver: evia-warning-chat
+  group_by: ['alertname', 'job', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - receiver: evia-critical-pager
+      matchers:
+        - severity="critical"
+    - receiver: evia-warning-chat
+      matchers:
+        - severity="warning"
+
+inhibit_rules:
+  # An unreachable target makes every burn alert for that job noise: the
+  # scrape failure is the actionable root cause. Equal job keeps the rule
+  # scoped so other jobs keep paging independently.
+  - source_matchers:
+      - alertname="EviaScrapeTargetDown"
+    target_matchers:
+      - severity="critical"
+    equal: ['job']
+  # While any critical alert pages for a job, warning-level alerts for the
+  # same job are held back to avoid duplicate notifications.
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['job']
+
+receivers:
+  - name: evia-critical-pager
+    webhook_configs:
+      # Replace with the site paging gateway (on-call manager or incident
+      # webhook); send_resolved keeps the incident timeline complete.
+      - url: 'http://evia-pager.internal:5001/evia/critical'
+        send_resolved: true
+  - name: evia-warning-chat
+    webhook_configs:
+      # Replace with the site chat/notification gateway.
+      - url: 'http://evia-chat.internal:5002/evia/warning'
+        send_resolved: true
