@@ -100,3 +100,21 @@ func (s *FileArchiveStore) WriteStream(_ context.Context, manifestID string, str
 
 // Compile-time assertion that the concrete store satisfies the port.
 var _ ArtifactStore = (*FileArchiveStore)(nil)
+
+// OpenArtifact opens a previously materialized archive after verifying the
+// absolute path stays inside the archive root. It satisfies the backfilling
+// package's ArchiveSource port without sharing write capabilities.
+func (s *FileArchiveStore) OpenArtifact(_ context.Context, artifactPath string) (io.ReadCloser, error) {
+	clean := filepath.Clean(artifactPath)
+	if !strings.HasPrefix(clean, s.root+string(os.PathSeparator)) {
+		return nil, fault.New(fault.Forbidden, "ARCHIVE_ARTIFACT_FORBIDDEN", "归档产物路径超出允许范围")
+	}
+	handle, err := os.Open(clean)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fault.New(fault.NotFound, "ARCHIVE_ARTIFACT_NOT_FOUND", "归档产物不存在")
+		}
+		return nil, err
+	}
+	return handle, nil
+}
