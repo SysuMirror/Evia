@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily Evia backup and recovery drill
+Documentation=https://github.com/howtomakeaname/Evia/blob/main/docs/runbooks/backup-restore.md
+
+[Timer]
+# Fire shortly after 02:00 local time with jitter so collocated deployments do
+# not hammer shared storage simultaneously. Persistent=true catches up after a
+# powered-down night instead of silently skipping the day.
+OnCalendar=*-*-* 02:17:00
+RandomizedDelaySec=900
+Persistent=true
+Unit=evia-backup-drill.service
+
+[Install]
+WantedBy=timers.target

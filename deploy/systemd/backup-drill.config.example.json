@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "state_dir": "/var/lib/evia/backup/state",
+  "metrics_path": "/var/lib/node_exporter/textfile/evia-backup.prom",
+  "targets": [
+    {
+      "name": "control-pg",
+      "kind": "postgres",
+      "dsn_env": "EVIA_BACKUP_PG_DSN",
+      "output_dir": "/var/lib/evia/backup/postgres",
+      "schema": "public",
+      "retention_keep": 7
+    },
+    {
+      "name": "events-ch",
+      "kind": "clickhouse",
+      "database": "evia_events",
+      "output_dir": "/var/lib/evia/backup/clickhouse",
+      "ch_client_env": "EVIA_CH_CLIENT",
+      "ch_username_env": "EVIA_CH_USERNAME",
+      "ch_password_env": "EVIA_CH_PASSWORD",
+      "timeout_seconds": 600,
+      "retention_keep": 7
+    }
+  ]
+}

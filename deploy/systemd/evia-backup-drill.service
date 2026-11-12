@@ -1,0 +1,29 @@
+[Unit]
+Description=Evia backup and recovery drill (PostgreSQL + ClickHouse)
+Documentation=https://github.com/howtomakeaname/Evia/blob/main/docs/runbooks/backup-restore.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Credentials are read from this EnvironmentFile; the config JSON only
+# references variable names, so no password lands on the command line.
+EnvironmentFile=/etc/evia/backup-drill.env
+ExecStartPre=/usr/bin/python3 /opt/evia/tooling/backup/schedule.py validate --config /etc/evia/backup-drill.json
+ExecStart=/usr/bin/python3 /opt/evia/tooling/backup/schedule.py run-once --config /etc/evia/backup-drill.json
+# A failed drill must surface through the unit state and the backup alerts.
+SuccessExitStatus=0
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# The backup state, metrics textfile and artifact directories need write
+# access; list every writable path explicitly instead of weakening ProtectSystem.
+ReadWritePaths=/var/lib/evia/backup /var/lib/node_exporter/textfile
+ReadOnlyPaths=/etc/evia /opt/evia
+
+[Install]
+WantedBy=multi-user.target
