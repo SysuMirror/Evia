@@ -107,7 +107,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		}
 		return true, nil
 	}
-	artifact, e := w.Artifacts.Write(ctx, claim.JobID, result)
+	artifact, e := w.Artifacts.Write(ctx, claim.JobID, claim.Format, result)
 	if e != nil {
 		code := "EXPORT_ARTIFACT_WRITE_FAILED"
 		var known *fault.Error

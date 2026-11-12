@@ -77,6 +77,32 @@ func TestExportJobAuthorityIdempotencyAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestExportCSVFormatPersistedAndReplayed(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	in := exportInput(f, "export-csv")
+	in.Format = exporting.FormatCSV
+	job, created, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || !created || job.Format != exporting.FormatCSV {
+		t.Fatalf("csv job not persisted: %+v err=%v", job, e)
+	}
+	// Idempotent replay keeps the same format snapshot.
+	replay, _, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || replay.Format != exporting.FormatCSV {
+		t.Fatalf("csv replay mismatch: %+v err=%v", replay, e)
+	}
+	claim, e := f.s.ClaimExportJob(ctx, "export-worker-csv", time.Minute)
+	if e != nil || claim == nil || claim.Format != exporting.FormatCSV {
+		t.Fatalf("claimed csv job lost format: %+v err=%v", claim, e)
+	}
+	// The closed vocabulary is enforced at the storage boundary.
+	bad := exportInput(f, "export-bad-format")
+	bad.Format = "parquet"
+	if _, _, e = f.s.CreateExportJob(ctx, bad); e == nil {
+		t.Fatal("unsupported format must be rejected")
+	}
+}
+
 func TestExportClaimCompleteFailAndLeaseGuard(t *testing.T) {
 	f := catalogDB(t)
 	ctx := context.Background()

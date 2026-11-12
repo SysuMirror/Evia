@@ -20,9 +20,25 @@ func invalid(message string) error {
 	return fault.New(fault.Invalid, invalidCode, message)
 }
 
+// NormalizeFormat maps an omitted format to the json default and rejects
+// anything outside the closed vocabulary before it reaches persistence.
+func NormalizeFormat(format string) (string, error) {
+	switch format {
+	case "", FormatJSON:
+		return FormatJSON, nil
+	case FormatCSV:
+		return FormatCSV, nil
+	default:
+		return "", invalid("导出格式仅支持 json 或 csv")
+	}
+}
+
 // ValidateInput repeats the HTTP contract at the domain boundary so a
 // bypassed validator cannot persist a malformed export job.
 func ValidateInput(in Input) error {
+	if _, err := NormalizeFormat(in.Format); err != nil {
+		return err
+	}
 	if !uuidPattern.MatchString(in.ProjectID) || !uuidPattern.MatchString(in.ActorID) {
 		return invalid("项目或操作主体标识格式不正确")
 	}

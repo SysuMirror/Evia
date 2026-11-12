@@ -20,8 +20,10 @@ const (
 )
 
 const (
-	// FormatJSON is the only supported export format for the first release.
+	// FormatJSON materializes the full analysis.Result document.
 	FormatJSON = "json"
+	// FormatCSV renders the tabular rows with the result's column order.
+	FormatCSV = "csv"
 	// MaxAttempts bounds worker retries before a job is parked as failed.
 	MaxAttempts = 5
 	// MaxNameLength bounds the human-readable export name.
@@ -68,6 +70,7 @@ type Input struct {
 	Environment    string
 	ActorID        string
 	Name           string
+	Format         string
 	Request        analysis.Request
 	IdempotencyKey string
 	RequestHash    string

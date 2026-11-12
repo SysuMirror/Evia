@@ -18,7 +18,7 @@ import (
 // ArtifactStore persists export outputs. The filesystem implementation is the
 // first adapter; object storage can replace it behind the same interface.
 type ArtifactStore interface {
-	Write(ctx context.Context, jobID string, result analysis.Result) (Artifact, error)
+	Write(ctx context.Context, jobID, format string, result analysis.Result) (Artifact, error)
 	Open(ctx context.Context, artifactPath string) (io.ReadCloser, error)
 }
 
@@ -44,22 +44,36 @@ func NewFileArtifactStore(root string) (*FileArtifactStore, error) {
 
 // artifactName keeps the on-disk name deterministic per job and independent of
 // user-controlled input.
-func artifactName(jobID string) (string, error) {
+func artifactName(jobID, format string) (string, error) {
 	if !uuidPattern.MatchString(jobID) {
 		return "", errors.New("invalid export job id for artifact path")
 	}
-	return jobID + ".json", nil
+	normalized, err := NormalizeFormat(format)
+	if err != nil {
+		return "", err
+	}
+	return jobID + "." + normalized, nil
 }
 
-func (s *FileArtifactStore) Write(_ context.Context, jobID string, result analysis.Result) (Artifact, error) {
+func (s *FileArtifactStore) Write(_ context.Context, jobID, format string, result analysis.Result) (Artifact, error) {
 	if len(result.Rows) > MaxResultRows {
 		return Artifact{}, fault.New(fault.Invalid, "EXPORT_RESULT_TOO_LARGE", "导出结果行数超过上限")
 	}
-	name, err := artifactName(jobID)
+	normalized, err := NormalizeFormat(format)
 	if err != nil {
 		return Artifact{}, err
 	}
-	payload, err := json.MarshalIndent(result, "", "  ")
+	name, err := artifactName(jobID, normalized)
+	if err != nil {
+		return Artifact{}, err
+	}
+	var payload []byte
+	switch normalized {
+	case FormatCSV:
+		payload, err = renderCSV(result)
+	default:
+		payload, err = json.MarshalIndent(result, "", "  ")
+	}
 	if err != nil {
 		return Artifact{}, err
 	}

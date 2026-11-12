@@ -38,31 +38,36 @@ func (s *Store) exportAuthority(ctx context.Context, tx pgx.Tx, actor, project, 
 	return memberOwnerTx(ctx, tx, actor, project)
 }
 
-func validateExportInput(in exporting.Input) error {
+func validateExportInput(in exporting.Input) (exporting.Input, error) {
 	if !exportUUIDPattern.MatchString(in.ProjectID) || !exportUUIDPattern.MatchString(in.ActorID) {
-		return exportInvalid("项目或操作主体标识格式不正确")
+		return in, exportInvalid("项目或操作主体标识格式不正确")
 	}
+	normalized, e := exporting.NormalizeFormat(in.Format)
+	if e != nil {
+		return in, e
+	}
+	in.Format = normalized
 	switch in.Environment {
 	case "development", "staging", "production":
 	default:
-		return exportInvalid("环境标识无效")
+		return in, exportInvalid("环境标识无效")
 	}
 	if len(in.Name) < 1 || len(in.Name) > exporting.MaxNameLength {
-		return exportInvalid("导出名称长度无效")
+		return in, exportInvalid("导出名称长度无效")
 	}
 	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 128 {
-		return exportInvalid("幂等键长度无效")
+		return in, exportInvalid("幂等键长度无效")
 	}
 	if len(in.RequestHash) != 64 {
-		return exportInvalid("请求摘要无效")
+		return in, exportInvalid("请求摘要无效")
 	}
 	if in.Request.Kind == "" || in.Request.Environment != in.Environment {
-		return exportInvalid("导出必须包含环境一致的有界分析请求")
+		return in, exportInvalid("导出必须包含环境一致的有界分析请求")
 	}
 	if in.ArtifactExpiry != nil && !in.ArtifactExpiry.After(time.Now()) {
-		return exportInvalid("产物过期时间必须晚于当前时间")
+		return in, exportInvalid("产物过期时间必须晚于当前时间")
 	}
-	return nil
+	return in, nil
 }
 
 const exportJobColumns = `id::text,project_id::text,environment,actor_id::text,name,format,request_json,state,
@@ -93,9 +98,11 @@ func scanExportJob(row queryScanner) (exporting.Job, error) {
 }
 
 func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (exporting.Job, bool, error) {
-	if e := validateExportInput(in); e != nil {
+	normalized, e := validateExportInput(in)
+	if e != nil {
 		return exporting.Job{}, false, e
 	}
+	in = normalized
 	rawRequest, e := json.Marshal(in.Request)
 	if e != nil {
 		return exporting.Job{}, false, e
@@ -125,9 +132,9 @@ func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (export
 		expiry = in.ArtifactExpiry.UTC()
 	}
 	row := tx.QueryRow(ctx, `INSERT INTO export_jobs(
- id,project_id,environment,actor_id,name,request_json,idempotency_key,request_hash,expires_at)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+exportJobColumns,
-		jobID, in.ProjectID, in.Environment, in.ActorID, in.Name, rawRequest,
+ id,project_id,environment,actor_id,name,format,request_json,idempotency_key,request_hash,expires_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING `+exportJobColumns,
+		jobID, in.ProjectID, in.Environment, in.ActorID, in.Name, in.Format, rawRequest,
 		in.IdempotencyKey, in.RequestHash, expiry)
 	job, e := scanExportJob(row)
 	if e != nil {

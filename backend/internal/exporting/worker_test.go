@@ -148,7 +148,7 @@ func TestFileArtifactStoreRejectsOversizeResult(t *testing.T) {
 	for i := range rows {
 		rows[i] = map[string]any{"i": i}
 	}
-	_, err = store.Write(context.Background(), "33333333-3333-4333-8333-333333333333", analysis.Result{Rows: rows})
+	_, err = store.Write(context.Background(), "33333333-3333-4333-8333-333333333333", FormatJSON, analysis.Result{Rows: rows})
 	var known *fault.Error
 	if err == nil || !errors.As(err, &known) || known.Code != "EXPORT_RESULT_TOO_LARGE" {
 		t.Fatalf("oversize result must fail with EXPORT_RESULT_TOO_LARGE, got %v", err)
