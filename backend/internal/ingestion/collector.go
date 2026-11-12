@@ -25,6 +25,7 @@ type Collector struct {
 	queue      Queue
 	budget     Budget
 	validator  SchemaValidator
+	rejections RejectionSink
 	mu         sync.Mutex
 	cache      map[string]compiledPlan
 	inflight   map[string]*planFlight
@@ -52,6 +53,13 @@ func NewCollector(sources SourceResolver, plans PlanResolver, queue Queue, budge
 		return nil, errors.New("collector requires source, plan, durable queue, global budget and contract adapters")
 	}
 	return &Collector{sources: sources, plans: plans, queue: queue, budget: budget, validator: validator, cache: map[string]compiledPlan{}, inflight: map[string]*planFlight{}, misses: make(chan struct{}, 8)}, nil
+}
+
+// WithRejectionSink attaches fail-open rejection accounting. The sink is
+// optional; without it collection behavior is unchanged.
+func (c *Collector) WithRejectionSink(sink RejectionSink) *Collector {
+	c.rejections = sink
+	return c
 }
 func unavailable(code string) error {
 	return fault.New(fault.Unavailable, code, "接收服务暂不可用，请保留原事件并稍后重试")
@@ -239,12 +247,21 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 	if e != nil {
 		return Receipt{}, 0, e
 	}
+	rejected := map[string]int{}
+	flushRejections := func() {
+		if c.rejections != nil && len(rejected) > 0 {
+			c.rejections.RecordRejections(ctx, source.Source.ProjectID, source.Source.Environment, rejected)
+		}
+	}
 	if e = c.budget.ReserveCollection(ctx, source.Source.ProjectID, source.Source.Environment, len(batch.Events)); e != nil {
 		if fault.Public(e).Kind == fault.Limited {
+			rejected["COLLECTION_BUDGET_EXCEEDED"]++
+			flushRejections()
 			return Receipt{}, 0, e
 		}
 		return Receipt{}, 0, unavailable("ADMISSION_BUDGET_UNAVAILABLE")
 	}
+	defer flushRejections()
 	out := Receipt{BatchID: batch.ID, ReceiptID: ids.New(), Results: make([]ItemResult, len(batch.Events))}
 	records := make([]Record, 0, len(batch.Events))
 	itemIndices := make([]int, 0, len(batch.Events))
@@ -257,6 +274,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 		result := ItemResult{Index: i, Status: "rejected"}
 		reject := func(code string, retry bool, paths ...string) {
 			result.Error = &ItemError{Code: code, Retryable: retry, FieldPaths: paths}
+			rejected[code]++
 			retryable = retryable || retry
 		}
 		if len(raw) > 8*1024 {
@@ -405,6 +423,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			item := &out.Results[itemIndices[j]]
 			item.Status = "rejected"
 			item.Error = &ItemError{Code: "SCHEMA_NOT_READY", Retryable: true, FieldPaths: []string{"release_revision"}}
+			rejected["SCHEMA_NOT_READY"]++
 			retryable = true
 			continue
 		}

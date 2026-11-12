@@ -36,6 +36,14 @@ type Issued struct {
 	Source     Source
 	SecretOnce string
 }
+
+// RejectionSink consumes source-attributed rejection counters. Implementations
+// must be fail-open: diagnostic accounting can never change an admission
+// decision. A nil sink disables rejection accounting.
+type RejectionSink interface {
+	RecordRejections(ctx context.Context, projectID, environment string, counts map[string]int)
+}
+
 type SourceStore interface {
 	CreateSource(context.Context, string, string, Source, Credential) (Source, error)
 	ListSources(context.Context, string, string, string, string, int) ([]Source, error)
