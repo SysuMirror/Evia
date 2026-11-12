@@ -16,6 +16,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/archiving"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
@@ -205,6 +206,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	retentionService := retention.NewServiceWithSweepReader(store, store)
 	api.Retention = retentionService
 	api.RetentionSweeps = retentionService
+	api.Archives = store
 	exportValidator, err := contract.New()
 	if err != nil {
 		return stageError("export contract compilation", err)
@@ -568,7 +570,20 @@ func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgre
 		mode = "enforcement"
 	}
 	registry := observe.NewRegistry("retention-worker")
-	worker := retention.NewSweepWorker(store, executor, c.RetentionEnforcement, c.RetentionSweepInterval, logger, newRetentionSweepObserver(registry))
+	options := []retention.Option{}
+	if c.ArchiveEnabled {
+		archiveStore, archiveErr := archiving.NewFileArchiveStore(c.ArchiveDir)
+		if archiveErr != nil {
+			return stageError("retention archive configuration", archiveErr)
+		}
+		archiveReader, archiveErr := pipeline.NewArchiveExecutor(sinkConfig(c, client), client)
+		if archiveErr != nil {
+			return stageError("retention archive executor configuration", archiveErr)
+		}
+		options = append(options, retention.WithScopeArchiver(archiving.NewService(store, archiveReader, archiveStore)))
+		logger.Info("retention archive-before-delete enabled", "archive_dir", c.ArchiveDir)
+	}
+	worker := retention.NewSweepWorker(store, executor, c.RetentionEnforcement, c.RetentionSweepInterval, logger, newRetentionSweepObserver(registry), options...)
 	logger.Info("retention worker starting", "mode", mode, "interval", c.RetentionSweepInterval.String())
 	return supervise(ctx, append(metricsTasks(c, "retention-worker", registry), task{name: "retention worker", run: worker.Run}), 15*time.Second)
 }

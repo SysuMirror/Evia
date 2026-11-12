@@ -131,6 +131,22 @@ func TestRetentionWorkerDefaultsToSafeDryRun(t *testing.T) {
 	if _, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err == nil {
 		t.Fatal("sub-minute sweep interval accepted")
 	}
+	delete(values, "EVIA_RETENTION_SWEEP_INTERVAL")
+
+	// Archive opt-in requires an artifact directory.
+	values["EVIA_ARCHIVE_ENABLED"] = "true"
+	if _, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("archive enabled without directory accepted")
+	}
+	values["EVIA_ARCHIVE_DIR"] = "/var/lib/evia/archives"
+	archived, err := ReadFor("retention-worker", func(k string) string { return values[k] })
+	if err != nil || !archived.ArchiveEnabled || archived.ArchiveDir != "/var/lib/evia/archives" {
+		t.Fatalf("archive opt-in not honored: %+v err=%v", archived, err)
+	}
+	values["EVIA_ARCHIVE_ENABLED"] = "maybe"
+	if _, err := ReadFor("retention-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("non-boolean archive flag accepted")
+	}
 }
 
 func TestIngestWorkerLagInterval(t *testing.T) {

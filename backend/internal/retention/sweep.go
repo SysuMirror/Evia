@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/archiving"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
 
@@ -74,6 +75,14 @@ type FactSweeper interface {
 	DeleteExpired(ctx context.Context, project, environment string, cutoff time.Time) (uint64, error)
 }
 
+// ScopeArchiver is the optional archive-before-delete port. When configured,
+// an enforced sweep materializes the full expired scope into a checksummed
+// artifact before deleting it. An archive error aborts the sweep so facts are
+// never deleted without a recoverable copy.
+type ScopeArchiver interface {
+	ArchiveScope(ctx context.Context, scope archiving.Scope) (archiving.Manifest, error)
+}
+
 // SweepStore extends the retention store with worker-scoped, system-level
 // operations that have no human actor and therefore skip owner authorization.
 type SweepStore interface {
@@ -89,10 +98,19 @@ type SweepWorker struct {
 	store    SweepStore
 	sweeper  FactSweeper
 	observer SweepObserver
+	archiver ScopeArchiver
 	enforce  bool
 	interval time.Duration
 	now      func() time.Time
 	logger   *slog.Logger
+}
+
+// Option customizes a SweepWorker without growing the positional constructor.
+type Option func(*SweepWorker)
+
+// WithScopeArchiver enables archive-before-delete on enforced sweeps.
+func WithScopeArchiver(archiver ScopeArchiver) Option {
+	return func(w *SweepWorker) { w.archiver = archiver }
 }
 
 func NewSweepWorker(
@@ -102,6 +120,7 @@ func NewSweepWorker(
 	interval time.Duration,
 	logger *slog.Logger,
 	observer SweepObserver,
+	options ...Option,
 ) *SweepWorker {
 	if interval <= 0 {
 		interval = time.Hour
@@ -112,7 +131,7 @@ func NewSweepWorker(
 	if observer == nil {
 		observer = NoopSweepObserver{}
 	}
-	return &SweepWorker{
+	worker := &SweepWorker{
 		store:    store,
 		sweeper:  sweeper,
 		observer: observer,
@@ -121,6 +140,10 @@ func NewSweepWorker(
 		now:      func() time.Time { return time.Now().UTC() },
 		logger:   logger,
 	}
+	for _, option := range options {
+		option(worker)
+	}
+	return worker
 }
 
 // SweepResult reports what happened to one policy scope in a RunOnce pass.
@@ -192,6 +215,23 @@ func (w *SweepWorker) sweepOne(ctx context.Context, policy Policy) SweepResult {
 		return result
 	}
 
+	if w.archiver != nil && candidates > 0 {
+		if _, archiveErr := w.archiver.ArchiveScope(ctx, archiving.Scope{
+			ProjectID:     plan.ProjectID,
+			Environment:   plan.Environment,
+			RetentionDays: plan.RetentionDays,
+			Cutoff:        plan.Cutoff,
+			SweepID:       record.ID,
+		}); archiveErr != nil {
+			result.Err = archiveErr
+			record.Status = SweepFailed
+			record.Detail = "archive before delete failed"
+			_ = w.store.RecordSweep(ctx, record)
+			w.logger.Error("retention archive failed; deletion skipped",
+				"project_id", plan.ProjectID, "environment", plan.Environment, "error", archiveErr.Error())
+			return result
+		}
+	}
 	deleted, deleteErr := w.sweeper.DeleteExpired(ctx, plan.ProjectID, plan.Environment, plan.Cutoff)
 	completed := w.now()
 	record.CompletedAt = &completed

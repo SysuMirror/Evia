@@ -46,8 +46,12 @@ type Config struct {
 	// lag monitor. Other commands leave the field unused.
 	IngestLagInterval time.Duration
 	// ExportDir holds materialized export artifacts; required for export-worker.
-	ExportDir  string
-	InstanceID string
+	ExportDir string
+	// ArchiveEnabled turns on archive-before-delete in the retention worker.
+	// ArchiveDir is required when enabled and holds the JSONL fact archives.
+	ArchiveEnabled bool
+	ArchiveDir     string
+	InstanceID     string
 }
 
 var (
@@ -134,6 +138,15 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		if raw := get("EVIA_RETENTION_SWEEP_INTERVAL"); raw != "" {
 			if c.RetentionSweepInterval, err = time.ParseDuration(raw); err != nil || c.RetentionSweepInterval < time.Minute || c.RetentionSweepInterval > 24*time.Hour {
 				return c, errors.New("EVIA_RETENTION_SWEEP_INTERVAL must be between 1m and 24h")
+			}
+		}
+		if c.ArchiveEnabled, err = boolean(get, "EVIA_ARCHIVE_ENABLED", false); err != nil {
+			return c, err
+		}
+		if c.ArchiveEnabled {
+			c.ArchiveDir = get("EVIA_ARCHIVE_DIR")
+			if c.ArchiveDir == "" {
+				return c, errors.New("retention-worker with EVIA_ARCHIVE_ENABLED requires EVIA_ARCHIVE_DIR")
 			}
 		}
 	}
