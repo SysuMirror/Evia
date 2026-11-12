@@ -16124,6 +16124,436 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/backfills": {
+      "get": {
+        "operationId": "listBackfillJobs",
+        "summary": "listBackfillJobs",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "导出作业列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBackfillJob",
+        "summary": "createBackfillJob",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "导出作业已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillJob"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "幂等重放返回既有作业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/backfills/{job_id}": {
+      "get": {
+        "operationId": "getBackfillJob",
+        "summary": "getBackfillJob",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "导出作业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelBackfillJob",
+        "summary": "cancelBackfillJob",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已取消的导出作业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18029,37 +18459,28 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
           "environment": {
+            "type": "string",
             "enum": [
               "development",
               "staging",
               "production"
             ]
           },
-          "archive_manifest_ids": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 100,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          "time_range": {
-            "$ref": "../query/query-request.schema.json#/properties/time_range"
-          },
-          "reason": {
+          "manifest_id": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 256
+            "format": "uuid"
           }
         },
         "required": [
+          "name",
           "environment",
-          "archive_manifest_ids",
-          "time_range",
-          "reason"
+          "manifest_id"
         ]
       },
       "BackfillJob": {
@@ -18070,20 +18491,48 @@
             "type": "string",
             "format": "uuid"
           },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "manifest_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
           "state": {
+            "type": "string",
             "enum": [
               "queued",
               "running",
-              "cancel_requested",
-              "succeeded",
+              "completed",
               "failed",
-              "canceled"
+              "cancelled"
             ]
           },
-          "phase": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
+          "rows_expected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rows_inserted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "created_at": {
             "type": "string",
@@ -18093,26 +18542,27 @@
             "type": "string",
             "format": "date-time"
           },
-          "error": {
-            "$ref": "#/components/schemas/Problem"
-          },
-          "data_version": {
+          "finished_at": {
             "type": [
               "string",
               "null"
-            ]
-          },
-          "coverage_verified": {
-            "type": "boolean"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
           "job_id",
+          "project_id",
+          "environment",
+          "manifest_id",
+          "name",
           "state",
-          "phase",
+          "rows_expected",
+          "rows_inserted",
+          "error_code",
           "created_at",
           "updated_at",
-          "coverage_verified"
+          "finished_at"
         ]
       },
       "BackfillList": {

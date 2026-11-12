@@ -1115,6 +1115,53 @@ test('archive manifest list and get encode scope and cursor', async () => {
   assert.equal(init.method, 'GET');
 });
 
+test('backfill jobs encode create, list, get and cancel paths', async () => {
+  const fetch = respond(200, {
+    job_id: '66666666-6666-4666-8666-666666666666',
+    project_id: 'p',
+    environment: 'development',
+    manifest_id: '33333333-3333-4333-8333-333333333333',
+    name: 'restore november',
+    state: 'queued',
+    rows_expected: 12,
+    rows_inserted: 0,
+    error_code: null,
+    created_at: '2026-11-12T10:00:00Z',
+    updated_at: '2026-11-12T10:00:00Z',
+    finished_at: null,
+  });
+  const controller = new AbortController();
+  const input = {
+    name: 'restore november',
+    environment: 'development' as const,
+    manifest_id: '33333333-3333-4333-8333-333333333333',
+  };
+  await api.createBackfillJob('p', input, 'bf-key', 'csrf', controller.signal);
+  await api.listBackfillJobs('p', { limit: 25 }, controller.signal);
+  await api.getBackfillJob('p', '66666666-6666-4666-8666-666666666666', controller.signal);
+  await api.cancelBackfillJob(
+    'p',
+    '66666666-6666-4666-8666-666666666666',
+    'csrf',
+    controller.signal,
+  );
+  const urls = fetch.mock.calls.map((call) => call.arguments[0]);
+  assert.deepEqual(urls, [
+    '/api/v1/projects/p/backfills',
+    '/api/v1/projects/p/backfills?limit=25',
+    '/api/v1/projects/p/backfills/66666666-6666-4666-8666-666666666666',
+    '/api/v1/projects/p/backfills/66666666-6666-4666-8666-666666666666',
+  ]);
+  const post = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(post.method, 'POST');
+  assert.equal((post.headers as Headers).get('Idempotency-Key'), 'bf-key');
+  assert.equal((post.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(post.body as string), input);
+  const del = fetch.mock.calls[3]!.arguments[1] as RequestInit;
+  assert.equal(del.method, 'DELETE');
+  assert.equal((del.headers as Headers).get('X-CSRF-Token'), 'csrf');
+});
+
 test('retention policy create sends the expect-absent zero revision', async () => {
   const fetch = respond(200, {
     project_id: 'p',

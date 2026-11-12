@@ -125,21 +125,24 @@ type AuditList struct {
 }
 
 type BackfillInput struct {
-	Environment        string          `json:"environment"`
-	ArchiveManifestIDs []string        `json:"archive_manifest_ids"`
-	TimeRange          json.RawMessage `json:"time_range"`
-	Reason             string          `json:"reason"`
+	Name        string `json:"name"`
+	Environment string `json:"environment"`
+	ManifestID  string `json:"manifest_id"`
 }
 
 type BackfillJob struct {
-	JobID            string   `json:"job_id"`
-	State            string   `json:"state"`
-	Phase            string   `json:"phase"`
-	CreatedAt        string   `json:"created_at"`
-	UpdatedAt        string   `json:"updated_at"`
-	Error            *Problem `json:"error,omitempty"`
-	DataVersion      *string  `json:"data_version,omitempty"`
-	CoverageVerified bool     `json:"coverage_verified"`
+	JobID        string  `json:"job_id"`
+	ProjectID    string  `json:"project_id"`
+	Environment  string  `json:"environment"`
+	ManifestID   string  `json:"manifest_id"`
+	Name         string  `json:"name"`
+	State        string  `json:"state"`
+	RowsExpected int64   `json:"rows_expected"`
+	RowsInserted int64   `json:"rows_inserted"`
+	ErrorCode    *string `json:"error_code"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	FinishedAt   *string `json:"finished_at"`
 }
 
 type BackfillList struct {

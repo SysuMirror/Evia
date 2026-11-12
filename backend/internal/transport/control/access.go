@@ -50,6 +50,7 @@ type API struct {
 	Retention       RetentionService
 	RetentionSweeps RetentionSweepService
 	Archives        ArchiveService
+	Backfills       BackfillService
 	Cursor          *cursor.Codec
 	Origin          string
 	SecureCookies   bool
@@ -84,6 +85,7 @@ func (a *API) Handler() http.Handler {
 	(&ExportAPI{API: a, Service: a.Exports, Validator: a.ExportValidator, Downloads: a.ExportDownloads}).Register(mux)
 	(&RetentionAPI{API: a, Service: a.Retention, Sweeps: a.RetentionSweeps}).Register(mux)
 	(&ArchiveAPI{API: a, Service: a.Archives}).Register(mux)
+	(&BackfillAPI{API: a, Service: a.Backfills}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.

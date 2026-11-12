@@ -44,6 +44,9 @@ export type RetentionSweep = components['schemas']['RetentionSweep'];
 export type RetentionSweepList = components['schemas']['RetentionSweepList'];
 export type ArchiveManifest = components['schemas']['ArchiveManifest'];
 export type ArchiveManifestList = components['schemas']['ArchiveManifestList'];
+export type BackfillInput = components['schemas']['BackfillInput'];
+export type BackfillJob = components['schemas']['BackfillJob'];
+export type BackfillList = components['schemas']['BackfillList'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1079,6 +1082,43 @@ export const api = {
       `${projectPath(projectID)}/archive-manifests/${encodeURIComponent(manifestID)}`,
       { signal },
     ),
+  createBackfillJob: (
+    projectID: string,
+    body: BackfillInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<BackfillJob>(`${projectPath(projectID)}/backfills`, {
+      method: 'POST',
+      body,
+      csrf,
+      headers: { 'Idempotency-Key': idempotencyKey },
+      signal,
+    }),
+  listBackfillJobs: (
+    projectID: string,
+    options: { limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.cursor) params.set('cursor', options.cursor);
+    const query = params.toString();
+    return request<BackfillList>(`${projectPath(projectID)}/backfills${query ? `?${query}` : ''}`, {
+      signal,
+    });
+  },
+  getBackfillJob: (projectID: string, jobID: string, signal?: AbortSignal) =>
+    request<BackfillJob>(`${projectPath(projectID)}/backfills/${encodeURIComponent(jobID)}`, {
+      signal,
+    }),
+  cancelBackfillJob: (projectID: string, jobID: string, csrf: string, signal?: AbortSignal) =>
+    request<BackfillJob>(`${projectPath(projectID)}/backfills/${encodeURIComponent(jobID)}`, {
+      method: 'DELETE',
+      csrf,
+      signal,
+    }),
   createExportJob: (
     projectID: string,
     body: ExportInput,
