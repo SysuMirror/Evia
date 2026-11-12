@@ -180,3 +180,78 @@ func TestClickHouseDedicatedReaderMatchesDocumentReader(t *testing.T) {
 		t.Fatalf("legacy fallback row missing from dedicated reader results: %v", enabledRows)
 	}
 }
+
+func TestClickHouseDedicatedTrendMatchesDocumentTrend(t *testing.T) {
+	catalog := dedicatedEquivalenceCatalog(t)
+	client := dedicatedDatabase(t, catalog)
+
+	documents := []string{
+		`{"value":1.5}`, `{"value":1e2}`, `{"value":1.00}`, `{"value":0}`, `{"value":-3}`,
+		`{"value":null}`, `{}`, `{"value":"100"}`, `{"value":true}`,
+		`{"title":"Home","value":7}`, `{"title":"Settings","value":8}`,
+	}
+	rows := make([]map[string]any, 0, len(documents)+1)
+	for index, document := range documents {
+		row := fact("trend-"+string(rune('a'+index)), "opened", "user", "device", "source-one", index, nil)
+		row["properties_json"] = document
+		rows = append(rows, dedicatedFactRow(t, row, catalog))
+	}
+	// Legacy row: zero marker and empty slots must fall back to the document.
+	legacy := fact("trend-legacy", "opened", "user", "device", "source-one", 99, nil)
+	legacy["properties_json"] = `{"title":"Home","value":7}`
+	rows = append(rows, legacy)
+	seedRows(t, client, rows)
+
+	disabled, err := NewClickHouse(ClickHouseConfig{
+		URL: client.endpoint.String(), Database: client.database,
+		Username: client.username, Password: client.password, Client: client.client,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled, err := NewClickHouse(ClickHouseConfig{
+		URL: client.endpoint.String(), Database: client.database,
+		Username: client.username, Password: client.password, Client: client.client, Catalog: catalog,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	titleField := Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}
+	valueField := Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "value", ResolvedType: "number"}
+	base := request(t, baseRequest) // trend kind
+	base.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
+	queries := []Request{}
+
+	metrics := base
+	metrics.Metrics = []Metric{
+		{Op: "count"}, {Op: "sum", Field: &valueField}, {Op: "avg", Field: &valueField},
+		{Op: "min", Field: &valueField}, {Op: "max", Field: &valueField},
+	}
+	queries = append(queries, metrics)
+
+	grouped := base
+	grouped.GroupBy = []Field{titleField}
+	grouped.Metrics = []Metric{{Op: "count"}}
+	queries = append(queries, grouped)
+
+	for _, filter := range []Filter{
+		{Op: "gte", Field: &valueField, Value: json.Number("0")},
+		{Op: "eq", Field: &valueField, Value: json.Number("100")},
+		{Op: "is_present", Field: &titleField},
+		{Op: "is_missing", Field: &titleField},
+	} {
+		r := base
+		r.Filter = &filter
+		r.Metrics = []Metric{{Op: "count"}}
+		queries = append(queries, r)
+	}
+
+	for index, query := range queries {
+		gotDisabled := execute(t, disabled, query)
+		gotEnabled := execute(t, enabled, query)
+		if !reflect.DeepEqual(gotDisabled.Rows, gotEnabled.Rows) {
+			t.Fatalf("trend query %d diverges:\ndisabled=%v\nenabled=%v", index, gotDisabled.Rows, gotEnabled.Rows)
+		}
+	}
+}
