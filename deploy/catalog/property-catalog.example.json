@@ -1,0 +1,17 @@
+{
+  "revision": 1,
+  "entries": [
+    {
+      "event_key": "page_opened",
+      "schema_version": 1,
+      "property_key": "score",
+      "resolved_type": "integer"
+    },
+    {
+      "event_key": "page_opened",
+      "schema_version": 1,
+      "property_key": "segment_03",
+      "resolved_type": "string"
+    }
+  ]
+}
