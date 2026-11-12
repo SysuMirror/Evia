@@ -1168,20 +1168,50 @@ type ReleaseList struct {
 }
 
 type Report struct {
-	ID       string       `json:"id"`
-	Revision int64        `json:"revision"`
-	Name     string       `json:"name"`
-	Query    QueryRequest `json:"query"`
+	ReportID    string           `json:"report_id"`
+	ProjectID   string           `json:"project_id"`
+	Environment string           `json:"environment"`
+	Revision    int64            `json:"revision"`
+	Definition  ReportDefinition `json:"definition"`
+	CreatedAt   string           `json:"created_at"`
+	UpdatedAt   string           `json:"updated_at"`
+}
+
+type ReportDefinition struct {
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Sections    []ReportSection `json:"sections"`
+}
+
+type ReportDefinitionInput struct {
+	Title       string               `json:"title"`
+	Description string               `json:"description"`
+	Sections    []ReportSectionInput `json:"sections"`
 }
 
 type ReportInput struct {
-	Name  string       `json:"name"`
-	Query QueryRequest `json:"query"`
+	Environment string                `json:"environment"`
+	Definition  ReportDefinitionInput `json:"definition"`
 }
 
 type ReportList struct {
 	Items      []Report `json:"items"`
 	NextCursor *string  `json:"next_cursor"`
+}
+
+type ReportSection struct {
+	SectionID       string `json:"section_id"`
+	ReadingOrder    int64  `json:"reading_order"`
+	SectionTitle    string `json:"section_title"`
+	AnalysisID      string `json:"analysis_id"`
+	AnalysisVersion int64  `json:"analysis_version"`
+}
+
+type ReportSectionInput struct {
+	ReadingOrder    int64  `json:"reading_order"`
+	SectionTitle    string `json:"section_title"`
+	AnalysisID      string `json:"analysis_id"`
+	AnalysisVersion int64  `json:"analysis_version"`
 }
 
 type Retention struct {
