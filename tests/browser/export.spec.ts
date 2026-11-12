@@ -79,6 +79,7 @@ test('owner creates an export and downloads a completed artifact', async ({ page
   await form.getByRole('combobox', { name: '查询类型' }).selectOption('trend');
   await form.getByLabel(/时间窗口/).fill('3');
   await form.getByLabel(/结果行数上限/).fill('100');
+  await form.getByRole('combobox', { name: '产物格式' }).selectOption('csv');
 
   // A valid request opens the confirmation modal first.
   await page.getByRole('button', { name: '发起导出' }).click();
@@ -90,7 +91,9 @@ test('owner creates an export and downloads a completed artifact', async ({ page
     (response) => response.url().endsWith('/exports') && response.request().method() === 'POST',
   );
   await dialog.getByRole('button', { name: '确认导出' }).click();
-  expect((await created).status()).toBe(201);
+  const createdResponse = await created;
+  expect(createdResponse.status()).toBe(201);
+  expect((await createdResponse.json()).format).toBe('csv');
   await expect(dialog).not.toBeVisible();
 
   // The export-worker materializes the JSON artifact and the job completes.
@@ -111,7 +114,7 @@ test('owner creates an export and downloads a completed artifact', async ({ page
   // the path and is single-use.
   expect(new URL(request.url()).pathname).toMatch(/^\/api\/v1\/exports\/downloads\/[a-f0-9]{32,}$/);
   const download = await downloadEvent;
-  expect(download.suggestedFilename()).toMatch(/^[0-9a-fA-F-]{36}\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^[0-9a-fA-F-]{36}\.csv$/);
 
   await page.screenshot({
     path: testInfo.outputPath('desktop-export-workspace.png'),

@@ -29,6 +29,14 @@ test('a valid form builds the bounded export input', () => {
   expect(built.input?.query.timezone).toBe('UTC');
 });
 
+test('format defaults to json and is carried into the export input', () => {
+  expect(defaultExportForm('development').format).toBe('json');
+  expect(toExportInput(form()).input?.format).toBe('json');
+  const csv = toExportInput(form({ format: 'csv' }));
+  expect(csv.errors).toEqual([]);
+  expect(csv.input?.format).toBe('csv');
+});
+
 test('window ceiling follows the query kind budget', () => {
   expect(maxWindowDays('trend')).toBe(31);
   expect(maxWindowDays('events')).toBe(7);
