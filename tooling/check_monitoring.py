@@ -28,6 +28,10 @@ HISTOGRAM_RE = re.compile(r"\.Histogram\(\s*\"([a-zA-Z_:][a-zA-Z0-9_:]*)\"")
 RUNTIME_NAME_RE = re.compile(r"\"((?:evia|go|process)_[a-z0-9_]+)\"")
 IDENTIFIER_RE = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*")
 RUNTIME_FILE = ROOT / "backend" / "internal" / "platform" / "observe" / "runtime.go"
+TEXTFILE_MANIFEST = MONITORING_DIR / "textfile-metrics.json"
+SCHEDULE_FILE = ROOT / "tooling" / "backup" / "schedule.py"
+TEXTFILE_METRIC_RE = re.compile(r"^evia_backup_[a-z_]+$")
+SCHEDULE_SPEC_RE = re.compile(r'"(evia_backup_[a-z_]+)"\s*:')
 
 # PromQL reserved words, aggregations, functions and modifiers. Anything left
 # after subtracting these must be a real metric or a locally defined recording
@@ -82,6 +86,46 @@ def emitted_metrics():
     return names
 
 
+def textfile_metrics(manifest_path=TEXTFILE_MANIFEST, schedule_path=SCHEDULE_FILE):
+    """Metrics the Python backup scheduler exposes via node_exporter textfile.
+
+    The manifest is the allowlist for non-Go metrics, but it cannot drift from
+    the actual emitter: every declared name must exist in schedule.py
+    METRIC_SPECS and every emitted spec must be declared.
+    """
+    failures = []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return set(), [f"textfile manifest unreadable: {error}"]
+    entries = manifest.get("metrics")
+    if not isinstance(entries, list) or not entries:
+        return set(), ["textfile manifest must define a non-empty metrics list"]
+    names = set()
+    for entry in entries:
+        name = entry.get("name")
+        if not isinstance(name, str) or not TEXTFILE_METRIC_RE.fullmatch(name):
+            failures.append(f"textfile metric has invalid name: {entry!r}")
+            continue
+        if entry.get("type") not in ("counter", "gauge"):
+            failures.append(f"textfile metric {name} needs a counter/gauge type")
+        labels = entry.get("labels")
+        if not isinstance(labels, list) or not labels or any(
+            not isinstance(label, str) or not label for label in labels
+        ):
+            failures.append(f"textfile metric {name} needs bounded string labels")
+        names.add(name)
+    try:
+        emitted = set(SCHEDULE_SPEC_RE.findall(schedule_path.read_text(encoding="utf-8")))
+    except OSError as error:
+        return names, failures + [f"schedule emitter unreadable: {error}"]
+    failures += [f"textfile manifest declares {name!r} but schedule.py does not emit it"
+                 for name in sorted(names - emitted)]
+    failures += [f"schedule.py emits {name!r} but the textfile manifest does not declare it"
+                 for name in sorted(emitted - names)]
+    return names, failures
+
+
 def strip_balanced(text, opener, closer):
     """Remove balanced opener..closer spans, supporting nested pairs."""
     result = []
@@ -123,6 +167,9 @@ def referenced_metrics(expr):
 def main():
     failures = []
     allowlist = emitted_metrics()
+    textfile_names, textfile_failures = textfile_metrics()
+    failures += textfile_failures
+    allowlist |= textfile_names
     document = yaml.safe_load(RULES_FILE.read_text(encoding="utf-8"))
     if not isinstance(document, dict) or not isinstance(document.get("groups"), list):
         failures.append("rules file must define a top-level groups list")

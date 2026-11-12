@@ -184,3 +184,70 @@ tests:
     alert_rule_test:
       - eval_time: 11m
         alertname: EviaConsumerLagHigh
+
+  # Backup drill failure: a zero gauge pages after the 5-minute for window.
+  - interval: 30s
+    input_series:
+      - series: 'evia_backup_up{target="control-pg",kind="postgres"}'
+        values: '0+0x24'
+      - series: 'evia_backup_last_success_timestamp_seconds{target="control-pg",kind="postgres"}'
+        values: '1794481200+0x24'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: EviaBackupDrillFailed
+      - eval_time: 6m
+        alertname: EviaBackupDrillFailed
+        exp_alerts:
+          - exp_labels:
+              target: control-pg
+              kind: postgres
+              severity: critical
+            exp_annotations:
+              summary: 'Backup drill failed for postgres target control-pg'
+              description: 'The scheduled backup/restore drill did not verify a clean restore for 5 minutes. Check the schedule run report under the backup state directory and the timer journal; the previous good backup cannot be considered recoverable until a drill passes again.'
+
+  # Healthy drill stays silent even though the metric is continuously present.
+  - interval: 30s
+    input_series:
+      - series: 'evia_backup_up{target="control-pg",kind="postgres"}'
+        values: '1+0x24'
+      - series: 'evia_backup_last_success_timestamp_seconds{target="control-pg",kind="postgres"}'
+        values: '1794481200+0x24'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: EviaBackupDrillFailed
+
+  # Stale drill: the promtool synthetic timeline starts at unix 0, so a zero
+  # success timestamp crosses the 26-hour threshold after 26h; the warning
+  # then needs the 15-minute for window before firing.
+  - interval: 5m
+    input_series:
+      - series: 'evia_backup_up{target="events-ch",kind="clickhouse"}'
+        values: '1+0x340'
+      - series: 'evia_backup_last_success_timestamp_seconds{target="events-ch",kind="clickhouse"}'
+        values: '0+0x340'
+    alert_rule_test:
+      - eval_time: 26h
+        alertname: EviaBackupDrillStale
+      - eval_time: 27h15m
+        alertname: EviaBackupDrillStale
+        exp_alerts:
+          - exp_labels:
+              target: events-ch
+              kind: clickhouse
+              severity: warning
+            exp_annotations:
+              summary: 'No successful backup drill for clickhouse target events-ch in over 26 hours'
+              description: 'The daily restore verification has not succeeded within the expected schedule window. Inspect the systemd timer and the backup schedule state; a value of 0 means no successful drill has ever been recorded for a newly deployed target.'
+
+  # A recent success timestamp keeps the staleness alert silent on the same
+  # long-running timeline.
+  - interval: 5m
+    input_series:
+      - series: 'evia_backup_up{target="events-ch",kind="clickhouse"}'
+        values: '1+0x340'
+      - series: 'evia_backup_last_success_timestamp_seconds{target="events-ch",kind="clickhouse"}'
+        values: '100000+0x340'
+    alert_rule_test:
+      - eval_time: 27h15m
+        alertname: EviaBackupDrillStale

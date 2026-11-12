@@ -159,3 +159,50 @@ class AlertmanagerGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TextfileMetricsTest(unittest.TestCase):
+    def test_shipped_manifest_matches_schedule_emitter(self):
+        names, failures = gate.textfile_metrics()
+        self.assertEqual(failures, [])
+        self.assertIn("evia_backup_up", names)
+        self.assertIn("evia_backup_last_success_timestamp_seconds", names)
+        self.assertEqual(len(names), 6)
+
+    def test_drift_between_manifest_and_emitter_is_caught(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            schedule = root / "schedule.py"
+            schedule.write_text('METRIC_SPECS = {"evia_backup_up": ("gauge", "help")}\n')
+            manifest = root / "textfile-metrics.json"
+            manifest.write_text(json.dumps({"metrics": [
+                {"name": "evia_backup_up", "type": "gauge", "labels": ["target"]},
+                {"name": "evia_backup_ghost", "type": "gauge", "labels": ["target"]},
+            ]}))
+            names, failures = gate.textfile_metrics(manifest, schedule)
+            self.assertIn("evia_backup_ghost", names)
+            self.assertTrue(any("evia_backup_ghost" in item for item in failures))
+
+            # An emitted spec missing from the manifest fails in the other direction.
+            manifest.write_text(json.dumps({"metrics": [
+                {"name": "evia_backup_up", "type": "gauge", "labels": ["target"]},
+            ]}))
+            _, failures = gate.textfile_metrics(manifest, schedule)
+            self.assertEqual(failures, [])
+
+            schedule.write_text('METRIC_SPECS = {"evia_backup_up": ("gauge", "h"), "evia_backup_new": ("counter", "h")}\n')
+            _, failures = gate.textfile_metrics(manifest, schedule)
+            self.assertTrue(any("evia_backup_new" in item for item in failures))
+
+    def test_malformed_manifest_entries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            schedule = root / "schedule.py"
+            schedule.write_text('METRIC_SPECS = {"evia_backup_up": ("gauge", "h")}\n')
+            manifest = root / "textfile-metrics.json"
+            manifest.write_text(json.dumps({"metrics": [
+                {"name": "Evia_Backup_Up", "type": "gauge", "labels": ["target"]},
+                {"name": "evia_backup_up", "type": "histogram", "labels": []},
+            ]}))
+            _, failures = gate.textfile_metrics(manifest, schedule)
+            self.assertEqual(len(failures), 2)

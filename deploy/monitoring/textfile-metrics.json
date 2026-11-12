@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "emitter": "tooling/backup/schedule.py",
+  "collector": "node_exporter textfile collector",
+  "description": "Metrics emitted by the scheduled backup/recovery drill runner rather than a Go process. The schedule runner atomically writes this textfile for the node_exporter textfile collector; check_monitoring.py cross-checks every name against schedule.py METRIC_SPECS so the manifest cannot drift from the emitter.",
+  "metrics": [
+    {
+      "name": "evia_backup_up",
+      "type": "gauge",
+      "labels": ["target", "kind"],
+      "help": "1 if the last drill for this target verified a restore, otherwise 0"
+    },
+    {
+      "name": "evia_backup_last_attempt_timestamp_seconds",
+      "type": "gauge",
+      "labels": ["target", "kind"],
+      "help": "Unix timestamp of the last scheduled drill attempt"
+    },
+    {
+      "name": "evia_backup_last_success_timestamp_seconds",
+      "type": "gauge",
+      "labels": ["target", "kind"],
+      "help": "Unix timestamp of the last successful drill, 0 if never"
+    },
+    {
+      "name": "evia_backup_success_total",
+      "type": "counter",
+      "labels": ["target", "kind"],
+      "help": "Cumulative successful drill runs since the state file was created"
+    },
+    {
+      "name": "evia_backup_failure_total",
+      "type": "counter",
+      "labels": ["target", "kind"],
+      "help": "Cumulative failed drill runs since the state file was created"
+    },
+    {
+      "name": "evia_backup_duration_seconds",
+      "type": "gauge",
+      "labels": ["target", "kind"],
+      "help": "Wall-clock duration of the last drill attempt"
+    }
+  ]
+}

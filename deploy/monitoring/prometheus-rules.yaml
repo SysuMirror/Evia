@@ -186,3 +186,26 @@ groups:
         annotations:
           summary: "Evia process {{ $labels.job }}/{{ $labels.instance }} holds over 500 goroutines"
           description: "Goroutine count has stayed above 500 for 15 minutes, which may indicate a leaked worker loop or blocked dependency call. Correlate with go_threads and heap growth."
+
+  # Backup/recovery drill health. These metrics are written by
+  # tooling/backup/schedule.py through the node_exporter textfile collector
+  # (see deploy/monitoring/textfile-metrics.json), not by a Go process.
+  - name: evia-backup-alerts
+    interval: 30s
+    rules:
+      - alert: EviaBackupDrillFailed
+        expr: max by (target, kind) (evia_backup_up) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup drill failed for {{ $labels.kind }} target {{ $labels.target }}"
+          description: "The scheduled backup/restore drill did not verify a clean restore for 5 minutes. Check the schedule run report under the backup state directory and the timer journal; the previous good backup cannot be considered recoverable until a drill passes again."
+      - alert: EviaBackupDrillStale
+        expr: (time() - max by (target, kind) (evia_backup_last_success_timestamp_seconds)) > 26 * 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful backup drill for {{ $labels.kind }} target {{ $labels.target }} in over 26 hours"
+          description: "The daily restore verification has not succeeded within the expected schedule window. Inspect the systemd timer and the backup schedule state; a value of 0 means no successful drill has ever been recorded for a newly deployed target."
