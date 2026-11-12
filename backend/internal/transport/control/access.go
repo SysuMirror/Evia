@@ -54,6 +54,7 @@ type API struct {
 	Diagnostics     DiagnosticsService
 	Quotas          QuotaService
 	QuotaRuntime    QuotaRuntime
+	Artifacts       ArtifactService
 	Cursor          *cursor.Codec
 	Origin          string
 	SecureCookies   bool
@@ -91,6 +92,7 @@ func (a *API) Handler() http.Handler {
 	(&BackfillAPI{API: a, Service: a.Backfills}).Register(mux)
 	(&DiagnosticsAPI{API: a, Service: a.Diagnostics}).Register(mux)
 	(&QuotaAPI{API: a, Service: a.Quotas, Runtime: a.QuotaRuntime}).Register(mux)
+	(&ArtifactAPI{API: a, Service: a.Artifacts}).Register(mux)
 	a.registerDelivery(mux)
 	mux.HandleFunc("/", a.Boundary.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		// Preserve a structured 405 for known paths instead of ServeMux's text response.

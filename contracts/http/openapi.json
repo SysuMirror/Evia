@@ -16907,6 +16907,119 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/releases/{release_id}/artifacts/typescript": {
+      "get": {
+        "operationId": "getReleaseTypeScriptArtifact",
+        "summary": "getReleaseTypeScriptArtifact",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "发布不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypeScriptArtifact"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23330,6 +23443,113 @@
           "environment",
           "rate_per_second",
           "burst"
+        ]
+      },
+      "TypeScriptEventCompatibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_key": {
+            "type": "string"
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "interface_name": {
+            "type": "string"
+          },
+          "valid_identifier": {
+            "type": "boolean"
+          },
+          "unsupported_constructs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "event_key",
+          "schema_version",
+          "interface_name",
+          "valid_identifier",
+          "unsupported_constructs"
+        ]
+      },
+      "TypeScriptArtifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "release_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "release_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "manifest_hash": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "typescript"
+            ]
+          },
+          "language_version": {
+            "type": "string"
+          },
+          "event_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "checksum": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "compatibility": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeScriptEventCompatibility"
+            },
+            "maxItems": 50
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 1048576
+          }
+        },
+        "required": [
+          "release_id",
+          "environment",
+          "release_revision",
+          "manifest_hash",
+          "language",
+          "language_version",
+          "event_count",
+          "byte_size",
+          "checksum",
+          "compatibility",
+          "source"
         ]
       }
     }

@@ -1264,3 +1264,42 @@ test('collection quota read and patch encode scope, revision and idempotency', a
   controller.abort();
   assert.equal(patchInit.signal?.aborted, true);
 });
+
+test('release typescript artifact read encodes the nested release path', async () => {
+  const fetch = respond(200, {
+    release_id: '33333333-3333-4333-8333-333333333333',
+    environment: 'production',
+    release_revision: 2,
+    manifest_hash: 'a'.repeat(64),
+    language: 'typescript',
+    language_version: '5.0',
+    event_count: 1,
+    byte_size: 256,
+    checksum: 'b'.repeat(64),
+    compatibility: [
+      {
+        event_key: 'lesson_opened',
+        schema_version: 1,
+        interface_name: 'LessonOpenedProperties',
+        valid_identifier: true,
+        unsupported_constructs: [],
+      },
+    ],
+    source: 'export interface LessonOpenedProperties {\n  lesson_id: number;\n}\n',
+  });
+  const controller = new AbortController();
+  const artifact = await api.getReleaseTypeScriptArtifact(
+    'p',
+    '33333333-3333-4333-8333-333333333333',
+    controller.signal,
+  );
+  const [url, init] = fetch.mock.calls[0]!.arguments;
+  assert.equal(
+    url,
+    '/api/v1/projects/p/releases/33333333-3333-4333-8333-333333333333/artifacts/typescript',
+  );
+  assert.equal((init as RequestInit).method, 'GET');
+  assert.equal(artifact.compatibility[0]!.interface_name, 'LessonOpenedProperties');
+  controller.abort();
+  assert.equal((init as RequestInit).signal?.aborted, true);
+});

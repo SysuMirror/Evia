@@ -1452,6 +1452,23 @@ export interface paths {
         patch: operations["patchCollectionQuota"];
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/releases/{release_id}/artifacts/typescript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getReleaseTypeScriptArtifact */
+        get: operations["getReleaseTypeScriptArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2859,6 +2876,29 @@ export interface components {
             environment: "development" | "staging" | "production";
             rate_per_second: number;
             burst: number;
+        };
+        TypeScriptEventCompatibility: {
+            event_key: string;
+            schema_version: number;
+            interface_name: string;
+            valid_identifier: boolean;
+            unsupported_constructs: string[];
+        };
+        TypeScriptArtifact: {
+            /** Format: uuid */
+            release_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            release_revision: number;
+            manifest_hash: string;
+            /** @enum {string} */
+            language: "typescript";
+            language_version: string;
+            event_count: number;
+            byte_size: number;
+            checksum: string;
+            compatibility: components["schemas"]["TypeScriptEventCompatibility"][];
+            source: string;
         };
         filter: {
             /** @enum {unknown} */
@@ -15374,6 +15414,92 @@ export interface operations {
             };
             /** @description 修订或幂等冲突 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getReleaseTypeScriptArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TypeScriptArtifact"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 发布不存在或不可见 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

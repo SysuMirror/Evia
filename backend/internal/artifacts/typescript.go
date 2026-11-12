@@ -6,6 +6,7 @@
 package artifacts
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -270,4 +271,30 @@ func formatNumber(n float64) string {
 
 func sanitizeComment(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "*/", "* /"), "\n", " ")
+}
+
+// ManifestStore is the authorized persistence port for release manifests.
+type ManifestStore interface {
+	GetReleaseManifest(ctx context.Context, actor, project, releaseID string) (ReleasePlan, error)
+}
+
+// Service composes manifest loading with the deterministic generator.
+type Service struct {
+	store ManifestStore
+}
+
+func NewService(store ManifestStore) *Service { return &Service{store: store} }
+
+// BuildTypeScript loads the authorized release manifest and renders its
+// TypeScript artifact. All authorization happens inside the store transaction.
+func (s *Service) BuildTypeScript(ctx context.Context, actor, project, releaseID string) (ReleasePlan, Artifact, error) {
+	plan, err := s.store.GetReleaseManifest(ctx, actor, project, releaseID)
+	if err != nil {
+		return ReleasePlan{}, Artifact{}, err
+	}
+	artifact, err := Generate(plan)
+	if err != nil {
+		return ReleasePlan{}, Artifact{}, err
+	}
+	return plan, artifact, nil
 }

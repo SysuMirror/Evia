@@ -1406,6 +1406,28 @@ type SourceUpdate struct {
 	AllowedOrigins []string `json:"allowed_origins,omitzero"`
 }
 
+type TypeScriptArtifact struct {
+	ReleaseID       string                         `json:"release_id"`
+	Environment     string                         `json:"environment"`
+	ReleaseRevision int64                          `json:"release_revision"`
+	ManifestHash    string                         `json:"manifest_hash"`
+	Language        string                         `json:"language"`
+	LanguageVersion string                         `json:"language_version"`
+	EventCount      int64                          `json:"event_count"`
+	ByteSize        int64                          `json:"byte_size"`
+	Checksum        string                         `json:"checksum"`
+	Compatibility   []TypeScriptEventCompatibility `json:"compatibility"`
+	Source          string                         `json:"source"`
+}
+
+type TypeScriptEventCompatibility struct {
+	EventKey              string   `json:"event_key"`
+	SchemaVersion         int64    `json:"schema_version"`
+	InterfaceName         string   `json:"interface_name"`
+	ValidIdentifier       bool     `json:"valid_identifier"`
+	UnsupportedConstructs []string `json:"unsupported_constructs"`
+}
+
 type ValidationInput struct {
 	DraftRevision    int64          `json:"draft_revision"`
 	SampleProperties map[string]any `json:"sample_properties"`
