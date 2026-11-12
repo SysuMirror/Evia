@@ -303,3 +303,36 @@ func TestRedisBackwardClockStateCannotMintCredits(t *testing.T) {
 		t.Fatalf("clock rollback created credits: %d %v", credits, err)
 	}
 }
+
+func TestReplacePoliciesFailsClosedUntilBucketReset(t *testing.T) {
+	limiter, cfg := realBudget(t, func(c *Config) {
+		c.Default = Policy{Rate: 1, Burst: 50}
+	})
+	project := ids.New()
+	// Create an active bucket under the initial policy.
+	allowed(t, limiter, project, "production", 50)
+	denied(t, limiter, project, "production", 1, fault.Limited)
+
+	// A live policy swap must not silently reset balances: the stored bucket
+	// disagrees with the new policy, so admission fails closed.
+	if err := limiter.ReplacePolicies(cfg.Default, map[Scope]Policy{
+		{ProjectID: project, Environment: "production"}: {Rate: 100, Burst: 200},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := limiter.ReserveCollection(context.Background(), project, "production", 1)
+	if err == nil || fault.Public(err).Kind != fault.Unavailable {
+		t.Fatalf("expected policy mismatch to fail closed, got %v", err)
+	}
+
+	// Resetting the bucket reinitializes it with the published override: a
+	// full batch is admitted again even though the old bucket was exhausted.
+	if err := limiter.ResetBucket(context.Background(), project, "production"); err != nil {
+		t.Fatal(err)
+	}
+	allowed(t, limiter, project, "production", 50)
+	snapshot := limiter.SnapshotPolicies(project)
+	if !snapshot[2].Override || snapshot[2].Burst != 200 {
+		t.Fatalf("override snapshot wrong: %+v", snapshot[2])
+	}
+}

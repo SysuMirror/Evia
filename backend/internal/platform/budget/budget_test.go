@@ -117,7 +117,8 @@ func TestConfigurationSnapshotsOverridesAndRoundsDown(t *testing.T) {
 	}
 	defer limiter.Close()
 	delete(c.Overrides, scope)
-	p, ok := limiter.overrides[scope]
+	state := limiter.state.Load()
+	p, ok := state.overrides[scope]
 	if !ok || p.refillPerMillisecond != 1234 {
 		t.Fatal("override was not snapshotted or rounded conservatively")
 	}
@@ -191,5 +192,72 @@ func TestSnapshotPoliciesReportsDefaultsAndOverrides(t *testing.T) {
 	}
 	if got := limiter.SnapshotPolicies("not-a-uuid"); got != nil {
 		t.Fatalf("invalid project must return nil, got %+v", got)
+	}
+}
+
+func TestValidateRejectsOutOfBoundsPolicies(t *testing.T) {
+	limiter, err := New(localConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	for _, candidate := range []Policy{
+		{Rate: 0, Burst: 50},
+		{Rate: 1, Burst: 49},
+		{Rate: 1_000_001, Burst: 2000},
+		{Rate: math.NaN(), Burst: 2000},
+	} {
+		if err := limiter.Validate(candidate); err == nil {
+			t.Fatalf("policy should be rejected: %+v", candidate)
+		}
+	}
+	if err := limiter.Validate(Policy{Rate: 12.5, Burst: 80}); err != nil {
+		t.Fatalf("valid policy rejected: %v", err)
+	}
+}
+
+func TestReplacePoliciesPublishesAtomicallyAndKeepsOldStateOnError(t *testing.T) {
+	cfg := localConfig()
+	cfg.Default = Policy{Rate: 10, Burst: 100}
+	limiter, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	project := testProject
+	if err := limiter.ReplacePolicies(
+		Policy{Rate: 20, Burst: 200},
+		map[Scope]Policy{{ProjectID: project, Environment: "production"}: {Rate: 2, Burst: 60}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := limiter.SnapshotPolicies(project)
+	if snapshot[0].Rate != 20 || snapshot[0].Burst != 200 || snapshot[0].Override {
+		t.Fatalf("default policy not replaced: %+v", snapshot[0])
+	}
+	if !snapshot[2].Override || snapshot[2].Rate != 2 || snapshot[2].Burst != 60 {
+		t.Fatalf("override not published: %+v", snapshot[2])
+	}
+	// An invalid replacement must leave the previously published snapshot intact.
+	if err := limiter.ReplacePolicies(Policy{Rate: -1, Burst: 60}, nil); err == nil {
+		t.Fatal("invalid replacement must be rejected")
+	}
+	again := limiter.SnapshotPolicies(project)
+	if again[0].Rate != 20 || again[0].Burst != 200 {
+		t.Fatalf("failed replacement mutated live state: %+v", again[0])
+	}
+	if err := limiter.ReplacePolicies(Policy{Rate: 20, Burst: 200}, map[Scope]Policy{{ProjectID: "bad-uuid", Environment: "production"}: {Rate: 2, Burst: 60}}); err == nil {
+		t.Fatal("invalid override scope must be rejected")
+	}
+}
+
+func TestResetBucketRejectsInvalidScopeBeforeIO(t *testing.T) {
+	limiter, err := New(localConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	if err := limiter.ResetBucket(context.Background(), "not-a-uuid", "production"); err == nil {
+		t.Fatal("invalid scope must be rejected")
 	}
 }

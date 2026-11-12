@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -64,17 +65,23 @@ func DefaultConfig(endpoint string) Config {
 
 type policy struct{ capacity, refillPerMillisecond, idleMilliseconds int64 }
 
-type Limiter struct {
-	client        *redis.Client
-	prefix        string
+// budgetState is an immutable snapshot published atomically. Maps are never
+// mutated after publication, so hot-path reservations can read without locks.
+type budgetState struct {
 	defaultPolicy policy
 	overrides     map[Scope]policy
 	// Public policy values are retained so diagnostics can report the exact
 	// configured rates without reversing the integer token normalization.
 	defaultCfg   Policy
 	overrideCfgs map[Scope]Policy
-	maxBatch     int
-	timeout      time.Duration
+}
+
+type Limiter struct {
+	client   *redis.Client
+	prefix   string
+	maxBatch int
+	timeout  time.Duration
+	state    atomic.Pointer[budgetState]
 }
 
 // ScopePolicy is the externally visible effective policy for one environment.
@@ -177,7 +184,77 @@ func New(c Config) (*Limiter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Limiter{client: redis.NewClient(opts), prefix: c.KeyPrefix, defaultPolicy: p, overrides: overrides, defaultCfg: c.Default, overrideCfgs: c.Overrides, maxBatch: c.MaxBatchEvents, timeout: c.Timeout}, nil
+	overrideCfgs := make(map[Scope]Policy, len(c.Overrides))
+	for scope, candidate := range c.Overrides {
+		overrideCfgs[scope] = candidate
+	}
+	limiter := &Limiter{
+		client:   redis.NewClient(opts),
+		prefix:   c.KeyPrefix,
+		maxBatch: c.MaxBatchEvents,
+		timeout:  c.Timeout,
+	}
+	limiter.state.Store(&budgetState{
+		defaultPolicy: p,
+		overrides:     overrides,
+		defaultCfg:    c.Default,
+		overrideCfgs:  overrideCfgs,
+	})
+	return limiter, nil
+}
+
+// Validate applies the same bounds as construction without mutating the
+// limiter, so management services can reject unusable policies before commit.
+func (l *Limiter) Validate(candidate Policy) error {
+	_, err := normalize(candidate, l.maxBatch)
+	return err
+}
+
+// ReplacePolicies validates and atomically publishes a new policy snapshot.
+// Existing Redis buckets keep the old capacity/rate and fail closed until they
+// expire or are removed explicitly through ResetBucket; the limiter itself
+// performs no network I/O here.
+func (l *Limiter) ReplacePolicies(defaultCfg Policy, overrideCfgs map[Scope]Policy) error {
+	defaultPolicy, err := normalize(defaultCfg, l.maxBatch)
+	if err != nil {
+		return err
+	}
+	overrides := make(map[Scope]policy, len(overrideCfgs))
+	copied := make(map[Scope]Policy, len(overrideCfgs))
+	for scope, candidate := range overrideCfgs {
+		if !validScope(scope) {
+			return errors.New("collection budget override has an invalid project or environment")
+		}
+		normalized, e := normalize(candidate, l.maxBatch)
+		if e != nil {
+			return e
+		}
+		overrides[scope] = normalized
+		copied[scope] = candidate
+	}
+	l.state.Store(&budgetState{
+		defaultPolicy: defaultPolicy,
+		overrides:     overrides,
+		defaultCfg:    defaultCfg,
+		overrideCfgs:  copied,
+	})
+	return nil
+}
+
+// ResetBucket removes one project/environment bucket so the next reservation
+// reinitializes it with the currently published policy instead of failing on a
+// stored policy mismatch.
+func (l *Limiter) ResetBucket(ctx context.Context, projectID, environment string) error {
+	scope := Scope{ProjectID: projectID, Environment: environment}
+	if !validScope(scope) {
+		return fault.New(fault.Invalid, "INVALID_COLLECTION_BUDGET", "采集预算范围无效")
+	}
+	bounded, cancel := context.WithTimeout(ctx, l.timeout)
+	defer cancel()
+	if err := l.client.Del(bounded, l.key(scope)).Err(); err != nil {
+		return unavailable(err)
+	}
+	return nil
 }
 
 // SnapshotPolicies reports the effective public policy for every supported
@@ -186,11 +263,12 @@ func (l *Limiter) SnapshotPolicies(projectID string) []ScopePolicy {
 	if !projectPattern.MatchString(projectID) {
 		return nil
 	}
+	state := l.state.Load()
 	out := make([]ScopePolicy, 0, 3)
 	for _, environment := range []string{"development", "staging", "production"} {
 		scope := Scope{ProjectID: projectID, Environment: environment}
-		entry := ScopePolicy{ProjectID: projectID, Environment: environment, Rate: l.defaultCfg.Rate, Burst: l.defaultCfg.Burst}
-		if configured, ok := l.overrideCfgs[scope]; ok {
+		entry := ScopePolicy{ProjectID: projectID, Environment: environment, Rate: state.defaultCfg.Rate, Burst: state.defaultCfg.Burst}
+		if configured, ok := state.overrideCfgs[scope]; ok {
 			entry.Rate, entry.Burst, entry.Override = configured.Rate, configured.Burst, true
 		}
 		out = append(out, entry)
@@ -214,8 +292,9 @@ func (l *Limiter) ReserveCollection(ctx context.Context, projectID, environment 
 	if !validScope(scope) || eventCount < 1 || eventCount > l.maxBatch {
 		return fault.New(fault.Invalid, "INVALID_COLLECTION_BUDGET", "采集预算范围或事件数量无效")
 	}
-	p := l.defaultPolicy
-	if configured, ok := l.overrides[scope]; ok {
+	state := l.state.Load()
+	p := state.defaultPolicy
+	if configured, ok := state.overrides[scope]; ok {
 		p = configured
 	}
 	bounded, cancel := context.WithTimeout(ctx, l.timeout)
