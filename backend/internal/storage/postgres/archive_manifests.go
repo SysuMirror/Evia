@@ -177,3 +177,18 @@ func (s *Store) GetManifest(ctx context.Context, actor, project, manifestID stri
 	}
 	return manifest, tx.Commit(ctx)
 }
+
+// GetSystemManifest reads a manifest without an actor for the backfill worker,
+// which authenticates through its leased job rather than a session.
+func (s *Store) GetSystemManifest(ctx context.Context, project, manifestID string) (archiving.Manifest, error) {
+	if !archiveUUIDPattern.MatchString(manifestID) {
+		return archiving.Manifest{}, archiveInvalid("清单标识格式不正确")
+	}
+	manifest, e := scanArchiveManifest(s.Pool.QueryRow(ctx,
+		`SELECT `+archiveManifestColumns+` FROM archive_manifests WHERE id=$1 AND project_id=$2`,
+		manifestID, project))
+	if errors.Is(e, pgx.ErrNoRows) {
+		return archiving.Manifest{}, fault.New(fault.NotFound, "ARCHIVE_MANIFEST_NOT_FOUND", "归档清单不存在")
+	}
+	return manifest, e
+}
