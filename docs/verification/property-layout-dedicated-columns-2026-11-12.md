@@ -82,3 +82,36 @@ python3 tooling/benchmark/property_layout_probe.py run \
 ```
 
 探针默认测完即删库；`--keep` 可保留库供人工核查。纯逻辑部分（数据生成、三布局 DDL、token 派生、标识符安全、门控裁决）由 `tooling/benchmark/test_property_layout_probe.py` 的 20 项单测钉住，经 `benchmark-tools-test` 纳入 `make check`，无需 ClickHouse 即可运行。本次门控证据 JSON 留存于执行机 `/tmp/probe-100k.json`。
+
+## G1 子门控：词法无损的 String token 专用列同样通过（2026-11-12 补充）
+
+布局计划 D2 的首要开放取舍是：专用列应该用类型化物理列（探针首测最快，但数值列无法保留 `1e2`/`-0.0` 等词法 token），还是用保存逐字 JSON token 的 String 列（词法无损，但数值谓词需在读取时解析）。探针因此扩展第四种布局 `dedicated_token`：两个热键均为 String 列，数值列保存裸 token（`49`）、字符串列保留 JSON 拼写（`"..."`），查询走与生产 reader 完全相同的合成单字段文档 `concat('{"f":',<token 列>,'}')` 再做 `JSONExtract*`。同一数据集、同一容差、同一 100,000 行画像，两次独立运行的物理指标逐字节一致。
+
+数值过滤（四布局）：
+
+| 布局 | read_bytes | SelectedMarks | peak memory | 耗时 |
+| --- | ---: | ---: | ---: | ---: |
+| legacy 文档列 | 280,389,750 | 27 | 29,468,722 | 270 ms |
+| map token 点查 | 588,302 | 59 | 408,316,846 | 225 ms |
+| dedicated 类型化列（Int64） | 800,000 | 28 | 160,064 | 3 ms |
+| **dedicated_token 词法 token 列** | **490,000** | **28** | **2,390,592** | **18 ms** |
+
+字符串分组（四布局）：
+
+| 布局 | read_bytes | SelectedMarks | peak memory | 耗时 |
+| --- | ---: | ---: | ---: | ---: |
+| legacy 文档列 | 280,389,750 | 27 | 52,547,634 | 322 ms |
+| map token 分组 | 10,500,000 | 59 | 39,358,226 | 232 ms |
+| dedicated 原始 String 列 | 10,300,000 | 28 | 27,649,812 | 44 ms |
+| **dedicated_token 词法 token 列** | **10,500,000** | **28** | **27,679,997** | **70 ms** |
+
+裁决：`dedicated_token` 两类负载三项指标全部 **PASSED**——数值过滤读字节比率 0.0017、峰值内存比率 0.0811、marks 1.037；字符串分组读字节 0.0374、内存 0.5268、marks 1.037。四种布局语义等价先验仍然成立（计数均 49,000、distinct group 均 100,000）。
+
+### 对 D2 取舍的结论
+
+1. **词法无损路径不需要任何契约豁免即可过门控**。数值过滤的逐行 `JSONExtractInt` 解析使 token 列内存（2.39 MiB）约为类型化列（0.16 MiB）的 15 倍，但仅为文档基线的 8.1%，绝对差 2.2 MiB 相对于曾以数百 MiB 失败的 512 MiB 预算可忽略；token 文本比定宽 Int64 更窄，读字节反而更少（490 KB 对 800 KB）。
+2. 字符串分组上 token 列与原始 String 列几乎持平（内存 52.68% 对 52.62%），合成文档包装只多 26 ms 延迟，没有可观测的物理退化。
+3. 静态存储：token 表磁盘占用 23.47 MiB，仅比类型化表多 0.01 MiB、比文档基线多 2.3%；其中 `metric_07_token` 压缩后 17.91 KiB、`segment_03_token` 508.38 KiB。Map 表仍为 37.97 MiB（+65.4%）。
+4. 因此在本画像下没有证据支持引入类型化影子列（设计选项 C）或数值词法豁免（选项 B）；生产化 v1 采用 String token 列（选项 A）。遗留边界：本探针数值域只有整数，小数/指数 token 的解析成本与等价性留给 G3 的 18 形态扩展矩阵与百万行矩阵核验，不在此外推。
+
+G1 证据 JSON 留存于执行机 `/tmp/probe-g1.json`（自动删库运行）与 `/tmp/probe-g1-keep.json`（静态取证运行，取证后已手动 `DROP ... SYNC`，CH 中 `evia_probe%` 计数归零）。

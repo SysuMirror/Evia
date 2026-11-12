@@ -68,3 +68,74 @@ The first successor candidate named above now has physical-read evidence, record
 
 - The dedicated columns pass every metric in both the numeric filter and the string grouping workload. Numeric filtering reads 0.3% of the baseline bytes at 0.5% of its peak memory; string grouping reads 3.7% of the bytes at 52.6% of the memory; marks move 27 to 28, a single-granule alignment delta inside the explicit allowance. The parked Map fails the same probe again (2.185x marks in both workloads, 13.86x peak memory on the numeric filter), independently reproducing the 2026-11-10 decision on a fresh harness.
 - This is gate evidence only. The probe is tooling, not production code: no migration, writer, reader or stored data changes, and the 514/728 capacity matrix is not reopened. A production design still needs a hot-key identification mechanism with a bounded column count and schema-evolution rules, same-insert atomic materialization alongside the authoritative document, a reader with version-0 fallback, a bounded backfill plan, and a lexical-equivalence story for typed columns (numeric columns cannot preserve tokens such as `1e2` or `-0.0`). The full query matrix under the 512 MiB budget must pass before any reader switch; until then the document path remains the only production read path.
+
+## Productionization design for dedicated columns (proposal, not approved)
+
+The 2026-11-12 probe gives the bounded dedicated-column candidate its physical-read qualification, but no production code may change until this design is reviewed and its open decisions are signed off. The design is anchored to the seams that already exist: the Go deriver in `internal/propertylayout`, the single-insert writer in `internal/pipeline/clickhouse.go` (`rowFor` / `factRow`), the gated reader in `internal/analysis/planner.go` (`field`) with its selective winner-tuple append in `trend_facts.go`, and the additive-migration pattern of 006/007.
+
+### Hard constraints inherited from the landed layout work
+
+1. `properties_json` stays the authoritative payload on every row; every derived column is a read accelerator, never a source of truth.
+2. Derived values must stay lexically lossless (`1e2`, `1.00`, `-0.0`, integers beyond the safe range keep their exact token). Any typed-column exception needs an explicit, narrowed contract, not a silent relaxation.
+3. Derived columns commit in the same raw-table insert as their document; a derivation error fails the insert closed. No second fact write.
+4. Old parts and old writers must keep serving correct results through structural defaults; rollback to the document path must always remain possible.
+5. No backfill, no reader switch and no capacity claim until the re-gates below pass on the real 512 MiB environment. The standing prohibition on property-layout backfill is only lifted by an explicit go/no-go decision after stage 2.
+
+### D1. Hot-key catalog: how columns are chosen
+
+The probe materialized two keys out of twenty-five. A production table cannot grow a column per observed key, so hot keys need a bounded, reviewable catalog keyed by the same identity the planner already binds: `(event_key, schema_version, property_key)` plus the catalog-resolved type.
+
+- **Proposal (v1): static operator catalog.** A versioned catalog with a hard cap of eight slots (16% of the 50-property ingestion limit), changed only through reviewed configuration and an additive migration. Predictable column set, no feedback-driven schema churn, auditable in the same governance flow as retention and quota changes.
+- Rejected for v1: automatic promotion from query frequency. Column churn, cold-start oscillation and merge pressure are unmeasured; it can be designed later as an extension that proposes catalog revisions for human approval, never as self-service ALTERs.
+- A key removed from the catalog stops being materialized for new rows but its column stays readable; physical column removal is a separate, later migration validated in isolation.
+
+### D2. Column typing and the lexical-fidelity fork (decision required)
+
+- **Option A — String token columns (recommended for v1, now evidence-backed).** Each slot stores the exact JSON token text, exactly as `property_tokens` values do today but in an independent column stream. The reader reuses the proven synthetic one-field document (`concat('{"f":', col, '}')`), so every `JSONType`/`JSONExtract*` behavior and lexical edge case stays identical by construction. This respects constraint 2 without exemptions. The G1 sub-gate (see [the verification record](../verification/property-layout-dedicated-columns-2026-11-12.md)) now measures this exact shape: it passes both workloads, with numeric filtering at 0.17% of baseline read bytes and 8.11% of peak memory, and string grouping effectively tied with the raw String column (52.68% vs 52.62% memory). Per-row JSON parsing costs about fifteen times the typed column's memory in absolute terms (2.39 MiB vs 0.16 MiB), still negligible against the 512 MiB budget.
+- Option B — typed columns (`Int64`/`Float64`/`String`). Fastest in the probe, but numeric typed columns cannot preserve `1e2`, `1.00`, `-0.0` or oversized integers, conflicting with constraint 2. It would require narrowing the contract to validated integer-domain catalog entries and keeping the document authoritative for any value extraction/display, with a per-key exemption recorded in the catalog. Not acceptable as a default.
+- Option C — dual columns (lossless String token plus typed shadow). Doubles write and storage for shadowed keys. The G1 evidence gives no reason to adopt it in the measured profile: Option A already passes with an absolute 2.2 MiB memory difference, so a shadow column would add complexity without a budget-driven need.
+- Decision after G1: proceed with Option A. Typed columns (Option B) and dual columns (Option C) stay unimplemented; any future exemption requires a failing G3 measurement, not a speculative optimization.
+
+### D3. Schema, markers and evolution
+
+- Migration 008 adds, per catalog slot, one `String DEFAULT ''` column named with `propertylayout.EncodeKey` (the same `p_`-hex identifiers as the map, so a key maps to exactly one physical name and cannot collide with fixed columns). `ADD COLUMN` is metadata-only; historical parts read the default and need no rewrite, matching the 006 precedent.
+- A row-level marker `dedicated_layout_version UInt8 DEFAULT 0` records the catalog revision at write time. The reader gate is marker **and** non-empty token, never the column alone: an empty string means "not materialized on this row" (old part, pre-catalog key), while a legitimate empty-string property still stores the two-byte token `""`.
+- Migration 009 recreates `event_facts` appending the marker and slots as fact.29 onward; the existing 28 slots, winner weight and ordering are untouched, so applying it alone cannot change a served result, exactly as 007 did for the map.
+- Column deprecation is two-phase (stop writes with reader fallback verified, then a later removal migration); no slot is reused for a different property key.
+
+### D4. Writer changes
+
+`factRow` gains the bounded slot fields plus the marker. `rowFor` populates them from the **same** `DeriveMap` result it already computes — no second parse, no database-side extractor — copying tokens verbatim. Keys outside the catalog leave their slot empty; the marker still records the catalog revision so readers can distinguish "absent by catalog" from "legacy row". A derivation or encoding error keeps failing the insert closed, and the existing `input_format_skip_unknown_fields=0` ordering makes a not-yet-migrated database reject the new writer instead of silently dropping columns.
+
+### D5. Reader changes and fallback chain
+
+`planner.field` gains an outer branch ahead of the parked map branch:
+
+1. catalog hit for `(event_key, schema_version, key)` **and** `dedicated_layout_version` gate on the row → synthetic document from the dedicated String token;
+2. else the existing version-1 map gate;
+3. else the authoritative `properties_json` document.
+
+All three branches keep the user key as a bound parameter and return the same `fieldSQL` shape. `trend_facts.go` appends dedicated columns to the winner tuple only when a walked property field resolves to a catalog slot, reusing the current selective-append pattern; view-backed queries receive them through the 009 tuple. The existing 18-shape equivalence matrix is extended to a third layout identity with byte-identical result rows, plus a mixed-marker winner test in the style of the current version-0/version-1 test.
+
+### D6. Backfill (proposal only; remains prohibited until explicitly approved)
+
+If re-gates justify it: a Go-driven, partition-bounded rewrite using the verified deriver — never a database-side JSON extractor — rewriting inspected month partitions while retaining the original documents, with per-batch row-count and token hash verification and a rollback path. The archive/backfill worker pattern in `internal/backfilling` is the operational reference. No ALTER acknowledgement is treated as materialization proof; readiness is per-part verification, mirroring the discipline already written into this plan.
+
+### D7. Re-gates required before any reader switch
+
+- **G1 — token-column sub-gate (completed 2026-11-12).** `property_layout_probe.py` now includes the String-token `dedicated_token` layout; it passes both workloads under the same 2% / mark tolerances and decides D2 in favor of Option A, with two byte-identical independent runs. Decimal/exponent token parsing remains deferred to the G3 equivalence matrix.
+- **G2 — view-layer gate.** Measure the `event_facts` argMin tuple carrying dedicated slots, including the temporary-disk quota that produced error 243 for the map tuple.
+- **G3 — million-row matrix.** Rebuild the wide-document dataset and re-run the 514/728-equivalent matrix under the 512 MiB tmpfs; the 182 property filter/group failures must flip to passes without introducing regressions in count/UV/bucket queries or in the version-0 fallback path.
+- Equivalence: the extended 18-shape matrix plus mixed-winner and lexical edge-case tests stay green at every stage.
+
+### Staged delivery (each stage independently verifiable; no reader switch before G3)
+
+0. This design reviewed; D1/D2 decisions signed off.
+1. Pure-Go catalog package (bounded config, encoded naming, validation) with unit tests; no ClickHouse change.
+2. ~~G1 probe extension and verdict documentation (tooling only).~~ Done 2026-11-12; verdict recorded in the verification doc and D2.
+3. Migrations 008/009; writer materialization behind the catalog; storage integration tests pin byte-identical tokens and mixed-version rows. No reader change.
+4. Reader dedicated branch with map/document fallback; extended equivalence and view tests; full `make check`.
+5. G2 view-layer measurements on the isolated 512 MiB environment.
+6. Backfill procedure and drill, only after explicit approval; then G3 and the go/no-go for the reader switch.
+
+Until stage 6 completes, the document path remains the only production read path, the map layout stays parked, and no capacity improvement is claimed.
