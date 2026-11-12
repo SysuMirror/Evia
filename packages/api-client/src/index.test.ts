@@ -1242,7 +1242,14 @@ test('collection quota read and patch encode scope, revision and idempotency', a
   const controller = new AbortController();
   const input = { environment: 'production' as const, rate_per_second: 5, burst: 60 };
   await api.getCollectionQuota('p', 'production', controller.signal);
-  const quota = await api.patchCollectionQuota('p', input, 2, 'quota-key', 'csrf', controller.signal);
+  const quota = await api.patchCollectionQuota(
+    'p',
+    input,
+    2,
+    'quota-key',
+    'csrf',
+    controller.signal,
+  );
   const urls = fetch.mock.calls.map((call) => call.arguments[0]);
   assert.equal(urls[0], '/api/v1/projects/p/quotas?environment=production');
   assert.equal(urls[1], '/api/v1/projects/p/quotas');
