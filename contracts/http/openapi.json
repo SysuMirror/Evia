@@ -16554,6 +16554,110 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/diagnostics": {
+      "get": {
+        "operationId": "getProjectDiagnostics",
+        "summary": "getProjectDiagnostics",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostics"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -22594,6 +22698,385 @@
         "required": [
           "token",
           "expires_at"
+        ]
+      },
+      "DiagnosticsNameCount": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ]
+      },
+      "DiagnosticsDisabledSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "environment",
+          "kind"
+        ]
+      },
+      "DiagnosticsFeatures": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "collection_enabled": {
+            "type": "boolean"
+          },
+          "analysis_enabled": {
+            "type": "boolean"
+          },
+          "delivery_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "collection_enabled",
+          "analysis_enabled",
+          "delivery_enabled"
+        ]
+      },
+      "DiagnosticsSourceSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "disabled",
+              "unavailable"
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "by_status": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsNameCount"
+            }
+          },
+          "by_environment": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsNameCount"
+            }
+          },
+          "disabled_sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsDisabledSource"
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "status",
+          "total",
+          "truncated",
+          "by_status",
+          "by_environment",
+          "disabled_sources"
+        ]
+      },
+      "DiagnosticsEnvPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "rate_per_second": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "burst": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "override": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "environment",
+          "rate_per_second",
+          "burst",
+          "override"
+        ]
+      },
+      "DiagnosticsBudget": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "rate_per_second": {
+            "type": "number",
+            "minimum": 0
+          },
+          "burst": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsEnvPolicy"
+            },
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "status",
+          "rate_per_second",
+          "burst",
+          "environments"
+        ]
+      },
+      "DiagnosticsProof": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "release_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "proof_count": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "environment",
+          "release_id",
+          "revision",
+          "observed_at",
+          "age_seconds",
+          "proof_count"
+        ]
+      },
+      "DiagnosticsPipeline": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_data",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "proofs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsProof"
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "status",
+          "proofs"
+        ]
+      },
+      "DiagnosticsReasonCount": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "reason",
+          "count"
+        ]
+      },
+      "DiagnosticsRejectionWindow": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bucket_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsReasonCount"
+            }
+          }
+        },
+        "required": [
+          "bucket_at",
+          "environment",
+          "reasons"
+        ]
+      },
+      "DiagnosticsRejections": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable",
+              "disabled"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "window_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsReasonCount"
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticsRejectionWindow"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "window_hours",
+          "totals",
+          "windows"
+        ]
+      },
+      "Diagnostics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "features": {
+            "$ref": "#/components/schemas/DiagnosticsFeatures"
+          },
+          "sources": {
+            "$ref": "#/components/schemas/DiagnosticsSourceSummary"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/DiagnosticsBudget"
+          },
+          "pipeline": {
+            "$ref": "#/components/schemas/DiagnosticsPipeline"
+          },
+          "rejections": {
+            "$ref": "#/components/schemas/DiagnosticsRejections"
+          }
+        },
+        "required": [
+          "project_id",
+          "generated_at",
+          "features",
+          "sources",
+          "budget",
+          "pipeline",
+          "rejections"
         ]
       }
     }

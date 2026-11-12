@@ -350,6 +350,92 @@ type DiagnosticList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
+type Diagnostics struct {
+	ProjectID   string                   `json:"project_id"`
+	GeneratedAt string                   `json:"generated_at"`
+	Features    DiagnosticsFeatures      `json:"features"`
+	Sources     DiagnosticsSourceSummary `json:"sources"`
+	Budget      DiagnosticsBudget        `json:"budget"`
+	Pipeline    DiagnosticsPipeline      `json:"pipeline"`
+	Rejections  DiagnosticsRejections    `json:"rejections"`
+}
+
+type DiagnosticsBudget struct {
+	Status        string                 `json:"status"`
+	ErrorCode     *string                `json:"error_code,omitempty"`
+	RatePerSecond float64                `json:"rate_per_second"`
+	Burst         int64                  `json:"burst"`
+	Environments  []DiagnosticsEnvPolicy `json:"environments"`
+}
+
+type DiagnosticsDisabledSource struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Environment string `json:"environment"`
+	Kind        string `json:"kind"`
+}
+
+type DiagnosticsEnvPolicy struct {
+	Environment   string  `json:"environment"`
+	RatePerSecond float64 `json:"rate_per_second"`
+	Burst         int64   `json:"burst"`
+	Override      bool    `json:"override"`
+}
+
+type DiagnosticsFeatures struct {
+	CollectionEnabled bool `json:"collection_enabled"`
+	AnalysisEnabled   bool `json:"analysis_enabled"`
+	DeliveryEnabled   bool `json:"delivery_enabled"`
+}
+
+type DiagnosticsNameCount struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+type DiagnosticsPipeline struct {
+	Status    string             `json:"status"`
+	ErrorCode *string            `json:"error_code,omitempty"`
+	Proofs    []DiagnosticsProof `json:"proofs"`
+}
+
+type DiagnosticsProof struct {
+	Environment string `json:"environment"`
+	ReleaseID   string `json:"release_id"`
+	Revision    int64  `json:"revision"`
+	ObservedAt  string `json:"observed_at"`
+	AgeSeconds  int64  `json:"age_seconds"`
+	ProofCount  int64  `json:"proof_count"`
+}
+
+type DiagnosticsReasonCount struct {
+	Reason string `json:"reason"`
+	Count  int64  `json:"count"`
+}
+
+type DiagnosticsRejectionWindow struct {
+	BucketAt    string                   `json:"bucket_at"`
+	Environment string                   `json:"environment"`
+	Reasons     []DiagnosticsReasonCount `json:"reasons"`
+}
+
+type DiagnosticsRejections struct {
+	Status      string                       `json:"status"`
+	ErrorCode   *string                      `json:"error_code,omitempty"`
+	WindowHours int64                        `json:"window_hours"`
+	Totals      []DiagnosticsReasonCount     `json:"totals"`
+	Windows     []DiagnosticsRejectionWindow `json:"windows"`
+}
+
+type DiagnosticsSourceSummary struct {
+	Status          string                      `json:"status"`
+	Total           int64                       `json:"total"`
+	Truncated       bool                        `json:"truncated"`
+	ByStatus        []DiagnosticsNameCount      `json:"by_status"`
+	ByEnvironment   []DiagnosticsNameCount      `json:"by_environment"`
+	DisabledSources []DiagnosticsDisabledSource `json:"disabled_sources"`
+}
+
 type DownloadGrant struct {
 	URL       string `json:"url"`
 	ExpiresAt string `json:"expires_at"`

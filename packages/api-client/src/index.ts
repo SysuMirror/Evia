@@ -47,6 +47,7 @@ export type ArchiveManifestList = components['schemas']['ArchiveManifestList'];
 export type BackfillInput = components['schemas']['BackfillInput'];
 export type BackfillJob = components['schemas']['BackfillJob'];
 export type BackfillList = components['schemas']['BackfillList'];
+export type Diagnostics = components['schemas']['Diagnostics'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1119,6 +1120,8 @@ export const api = {
       csrf,
       signal,
     }),
+  getDiagnostics: (projectID: string, signal?: AbortSignal) =>
+    request<Diagnostics>(`${projectPath(projectID)}/diagnostics`, { signal }),
   createExportJob: (
     projectID: string,
     body: ExportInput,

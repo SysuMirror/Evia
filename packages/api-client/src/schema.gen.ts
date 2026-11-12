@@ -1417,6 +1417,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getProjectDiagnostics */
+        get: operations["getProjectDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2731,6 +2748,94 @@ export interface components {
             token: string;
             /** Format: date-time */
             expires_at: string;
+        };
+        DiagnosticsNameCount: {
+            name: string;
+            count: number;
+        };
+        DiagnosticsDisabledSource: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            kind: string;
+        };
+        DiagnosticsFeatures: {
+            collection_enabled: boolean;
+            analysis_enabled: boolean;
+            delivery_enabled: boolean;
+        };
+        DiagnosticsSourceSummary: {
+            /** @enum {string} */
+            status: "ok" | "disabled" | "unavailable";
+            total: number;
+            truncated: boolean;
+            by_status: components["schemas"]["DiagnosticsNameCount"][];
+            by_environment: components["schemas"]["DiagnosticsNameCount"][];
+            disabled_sources: components["schemas"]["DiagnosticsDisabledSource"][];
+        };
+        DiagnosticsEnvPolicy: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            rate_per_second: number;
+            burst: number;
+            override: boolean;
+        };
+        DiagnosticsBudget: {
+            /** @enum {string} */
+            status: "ok" | "unavailable" | "disabled";
+            error_code?: string;
+            rate_per_second: number;
+            burst: number;
+            environments: components["schemas"]["DiagnosticsEnvPolicy"][];
+        };
+        DiagnosticsProof: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            /** Format: uuid */
+            release_id: string;
+            revision: number;
+            /** Format: date-time */
+            observed_at: string;
+            age_seconds: number;
+            proof_count: number;
+        };
+        DiagnosticsPipeline: {
+            /** @enum {string} */
+            status: "ok" | "no_data" | "unavailable" | "disabled";
+            error_code?: string;
+            proofs: components["schemas"]["DiagnosticsProof"][];
+        };
+        DiagnosticsReasonCount: {
+            reason: string;
+            count: number;
+        };
+        DiagnosticsRejectionWindow: {
+            /** Format: date-time */
+            bucket_at: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            reasons: components["schemas"]["DiagnosticsReasonCount"][];
+        };
+        DiagnosticsRejections: {
+            /** @enum {string} */
+            status: "ok" | "unavailable" | "disabled";
+            error_code?: string;
+            window_hours: number;
+            totals: components["schemas"]["DiagnosticsReasonCount"][];
+            windows: components["schemas"]["DiagnosticsRejectionWindow"][];
+        };
+        Diagnostics: {
+            /** Format: uuid */
+            project_id: string;
+            /** Format: date-time */
+            generated_at: string;
+            features: components["schemas"]["DiagnosticsFeatures"];
+            sources: components["schemas"]["DiagnosticsSourceSummary"];
+            budget: components["schemas"]["DiagnosticsBudget"];
+            pipeline: components["schemas"]["DiagnosticsPipeline"];
+            rejections: components["schemas"]["DiagnosticsRejections"];
         };
         filter: {
             /** @enum {unknown} */
@@ -14994,6 +15099,91 @@ export interface operations {
             };
             /** @description 服务端错误 */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProjectDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Diagnostics"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

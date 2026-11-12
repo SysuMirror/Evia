@@ -1183,3 +1183,45 @@ test('retention policy create sends the expect-absent zero revision', async () =
   assert.equal(policy.revision, 1);
   assert.equal(policy.retention_days, 90);
 });
+
+test('diagnostics read uses the fixed project diagnostics path', async () => {
+  const fetch = respond(200, {
+    project_id: 'p',
+    generated_at: '2026-11-12T10:00:00Z',
+    features: {
+      collection_enabled: true,
+      analysis_enabled: true,
+      delivery_enabled: false,
+    },
+    sources: {
+      status: 'ok',
+      total: 1,
+      truncated: false,
+      by_status: [{ name: 'active', count: 1 }],
+      by_environment: [{ name: 'production', count: 1 }],
+      disabled_sources: [],
+    },
+    budget: {
+      status: 'disabled',
+      rate_per_second: 0,
+      burst: 0,
+      environments: [],
+    },
+    pipeline: { status: 'no_data', proofs: [] },
+    rejections: {
+      status: 'disabled',
+      window_hours: 24,
+      totals: [],
+      windows: [],
+    },
+  });
+  const controller = new AbortController();
+  const report = await api.getDiagnostics('p', controller.signal);
+  const [url, init] = fetch.mock.calls[0]!.arguments;
+  assert.equal(url, '/api/v1/projects/p/diagnostics');
+  assert.equal((init as RequestInit).method, 'GET');
+  assert.equal(report.sources.total, 1);
+  assert.equal(report.pipeline.status, 'no_data');
+  controller.abort();
+  assert.equal((init as RequestInit).signal?.aborted, true);
+});
