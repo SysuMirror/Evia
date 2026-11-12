@@ -344,3 +344,38 @@ func TestDeliveryConfigurationRequiresActualReadbackDependency(t *testing.T) {
 		t.Fatal("a topic name alone enabled release delivery", err)
 	}
 }
+
+func TestShutdownDelayBounds(t *testing.T) {
+	values := runtimeValues()
+	// Default applies when the variable is unset.
+	c, err := ReadFor("serve", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ShutdownDelay != 5*time.Second {
+		t.Fatalf("default shutdown delay = %v, want 5s", c.ShutdownDelay)
+	}
+
+	values["EVIA_SHUTDOWN_DELAY"] = "0s"
+	if c, err = ReadFor("serve", func(k string) string { return values[k] }); err != nil || c.ShutdownDelay != 0 {
+		t.Fatal("zero delay should be accepted for immediate shutdown", c.ShutdownDelay, err)
+	}
+
+	values["EVIA_SHUTDOWN_DELAY"] = "30s"
+	if c, err = ReadFor("serve", func(k string) string { return values[k] }); err != nil || c.ShutdownDelay != 30*time.Second {
+		t.Fatal("upper bound delay rejected", c.ShutdownDelay, err)
+	}
+
+	for _, raw := range []string{"31s", "-1s", "not-a-duration"} {
+		values["EVIA_SHUTDOWN_DELAY"] = raw
+		if _, err = ReadFor("serve", func(k string) string { return values[k] }); err == nil {
+			t.Fatalf("invalid EVIA_SHUTDOWN_DELAY %q accepted", raw)
+		}
+	}
+
+	// Non-serve commands ignore the HTTP-only setting.
+	delete(values, "EVIA_SHUTDOWN_DELAY")
+	if c, err = ReadFor("ingest-worker", func(k string) string { return values[k] }); err != nil || c.ShutdownDelay != 0 {
+		t.Fatal("worker must not inherit the serve shutdown delay", c.ShutdownDelay, err)
+	}
+}

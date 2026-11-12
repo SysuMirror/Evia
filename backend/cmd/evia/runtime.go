@@ -377,21 +377,16 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	// a separate slice because they need domain-level queue and lease instruments.
 	registry := observe.NewRegistry("serve")
 	instrumenter := observe.NewInstrumenter(registry)
+	// The gate flips readiness before the listener closes so a load balancer
+	// can drain this replica instead of resetting in-flight connections.
+	drainGate := observe.NewDrainGate()
 	// Registered without a method prefix so the handler can return an explicit
 	// 405 for non-GET methods; a GET-only pattern would fall through to the API
 	// catch-all and surface as 404 instead.
 	mux.HandleFunc("/metrics", observe.MetricsHandler(registry))
 	mux.Handle("/", api.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		check, cancel := context.WithTimeout(r.Context(), time.Second)
-		defer cancel()
-		if probe(check) != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	mux.HandleFunc("GET /readyz", drainGate.ReadinessHandler(probe))
 	instrumented := instrumenter.Middleware(mux)
 	bounded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		request, cancel := context.WithTimeout(r.Context(), 25*time.Second)
@@ -400,10 +395,10 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	})
 	server := httpapi.Server(c.Listen, bounded)
 	logger.Info("API starting", "listen", c.Listen, "collection_enabled", c.CollectionEnabled, "analysis_enabled", c.AnalysisEnabled, "delivery_enabled", c.DeliveryEnabled, "sources_enabled", len(c.SourceSecretKey) > 0)
-	return supervise(ctx, []task{{"HTTP listener", func(ctx context.Context) error { return runHTTP(ctx, server) }}, {"credential cleanup", func(ctx context.Context) error { return cleanup(ctx, store) }}}, 15*time.Second)
+	return supervise(ctx, []task{{"HTTP listener", func(ctx context.Context) error { return runHTTP(ctx, server, drainGate, c.ShutdownDelay) }}, {"credential cleanup", func(ctx context.Context) error { return cleanup(ctx, store) }}}, 15*time.Second)
 }
 
-func runHTTP(ctx context.Context, server *http.Server) error {
+func runHTTP(ctx context.Context, server *http.Server, gate *observe.DrainGate, drainDelay time.Duration) error {
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	select {
@@ -413,6 +408,22 @@ func runHTTP(ctx context.Context, server *http.Server) error {
 		}
 		return err
 	case <-ctx.Done():
+		// Fail readiness first so the load balancer stops routing new requests
+		// while liveness stays up. The delay gives endpoint propagation time
+		// before the listener stops accepting connections.
+		gate.MarkDraining()
+		if drainDelay > 0 {
+			timer := time.NewTimer(drainDelay)
+			select {
+			case <-timer.C:
+			case err := <-result:
+				timer.Stop()
+				if !errors.Is(err, http.ErrServerClosed) {
+					return err
+				}
+				return ctx.Err()
+			}
+		}
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdown); err != nil {

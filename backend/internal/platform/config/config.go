@@ -52,6 +52,11 @@ type Config struct {
 	ArchiveEnabled bool
 	ArchiveDir     string
 	InstanceID     string
+	// ShutdownDelay is the interval between failing readiness (so the load
+	// balancer drains the replica) and closing the listener. Bounded to keep
+	// a wedged shutdown from hanging the supervisor; zero keeps the legacy
+	// immediate-shutdown behavior for non-serve processes.
+	ShutdownDelay time.Duration
 }
 
 var (
@@ -210,6 +215,12 @@ func (c *Config) readHTTP(get func(string) string) error {
 	c.CursorKey, err = hex.DecodeString(get("EVIA_CURSOR_KEY"))
 	if err != nil || len(c.CursorKey) != 32 {
 		return errors.New("EVIA_CURSOR_KEY must be 32 random bytes encoded as 64 hexadecimal characters")
+	}
+	c.ShutdownDelay = 5 * time.Second
+	if raw := get("EVIA_SHUTDOWN_DELAY"); raw != "" {
+		if c.ShutdownDelay, err = time.ParseDuration(raw); err != nil || c.ShutdownDelay < 0 || c.ShutdownDelay > 30*time.Second {
+			return errors.New("EVIA_SHUTDOWN_DELAY must be a duration between 0 and 30s")
+		}
 	}
 	return nil
 }
