@@ -77,6 +77,9 @@ const ExportsPage = lazy(() =>
 const RetentionPage = lazy(() =>
   import('./retention/retention').then((module) => ({ default: module.RetentionPage })),
 );
+const ArchivingPage = lazy(() =>
+  import('./archiving/archiving').then((module) => ({ default: module.ArchivingPage })),
+);
 const MetricsPage = lazy(() =>
   import('./metrics/metrics').then((module) => ({ default: module.MetricsPage })),
 );
@@ -232,7 +235,10 @@ function Workspace({ session }: { session: Session }) {
       ? [{ path: 'exports' as const, label: '数据导出', component: ExportsPage }]
       : []),
     ...(project.data?.permissions.includes('settings.write')
-      ? [{ path: 'retention' as const, label: '数据保留', component: RetentionPage }]
+      ? [
+          { path: 'retention' as const, label: '数据保留', component: RetentionPage },
+          { path: 'archiving' as const, label: '归档回补', component: ArchivingPage },
+        ]
       : []),
     ...(project.data?.permissions.includes('metrics.read')
       ? [

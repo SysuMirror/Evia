@@ -12,6 +12,7 @@ export type WorkspaceSection =
   | 'erasure'
   | 'exports'
   | 'retention'
+  | 'archiving'
   | 'metrics'
   | 'formula-metrics';
 
@@ -26,6 +27,12 @@ const paths: Record<WorkspaceSection, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  archiving: (
+    <>
+      <rect x="4" y="4" width="16" height="5" rx="1.5" />
+      <path d="M5 9v10a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V9M12 12v7m0 0l-3-3m3 3l3-3" />
     </>
   ),
   erasure: (
