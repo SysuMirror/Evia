@@ -86,13 +86,22 @@ type AnalysisFieldCapability struct {
 }
 
 type ArchiveManifest struct {
-	ID              string          `json:"id"`
-	Environment     string          `json:"environment"`
-	TimeRange       json.RawMessage `json:"time_range"`
-	State           string          `json:"state"`
-	EventCount      int64           `json:"event_count"`
-	CompressedBytes int64           `json:"compressed_bytes"`
-	Checksum        string          `json:"checksum"`
+	ManifestID     string  `json:"manifest_id"`
+	ProjectID      string  `json:"project_id"`
+	Environment    string  `json:"environment"`
+	RetentionDays  int64   `json:"retention_days"`
+	CutoffAt       string  `json:"cutoff_at"`
+	WindowStartAt  *string `json:"window_start_at"`
+	WindowEndAt    *string `json:"window_end_at"`
+	RowCount       int64   `json:"row_count"`
+	ArtifactPath   *string `json:"artifact_path"`
+	ArtifactSha256 *string `json:"artifact_sha256"`
+	ArtifactBytes  *int64  `json:"artifact_bytes"`
+	Status         string  `json:"status"`
+	ErrorCode      *string `json:"error_code"`
+	SweepID        *string `json:"sweep_id"`
+	CreatedAt      string  `json:"created_at"`
+	CompletedAt    *string `json:"completed_at"`
 }
 
 type ArchiveManifestList struct {

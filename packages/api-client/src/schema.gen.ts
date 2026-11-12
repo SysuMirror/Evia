@@ -1364,6 +1364,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/archive-manifests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** listArchiveManifests */
+        get: operations["listArchiveManifests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1836,15 +1853,31 @@ export interface components {
         };
         ArchiveManifest: {
             /** Format: uuid */
-            id: string;
-            /** @enum {unknown} */
+            manifest_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
             environment: "development" | "staging" | "production";
-            time_range: components["schemas"]["time_range"];
-            /** @enum {unknown} */
-            state: "writing" | "verified" | "incomplete" | "expired";
-            event_count: number;
-            compressed_bytes: number;
-            checksum: string;
+            retention_days: number;
+            /** Format: date-time */
+            cutoff_at: string;
+            /** Format: date-time */
+            window_start_at: string | null;
+            /** Format: date-time */
+            window_end_at: string | null;
+            row_count: number;
+            artifact_path: string | null;
+            artifact_sha256: string | null;
+            artifact_bytes: number | null;
+            /** @enum {string} */
+            status: "pending" | "materialized" | "failed";
+            error_code: string | null;
+            /** Format: uuid */
+            sweep_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
         };
         ArchiveManifestList: {
             items: components["schemas"]["ArchiveManifest"][];
@@ -14506,6 +14539,95 @@ export interface operations {
             };
             /** @description 服务端错误 */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listArchiveManifests: {
+        parameters: {
+            query?: {
+                environment?: "development" | "staging" | "production";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveManifestList"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

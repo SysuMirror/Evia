@@ -15987,6 +15987,143 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/archive-manifests": {
+      "get": {
+        "operationId": "listArchiveManifests",
+        "summary": "listArchiveManifests",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveManifestList"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18026,48 +18163,119 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": {
+          "manifest_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
             "type": "string",
             "format": "uuid"
           },
           "environment": {
+            "type": "string",
             "enum": [
               "development",
               "staging",
               "production"
             ]
           },
-          "time_range": {
-            "$ref": "../query/query-request.schema.json#/properties/time_range"
+          "retention_days": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3650
           },
-          "state": {
-            "enum": [
-              "writing",
-              "verified",
-              "incomplete",
-              "expired"
+          "cutoff_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "window_start_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "window_end_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "row_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "artifact_path": {
+            "type": [
+              "string",
+              "null"
             ]
           },
-          "event_count": {
-            "type": "integer",
+          "artifact_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "artifact_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 0
           },
-          "compressed_bytes": {
-            "type": "integer",
-            "minimum": 0
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "materialized",
+              "failed"
+            ]
           },
-          "checksum": {
-            "type": "string"
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sweep_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
-          "id",
+          "manifest_id",
+          "project_id",
           "environment",
-          "time_range",
-          "state",
-          "event_count",
-          "compressed_bytes",
-          "checksum"
+          "retention_days",
+          "cutoff_at",
+          "window_start_at",
+          "window_end_at",
+          "row_count",
+          "artifact_path",
+          "artifact_sha256",
+          "artifact_bytes",
+          "status",
+          "error_code",
+          "sweep_id",
+          "created_at",
+          "completed_at"
         ]
       },
       "ArchiveManifestList": {

@@ -42,6 +42,8 @@ export type RetentionPolicy = components['schemas']['RetentionPolicy'];
 export type RetentionPolicyInput = components['schemas']['RetentionPolicyInput'];
 export type RetentionSweep = components['schemas']['RetentionSweep'];
 export type RetentionSweepList = components['schemas']['RetentionSweepList'];
+export type ArchiveManifest = components['schemas']['ArchiveManifest'];
+export type ArchiveManifestList = components['schemas']['ArchiveManifestList'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1053,6 +1055,30 @@ export const api = {
       { signal },
     );
   },
+  listArchiveManifests: (
+    projectID: string,
+    options: {
+      environment?: ArchiveManifest['environment'];
+      limit?: number;
+      cursor?: string;
+    } = {},
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams();
+    if (options.environment) params.set('environment', options.environment);
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.cursor) params.set('cursor', options.cursor);
+    const query = params.toString();
+    return request<ArchiveManifestList>(
+      `${projectPath(projectID)}/archive-manifests${query ? `?${query}` : ''}`,
+      { signal },
+    );
+  },
+  getArchiveManifest: (projectID: string, manifestID: string, signal?: AbortSignal) =>
+    request<ArchiveManifest>(
+      `${projectPath(projectID)}/archive-manifests/${encodeURIComponent(manifestID)}`,
+      { signal },
+    ),
   createExportJob: (
     projectID: string,
     body: ExportInput,

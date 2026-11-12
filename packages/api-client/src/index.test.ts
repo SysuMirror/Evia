@@ -1074,6 +1074,47 @@ test('retention sweep reads encode environment and limit query params', async ()
   assert.equal(init.signal?.aborted, true);
 });
 
+test('archive manifest list and get encode scope and cursor', async () => {
+  const fetch = respond(200, {
+    items: [
+      {
+        manifest_id: '33333333-3333-4333-8333-333333333333',
+        project_id: 'p',
+        environment: 'production',
+        retention_days: 90,
+        cutoff_at: '2026-08-13T10:00:00Z',
+        window_start_at: '2026-05-01T00:00:00Z',
+        window_end_at: '2026-08-12T00:00:00Z',
+        row_count: 128,
+        artifact_path: '/var/lib/evia/archives/x.jsonl',
+        artifact_sha256: null,
+        artifact_bytes: 2048,
+        status: 'materialized',
+        error_code: null,
+        sweep_id: null,
+        created_at: '2026-08-13T10:05:00Z',
+        completed_at: '2026-08-13T10:05:00Z',
+      },
+    ],
+    next_cursor: null,
+  });
+  await api.listArchiveManifests('p', { environment: 'production', limit: 25, cursor: 'cur-1' });
+  await api.listArchiveManifests('p');
+  await api.getArchiveManifest('p', '33333333-3333-4333-8333-333333333333');
+  const urls = fetch.mock.calls.map((call) => call.arguments[0]);
+  assert.equal(
+    urls[0],
+    '/api/v1/projects/p/archive-manifests?environment=production&limit=25&cursor=cur-1',
+  );
+  assert.equal(urls[1], '/api/v1/projects/p/archive-manifests');
+  assert.equal(
+    urls[2],
+    '/api/v1/projects/p/archive-manifests/33333333-3333-4333-8333-333333333333',
+  );
+  const init = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(init.method, 'GET');
+});
+
 test('retention policy create sends the expect-absent zero revision', async () => {
   const fetch = respond(200, {
     project_id: 'p',
