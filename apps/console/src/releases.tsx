@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { TypeScriptArtifactPanel } from './artifacts/typescript-artifact-panel';
 import {
   api,
   ApiError,
@@ -601,6 +602,7 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
                     </div>
                   </dl>
                 </Panel>
+                <TypeScriptArtifactPanel project={project} releaseID={detail.data.release_id} />
                 {detail.data.error && (
                   <Alert tone="error" title={detail.data.error.message}>
                     {detail.data.error.code}
