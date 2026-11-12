@@ -61,7 +61,8 @@ class ConfigValidationTest(unittest.TestCase):
 
     def test_accepts_valid_mixed_targets(self):
         path = write_config(self.root, [pg_target(), ch_target()])
-        targets, state_dir, metrics_path = schedule.load_config(path)
+        targets, state_dir, metrics_path, replication = schedule.load_config(path)
+        self.assertIsNone(replication)
         self.assertEqual([t.name for t in targets], ["control-pg", "events-ch"])
         self.assertEqual(targets[0].kind, "postgres")
         self.assertEqual(targets[1].database, "evia_events")
@@ -284,3 +285,110 @@ class TextfileRenderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReplicationHookTest(unittest.TestCase):
+    """The optional replication stage runs after drills and fails closed."""
+
+    def setUp(self):
+        import threading
+        from http.server import ThreadingHTTPServer
+        from test_objectstore import ACCESS_KEY, MockS3Handler, SECRET_KEY
+
+        MockS3Handler.objects = {}
+        MockS3Handler.corrupt_get = False
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), MockS3Handler)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        os.environ["EVIA_TEST_PG_DSN"] = "postgres://evia:secret@db.example:5432/evia"
+        os.environ["EVIA_TEST_S3_AK"] = ACCESS_KEY
+        os.environ["EVIA_TEST_S3_SK"] = SECRET_KEY
+        (self.root / "pg").mkdir()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.tmp.cleanup()
+        os.environ.pop("EVIA_TEST_PG_DSN", None)
+        os.environ.pop("EVIA_TEST_S3_AK", None)
+        os.environ.pop("EVIA_TEST_S3_SK", None)
+
+    def _write_configs(self, replication_document: dict) -> Path:
+        replication_path = self.root / "replication.json"
+        replication_path.write_text(json.dumps(replication_document))
+        schedule_path = self.root / "schedule.json"
+        schedule_path.write_text(json.dumps({
+            "version": schedule.SCHEDULE_FORMAT_VERSION,
+            "state_dir": str(self.root / "state"),
+            "metrics_path": str(self.root / "metrics" / "evia-backup.prom"),
+            "replication_config": str(replication_path),
+            "targets": [pg_target(output_dir=str(self.root / "pg"))],
+        }))
+        return schedule_path
+
+    def test_replication_stage_runs_and_reports_outcome(self):
+        replication = {
+            "version": 1,
+            "state_dir": str(self.root / "repl-state"),
+            "store": {
+                "endpoint": f"http://127.0.0.1:{self.port}",
+                "region": "us-east-1",
+                "bucket": "evia-backup",
+                "access_key_env": "EVIA_TEST_S3_AK",
+                "secret_key_env": "EVIA_TEST_S3_SK",
+                "path_style": True,
+                "insecure_http": True,
+                "timeout_seconds": 5,
+            },
+            "sources": [{
+                "name": "control-pg",
+                "kind": "postgres",
+                "directory": str(self.root / "pg"),
+                "prefix": "postgres/",
+                "retention_keep": 2,
+            }],
+        }
+        config = self._write_configs(replication)
+        drill_ok = lambda target: {"ok": True}  # noqa: E731
+        code = schedule.run_once(config, {"postgres": drill_ok, "clickhouse": drill_ok})
+        # Nothing to replicate yet, so the stage succeeds even with no objects.
+        self.assertEqual(code, 0)
+        run_reports = list((self.root / "state").glob("schedule-run-*.json"))
+        report = json.loads(run_reports[0].read_text())
+        self.assertEqual(report["replication"]["exit_code"], 0)
+        self.assertEqual(report["replication"]["bucket"], "evia-backup")
+
+    def test_unreachable_store_fails_the_whole_run(self):
+        replication = {
+            "version": 1,
+            "state_dir": str(self.root / "repl-state"),
+            "store": {
+                "endpoint": "http://127.0.0.1:9",
+                "region": "us-east-1",
+                "bucket": "evia-backup",
+                "access_key_env": "EVIA_TEST_S3_AK",
+                "secret_key_env": "EVIA_TEST_S3_SK",
+                "path_style": True,
+                "insecure_http": True,
+                "timeout_seconds": 1,
+            },
+            "sources": [{
+                "name": "control-pg",
+                "kind": "postgres",
+                "directory": str(self.root / "pg"),
+                "prefix": "postgres/",
+                "retention_keep": 2,
+            }],
+        }
+        # Give the source a real file so the replicator attempts an upload.
+        (self.root / "pg" / "evia-pg-backup-20260101T000000Z.dump").write_text("payload")
+        config = self._write_configs(replication)
+        drill_ok = lambda target: {"ok": True}  # noqa: E731
+        code = schedule.run_once(config, {"postgres": drill_ok, "clickhouse": drill_ok})
+        self.assertEqual(code, 1)
+        run_reports = list((self.root / "state").glob("schedule-run-*.json"))
+        report = json.loads(run_reports[0].read_text())
+        self.assertEqual(report["replication"]["exit_code"], 1)
+        self.assertIn("error", report["replication"]["sources"][0])

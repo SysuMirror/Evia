@@ -169,7 +169,10 @@ def load_config(path: Path) -> tuple[list[Target], Path, Path]:
         raise ScheduleError("state_dir must be a non-empty string")
     if not isinstance(raw_metrics_path, str) or not raw_metrics_path.strip():
         raise ScheduleError("metrics_path must be a non-empty string")
-    return targets, Path(raw_state_dir), Path(raw_metrics_path)
+    replication = document.get("replication_config")
+    if replication is not None and (not isinstance(replication, str) or not replication.strip()):
+        raise ScheduleError("replication_config must be a non-empty config path")
+    return targets, Path(raw_state_dir), Path(raw_metrics_path), Path(replication) if replication else None
 
 
 def redact_secret(text: str, secret: str) -> str:
@@ -290,7 +293,7 @@ def acquire_lock(path: Path) -> object:
 
 
 def run_once(config_path: Path, runners: dict | None = None) -> int:
-    targets, state_dir, metrics_path = load_config(config_path)
+    targets, state_dir, metrics_path, replication_config = load_config(config_path)
     runners = runners or DEFAULT_RUNNERS
     lock_handle = acquire_lock(state_dir / "schedule.lock")
     try:
@@ -348,6 +351,10 @@ def run_once(config_path: Path, runners: dict | None = None) -> int:
                 write_state_atomic(state_path, state)
                 write_metrics_atomic(metrics_path, state)
                 run_report["targets"].append(target_report)
+        if replication_config is not None:
+            run_report["replication"] = _run_replication(replication_config, state_dir)
+            if run_report["replication"].get("exit_code") != 0:
+                overall_ok = False
         report_path = state_dir / f"schedule-run-{run_started.strftime('%Y%m%dT%H%M%SZ')}.json"
         write_state_atomic(report_path, run_report)
         print(json.dumps(run_report, indent=2, sort_keys=True, ensure_ascii=False))
@@ -355,6 +362,39 @@ def run_once(config_path: Path, runners: dict | None = None) -> int:
     finally:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
         lock_handle.close()
+
+
+def _run_replication(config_path: Path, state_dir: Path) -> dict:
+    """Invoke the offsite replicator in-process and capture its outcome."""
+    import replicate  # local import keeps single-drill usage dependency-light
+
+    store_config, sources, _ = replicate.load_config(config_path)
+    state_path = state_dir / "replication-state.json"
+    state = replicate.load_state(state_path)
+    client = objectstore_client(store_config)
+    run_report = {"config": str(config_path), "bucket": store_config.bucket, "sources": []}
+    ok = True
+    for source in sources:
+        try:
+            run_report["sources"].append(
+                replicate.replicate_source(client, source, state, state["objects"])
+            )
+        except Exception as error:  # noqa: BLE001 - failures must reach the schedule report
+            secret = os.environ.get(store_config.secret_key_env, "")
+            run_report["sources"].append(
+                {"source": source.name, "error": str(error).replace(secret, "***") if secret else str(error)}
+            )
+            ok = False
+        finally:
+            replicate.write_state_atomic(state_path, state)
+    run_report["exit_code"] = 0 if ok else 1
+    return run_report
+
+
+def objectstore_client(store_config):
+    import objectstore
+
+    return objectstore.S3Client(store_config)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -370,8 +410,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        targets, _, _ = load_config(args.config)
+        targets, _, _, replication_config = load_config(args.config)
         if args.command == "validate":
+            if replication_config is not None:
+                import replicate
+
+                replicate.load_config(replication_config)
             for target in targets:
                 if target.kind == "postgres" and not os.environ.get(target.dsn_env or ""):
                     raise ScheduleError(f"environment variable {target.dsn_env} is not set")
