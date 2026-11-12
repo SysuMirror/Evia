@@ -92,6 +92,82 @@ real cycles and record the change here.
 * RPO target: 24 hours for control metadata (bounded by the backup interval).
 * RTO target: 4 hours from declaring a recovery event to a verified restore.
 
+## Automated scheduled drills
+
+`tooling/backup/schedule.py` turns the single-shot drills into an unattended
+daily cycle with the standard library only. It never replaces the drill
+tools: each target calls the same `do_drill` functions, so a scheduled run and
+a manual run prove exactly the same backup -> scratch restore -> fingerprint
+verify path.
+
+### Configuration and credentials
+
+`deploy/systemd/backup-drill.config.example.json` is the config template. The
+JSON only references environment variable *names* (`dsn_env`,
+`ch_password_env`); the values live in `/etc/evia/backup-drill.env` with
+`chmod 0600`. Run reports and metric labels therefore cannot contain a
+password, and the runner additionally redacts any secret that leaks into an
+error message. Target names are bounded to `[a-z0-9_-]{1,32}` and become
+Prometheus labels, so cardinality is fixed at deployment time.
+
+`validate` checks the config and credential environment without touching a
+database; the systemd unit runs it as `ExecStartPre` so a typo fails before
+the drill window starts.
+
+### Run semantics
+
+* `run-once` executes targets sequentially and never lets one failure abort
+  the others; the process exits non-zero if any target failed, which fails the
+  systemd unit and pages through the backup alerts.
+* An `flock` on `state_dir/schedule.lock` rejects overlapping timer runs.
+* Cumulative counters and last timestamps persist in
+  `state_dir/schedule-state.json`; a malformed state file is refused rather
+  than silently resetting counters.
+* After every target the runner atomically replaces the node_exporter
+  textfile document (`metrics_path`, tmp-file + rename) with
+  `evia_backup_*` gauges and counters. Point the node_exporter
+  `--collector.textfile.directory` at that directory.
+* Retention pruning only deletes files matching the managed naming patterns
+  (`evia-pg-backup-*`, `evia-restore-drill-*.report.json`,
+  `evia_ch_backup_*`) and keeps the newest `retention_keep` sets; unrelated
+  files in the backup directory are never touched.
+* PostgreSQL scratch databases are always dropped while the dump and
+  manifest are retained; ClickHouse keeps the host artifact (the container
+  copy is removed to protect the bounded tmpfs) and always drops its scratch
+  database.
+
+### systemd installation
+
+```
+install -m 0644 deploy/systemd/evia-backup-drill.service /etc/systemd/system/
+install -m 0644 deploy/systemd/evia-backup-drill.timer /etc/systemd/system/
+install -m 0600 deploy/systemd/backup-drill.env.example /etc/evia/backup-drill.env
+install -m 0640 deploy/systemd/backup-drill.config.example.json /etc/evia/backup-drill.json
+# Edit both files for the local deployment, then:
+systemctl daemon-reload
+systemctl enable --now evia-backup-drill.timer
+systemctl list-timers evia-backup-drill.timer
+```
+
+The timer fires at 02:17 with up to 15 minutes of jitter and
+`Persistent=true` catches up after a powered-down night. The service uses
+`ProtectSystem=strict` with explicit `ReadWritePaths` for the backup state,
+artifact and textfile directories.
+
+### Alerting
+
+Two rules in `deploy/monitoring/prometheus-rules.yaml` consume the textfile
+metrics; the metric allowlist lives in
+`deploy/monitoring/textfile-metrics.json` and `tooling/check_monitoring.py`
+fails the build if the manifest drifts from the emitter:
+
+* `EviaBackupDrillFailed` (critical): `evia_backup_up == 0` for 5 minutes.
+* `EviaBackupDrillStale` (warning): no successful drill for over 26 hours,
+  including a never-succeeded new deployment whose timestamp is still zero.
+
+Both route through the existing Alertmanager critical/warning receivers, so
+no Alertmanager change is required when enabling the schedule.
+
 ## Disaster recovery procedure
 
 1. Provision an empty PostgreSQL instance and apply the same role/credentials.
