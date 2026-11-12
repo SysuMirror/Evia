@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 
@@ -105,6 +106,22 @@ func ParseConfig(raw []byte) (*Catalog, error) {
 	}
 	catalog.normalize()
 	return &catalog, nil
+}
+
+// LoadFile reads and validates a versioned catalog document from disk. The
+// caller decides what an empty path means (conventionally: the disabled
+// catalog); a non-empty path that is missing, unreadable or invalid fails
+// closed so a typo cannot silently turn acceleration off.
+func LoadFile(path string) (*Catalog, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read property catalog %q: %w", path, err)
+	}
+	catalog, err := ParseConfig(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse property catalog %q: %w", path, err)
+	}
+	return catalog, nil
 }
 
 // Validate enforces every bound independently of JSON parsing so callers that

@@ -2,6 +2,8 @@ package propertycatalog
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -205,6 +207,35 @@ func TestSlotColumnReusesPropertyLayoutEncoding(t *testing.T) {
 		if got := SlotColumn(key); got != propertylayout.EncodeKey(key) || !strings.HasPrefix(got, propertylayout.KeyPrefix) {
 			t.Fatalf("slot column %q diverges from the shared encoding for %q", got, key)
 		}
+	}
+}
+
+func TestLoadFileHappyPathAndFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	validPath := filepath.Join(dir, "catalog.json")
+	valid := []byte(`{"revision":1,"entries":[{"event_key":"page_opened","schema_version":1,"property_key":"score","resolved_type":"integer"}]}`)
+	if err := os.WriteFile(validPath, valid, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := LoadFile(validPath)
+	if err != nil || !catalog.Enabled() || catalog.Revision != 1 {
+		t.Fatalf("valid catalog file rejected: %+v err=%v", catalog, err)
+	}
+	if _, err := LoadFile(filepath.Join(dir, "missing.json")); err == nil {
+		t.Fatal("missing catalog file must fail closed rather than disable silently")
+	}
+	invalidPath := filepath.Join(dir, "invalid.json")
+	if err := os.WriteFile(invalidPath, []byte(`{"revision":1,"entries":[{"event_key":"BAD","schema_version":1,"property_key":"k","resolved_type":"string"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadFile(invalidPath); err == nil {
+		t.Fatal("invalid catalog content must be rejected at load time")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte(`{not json`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadFile(filepath.Join(dir, "broken.json")); err == nil {
+		t.Fatal("malformed catalog JSON must be rejected")
 	}
 }
 
