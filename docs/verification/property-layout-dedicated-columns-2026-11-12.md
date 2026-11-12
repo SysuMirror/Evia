@@ -115,3 +115,25 @@ python3 tooling/benchmark/property_layout_probe.py run \
 4. 因此在本画像下没有证据支持引入类型化影子列（设计选项 C）或数值词法豁免（选项 B）；生产化 v1 采用 String token 列（选项 A）。遗留边界：本探针数值域只有整数，小数/指数 token 的解析成本与等价性留给 G3 的 18 形态扩展矩阵与百万行矩阵核验，不在此外推。
 
 G1 证据 JSON 留存于执行机 `/tmp/probe-g1.json`（自动删库运行）与 `/tmp/probe-g1-keep.json`（静态取证运行，取证后已手动 `DROP ... SYNC`，CH 中 `evia_probe%` 计数归零）。
+
+## G2 视图层门控：专用列避开 map 元组的临时盘失败（2026-11-13）
+
+G2 测量 trend 查询真正经过的 `event_facts` 视图路径：每个布局建一个最小 argMin 视图（`argMin(tuple(properties_json, <布局列>), tuple(id))`，权重用探针表的 id，被测成本是元组宽度），再跑一个物化获胜元组并施加热数值谓词的 trend 风格聚合。探针 `property_layout_view_probe.py` 在标准 read_bytes/marks/memory 之外显式记录查询状态，使资源耗尽成为证据而非崩溃。同一 100,000 行画像、5 次重复，ClickHouse 26.8.36.3、max_threads=2。
+
+| 布局 | 成功 | read_bytes | marks | peak_memory | 耗时 | 结果 |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| legacy（仅文档元组） | 是 | 281,189,750 | 27 | 355,873,456 | 765 ms | 1 |
+| map（携带整个 token map） | **否，错误 243** | 422,232,132 | 59 | 724,660,746（申请即失败） | 692 ms | — |
+| dedicated（类型化槽位） | 是 | 292,289,684 | 28 | 378,183,357 | 721 ms | 1 |
+| dedicated_token（词法 token 槽位） | 是 | 292,079,637 | 28 | 378,096,156 | 775 ms | 1 |
+
+关键证据：
+
+1. **复现了 map 布局的视图层失败**。`system.query_log` 记录四次 `exception_code=243`：`Not enough space on temporary disk, cannot reserve ~724 MB`。携带整个 token map 的 argMin 元组在聚合落临时盘时超出 512 MiB tmpfs，与 2026-11-10 门控观察到的失败同源；这正是 map 布局被搁置的根因在视图路径的直接复现。
+2. **两个专用列布局在同环境成功**。dedicated 与 dedicated_token 的 read_bytes 仅比 legacy 高约 3.9%（约 +11 MB），峰值内存高约 6.3%（约 +22 MB，378 MB 对 356 MB），marks 27→28 在既有容差内；二者物理成本几乎相同，进一步支持不引入类型化影子列的 D2 结论。
+3. 成功布局的 trend 计数均为 1，语义一致；map 因查询失败无结果，无法参与正确性比较——这本身就是门控结论：map 在该资源画像下不可用。
+4. 静态存储延续此前画像：dedicated 23.44 MiB、dedicated_token 23.45 MiB、legacy 22.94 MiB、map 37.97 MiB。
+
+### 边界与对 G3 的含义
+
+G2 在 10 万行复现了 map 的错误 243 并证明专用列在视图路径的边际开销可承受，但**这不是容量验收**：合成数据、单分片、单一聚合形态，且 512 MiB 预算下专用列峰值 378 MB 已占用约 72%，在百万行、多并发或更多槽位时仍可能逼近上限。能否最终切换仍由 G3 百万行矩阵（含并发、count/UV/bucket 与版本 0 回退路径）裁决，514/728 失败记录继续有效。G2 证据 JSON 留存于执行机 `/tmp/probe-g2.json`，探针库测完 `DROP ... SYNC`，`evia_probe%` 计数归零。
