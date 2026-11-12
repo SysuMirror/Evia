@@ -187,9 +187,15 @@ EVIA_ARCHIVE_DIR=/var/lib/evia/archives \
   row-count drift, manifest persistence error) aborts the sweep before
   `ALTER DELETE`, so facts are never removed without a verified copy. Empty
   scopes produce no manifest and need no deletion.
-* Backfill (re-ingesting an archive JSONL back into ClickHouse) is planned as
-  the companion operation; until it ships, archive artifacts plus the Kafka
-  retention window are the recovery sources.
+* Backfill re-ingests an archive through the dedicated `backfill-worker`
+  (`EVIA_ARCHIVE_DIR` required). Owners create a job with
+  `POST /api/v1/projects/{project_id}/backfills` referencing a materialized
+  manifest; the worker streams the JSONL back into `event_facts_raw` and fails
+  unless the inserted line count matches both the manifest and the job's
+  expected rows. The `event_facts` view deduplicates by event identity, so
+  re-running a backfill cannot change query results even though raw rows are
+  reinserted. Queued jobs are cancellable; terminal states and row counts are
+  visible via the backfill collection and item endpoints.
 
 ## Local container verification
 
