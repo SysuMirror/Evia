@@ -85,7 +85,10 @@ test('member opens a release and reads the TypeScript artifact panel', async ({ 
     await route.fulfill({ json: { items: [releaseFixture()], next_cursor: null } });
   });
   await page.route(`**/api/v1/projects/${projectID}/release-activations*`, async (route) => {
-    await route.fulfill({ status: 404, json: { code: 'ACTIVATION_NOT_FOUND', message: 'no active release' } });
+    await route.fulfill({
+      status: 404,
+      json: { code: 'ACTIVATION_NOT_FOUND', message: 'no active release' },
+    });
   });
   await page.route(`**/api/v1/projects/${projectID}/releases/${releaseID}`, async (route) => {
     await route.fulfill({ json: releaseFixture() });
@@ -119,7 +122,10 @@ test('artifact panel surfaces generation failures with a retry action', async ({
     await route.fulfill({ json: { items: [releaseFixture()], next_cursor: null } });
   });
   await page.route(`**/api/v1/projects/${projectID}/release-activations*`, async (route) => {
-    await route.fulfill({ status: 404, json: { code: 'ACTIVATION_NOT_FOUND', message: 'no active release' } });
+    await route.fulfill({
+      status: 404,
+      json: { code: 'ACTIVATION_NOT_FOUND', message: 'no active release' },
+    });
   });
   await page.route(`**/api/v1/projects/${projectID}/releases/${releaseID}`, async (route) => {
     await route.fulfill({ json: releaseFixture() });
