@@ -1,0 +1,27 @@
+-- Version 008: row marker for the bounded dedicated hot-key column layout.
+-- Apply after version 007 and before any writer that materializes dedicated
+-- token columns. This migration intentionally adds ONLY the row marker:
+-- physical slot columns are added by later additive migrations, one per
+-- approved catalog revision, because slot names derive from the reviewed
+-- hot-key catalog and no production catalog has been approved yet.
+--
+-- dedicated_layout_version records the catalog revision at write time:
+--   0 = no dedicated token materialized on this row. Every legacy part and
+--       every writer that omits the field reads 0 through the type default,
+--       because JSONEachRow inserts substitute the default rather than
+--       evaluating the DEFAULT expression.
+--   1..255 = the row's dedicated token columns were populated losslessly in
+--       Go from the same DeriveMap result as property_tokens, in the SAME
+--       insert as the authoritative properties_json. Readers must require the
+--       marker AND a non-empty token column before selecting the dedicated
+--       path; an empty string means "not materialized", since a legitimate
+--       empty-string property still stores the two-byte token "".
+--
+-- The authoritative properties_json document remains the source of truth;
+-- this column is a writer-owned read-accelerator marker and never carries
+-- payload data. ADD COLUMN is metadata-only: sort/partition keys, the
+-- event_facts view, historical parts and stored bytes are untouched, so old
+-- parts need no rewrite and applying this file alone cannot change a served
+-- query result. Safe to reapply.
+ALTER TABLE event_facts_raw
+ ADD COLUMN IF NOT EXISTS dedicated_layout_version UInt8 DEFAULT 0;
