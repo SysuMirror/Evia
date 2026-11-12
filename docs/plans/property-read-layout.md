@@ -131,7 +131,7 @@ If re-gates justify it: a Go-driven, partition-bounded rewrite using the verifie
 ### Staged delivery (each stage independently verifiable; no reader switch before G3)
 
 0. This design reviewed; D1/D2 decisions signed off.
-1. Pure-Go catalog package (bounded config, encoded naming, validation) with unit tests; no ClickHouse change.
+1. ~~Pure-Go catalog package (bounded config, encoded naming, validation) with unit tests; no ClickHouse change.~~ Done 2026-11-13 as `internal/propertycatalog`: eight-slot cap, UInt8 revision bounds, identity dedupe, shared-column resolution and config parsing with 12 race-tested unit cases; no writer/reader wiring yet.
 2. ~~G1 probe extension and verdict documentation (tooling only).~~ Done 2026-11-12; verdict recorded in the verification doc and D2.
 3. Migrations 008/009; writer materialization behind the catalog; storage integration tests pin byte-identical tokens and mixed-version rows. No reader change.
 4. Reader dedicated branch with map/document fallback; extended equivalence and view tests; full `make check`.
