@@ -202,3 +202,67 @@ func TestCompileWithCatalogUnmatchedFieldStaysIdentical(t *testing.T) {
 		t.Fatalf("unmatched field must keep SQL byte-identical:\n%s\n%s", legacy.SQL, enabled.SQL)
 	}
 }
+
+func TestTrendTupleAppendsDedicatedColumnsOnlyOnCatalogHit(t *testing.T) {
+	column := propertycatalog.SlotColumn("title")
+	scope := Scope{ProjectID: "project-secret", Environment: "development"}
+	trendWithTitle := func() Request {
+		r := request(t, baseRequest) // baseRequest is a trend query
+		r.EventVersions = []EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}
+		r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
+		r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+		return r
+	}
+
+	// Default and nil-catalog plans must be byte-identical and never reference
+	// the marker or slot column.
+	legacy, err := Compile("testdb", "event_facts", scope, trendWithTitle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	nilPlan, err := CompileWithCatalog("testdb", "event_facts", scope, trendWithTitle(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.SQL != nilPlan.SQL {
+		t.Fatal("nil catalog must keep trend SQL byte-identical")
+	}
+	if strings.Contains(legacy.SQL, "dedicated_layout_version") || strings.Contains(legacy.SQL, column) {
+		t.Fatalf("default trend tuple must not carry dedicated columns: %s", legacy.SQL)
+	}
+
+	enabled, err := CompileWithCatalog("testdb", "event_facts", scope, trendWithTitle(), readerCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(enabled.SQL, "winner.") || !strings.Contains(enabled.SQL, "dedicated_layout_version") {
+		t.Fatalf("enabled trend tuple missing marker projection: %s", enabled.SQL)
+	}
+	if !strings.Contains(enabled.SQL, column) {
+		t.Fatalf("enabled trend tuple missing slot column %s: %s", column, enabled.SQL)
+	}
+	// The marker must travel inside the argMin tuple, not only the outer filter.
+	if !strings.Contains(enabled.SQL, "argMin(tuple(") {
+		t.Fatalf("expected argMin tuple in trend source: %s", enabled.SQL)
+	}
+}
+
+func TestTrendTupleIgnoresNonCatalogProperty(t *testing.T) {
+	scope := Scope{ProjectID: "project-secret", Environment: "development"}
+	r := request(t, baseRequest)
+	r.EventVersions = []EventVersion{{EventKey: "other_event", SchemaVersion: 1}}
+	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "other_event", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
+	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+
+	legacy, err := Compile("testdb", "event_facts", scope, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled, err := CompileWithCatalog("testdb", "event_facts", scope, r, readerCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.SQL != enabled.SQL {
+		t.Fatalf("non-catalog property must keep trend SQL byte-identical:\n%s\n%s", legacy.SQL, enabled.SQL)
+	}
+}

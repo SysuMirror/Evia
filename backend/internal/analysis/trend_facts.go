@@ -41,6 +41,7 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 			}
 		}
 	}
+	dedicatedNeeded := map[string]bool{}
 	if e := WalkFields(&request, func(field *Field) error {
 		if field.Kind == "property" {
 			// The layout columns travel in the same winner tuple so the
@@ -48,6 +49,13 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 			// without a second read of the raw table.
 			needed["event_key"], needed["schema_version"], needed["properties_json"] = true, true, true
 			needed["property_layout_version"], needed["property_tokens"] = true, true
+			// A catalog hit additionally requires the marker and the slot
+			// column inside the same winning tuple; a disabled catalog never
+			// hits, so the default query appends nothing.
+			if selection, ok := selectDedicated(p.catalog, *field); ok {
+				needed["dedicated_layout_version"] = true
+				dedicatedNeeded[selection.column] = true
+			}
 			return nil
 		}
 		if field.Kind == "system" {
@@ -85,6 +93,20 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 		if needed[column.name] {
 			arguments = append(arguments, column.expression)
 			projection = append(projection, fmt.Sprintf("winner.%d AS %s", len(arguments), column.name))
+		}
+	}
+	// Dedicated slots are appended after the fixed columns so existing tuple
+	// offsets never shift. Catalog column order keeps the SQL deterministic
+	// and independent of request field order.
+	if len(dedicatedNeeded) > 0 {
+		arguments = append(arguments, "dedicated_layout_version")
+		projection = append(projection, fmt.Sprintf("winner.%d AS dedicated_layout_version", len(arguments)))
+		for _, column := range p.catalog.Columns() {
+			if !dedicatedNeeded[column] {
+				continue
+			}
+			arguments = append(arguments, column)
+			projection = append(projection, fmt.Sprintf("winner.%d AS %s", len(arguments), column))
 		}
 	}
 	// Restrict by grouping keys before selecting winners. A necessary identity
