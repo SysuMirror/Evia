@@ -19,9 +19,9 @@ func (s *quotaStoreStub) GetQuota(context.Context, string, string, string) (Poli
 	return s.policy, s.found, s.err
 }
 
-func (s *quotaStoreStub) PutQuota(_ context.Context, in Input, _ int64) (Policy, error) {
+func (s *quotaStoreStub) PutQuota(_ context.Context, in Input, _ int64) (Policy, bool, error) {
 	s.got = in
-	return s.policy, s.err
+	return s.policy, false, s.err
 }
 
 func (s *quotaStoreStub) ListQuotas(context.Context) ([]Policy, error) {
@@ -69,8 +69,8 @@ func TestValidateAcceptsAndRejectsBounds(t *testing.T) {
 func TestServicePutDelegatesValidInput(t *testing.T) {
 	stub := &quotaStoreStub{policy: Policy{Revision: 1}}
 	svc := NewService(stub)
-	policy, err := svc.Put(context.Background(), validInput(), CreateRevision)
-	if err != nil || policy.Revision != 1 {
+	policy, replayed, err := svc.Put(context.Background(), validInput(), CreateRevision)
+	if err != nil || policy.Revision != 1 || replayed {
 		t.Fatal(err)
 	}
 	if stub.got.Rate != 12.5 || stub.got.Burst != 200 {

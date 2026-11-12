@@ -22,6 +22,7 @@ import (
 type fakeQuotaService struct {
 	policy     quotas.Policy
 	configured bool
+	replayed   bool
 	putErr     error
 	got        quotas.Input
 }
@@ -30,9 +31,9 @@ func (f *fakeQuotaService) Get(_ context.Context, _, _, _ string) (quotas.Policy
 	return f.policy, f.configured, nil
 }
 
-func (f *fakeQuotaService) Put(_ context.Context, in quotas.Input, _ int64) (quotas.Policy, error) {
+func (f *fakeQuotaService) Put(_ context.Context, in quotas.Input, _ int64) (quotas.Policy, bool, error) {
 	f.got = in
-	return f.policy, f.putErr
+	return f.policy, f.replayed, f.putErr
 }
 
 type fakeQuotaRuntime struct {
@@ -223,5 +224,26 @@ func TestQuotaRouteAbsentWhenNotWired(t *testing.T) {
 	w := quotaRequest(a.Handler(), http.MethodGet, "/api/v1/projects/"+projectID+"/quotas?environment=production", "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("unwired quota API must not mount routes, got %d", w.Code)
+	}
+}
+
+func TestQuotaPatchReplaySkipsRuntimeRepublish(t *testing.T) {
+	runtime := defaultRuntime()
+	svc := &fakeQuotaService{
+		replayed: true,
+		policy:   quotas.Policy{ProjectID: projectID, Environment: "production", Rate: 5, Burst: 60, Revision: 1},
+	}
+	handler := quotaAPIWithService(t, svc, runtime)
+	w := quotaRequest(handler, http.MethodPatch, "/api/v1/projects/"+projectID+"/quotas", `{"environment":"production","rate_per_second":5,"burst":60}`)
+	governanceStatus(t, w, http.StatusOK)
+	if runtime.applyCalls != 0 {
+		t.Fatalf("idempotent replay must not republish runtime policy, calls=%d", runtime.applyCalls)
+	}
+	var out wire.CollectionQuota
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.RuntimeStatus != "applied" {
+		t.Fatalf("replay should report applied without touching runtime: %s", out.RuntimeStatus)
 	}
 }

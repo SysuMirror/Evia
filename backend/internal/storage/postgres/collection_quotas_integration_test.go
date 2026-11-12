@@ -33,13 +33,13 @@ func TestCollectionQuotaAuthority(t *testing.T) {
 	if _, _, e := svc.Get(machine, f.owner, f.project, "development"); e == nil || faultPublicCode(e) != "MACHINE_FORBIDDEN" {
 		t.Fatalf("machine read must be forbidden, got %v", e)
 	}
-	if _, e := svc.Put(machine, quotaInput(f, "m1", "development", 10, 50), quotas.CreateRevision); e == nil || faultPublicCode(e) != "MACHINE_FORBIDDEN" {
+	if _, _, e := svc.Put(machine, quotaInput(f, "m1", "development", 10, 50), quotas.CreateRevision); e == nil || faultPublicCode(e) != "MACHINE_FORBIDDEN" {
 		t.Fatalf("machine write must be forbidden, got %v", e)
 	}
 
 	viewerInput := quotaInput(f, "viewer-denied", "development", 10, 50)
 	viewerInput.ActorID = f.viewer
-	if _, e := svc.Put(ctx, viewerInput, quotas.CreateRevision); e == nil || faultPublicCode(e) != "QUOTA_FORBIDDEN" {
+	if _, _, e := svc.Put(ctx, viewerInput, quotas.CreateRevision); e == nil || faultPublicCode(e) != "QUOTA_FORBIDDEN" {
 		t.Fatalf("viewer write must be forbidden, got %v", e)
 	}
 	if _, _, e := svc.Get(ctx, f.outsider, f.project, "development"); e == nil || faultPublicCode(e) != "PROJECT_NOT_FOUND" {
@@ -57,7 +57,10 @@ func TestCollectionQuotaRevisionIdempotencyAndAudit(t *testing.T) {
 		t.Fatalf("unconfigured scope: configured=%v err=%v", configured, e)
 	}
 
-	first, e := svc.Put(ctx, quotaInput(f, "key-1", env, 12.5, 200), quotas.CreateRevision)
+	first, replayed, e := svc.Put(ctx, quotaInput(f, "key-1", env, 12.5, 200), quotas.CreateRevision)
+	if e != nil || replayed {
+		t.Fatalf("first write must not be a replay: %v", e)
+	}
 	if e != nil || first.Revision != 1 || first.Rate != 12.5 || first.Burst != 200 || first.Environment != env || first.CreatedAt == "" || first.UpdatedAt == "" {
 		t.Fatal(first, e)
 	}
@@ -65,25 +68,28 @@ func TestCollectionQuotaRevisionIdempotencyAndAudit(t *testing.T) {
 		t.Fatalf("read after create wrong: %+v configured=%v err=%v", got, configured, e)
 	}
 
-	if _, e = svc.Put(ctx, quotaInput(f, "key-2", env, 13, 200), quotas.CreateRevision); e == nil || faultPublicCode(e) != "QUOTA_REVISION_CONFLICT" {
+	if _, _, e = svc.Put(ctx, quotaInput(f, "key-2", env, 13, 200), quotas.CreateRevision); e == nil || faultPublicCode(e) != "QUOTA_REVISION_CONFLICT" {
 		t.Fatalf("duplicate create must conflict, got %v", e)
 	}
 
-	replay, e := svc.Put(ctx, quotaInput(f, "key-1", env, 12.5, 200), quotas.CreateRevision)
-	if e != nil || replay != first {
+	replay, wasReplay, e := svc.Put(ctx, quotaInput(f, "key-1", env, 12.5, 200), quotas.CreateRevision)
+	if e != nil || !wasReplay || replay != first {
 		t.Fatalf("idempotent replay changed snapshot: %+v vs %+v err=%v", replay, first, e)
 	}
 	divergent := quotaInput(f, "key-1", env, 99, 200)
 	divergent.RequestHash = strings.Repeat("b", 64)
-	if _, e = svc.Put(ctx, divergent, 1); e == nil || faultPublicCode(e) != "IDEMPOTENCY_CONFLICT" {
+	if _, _, e = svc.Put(ctx, divergent, 1); e == nil || faultPublicCode(e) != "IDEMPOTENCY_CONFLICT" {
 		t.Fatalf("divergent idempotency key must conflict, got %v", e)
 	}
 
-	updated, e := svc.Put(ctx, quotaInput(f, "key-3", env, 30, 400), 1)
+	updated, updatedReplay, e := svc.Put(ctx, quotaInput(f, "key-3", env, 30, 400), 1)
+	if e != nil || updatedReplay {
+		t.Fatalf("update must not be a replay: %v", e)
+	}
 	if e != nil || updated.Revision != 2 || updated.Rate != 30 || updated.Burst != 400 {
 		t.Fatalf("optimistic update wrong: %+v err=%v", updated, e)
 	}
-	if _, e = svc.Put(ctx, quotaInput(f, "key-4", env, 31, 400), 1); e == nil || faultPublicCode(e) != "QUOTA_REVISION_CONFLICT" {
+	if _, _, e = svc.Put(ctx, quotaInput(f, "key-4", env, 31, 400), 1); e == nil || faultPublicCode(e) != "QUOTA_REVISION_CONFLICT" {
 		t.Fatalf("stale revision must conflict, got %v", e)
 	}
 
@@ -101,10 +107,10 @@ func TestCollectionQuotaListLoaderSeesEveryScope(t *testing.T) {
 	f := catalogDB(t)
 	ctx := context.Background()
 	svc := quotas.NewService(f.s)
-	if _, e := svc.Put(ctx, quotaInput(f, "d1", "development", 5, 50), quotas.CreateRevision); e != nil {
+	if _, _, e := svc.Put(ctx, quotaInput(f, "d1", "development", 5, 50), quotas.CreateRevision); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := svc.Put(ctx, quotaInput(f, "p1", "production", 50, 500), quotas.CreateRevision); e != nil {
+	if _, _, e := svc.Put(ctx, quotaInput(f, "p1", "production", 50, 500), quotas.CreateRevision); e != nil {
 		t.Fatal(e)
 	}
 	rows, e := f.s.ListQuotas(ctx)
@@ -129,7 +135,7 @@ func TestCollectionQuotaRejectsBoundsAtServiceLayer(t *testing.T) {
 		quotaInput(f, "bad-rate", "development", 0, 50),
 		quotaInput(f, "bad-burst", "development", 10, 49),
 	} {
-		if _, e := svc.Put(context.Background(), in, quotas.CreateRevision); e == nil || fault.Public(e).Kind != fault.Invalid {
+		if _, _, e := svc.Put(context.Background(), in, quotas.CreateRevision); e == nil || fault.Public(e).Kind != fault.Invalid {
 			t.Fatalf("out-of-bounds quota must be invalid: %+v err=%v", in, e)
 		}
 	}

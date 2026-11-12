@@ -74,18 +74,18 @@ func (s *Store) GetQuota(ctx context.Context, actor, project, environment string
 	return p, true, tx.Commit(ctx)
 }
 
-func (s *Store) PutQuota(ctx context.Context, in quotas.Input, expectedRevision int64) (quotas.Policy, error) {
+func (s *Store) PutQuota(ctx context.Context, in quotas.Input, expectedRevision int64) (quotas.Policy, bool, error) {
 	tx, e := s.Pool.Begin(ctx)
 	if e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 	defer tx.Rollback(context.Background())
 	if e = quotaOwnerTx(ctx, tx, in.ActorID, in.ProjectID); e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 	// Serialize concurrent first-time creates for the same scope.
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, in.ProjectID); e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 	var priorHash string
 	var response []byte
@@ -94,16 +94,16 @@ func (s *Store) PutQuota(ctx context.Context, in quotas.Input, expectedRevision 
 		in.ProjectID, in.ActorID, in.IdempotencyKey).Scan(&priorHash, &response)
 	if e == nil {
 		if priorHash != in.RequestHash {
-			return quotas.Policy{}, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于不同请求")
+			return quotas.Policy{}, false, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于不同请求")
 		}
 		var replay quotas.Policy
 		if e = json.Unmarshal(response, &replay); e != nil {
-			return quotas.Policy{}, e
+			return quotas.Policy{}, false, e
 		}
-		return replay, tx.Commit(ctx)
+		return replay, true, tx.Commit(ctx)
 	}
 	if !errors.Is(e, pgx.ErrNoRows) {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 
 	var p quotas.Policy
@@ -112,10 +112,10 @@ func (s *Store) PutQuota(ctx context.Context, in quotas.Input, expectedRevision 
  VALUES($1,$2,$3,$4) RETURNING `+quotaColumns, in.ProjectID, in.Environment, in.Rate, in.Burst))
 		var pgErr *pgconn.PgError
 		if errors.As(e, &pgErr) && pgErr.Code == "23505" {
-			return quotas.Policy{}, quotaRevisionConflict()
+			return quotas.Policy{}, false, quotaRevisionConflict()
 		}
 		if e != nil {
-			return quotas.Policy{}, e
+			return quotas.Policy{}, false, e
 		}
 	} else {
 		p, e = scanQuota(tx.QueryRow(ctx, `UPDATE collection_quotas
@@ -123,25 +123,25 @@ func (s *Store) PutQuota(ctx context.Context, in quotas.Input, expectedRevision 
  WHERE project_id=$1 AND environment=$2 AND revision=$5 RETURNING `+quotaColumns,
 			in.ProjectID, in.Environment, in.Rate, in.Burst, expectedRevision))
 		if errors.Is(e, pgx.ErrNoRows) {
-			return quotas.Policy{}, quotaRevisionConflict()
+			return quotas.Policy{}, false, quotaRevisionConflict()
 		}
 		if e != nil {
-			return quotas.Policy{}, e
+			return quotas.Policy{}, false, e
 		}
 	}
 
 	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key)
  VALUES($1,$2,'collection.quota_updated',$3)`, in.ProjectID, in.ActorID, in.Environment); e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 	if response, e = json.Marshal(p); e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO collection_quota_mutations(project_id,actor_id,idempotency_key,request_hash,response)
  VALUES($1,$2,$3,$4,$5)`, in.ProjectID, in.ActorID, in.IdempotencyKey, in.RequestHash, response); e != nil {
-		return quotas.Policy{}, e
+		return quotas.Policy{}, false, e
 	}
-	return p, tx.Commit(ctx)
+	return p, false, tx.Commit(ctx)
 }
 
 // ListQuotas is the system-scoped boot loader without a human actor. The

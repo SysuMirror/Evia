@@ -14,7 +14,7 @@ import (
 // QuotaService is the durable override store the HTTP boundary needs.
 type QuotaService interface {
 	Get(ctx context.Context, actor, project, environment string) (quotas.Policy, bool, error)
-	Put(ctx context.Context, in quotas.Input, expectedRevision int64) (quotas.Policy, error)
+	Put(ctx context.Context, in quotas.Input, expectedRevision int64) (quotas.Policy, bool, error)
 }
 
 // QuotaRuntime applies accepted overrides to the live Redis budget engine.
@@ -120,7 +120,7 @@ func (a *QuotaAPI) patch(w http.ResponseWriter, r *http.Request, actor authorize
 	if err != nil {
 		return err
 	}
-	policy, err := a.Service.Put(r.Context(), quotas.Input{
+	policy, replayed, err := a.Service.Put(r.Context(), quotas.Input{
 		ProjectID:      project,
 		ActorID:        actor.ID,
 		Environment:    body.Environment,
@@ -132,10 +132,15 @@ func (a *QuotaAPI) patch(w http.ResponseWriter, r *http.Request, actor authorize
 	if err != nil {
 		return err
 	}
-	scope := budget.Scope{ProjectID: project, Environment: body.Environment}
-	bucketReset, err := a.Runtime.ApplyOverride(r.Context(), scope, budget.Policy{Rate: body.RatePerSecond, Burst: int(body.Burst)})
-	if err != nil {
-		return fault.New(fault.Unavailable, "QUOTA_RUNTIME_APPLY_FAILED", "配额已持久化但运行时策略发布失败，请检查预算依赖")
+	// An idempotent replay already published its policy on the original accept;
+	// re-applying it could regress the limiter behind a newer accepted write.
+	bucketReset := true
+	if !replayed {
+		scope := budget.Scope{ProjectID: project, Environment: body.Environment}
+		bucketReset, err = a.Runtime.ApplyOverride(r.Context(), scope, budget.Policy{Rate: body.RatePerSecond, Burst: int(body.Burst)})
+		if err != nil {
+			return fault.New(fault.Unavailable, "QUOTA_RUNTIME_APPLY_FAILED", "配额已持久化但运行时策略发布失败，请检查预算依赖")
+		}
 	}
 	out := wire.CollectionQuota{
 		ProjectID:     project,

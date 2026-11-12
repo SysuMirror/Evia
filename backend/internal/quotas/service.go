@@ -83,12 +83,12 @@ func (s *Service) Get(ctx context.Context, actor, project, environment string) (
 }
 
 // Put validates and persists an override, applying optimistic revision rules.
-func (s *Service) Put(ctx context.Context, in Input, expectedRevision int64) (Policy, error) {
+func (s *Service) Put(ctx context.Context, in Input, expectedRevision int64) (Policy, bool, error) {
 	if e := s.caller(ctx, in.ActorID, in.ProjectID); e != nil {
-		return Policy{}, e
+		return Policy{}, false, e
 	}
 	if e := validate(in, expectedRevision); e != nil {
-		return Policy{}, e
+		return Policy{}, false, e
 	}
 	return s.store.PutQuota(ctx, in, expectedRevision)
 }

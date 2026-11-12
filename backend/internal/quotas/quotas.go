@@ -14,11 +14,11 @@ type Policy struct {
 	ProjectID   string `json:"project_id"`
 	Environment string `json:"environment"`
 	// Rate is events per second; Burst is the whole-batch token capacity.
-	Rate        float64 `json:"rate_per_second"`
-	Burst       int     `json:"burst"`
-	Revision    int64   `json:"revision"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	Rate      float64 `json:"rate_per_second"`
+	Burst     int     `json:"burst"`
+	Revision  int64   `json:"revision"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
 }
 
 // Input is an owner-scoped upsert request with its idempotency ledger fields.
@@ -37,8 +37,9 @@ type Store interface {
 	// GetQuota returns configured=false when no override exists for the scope.
 	GetQuota(ctx context.Context, actor, project, environment string) (Policy, bool, error)
 	// PutQuota inserts (expectedRevision==CreateRevision) or updates an override,
-	// rejecting a stale or concurrently-created revision as a conflict.
-	PutQuota(ctx context.Context, in Input, expectedRevision int64) (Policy, error)
+	// rejecting a stale or concurrently-created revision as a conflict. The bool
+	// reports an idempotent replay, which must not republish runtime policy.
+	PutQuota(ctx context.Context, in Input, expectedRevision int64) (Policy, bool, error)
 	// ListQuotas has no human actor: the serve process loads every override at boot.
 	ListQuotas(ctx context.Context) ([]Policy, error)
 }
