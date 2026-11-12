@@ -16,6 +16,11 @@ physical-read metrics from system.query_log:
 * token map - property_tokens Map(String, String), the parked layout.
 * dedicated - a bounded set of hot keys materialized as typed columns, the
               first successor candidate named in the layout plan.
+* dedicated_token - the same hot keys materialized as String columns holding the
+              exact JSON token text, read through the same synthetic one-field
+              document the production reader uses (lossless Option A in the
+              layout plan); the sub-gate against the typed column decides the
+              lexical-fidelity trade-off.
 
 A candidate passes only when read_bytes, SelectedMarks and peak memory are all
 no worse than the document baseline within an explicit measurement tolerance.
@@ -165,13 +170,45 @@ def dedicated_ddl(table: str, hot_string_key: str, numeric_key: str) -> str:
     )
 
 
-def numeric_filter_queries(hot_numeric_column: str | None = None) -> dict[str, str]:
+def dedicated_token_ddl(table: str, hot_string_key: str, numeric_key: str) -> str:
+    """String columns holding exact JSON tokens (lossless Option A).
+
+    The numeric token stays bare text (``49``) and the string token keeps its
+    JSON spelling (``"Home"``); readers wrap either in a synthetic one-field
+    document so the existing JSON extraction semantics apply unchanged.
+    """
+    for name in (table, hot_string_key, numeric_key):
+        validate_identifier(name)
+    return (
+        f"CREATE TABLE {table} ("
+        "id UInt64, "
+        "properties_json String, "
+        f"{hot_string_key}_token String, "
+        f"{numeric_key}_token String"
+        ") ENGINE=MergeTree ORDER BY id"
+    )
+
+
+def synthetic_document(token_column: str) -> str:
+    """Mirror the planner's one-field document built from an exact token."""
+    validate_identifier(token_column)
+    return f"concat('{{\"f\":',{token_column},'}}')"
+
+
+def numeric_filter_queries(
+    hot_numeric_column: str | None = None,
+    token_numeric_column: str | None = None,
+) -> dict[str, str]:
     """Semantically identical count queries; each returns the same row count."""
     if hot_numeric_column is not None:
         validate_identifier(hot_numeric_column)
         dedicated = f"SELECT count() FROM {{table}} WHERE {hot_numeric_column} > 50"
     else:
         dedicated = None
+    token_query = ""
+    if token_numeric_column is not None:
+        token_doc = synthetic_document(token_numeric_column)
+        token_query = f"SELECT count() FROM {{table}} WHERE JSONExtractInt({token_doc}, 'f') > 50"
     return {
         "legacy": "SELECT count() FROM {table} WHERE JSONExtractInt(properties_json, 'metric_07') > 50",
         "map": (
@@ -179,21 +216,33 @@ def numeric_filter_queries(hot_numeric_column: str | None = None) -> dict[str, s
             "AND toInt64OrZero(property_tokens['p_6D65747269635F3037']) > 50"
         ),
         "dedicated": dedicated or "",
+        "dedicated_token": token_query,
     }
 
 
-def string_group_queries(hot_string_column: str | None = None) -> dict[str, str]:
+def string_group_queries(
+    hot_string_column: str | None = None,
+    token_string_column: str | None = None,
+) -> dict[str, str]:
     if hot_string_column is not None:
         validate_identifier(hot_string_column)
         dedicated = f"SELECT count() FROM {{table}} GROUP BY {hot_string_column}"
     else:
         dedicated = None
+    token_query = ""
+    if token_string_column is not None:
+        token_doc = synthetic_document(token_string_column)
+        token_query = (
+            "SELECT count() FROM (SELECT count() FROM {table} "
+            f"GROUP BY JSONExtractString({token_doc}, 'f'))"
+        )
     # Wrap the grouping in a count subquery so every layout yields one scalar
     # (the number of distinct groups), which is directly comparable.
     return {
         "legacy": "SELECT count() FROM (SELECT count() FROM {table} GROUP BY JSONExtractString(properties_json, 'segment_03'))",
         "map": "SELECT count() FROM (SELECT count() FROM {table} GROUP BY property_tokens['p_7365676D656E745F3033'])",
         "dedicated": "SELECT count() FROM (SELECT count() FROM {table} GROUP BY segment_03)",
+        "dedicated_token": token_query,
     }
 
 
@@ -309,7 +358,12 @@ class ClickHouseProbe:
 
 def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int) -> dict:
     validate_database(database)
-    tables = {"legacy": "probe_legacy", "map": "probe_map", "dedicated": "probe_dedicated"}
+    tables = {
+        "legacy": "probe_legacy",
+        "map": "probe_map",
+        "dedicated": "probe_dedicated",
+        "dedicated_token": "probe_dedicated_token",
+    }
     for table in tables.values():
         validate_identifier(table)
 
@@ -321,6 +375,9 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
         f"CREATE TABLE {tables['map']}", f"CREATE TABLE {database}.{tables['map']}"))
     client.run(dedicated_ddl(tables["dedicated"], HOT_STRING_KEY, NUMERIC_KEY).replace(
         f"CREATE TABLE {tables['dedicated']}", f"CREATE TABLE {database}.{tables['dedicated']}"))
+    client.run(dedicated_token_ddl(tables["dedicated_token"], HOT_STRING_KEY, NUMERIC_KEY).replace(
+        f"CREATE TABLE {tables['dedicated_token']}",
+        f"CREATE TABLE {database}.{tables['dedicated_token']}"))
 
     raw_rows = [generate_row(i) for i in range(rows)]
     payloads = {
@@ -346,6 +403,18 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
             for row in raw_rows
         ],
     }
+    token_payloads = []
+    for row in raw_rows:
+        tokens = derive_tokens(row["properties_json"])
+        token_payloads.append(
+            {
+                "id": row["id"],
+                "properties_json": row["properties_json"],
+                f"{HOT_STRING_KEY}_token": tokens[encode_key(HOT_STRING_KEY)],
+                f"{NUMERIC_KEY}_token": tokens[encode_key(NUMERIC_KEY)],
+            }
+        )
+    payloads["dedicated_token"] = token_payloads
     for layout, table in tables.items():
         payload = "\n".join(render_json_each_row(row) for row in payloads[layout]).encode()
         client.run(
@@ -357,8 +426,8 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
     # Semantic equivalence check before any physical measurement.
     expected_filter = str(sum(1 for i in range(rows) if i % NUMERIC_DOMAIN > 50))
     workloads = {
-        "numeric_filter": numeric_filter_queries(NUMERIC_KEY),
-        "string_group": string_group_queries(HOT_STRING_KEY),
+        "numeric_filter": numeric_filter_queries(NUMERIC_KEY, f"{NUMERIC_KEY}_token"),
+        "string_group": string_group_queries(HOT_STRING_KEY, f"{HOT_STRING_KEY}_token"),
     }
     measurements: list[Measurement] = []
     verdicts: list[dict] = []
@@ -375,7 +444,7 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
                 client._next_query_id = query_id
                 try:
                     client.run(
-                        sql_template.format(table=f"{database}.{table}")
+                        sql_template.replace("{table}", f"{database}.{table}")
                         + " SETTINGS max_threads=2"
                     )
                 finally:
@@ -404,9 +473,9 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
                 samples.append(json.loads(row))
             stable = samples[-1]
             result_check = client.scalar(
-                sql_template.format(table=f"{database}.{tables['legacy']}")
+                sql_template.replace("{table}", f"{database}.{tables['legacy']}")
                 if layout == "legacy"
-                else sql_template.format(table=f"{database}.{table}")
+                else sql_template.replace("{table}", f"{database}.{table}")
             ).strip()
             per_layout[layout] = Measurement(
                 layout=layout,
@@ -427,7 +496,7 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
                 f"numeric filter count {next(iter(result_values))} != {expected_filter}"
             )
         baseline = per_layout["legacy"]
-        for layout in ("map", "dedicated"):
+        for layout in ("map", "dedicated", "dedicated_token"):
             if layout in per_layout:
                 verdicts.append(verdict(baseline, per_layout[layout]))
         measurements.extend(per_layout.values())

@@ -65,22 +65,88 @@ class IdentifierSafetyTest(unittest.TestCase):
 
 
 class QueryEquivalenceTest(unittest.TestCase):
-    def test_numeric_filter_queries_cover_three_layouts(self):
-        queries = probe.numeric_filter_queries("metric_07")
-        self.assertEqual(set(queries), {"legacy", "map", "dedicated"})
+    def test_numeric_filter_queries_cover_four_layouts(self):
+        queries = probe.numeric_filter_queries("metric_07", "metric_07_token")
+        self.assertEqual(set(queries), {"legacy", "map", "dedicated", "dedicated_token"})
         self.assertIn("JSONExtractInt(properties_json, 'metric_07')", queries["legacy"])
         self.assertIn("p_6D65747269635F3037", queries["map"])
         self.assertIn("metric_07 > 50", queries["dedicated"])
+        # The token path reads the exact token through the synthetic one-field
+        # document, never a typed conversion on the physical column.
+        self.assertIn("JSONExtractInt(concat('{\"f\":',metric_07_token,'}'), 'f') > 50",
+                      queries["dedicated_token"])
 
-    def test_string_group_queries_cover_three_layouts(self):
-        queries = probe.string_group_queries("segment_03")
+    def test_token_layout_is_opt_in(self):
+        without_token = probe.numeric_filter_queries("metric_07")
+        self.assertEqual(without_token["dedicated_token"], "")
+        without_group = probe.string_group_queries("segment_03")
+        self.assertEqual(without_group["dedicated_token"], "")
+
+    def test_string_group_queries_cover_four_layouts(self):
+        queries = probe.string_group_queries("segment_03", "segment_03_token")
         self.assertIn("JSONExtractString(properties_json, 'segment_03')", queries["legacy"])
         self.assertIn("p_7365676D656E745F3033", queries["map"])
         self.assertIn("GROUP BY segment_03", queries["dedicated"])
+        self.assertIn(
+            "GROUP BY JSONExtractString(concat('{\"f\":',segment_03_token,'}'), 'f')",
+            queries["dedicated_token"],
+        )
+
+    def test_token_template_survives_table_substitution(self):
+        # Regression: the synthetic-document JSON braces must not be interpreted
+        # as format placeholders when the physical table name is substituted.
+        queries = probe.numeric_filter_queries("metric_07", "metric_07_token")
+        rendered = queries["dedicated_token"].replace(
+            "{table}", "evia_probe_token.probe_dedicated_token"
+        )
+        self.assertNotIn("{table}", rendered)
+        self.assertIn("evia_probe_token.probe_dedicated_token", rendered)
+        self.assertIn("concat('{\"f\":',metric_07_token,'}')", rendered)
+        group = probe.string_group_queries("segment_03", "segment_03_token")
+        rendered_group = group["dedicated_token"].replace(
+            "{table}", "evia_probe_token.probe_dedicated_token"
+        )
+        self.assertNotIn("{table}", rendered_group)
 
     def test_dedicated_query_requires_valid_column(self):
         with self.assertRaises(probe.ProbeError):
             probe.numeric_filter_queries("metric_07; DROP")
+        with self.assertRaises(probe.ProbeError):
+            probe.numeric_filter_queries("metric_07", "metric_07_token; DROP")
+
+
+class TokenLayoutDDLTest(unittest.TestCase):
+    def test_token_ddl_uses_string_columns_with_token_suffix(self):
+        ddl = probe.dedicated_token_ddl("probe_dedicated_token", "segment_03", "metric_07")
+        self.assertIn("segment_03_token String", ddl)
+        self.assertIn("metric_07_token String", ddl)
+        self.assertNotIn("metric_07 Int64", ddl)  # no typed numeric hot column
+        self.assertTrue(ddl.startswith("CREATE TABLE probe_dedicated_token ("))
+
+    def test_token_ddl_rejects_unsafe_identifiers(self):
+        with self.assertRaises(probe.ProbeError):
+            probe.dedicated_token_ddl("t", "segment_03; DROP", "metric_07")
+
+    def test_synthetic_document_mirrors_planner_shape(self):
+        self.assertEqual(
+            probe.synthetic_document("metric_07_token"),
+            "concat('{\"f\":',metric_07_token,'}')",
+        )
+        with self.assertRaises(probe.ProbeError):
+            probe.synthetic_document("col; DROP")
+
+    def test_token_payload_keeps_lexical_spelling(self):
+        row = probe.generate_row(51)
+        tokens = probe.derive_tokens(row["properties_json"])
+        payload = {
+            "id": row["id"],
+            "properties_json": row["properties_json"],
+            f"{probe.HOT_STRING_KEY}_token": tokens[probe.encode_key(probe.HOT_STRING_KEY)],
+            f"{probe.NUMERIC_KEY}_token": tokens[probe.encode_key(probe.NUMERIC_KEY)],
+        }
+        # Numeric token is bare text; string token keeps its JSON quotes.
+        self.assertEqual(payload["metric_07_token"], "51")
+        self.assertTrue(payload["segment_03_token"].startswith('"'))
 
 
 class VerdictTest(unittest.TestCase):
