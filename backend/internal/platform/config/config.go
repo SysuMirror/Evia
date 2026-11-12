@@ -66,7 +66,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -125,7 +125,7 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	// The erasure and retention workers only need PostgreSQL plus the
 	// ClickHouse executor; they deliberately load neither Kafka nor the Redis
 	// admission budget.
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "retention-worker" || command == "export-worker" {
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "retention-worker" || command == "export-worker" || command == "backfill-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
@@ -148,6 +148,12 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 			if c.ArchiveDir == "" {
 				return c, errors.New("retention-worker with EVIA_ARCHIVE_ENABLED requires EVIA_ARCHIVE_DIR")
 			}
+		}
+	}
+	if command == "backfill-worker" {
+		c.ArchiveDir = get("EVIA_ARCHIVE_DIR")
+		if c.ArchiveDir == "" {
+			return c, errors.New("backfill-worker requires EVIA_ARCHIVE_DIR")
 		}
 	}
 	if command == "query-worker" {

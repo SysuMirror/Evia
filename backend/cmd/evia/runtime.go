@@ -17,6 +17,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/archiving"
+	"github.com/howtomakeaname/Evia/backend/internal/backfilling"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
@@ -207,6 +208,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Retention = retentionService
 	api.RetentionSweeps = retentionService
 	api.Archives = store
+	api.Backfills = backfilling.NewService(store)
 	exportValidator, err := contract.New()
 	if err != nil {
 		return stageError("export contract compilation", err)
@@ -550,6 +552,36 @@ func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.S
 	}
 	logger.Info("export worker starting", "artifact_dir", c.ExportDir)
 	return supervise(ctx, append(metricsTasks(c, "export-worker", registry), task{name: "export worker", run: worker.Run}), 15*time.Second)
+}
+
+func backfillWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("backfill worker startup", err)
+	}
+	archives, err := archiving.NewFileArchiveStore(c.ArchiveDir)
+	if err != nil {
+		return stageError("backfill archive store", err)
+	}
+	sink, err := pipeline.NewBackfillInserter(sinkConfig(c, client), client)
+	if err != nil {
+		return stageError("backfill inserter configuration", err)
+	}
+	registry := observe.NewRegistry("backfill-worker")
+	worker := &backfilling.Worker{
+		ID:        c.InstanceID + "-" + ids.New(),
+		Store:     store,
+		Manifests: store,
+		Archives:  archives,
+		Sink:      sink,
+		Logger:    logger,
+	}
+	logger.Info("backfill worker starting", "archive_dir", c.ArchiveDir)
+	return supervise(ctx, append(metricsTasks(c, "backfill-worker", registry), task{name: "backfill worker", run: worker.Run}), 15*time.Second)
 }
 
 func retentionWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {

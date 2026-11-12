@@ -149,6 +149,18 @@ func TestRetentionWorkerDefaultsToSafeDryRun(t *testing.T) {
 	}
 }
 
+func TestBackfillWorkerRequiresArchiveDirectory(t *testing.T) {
+	values := runtimeValues()
+	if _, err := ReadFor("backfill-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("backfill worker without archive directory accepted")
+	}
+	values["EVIA_ARCHIVE_DIR"] = "/var/lib/evia/archives"
+	c, err := ReadFor("backfill-worker", func(k string) string { return values[k] })
+	if err != nil || c.ArchiveDir != "/var/lib/evia/archives" || c.ClickHouse.URL == "" {
+		t.Fatalf("backfill worker config wrong: %+v err=%v", c, err)
+	}
+}
+
 func TestIngestWorkerLagInterval(t *testing.T) {
 	values := runtimeValues()
 	c, err := ReadFor("ingest-worker", func(k string) string { return values[k] })
