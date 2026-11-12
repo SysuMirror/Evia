@@ -151,3 +151,45 @@ func TestInvalidCallsFailBeforeDependencyAccess(t *testing.T) {
 		}
 	}
 }
+
+func TestSnapshotPoliciesReportsDefaultsAndOverrides(t *testing.T) {
+	cfg := localConfig()
+	cfg.Default = Policy{Rate: 12.5, Burst: 80}
+	cfg.Overrides = map[Scope]Policy{
+		{ProjectID: testProject, Environment: "production"}: {Rate: 3.25, Burst: 60},
+	}
+	limiter, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	policies := limiter.SnapshotPolicies(testProject)
+	if len(policies) != 3 {
+		t.Fatalf("expected three environments, got %d", len(policies))
+	}
+	seen := map[string]ScopePolicy{}
+	for _, policy := range policies {
+		if policy.ProjectID != testProject {
+			t.Fatalf("unexpected project id: %s", policy.ProjectID)
+		}
+		seen[policy.Environment] = policy
+	}
+	for _, environment := range []string{"development", "staging", "production"} {
+		policy, ok := seen[environment]
+		if !ok {
+			t.Fatalf("missing environment policy: %s", environment)
+		}
+		if environment == "production" {
+			if !policy.Override || policy.Rate != 3.25 || policy.Burst != 60 {
+				t.Fatalf("override policy not preserved: %+v", policy)
+			}
+			continue
+		}
+		if policy.Override || policy.Rate != 12.5 || policy.Burst != 80 {
+			t.Fatalf("default policy not preserved: %+v", policy)
+		}
+	}
+	if got := limiter.SnapshotPolicies("not-a-uuid"); got != nil {
+		t.Fatalf("invalid project must return nil, got %+v", got)
+	}
+}

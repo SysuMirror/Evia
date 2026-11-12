@@ -69,8 +69,21 @@ type Limiter struct {
 	prefix        string
 	defaultPolicy policy
 	overrides     map[Scope]policy
-	maxBatch      int
-	timeout       time.Duration
+	// Public policy values are retained so diagnostics can report the exact
+	// configured rates without reversing the integer token normalization.
+	defaultCfg   Policy
+	overrideCfgs map[Scope]Policy
+	maxBatch     int
+	timeout      time.Duration
+}
+
+// ScopePolicy is the externally visible effective policy for one environment.
+type ScopePolicy struct {
+	ProjectID   string
+	Environment string
+	Rate        float64
+	Burst       int
+	Override    bool
 }
 
 func validScope(scope Scope) bool {
@@ -164,7 +177,25 @@ func New(c Config) (*Limiter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Limiter{client: redis.NewClient(opts), prefix: c.KeyPrefix, defaultPolicy: p, overrides: overrides, maxBatch: c.MaxBatchEvents, timeout: c.Timeout}, nil
+	return &Limiter{client: redis.NewClient(opts), prefix: c.KeyPrefix, defaultPolicy: p, overrides: overrides, defaultCfg: c.Default, overrideCfgs: c.Overrides, maxBatch: c.MaxBatchEvents, timeout: c.Timeout}, nil
+}
+
+// SnapshotPolicies reports the effective public policy for every supported
+// environment of one project, marking explicit overrides. It performs no I/O.
+func (l *Limiter) SnapshotPolicies(projectID string) []ScopePolicy {
+	if !projectPattern.MatchString(projectID) {
+		return nil
+	}
+	out := make([]ScopePolicy, 0, 3)
+	for _, environment := range []string{"development", "staging", "production"} {
+		scope := Scope{ProjectID: projectID, Environment: environment}
+		entry := ScopePolicy{ProjectID: projectID, Environment: environment, Rate: l.defaultCfg.Rate, Burst: l.defaultCfg.Burst}
+		if configured, ok := l.overrideCfgs[scope]; ok {
+			entry.Rate, entry.Burst, entry.Override = configured.Rate, configured.Burst, true
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func (l *Limiter) key(scope Scope) string {
