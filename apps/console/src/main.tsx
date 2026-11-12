@@ -80,6 +80,9 @@ const RetentionPage = lazy(() =>
 const ArchivingPage = lazy(() =>
   import('./archiving/archiving').then((module) => ({ default: module.ArchivingPage })),
 );
+const DiagnosticsPage = lazy(() =>
+  import('./diagnostics/diagnostics').then((module) => ({ default: module.DiagnosticsPage })),
+);
 const MetricsPage = lazy(() =>
   import('./metrics/metrics').then((module) => ({ default: module.MetricsPage })),
 );
@@ -219,6 +222,7 @@ function Workspace({ session }: { session: Session }) {
     { path: 'events', label: '事件管理', component: CatalogPage },
     { path: 'releases', label: '发布管理', component: ReleasesPage },
     { path: 'sources', label: '接入来源', component: SourcesPage },
+    { path: 'diagnostics', label: '采集诊断', component: DiagnosticsPage },
     { path: 'analysis', label: '数据分析', component: AnalysisPage },
     { path: 'saved-analyses', label: '保存的分析', component: SavedAnalysesPage },
     { path: 'dashboards', label: '自定义看板', component: DashboardsPage },
