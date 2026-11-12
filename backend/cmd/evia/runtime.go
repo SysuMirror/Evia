@@ -20,10 +20,12 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/backfilling"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
+	"github.com/howtomakeaname/Evia/backend/internal/diagnostics"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/exporting"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/admissionstats"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/config"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
@@ -99,6 +101,15 @@ func supervise(ctx context.Context, tasks []task, shutdown time.Duration) error 
 	}
 	return result
 }
+
+// Compile-time guarantees that the platform adapters satisfy the diagnostics
+// and ingestion ports used by the serve process.
+var (
+	_ ingestion.RejectionSink     = (*admissionstats.Recorder)(nil)
+	_ diagnostics.BudgetInspector = (*budget.Limiter)(nil)
+	_ diagnostics.ReadinessPort   = (*pipeline.ReadinessReader)(nil)
+	_ diagnostics.RejectionPort   = (*admissionstats.Recorder)(nil)
+)
 
 func kafkaConfig(c config.Config, command string) pipeline.KafkaConfig {
 	out := pipeline.KafkaConfig{Brokers: c.Kafka.Brokers, Topic: c.Kafka.Topic, DeadLetterTopic: c.Kafka.DeadLetterTopic, Group: c.Kafka.Group, ClientID: c.InstanceID + "-" + command + "-" + ids.New(), Username: c.Kafka.Username, Password: c.Kafka.Password}
@@ -237,14 +248,29 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		}
 		api.Sources = service
 	}
+	var collectionLimiter *budget.Limiter
+	var admissionRecorder *admissionstats.Recorder
 	if c.CollectionEnabled {
 		limiter, err := budget.New(c.Budget)
 		if err != nil {
 			return stageError("Redis budget configuration", err)
 		}
+		collectionLimiter = limiter
 		defer func() {
 			if err := limiter.Close(); err != nil {
 				result = errors.Join(result, stageError("Redis shutdown", err))
+			}
+		}()
+		statsConfig := admissionstats.DefaultConfig(c.Budget.URL)
+		statsConfig.AllowInsecureLocal = c.Budget.AllowInsecureLocal
+		recorder, err := admissionstats.New(statsConfig)
+		if err != nil {
+			return stageError("admission stats configuration", err)
+		}
+		admissionRecorder = recorder
+		defer func() {
+			if err := recorder.Close(); err != nil {
+				result = errors.Join(result, stageError("admission stats shutdown", err))
 			}
 		}()
 		producer, err := pipeline.NewKafkaProducer(kafkaConfig(c, "collect"))
@@ -256,12 +282,13 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		if err != nil {
 			return stageError("collector configuration", err)
 		}
+		collector.WithRejectionSink(recorder)
 		collectionAPI, err := control.NewCollectionAPI(boundary, collector)
 		if err != nil {
 			return stageError("collection boundary", err)
 		}
 		mux.Handle("/v1/collect", collectionAPI.Handler())
-		probes = append(probes, limiter.Ping, producer.Ping)
+		probes = append(probes, limiter.Ping, recorder.Ping, producer.Ping)
 	}
 	var engine analysis.Engine
 	if c.AnalysisEnabled {
@@ -282,6 +309,33 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		api.Delivery = service
 		probes = append(probes, probe.Ping)
 	}
+	var readinessPort diagnostics.ReadinessPort
+	if c.AnalysisEnabled || c.DeliveryEnabled {
+		reader, err := pipeline.NewReadinessReader(sinkConfig(c, client))
+		if err != nil {
+			return stageError("diagnostics readiness reader", err)
+		}
+		readinessPort = reader
+	}
+	var budgetPort diagnostics.BudgetInspector
+	if collectionLimiter != nil {
+		budgetPort = collectionLimiter
+	}
+	var rejectionPort diagnostics.RejectionPort
+	if admissionRecorder != nil {
+		rejectionPort = admissionRecorder
+	}
+	api.Diagnostics = diagnostics.NewService(
+		diagnostics.Features{
+			CollectionEnabled: c.CollectionEnabled,
+			AnalysisEnabled:   c.AnalysisEnabled,
+			DeliveryEnabled:   c.DeliveryEnabled,
+		},
+		api.Sources,
+		budgetPort,
+		readinessPort,
+		rejectionPort,
+	)
 	probe := func(ctx context.Context) error {
 		for _, check := range probes {
 			if err := check(ctx); err != nil {

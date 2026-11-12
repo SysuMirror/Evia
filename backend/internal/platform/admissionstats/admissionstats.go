@@ -219,6 +219,12 @@ func (r *Recorder) Record(ctx context.Context, projectID, environment string, co
 	}
 }
 
+// RecordRejections satisfies ingestion.RejectionSink so the collector can
+// attach the fail-open recorder without a direct dependency on this package.
+func (r *Recorder) RecordRejections(ctx context.Context, projectID, environment string, counts map[string]int) {
+	r.Record(ctx, projectID, environment, counts)
+}
+
 // Read returns the last windows hourly buckets per environment, oldest first.
 // Empty buckets are omitted; totals aggregate every returned window.
 func (r *Recorder) Read(ctx context.Context, projectID string, windows int) (ProjectRead, error) {
