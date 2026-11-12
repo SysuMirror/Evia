@@ -168,6 +168,56 @@ fails the build if the manifest drifts from the emitter:
 Both route through the existing Alertmanager critical/warning receivers, so
 no Alertmanager change is required when enabling the schedule.
 
+## Offsite replication to S3-compatible storage
+
+Local backups do not survive host or storage failure. `tooling/backup/replicate.py`
+copies the verified drill artifacts into an S3-compatible bucket (AWS S3,
+MinIO, Ceph RGW) using a standard-library SigV4 client — no AWS SDK is added
+to the recovery toolchain.
+
+### What gets copied and how it is verified
+
+* Only files matching the managed naming patterns are eligible; the bucket
+  prefix and object key are validated so manifests cannot address `..`
+  segments or absolute paths.
+* Every upload carries its sha256 as the `x-amz-content-sha256` SigV4 payload
+  hash. With the default `verify: "download"` mode the object is immediately
+  downloaded back into a scratch file and the sha256 is compared before any
+  state is written, so a truncated or corrupted upload fails closed.
+* Replication state lives in `state_dir/replication-state.json`. Re-running
+  with unchanged artifacts performs no network writes; changed content is
+  re-uploaded and re-verified. A malformed state file is refused rather than
+  reset, so counters cannot silently restart.
+* Remote retention mirrors local retention per filename pattern: objects
+  outside the `retention_keep` window are deleted through the signed API and
+  removed from state, keeping the offsite copy aligned with the local window.
+
+### Signature correctness
+
+The SigV4 implementation (`tooling/backup/objectstore.py`) is cross-validated
+byte-for-byte against `botocore`'s signer for both the empty-payload GET
+vector (AKIDEXAMPLE / 20150830T123600Z, matching the AWS test-suite signature
+`5fa00fa3…fbf31`) and a PUT with a real payload hash. Unit tests embed the
+verified values; the loopback S3 mock additionally recomputes every signature
+on the server side, so a signing regression fails the HTTP roundtrip.
+
+### Deployment topologies
+
+1. **Integrated (single host).** Point the drill schedule at the replication
+   config with `replication_config` in `backup-drill.json`; the daily timer
+   then runs drills and replication in one unit, and a replication failure
+   fails the whole schedule run.
+2. **Split (recommended for production).** Keep object-store credentials off
+   the drill host and run `evia-backup-replication.timer` separately at 03:23.
+   Install `deploy/systemd/evia-backup-replication.{service,timer}` with
+   `backup-replication.config.example.json` and the 0600 env file. The
+   service is `ProtectSystem=strict` with writes limited to the backup state
+   directory.
+
+Validate credentials and config without uploading with
+`replicate.py validate --config …`; the systemd unit runs this as
+`ExecStartPre`.
+
 ## Disaster recovery procedure
 
 1. Provision an empty PostgreSQL instance and apply the same role/credentials.
