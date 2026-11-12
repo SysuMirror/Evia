@@ -2,6 +2,8 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
+**2026-11-13，G3 百万行矩阵 harness 就绪并小规模验证（真实执行待宿主盘环境）**：新增 `property_layout_scale_probe.py`，按批流式装载（25k/批，避免百万行驻留内存），对四布局跑 count/unique/数值过滤/字符串分组四形态、可配并发（1..16），逐查询捕获状态/内存/结果并按 512MiB 预算裁决，汇总跨布局结果等价性。端到端先红后绿：首版矩阵查询用裸表名未限定数据库（Code 60 UNKNOWN_TABLE），改为 db.table 限定名后修复；50k 行 tmpfs 实测四形态跨布局结果全部等价，数值过滤峰值内存从文档 30MB 降到类型化槽位 0.16MB、词法槽位 1.28MB。9 项纯单测（benchmark 目录累计 62 项）全绿，探针库清理零残留。诚实边界：512MiB tmpfs 仅剩约 450MiB，放不下四套百万行宽表，真实百万行须在 compose.benchmark.yaml 的宿主盘 4GiB ClickHouse 上执行，harness 本身不构成容量验收，514/728 失败记录仍有效。
+
 **2026-11-13，G2 视图层门控：专用列避开 map 元组临时盘失败（真实 ClickHouse）**：新增 `property_layout_view_probe.py`，为四布局各建 argMin 视图并跑 trend 风格聚合，除物理指标外显式记录查询成败，使资源耗尽成为可审计证据。10 万行实测：携带整个 token map 的元组触发 ClickHouse 错误 243（临时盘无法预留约 724MB），四次 exception_code=243 入 query_log，复现 2026-11-10 map 搁置根因；dedicated 与 dedicated_token 元组均成功，read_bytes 仅比文档元组高约 3.9%、峰值内存高约 6.3%（378MB vs 356MB）、计数一致，二者成本几乎相同。同时把原探针建表逻辑抽为 provision_layout_tables 供两探针复用，benchmark 目录 53 项纯逻辑单测全绿。诚实边界：专用列峰值已占 512MiB 约 72%，最终切换仍由 G3 百万行矩阵裁决，514/728 失败记录继续有效。
 
 **2026-11-13，专用列阶段 4c-3：确定性迁移生成器与 CLI（机械可评审的生产迁移路径）**：propertycatalog 新增 `ViewDDL`/`MigrationSQL`，固定 29 槽视图体与迁移 009 对齐，槽位列从 fact.30 起按目录列序确定性追加，等价目录无论条目顺序产出逐字节相同 SQL；新增 `evia-catalog-migration` 命令，从经评审目录 JSON 输出多语句迁移、不触碰 ClickHouse（缺失/非法 fail-closed，含单测）。集成测试的测试视图改由生成器产出（移除手写 DDL 与 itoa 辅助），真实 ClickHouse 验证完整操作员工作流：CLI 输出经 clickhouse-client --multiquery 应用、重复应用幂等、raw 与视图均出现 String 槽位列、视图可查询、临时库清理零残留；analysis 完整真实 CH 集成 64.1s 全绿。剩余：首个获批目录及其生成迁移入库 deploy/clickhouse，随后 G2/G3。
