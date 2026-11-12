@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { QuotaPanel } from './quota-panel';
 import {
   api,
   ApiError,
@@ -41,7 +42,7 @@ const countColumns: DataTableColumn<NameCountRow>[] = [
   { key: 'count', header: '数量', render: (row) => String(row.count) },
 ];
 
-export function DiagnosticsPage({ project }: PageProps) {
+export function DiagnosticsPage({ project, session }: PageProps) {
   const diagnostics = useQuery({
     queryKey: ['diagnostics', project.id],
     queryFn: ({ signal }) => api.getDiagnostics(project.id, signal),
@@ -222,6 +223,8 @@ export function DiagnosticsPage({ project }: PageProps) {
           <EmptyPanel description="正在读取预算策略。" />
         )}
       </DataSurface>
+
+      <QuotaPanel project={project} session={session} />
 
       <DataSurface label="管道就绪探针">
         {report ? (

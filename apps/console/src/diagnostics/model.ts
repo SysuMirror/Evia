@@ -61,3 +61,43 @@ export function totalRejectionCount(report: Diagnostics): number {
 export function shortUUID(value: string): string {
   return value.length <= 13 ? value : `${value.slice(0, 8)}…`;
 }
+
+export const QUOTA_RATE_MIN = 0.001;
+export const QUOTA_RATE_MAX = 1_000_000;
+export const QUOTA_BURST_MIN = 50;
+export const QUOTA_BURST_MAX = 1_000_000;
+
+export interface QuotaFormState {
+  rate: string;
+  burst: string;
+}
+
+export function defaultQuotaForm(): QuotaFormState {
+  return { rate: '', burst: '' };
+}
+
+export function validateQuotaForm(form: QuotaFormState): string[] {
+  const errors: string[] = [];
+  const rate = Number(form.rate);
+  if (
+    form.rate.trim() === '' ||
+    !Number.isFinite(rate) ||
+    rate < QUOTA_RATE_MIN ||
+    rate > QUOTA_RATE_MAX
+  ) {
+    errors.push(`速率必须是 ${QUOTA_RATE_MIN} 到 ${QUOTA_RATE_MAX} 事件/秒之间的有限数。`);
+  }
+  const burst = Number(form.burst);
+  if (!/^\d+$/.test(form.burst.trim()) || burst < QUOTA_BURST_MIN || burst > QUOTA_BURST_MAX) {
+    errors.push(`突发容量必须是 ${QUOTA_BURST_MIN} 到 ${QUOTA_BURST_MAX} 之间的整数。`);
+  }
+  return errors;
+}
+
+export function quotaSourceLabel(source: 'default' | 'project_override'): string {
+  return source === 'project_override' ? '项目覆盖' : '默认策略';
+}
+
+export function runtimeStatusLabel(status: 'applied' | 'bucket_reset_pending'): string {
+  return status === 'applied' ? '已生效' : '桶重置待完成';
+}
