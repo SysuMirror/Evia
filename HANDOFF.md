@@ -405,4 +405,5 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/evia/playwright \
 | SDK 与外部接入 | [SDK](docs/browser-sdk.md)、[公开资产](integrations/README.md) |
 | 环境与验证 | [开发](docs/runbooks/development.md)、[依赖](docs/runbooks/dependencies.md)、[控制台](docs/runbooks/console-verification.md)、[HTTP 验收](docs/runbooks/backend-smoke.md) |
 | 压测与升级 | [压测](docs/runbooks/benchmark.md)、[紧凑列升级](docs/runbooks/compact-winner-upgrade.md)、[身份查询升级](docs/runbooks/identity-query-upgrade.md)、[部署边界](docs/runbooks/deployment.md) |
+| 高可用与恢复 | [优雅排空与多副本](docs/runbooks/ha.md)、[备份恢复](docs/runbooks/backup-restore.md)、[SLO 与告警](docs/runbooks/slo.md)、[观测性](docs/runbooks/observability.md) |
 | 图示与截图 | [资产来源与维护](docs/assets/README.md)、[最新指标验证](docs/verification/metrics-2026-11-09.md) |
