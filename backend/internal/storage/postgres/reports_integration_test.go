@@ -178,6 +178,22 @@ func TestReportRevisionLifecycleSectionReplacementPaginationAndDelete(t *testing
 	_, e = svc.Update(ctx, stale, first.Revision)
 	faultCode(t, e, "REPORT_REVISION_CONFLICT")
 
+	// A retried PATCH with the same key replays the accepted snapshot and must
+	// not bump the revision a second time even though If-Match is now stale.
+	replayed, e := svc.Update(ctx, update, first.Revision)
+	if e != nil || replayed.Revision != 2 || replayed.ID != updated.ID {
+		t.Fatal("update replay changed state", replayed, e)
+	}
+	updateConflict := update
+	updateConflict.Definition.Description = "第二次编辑"
+	updateConflict.RequestHash = reportRequestHash(updateConflict.Definition)
+	_, e = svc.Update(ctx, updateConflict, updated.Revision)
+	faultCode(t, e, "IDEMPOTENCY_CONFLICT")
+	var mutations int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM report_mutations WHERE project_id=$1`, f.project).Scan(&mutations); e != nil || mutations != 2 {
+		t.Fatalf("mutation count=%d err=%v (expect 2: create + update)", mutations, e)
+	}
+
 	missingID := ids.New()
 	missing := reportInput(f, "development", versions[:1])
 	missing.ReportID = missingID

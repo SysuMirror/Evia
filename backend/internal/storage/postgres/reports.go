@@ -203,6 +203,26 @@ func (s *Store) Update(ctx context.Context, in reports.Input, expectedRevision i
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, in.ProjectID); e != nil {
 		return reports.Report{}, e
 	}
+	// Updates share the create ledger: a retried PATCH returns the originally
+	// accepted snapshot without a second revision bump, and a reused key with a
+	// different body conflicts before any row is touched.
+	var priorHash string
+	var response []byte
+	e = tx.QueryRow(ctx, `SELECT request_hash,response FROM report_mutations
+ WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3`, in.ProjectID, in.ActorID, in.IdempotencyKey).Scan(&priorHash, &response)
+	if e == nil {
+		if priorHash != in.RequestHash {
+			return reports.Report{}, fault.New(fault.Conflict, "IDEMPOTENCY_CONFLICT", "幂等键已用于不同请求")
+		}
+		var replay reports.Report
+		if e = json.Unmarshal(response, &replay); e != nil {
+			return reports.Report{}, e
+		}
+		return replay, tx.Commit(ctx)
+	}
+	if !errors.Is(e, pgx.ErrNoRows) {
+		return reports.Report{}, e
+	}
 	reportID := in.ReportID
 	if reportID == "" {
 		return reports.Report{}, fault.New(fault.Invalid, "INVALID_REPORT_ID", "报告标识格式不正确")
@@ -239,6 +259,13 @@ func (s *Store) Update(ctx context.Context, in reports.Input, expectedRevision i
 	}
 	out, e := s.readReportTx(ctx, tx, in.ProjectID, reportID)
 	if e != nil {
+		return reports.Report{}, e
+	}
+	if response, e = json.Marshal(out); e != nil {
+		return reports.Report{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO report_mutations(project_id,actor_id,idempotency_key,request_hash,response)
+ VALUES($1,$2,$3,$4,$5)`, in.ProjectID, in.ActorID, in.IdempotencyKey, in.RequestHash, response); e != nil {
 		return reports.Report{}, e
 	}
 	return out, tx.Commit(ctx)
