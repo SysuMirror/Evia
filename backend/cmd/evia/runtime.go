@@ -36,6 +36,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
 	"github.com/howtomakeaname/Evia/backend/internal/quotas"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
+	"github.com/howtomakeaname/Evia/backend/internal/reports"
 	"github.com/howtomakeaname/Evia/backend/internal/retention"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
 	"github.com/howtomakeaname/Evia/backend/internal/transport/control"
@@ -346,6 +347,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		rejectionPort = admissionRecorder
 	}
 	api.Artifacts = artifacts.NewService(store)
+	api.Reports = reports.NewService(store)
 	api.Diagnostics = diagnostics.NewService(
 		diagnostics.Features{
 			CollectionEnabled: c.CollectionEnabled,
