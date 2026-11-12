@@ -40,6 +40,7 @@ import {
   parseEventKeys,
   toExportInput,
   type ExportFormState,
+  type ExportFormat,
   type ExportKind,
 } from './model';
 import { useExportRequest } from './use-export-request';
@@ -59,6 +60,11 @@ const environmentOptions = [
 const kindOptions: { value: ExportKind; label: string }[] = [
   { value: 'trend', label: '趋势查询（最长 31 天）' },
   { value: 'events', label: '事件明细（最长 7 天）' },
+];
+
+const formatOptions: { value: ExportFormat; label: string }[] = [
+  { value: 'json', label: 'JSON 完整结果文档' },
+  { value: 'csv', label: 'CSV 表格（按结果列顺序）' },
 ];
 
 function shortJobID(jobID: string): string {
@@ -202,6 +208,11 @@ export function ExportsPage({ project, session, environment }: PageProps) {
       render: (row) => row.name,
     },
     {
+      key: 'format',
+      header: '格式',
+      render: (row) => row.format.toUpperCase(),
+    },
+    {
       key: 'state',
       header: '状态',
       render: (row) => (
@@ -288,6 +299,15 @@ export function ExportsPage({ project, session, environment }: PageProps) {
                 onChange={(event) =>
                   patch({ environment: event.target.value as ExportFormState['environment'] })
                 }
+              />
+            </Field>
+            <Field label="产物格式" htmlFor="export-format">
+              <Select
+                id="export-format"
+                value={form.format}
+                options={formatOptions}
+                disabled={!!requests.busy}
+                onChange={(event) => patch({ format: event.target.value as ExportFormat })}
               />
             </Field>
             <Field label="查询类型" htmlFor="export-kind">
@@ -435,7 +455,7 @@ export function ExportsPage({ project, session, environment }: PageProps) {
             {environmentOptions.find((item) => item.value === form.environment)?.label}
           </strong>{' '}
           导出最近 {form.windowDays} 天的{form.kind === 'trend' ? '趋势' : '事件明细'}数据，行数上限{' '}
-          {form.limit}，产物格式为 JSON。
+          {form.limit}，产物格式为 {form.format.toUpperCase()}。
         </p>
         <p className="evia-field-hint">名称：{form.name.trim()}</p>
       </Modal>

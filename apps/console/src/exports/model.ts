@@ -1,10 +1,12 @@
 import type { ExportInput, ExportJob, QueryRequest } from '@evia/api-client';
 
 export type ExportKind = 'trend' | 'events';
+export type ExportFormat = 'json' | 'csv';
 
 export interface ExportFormState {
   name: string;
   environment: ExportInput['environment'];
+  format: ExportFormat;
   kind: ExportKind;
   windowDays: number;
   limit: number;
@@ -26,6 +28,7 @@ export function defaultExportForm(environment: ExportInput['environment']): Expo
   return {
     name: '',
     environment,
+    format: 'json',
     kind: 'trend',
     windowDays: 7,
     limit: 200,
@@ -104,6 +107,7 @@ export function toExportInput(form: ExportFormState): {
   const input = {
     name: form.name.trim(),
     environment: form.environment,
+    format: form.format,
     query: buildQueryRequest(form),
   } as unknown as ExportInput;
   return { input, errors: [] };
