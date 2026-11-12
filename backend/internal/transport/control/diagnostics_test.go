@@ -23,7 +23,7 @@ import (
 type fakeDiagnosticsService struct {
 	report diagnostics.Report
 	err    error
-	got   struct{ actor, project string }
+	got    struct{ actor, project string }
 }
 
 func (f *fakeDiagnosticsService) Build(_ context.Context, actor, project string) (diagnostics.Report, error) {
