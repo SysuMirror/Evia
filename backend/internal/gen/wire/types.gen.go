@@ -164,6 +164,25 @@ type CollectResponse struct {
 	Results   []json.RawMessage `json:"results"`
 }
 
+type CollectionQuota struct {
+	ProjectID     string  `json:"project_id"`
+	Environment   string  `json:"environment"`
+	RatePerSecond float64 `json:"rate_per_second"`
+	Burst         int64   `json:"burst"`
+	Override      bool    `json:"override"`
+	Source        string  `json:"source"`
+	Revision      int64   `json:"revision"`
+	RuntimeStatus string  `json:"runtime_status"`
+	CreatedAt     *string `json:"created_at"`
+	UpdatedAt     *string `json:"updated_at"`
+}
+
+type CollectionQuotaInput struct {
+	Environment   string  `json:"environment"`
+	RatePerSecond float64 `json:"rate_per_second"`
+	Burst         int64   `json:"burst"`
+}
+
 type CredentialRotation struct {
 	OverlapSeconds int64 `json:"overlap_seconds"`
 }
@@ -1121,26 +1140,6 @@ type QueryValidation struct {
 	QueryHash          string                  `json:"query_hash"`
 	Dependencies       QueryDependencyManifest `json:"dependencies"`
 	DependencyHash     string                  `json:"dependency_hash"`
-}
-
-type Quota struct {
-	EventsPerSecond   int64  `json:"events_per_second"`
-	RequestsPerSecond int64  `json:"requests_per_second"`
-	QueryConcurrency  int64  `json:"query_concurrency"`
-	QueryScanBytes    int64  `json:"query_scan_bytes"`
-	ExportMaxRows     int64  `json:"export_max_rows"`
-	ExportMaxBytes    int64  `json:"export_max_bytes"`
-	Revision          int64  `json:"revision"`
-	ApplicationState  string `json:"application_state"`
-}
-
-type QuotaInput struct {
-	EventsPerSecond   int64 `json:"events_per_second"`
-	RequestsPerSecond int64 `json:"requests_per_second"`
-	QueryConcurrency  int64 `json:"query_concurrency"`
-	QueryScanBytes    int64 `json:"query_scan_bytes"`
-	ExportMaxRows     int64 `json:"export_max_rows"`
-	ExportMaxBytes    int64 `json:"export_max_bytes"`
 }
 
 type Release struct {

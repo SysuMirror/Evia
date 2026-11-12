@@ -1225,3 +1225,35 @@ test('diagnostics read uses the fixed project diagnostics path', async () => {
   controller.abort();
   assert.equal((init as RequestInit).signal?.aborted, true);
 });
+
+test('collection quota read and patch encode scope, revision and idempotency', async () => {
+  const fetch = respond(200, {
+    project_id: 'p',
+    environment: 'production',
+    rate_per_second: 5,
+    burst: 60,
+    override: true,
+    source: 'project_override',
+    revision: 2,
+    runtime_status: 'applied',
+    created_at: '2026-11-12T10:00:00Z',
+    updated_at: '2026-11-12T11:00:00Z',
+  });
+  const controller = new AbortController();
+  const input = { environment: 'production' as const, rate_per_second: 5, burst: 60 };
+  await api.getCollectionQuota('p', 'production', controller.signal);
+  const quota = await api.patchCollectionQuota('p', input, 2, 'quota-key', 'csrf', controller.signal);
+  const urls = fetch.mock.calls.map((call) => call.arguments[0]);
+  assert.equal(urls[0], '/api/v1/projects/p/quotas?environment=production');
+  assert.equal(urls[1], '/api/v1/projects/p/quotas');
+  const patchInit = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(patchInit.method, 'PATCH');
+  const headers = patchInit.headers as Headers;
+  assert.equal(headers.get('If-Match'), '"2"');
+  assert.equal(headers.get('Idempotency-Key'), 'quota-key');
+  assert.equal(headers.get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(patchInit.body as string), input);
+  assert.equal(quota.runtime_status, 'applied');
+  controller.abort();
+  assert.equal(patchInit.signal?.aborted, true);
+});
