@@ -148,3 +148,57 @@ func TestPlannerFieldEmitsDedicatedTierOnlyWhenCatalogInjected(t *testing.T) {
 		t.Fatalf("map fallback must be retained inside the dedicated branch: %s", enabledSQL.value)
 	}
 }
+
+func TestCompileWithCatalogDefaultsByteIdenticalAndEnablesGate(t *testing.T) {
+	r := request(t, baseRequest)
+	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
+	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	scope := Scope{ProjectID: "project-secret", Environment: "development"}
+
+	legacy, err := Compile("testdb", "event_facts", scope, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nilCatalog, err := CompileWithCatalog("testdb", "event_facts", scope, r, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.SQL != nilCatalog.SQL {
+		t.Fatal("nil catalog must compile byte-identical SQL to Compile")
+	}
+
+	enabled, err := CompileWithCatalog("testdb", "event_facts", scope, r, readerCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	column := propertycatalog.SlotColumn("title")
+	if !strings.Contains(enabled.SQL, "dedicated_layout_version=6") || !strings.Contains(enabled.SQL, column) {
+		t.Fatalf("catalog-enabled plan missing dedicated gate:\n%s", enabled.SQL)
+	}
+	if legacy.SQL == enabled.SQL {
+		t.Fatal("enabled catalog must change the SQL when the field matches an entry")
+	}
+	// The map fallback and bound parameters must survive the outer tier.
+	if !strings.Contains(enabled.SQL, "property_layout_version=1") {
+		t.Fatalf("map fallback lost in catalog-enabled plan:\n%s", enabled.SQL)
+	}
+}
+
+func TestCompileWithCatalogUnmatchedFieldStaysIdentical(t *testing.T) {
+	r := request(t, baseRequest)
+	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "other_event", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
+	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	scope := Scope{ProjectID: "project-secret", Environment: "development"}
+
+	legacy, err := Compile("testdb", "event_facts", scope, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled, err := CompileWithCatalog("testdb", "event_facts", scope, r, readerCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.SQL != enabled.SQL {
+		t.Fatalf("unmatched field must keep SQL byte-identical:\n%s\n%s", legacy.SQL, enabled.SQL)
+	}
+}

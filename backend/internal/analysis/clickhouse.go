@@ -14,16 +14,20 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/propertycatalog"
 )
 
 type ClickHouseConfig struct {
 	URL, Username, Password, Database, Table string
 	Client                                   *http.Client
+	// Catalog optionally enables dedicated hot-key reads; nil means disabled.
+	Catalog *propertycatalog.Catalog
 }
 type ClickHouse struct {
 	endpoint                            *url.URL
 	username, password, database, table string
 	client                              *http.Client
+	catalog                             *propertycatalog.Catalog
 }
 
 func NewClickHouse(cfg ClickHouseConfig) (*ClickHouse, error) {
@@ -47,7 +51,11 @@ func NewClickHouse(cfg ClickHouseConfig) (*ClickHouse, error) {
 		copyClient.Timeout = 35 * time.Second
 	}
 	client = &copyClient
-	return &ClickHouse{endpoint: endpoint, username: cfg.Username, password: cfg.Password, database: cfg.Database, table: cfg.Table, client: client}, nil
+	catalog := cfg.Catalog
+	if catalog == nil {
+		catalog = propertycatalog.Disabled()
+	}
+	return &ClickHouse{endpoint: endpoint, username: cfg.Username, password: cfg.Password, database: cfg.Database, table: cfg.Table, client: client, catalog: catalog}, nil
 }
 func (c *ClickHouse) request(ctx context.Context, sql, queryID string, parameters map[string]string, execution bool) (*http.Response, error) {
 	endpoint := *c.endpoint
@@ -81,7 +89,7 @@ func (c *ClickHouse) kill(queryID string) {
 	}
 }
 func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Result, error) {
-	plan, e := Compile(c.database, c.table, scope, r)
+	plan, e := CompileWithCatalog(c.database, c.table, scope, r, c.catalog)
 	if e != nil {
 		return Result{}, e
 	}

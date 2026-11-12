@@ -228,7 +228,17 @@ func (p *planner) filter(f *Filter) (string, error) {
 	}
 	return "", Invalid("INVALID_FILTER_OPERATOR", "过滤运算无效")
 }
+
+// Compile keeps the historical entrypoint and always runs with the disabled
+// catalog, so existing callers produce byte-identical SQL.
 func Compile(database, table string, scope Scope, r Request) (Plan, error) {
+	return CompileWithCatalog(database, table, scope, r, nil)
+}
+
+// CompileWithCatalog builds a plan that may read dedicated hot-key columns for
+// catalog entries. A nil catalog is equivalent to Compile and must not change
+// any emitted SQL.
+func CompileWithCatalog(database, table string, scope Scope, r Request, catalog *propertycatalog.Catalog) (Plan, error) {
 	if !identifier.MatchString(database) || !identifier.MatchString(table) {
 		return Plan{}, Invalid("INVALID_QUERY_TABLE", "查询存储配置无效")
 	}
@@ -241,7 +251,7 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 	if e := CheckResolved(r); e != nil {
 		return Plan{}, e
 	}
-	p := planner{params: map[string]string{}}
+	p := planner{params: map[string]string{}, catalog: catalog}
 	source := "`" + database + "`.`" + table + "`"
 	if r.Kind == "trend" && table == "event_facts" {
 		var e error

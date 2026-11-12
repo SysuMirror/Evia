@@ -134,7 +134,7 @@ func sinkConfig(c config.Config, client *http.Client) pipeline.ClickHouseConfig 
 	return pipeline.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Client: client, Catalog: c.PropertyCatalog}
 }
 func queryEngine(c config.Config, client *http.Client) (*analysis.ClickHouse, error) {
-	engine, err := analysis.NewClickHouse(analysis.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Table: "event_facts", Client: client})
+	engine, err := analysis.NewClickHouse(analysis.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Table: "event_facts", Client: client, Catalog: c.PropertyCatalog})
 	if err != nil {
 		return nil, stageError("analysis engine configuration", err)
 	}
