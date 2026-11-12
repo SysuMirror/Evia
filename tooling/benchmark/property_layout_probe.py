@@ -333,12 +333,16 @@ class ClickHouseProbe:
         argv += ["--query", sql]
         return argv
 
-    def run(self, sql: str, stdin: bytes | None = None) -> str:
+    def run(self, sql: str, stdin: bytes | None = None, query_id: str | None = None) -> str:
         env = dict(os.environ)
         env["CLICKHOUSE_PASSWORD"] = self.password
+        if query_id is None:
+            # Serial probes opt into a query id through this mutable attribute;
+            # concurrent callers must pass query_id explicitly instead.
+            query_id = getattr(self, "_next_query_id", None)
         try:
             completed = subprocess.run(
-                self._argv(sql, interactive=stdin is not None, query_id=getattr(self, "_next_query_id", None)),
+                self._argv(sql, interactive=stdin is not None, query_id=query_id),
                 input=stdin,
                 env=env,
                 timeout=self.timeout,

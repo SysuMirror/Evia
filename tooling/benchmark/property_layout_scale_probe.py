@@ -267,15 +267,12 @@ def run_matrix(
     def execute(shape: str, layout: str, repeat: int) -> QueryOutcome:
         sql = matrix_query(layout, tables[layout], shape) + " SETTINGS max_threads=2"
         query_id = f"evia-g3-{shape}-{layout}-{repeat}"
-        client.run("SYSTEM DROP MARK CACHE")
+        # Each job uses its own immutable query id; the shared _next_query_id
+        # attribute is serial-only and must not be mutated from worker threads.
         try:
-            client._next_query_id = query_id
-            try:
-                client.run(sql)
-                error = ""
-                succeeded = True
-            finally:
-                client._next_query_id = None
+            client.run(sql, query_id=query_id)
+            error = ""
+            succeeded = True
         except ProbeError as exc:
             error = str(exc)
             succeeded = False
@@ -300,6 +297,9 @@ def run_matrix(
             result_check=result_check,
         )
 
+    # The mark cache is global; drop it once serially rather than racing on it
+    # from every worker, which also makes cold-start measurements comparable.
+    client.run("SYSTEM DROP MARK CACHE")
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(execute, *job) for job in jobs]
         for future in as_completed(futures):
