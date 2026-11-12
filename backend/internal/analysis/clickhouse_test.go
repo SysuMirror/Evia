@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"strings"
+
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/howtomakeaname/Evia/backend/internal/propertycatalog"
 )
 
 func TestClickHouseFailureClassifiesResourceLimitsByNamedException(t *testing.T) {
@@ -66,5 +69,61 @@ func TestClickHouseRejectsEndpointPathsAndEmbeddedAuthority(t *testing.T) {
 		if _, e := NewClickHouse(ClickHouseConfig{URL: endpoint, Database: "testdb"}); e == nil {
 			t.Fatal("unsafe endpoint accepted", endpoint)
 		}
+	}
+}
+
+func TestNewClickHouseStoresCatalogAndDefaultsToDisabled(t *testing.T) {
+	// A nil catalog must normalize to the disabled catalog so a misconfigured
+	// caller never enables dedicated reads by accident.
+	plain, err := NewClickHouse(ClickHouseConfig{URL: "http://example.invalid", Database: "testdb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.catalog == nil || plain.catalog.Enabled() {
+		t.Fatalf("nil catalog must become a non-nil disabled catalog: %+v", plain.catalog)
+	}
+
+	enabled := &propertycatalog.Catalog{Revision: 3, Entries: []propertycatalog.Entry{
+		{EventKey: "page_opened", SchemaVersion: 1, PropertyKey: "title", ResolvedType: "string"},
+	}}
+	if err := enabled.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	withCatalog, err := NewClickHouse(ClickHouseConfig{
+		URL: "http://example.invalid", Database: "testdb", Catalog: enabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withCatalog.catalog != enabled || !withCatalog.catalog.Enabled() {
+		t.Fatal("explicit catalog must be retained and enabled on the engine")
+	}
+}
+
+func TestEngineCatalogDrivesCompileWithoutConnecting(t *testing.T) {
+	// NewClickHouse only parses the endpoint, so the wiring can be proven
+	// without a live server: an enabled engine must compile a dedicated gate
+	// while a default engine compiles the legacy map/document shape.
+	enabled := &propertycatalog.Catalog{Revision: 5, Entries: []propertycatalog.Entry{
+		{EventKey: "page_opened", SchemaVersion: 1, PropertyKey: "title", ResolvedType: "string"},
+	}}
+	if err := enabled.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := NewClickHouse(ClickHouseConfig{
+		URL: "http://example.invalid", Database: "testdb", Catalog: enabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := request(t, baseRequest)
+	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
+	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	plan, err := CompileWithCatalog(engine.database, engine.table, Scope{ProjectID: "p", Environment: r.Environment}, r, engine.catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "dedicated_layout_version=5") {
+		t.Fatalf("engine catalog did not reach the compiled plan:\n%s", plan.SQL)
 	}
 }
