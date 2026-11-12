@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/propertycatalog"
 	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
@@ -23,11 +24,16 @@ type ClickHouseConfig struct {
 	Username string
 	Password string
 	Client   *http.Client
+	// Catalog optionally materializes dedicated hot-key token columns. A nil
+	// catalog is replaced by the disabled catalog, so existing callers keep
+	// their exact insert payload.
+	Catalog *propertycatalog.Catalog
 }
 type ClickHouse struct {
 	endpoint                     *url.URL
 	database, username, password string
 	client                       *http.Client
+	catalog                      *propertycatalog.Catalog
 }
 
 var databasePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
@@ -45,7 +51,11 @@ func NewClickHouse(c ClickHouseConfig) (*ClickHouse, error) {
 	// Do not forward database credentials across HTTP redirects.
 	copyClient := *client
 	copyClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &ClickHouse{endpoint: endpoint, database: c.Database, username: c.Username, password: c.Password, client: &copyClient}, nil
+	catalog := c.Catalog
+	if catalog == nil {
+		catalog = propertycatalog.Disabled()
+	}
+	return &ClickHouse{endpoint: endpoint, database: c.Database, username: c.Username, password: c.Password, client: &copyClient, catalog: catalog}, nil
 }
 
 type factRow struct {
@@ -86,6 +96,62 @@ type factRow struct {
 	// values are the exact JSON tokens; never re-serialize them numerically.
 	PropertyLayoutVersion uint8             `json:"property_layout_version"`
 	PropertyTokens        map[string]string `json:"property_tokens"`
+	// DedicatedLayoutVersion is the hot-key catalog revision (omitted entirely
+	// at zero so a disabled catalog produces a byte-identical legacy payload).
+	// dedicatedSlots carries the per-row token columns; only materialized
+	// slots are injected by MarshalJSON, and unexported so the default encoder
+	// never sees them.
+	DedicatedLayoutVersion uint8 `json:"dedicated_layout_version,omitempty"`
+	dedicatedSlots         []propertycatalog.SlotValue
+}
+
+// slotColumnPattern is a serialization-boundary guard: slot column names are
+// produced by propertylayout.EncodeKey (p_ plus uppercase hex), so a key that
+// fails this check can never be spliced into the JSONEachRow payload.
+var slotColumnPattern = regexp.MustCompile(`^p_[0-9A-F]+$`)
+
+// MarshalJSON keeps the fixed-field payload byte-identical for the disabled
+// catalog and appends only materialized dedicated token columns in the
+// catalog's deterministic column order. Each token is emitted as a JSON
+// string so its exact lexical text (quotes included) becomes the String
+// column content.
+func (r factRow) MarshalJSON() ([]byte, error) {
+	type factRowAlias factRow
+	base, err := json.Marshal(factRowAlias(r))
+	if err != nil {
+		return nil, err
+	}
+	materialized := make([]propertycatalog.SlotValue, 0, len(r.dedicatedSlots))
+	for _, slot := range r.dedicatedSlots {
+		if slot.Materialized {
+			materialized = append(materialized, slot)
+		}
+	}
+	if len(materialized) == 0 {
+		return base, nil
+	}
+	var buf bytes.Buffer
+	buf.Write(base[:len(base)-1])
+	for _, slot := range materialized {
+		if !slotColumnPattern.MatchString(slot.Column) {
+			return nil, fmt.Errorf("unsafe dedicated slot column name %q", slot.Column)
+		}
+		buf.WriteString(`,"`)
+		buf.WriteString(slot.Column)
+		buf.WriteString(`":`)
+		// Encode the token as a JSON string value so the String column's
+		// CONTENT is the exact token text (including quotes for JSON strings,
+		// e.g. the token "Home" must persist with its quotes so the reader's
+		// synthetic one-field document stays valid JSON). Raw insertion would
+		// make ClickHouse strip the JSON delimiters.
+		encodedToken, err := json.Marshal(slot.Token)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(encodedToken)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 func present(value string) *string {
@@ -106,6 +172,16 @@ func rawPresent(context map[string]json.RawMessage, key string) *string {
 	return &s
 }
 func rowFor(record ingestion.Record) (factRow, error) {
+	return rowForWithCatalog(record, propertycatalog.Disabled())
+}
+
+// rowForWithCatalog additionally resolves the dedicated hot-key token columns
+// for the row's event identity. A nil or disabled catalog yields the exact
+// legacy payload: marker zero (omitted) and no slot columns.
+func rowForWithCatalog(record ingestion.Record, catalog *propertycatalog.Catalog) (factRow, error) {
+	if catalog == nil {
+		catalog = propertycatalog.Disabled()
+	}
 	r, e := normalizeRecord(record)
 	if e != nil {
 		return factRow{}, e
@@ -131,6 +207,8 @@ func rowFor(record ingestion.Record) (factRow, error) {
 	for encoded, token := range derived {
 		propertyTokens[encoded] = string(token)
 	}
+	// Reuse the same derived map: no second JSON parse, no token re-encoding.
+	plan := catalog.Plan(r.EventKey, uint64(r.SchemaVersion), derived)
 	return factRow{
 		SourceKind: r.SourceKind, ProjectID: r.ProjectID, Environment: r.Environment, SourceID: r.SourceID, EventID: r.EventID, EventKey: r.EventKey, SchemaVersion: r.SchemaVersion, ReleaseRevision: r.ReleaseRevision,
 		OccurredAt: occurred, EventTime: occurred, OccurredAtPrecise: occurred, EventTimePrecise: occurred, ReceivedAt: r.ReceivedAt.Format("2006-01-02 15:04:05.000000000"), CanonicalHash: hash,
@@ -139,6 +217,7 @@ func rowFor(record ingestion.Record) (factRow, error) {
 		RouteName: rawPresent(exact, "route_name"), RouteTemplate: rawPresent(exact, "route_template"), SourceModule: rawPresent(exact, "source_module"), NavigationType: present(r.Context.NavigationType), PreviousPageViewID: present(r.Context.PreviousPageViewID),
 		SDKName: r.SDKName, SDKVersion: r.SDKVersion, ContextJSON: string(r.ContextJSON), PropertiesJSON: string(r.PropertiesJSON),
 		PropertyLayoutVersion: 1, PropertyTokens: propertyTokens,
+		DedicatedLayoutVersion: plan.Marker, dedicatedSlots: plan.Slots,
 	}, nil
 }
 
@@ -152,7 +231,7 @@ func (c *ClickHouse) Write(ctx context.Context, records []ingestion.Record) erro
 	var body bytes.Buffer
 	encoder := json.NewEncoder(&body)
 	for _, record := range records {
-		row, e := rowFor(record)
+		row, e := rowForWithCatalog(record, c.catalog)
 		if e != nil {
 			return e
 		}

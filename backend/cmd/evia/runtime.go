@@ -131,7 +131,7 @@ func httpClient() *http.Client {
 	return &http.Client{Transport: transport, Timeout: 35 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 func sinkConfig(c config.Config, client *http.Client) pipeline.ClickHouseConfig {
-	return pipeline.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Client: client}
+	return pipeline.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Client: client, Catalog: c.PropertyCatalog}
 }
 func queryEngine(c config.Config, client *http.Client) (*analysis.ClickHouse, error) {
 	engine, err := analysis.NewClickHouse(analysis.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Table: "event_facts", Client: client})
