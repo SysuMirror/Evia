@@ -356,8 +356,8 @@ class ClickHouseProbe:
         return self.run(sql).strip()
 
 
-def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int) -> dict:
-    validate_database(database)
+def provision_layout_tables(client: ClickHouseProbe, database: str, rows: int) -> dict[str, str]:
+    """Create and load the four-layout probe tables; shared by the raw-read and view (G2) probes."""
     tables = {
         "legacy": "probe_legacy",
         "map": "probe_map",
@@ -422,6 +422,12 @@ def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int)
             stdin=payload,
         )
         client.run(f"OPTIMIZE TABLE {database}.{table} FINAL")
+    return tables
+
+
+def build_probe(client: ClickHouseProbe, database: str, rows: int, repeats: int) -> dict:
+    validate_database(database)
+    tables = provision_layout_tables(client, database, rows)
 
     # Semantic equivalence check before any physical measurement.
     expected_filter = str(sum(1 for i in range(rows) if i % NUMERIC_DOMAIN > 50))
