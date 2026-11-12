@@ -8,6 +8,7 @@ export type WorkspaceSection =
   | 'analysis'
   | 'saved-analyses'
   | 'dashboards'
+  | 'reports'
   | 'machine-access'
   | 'governance'
   | 'erasure'
@@ -104,6 +105,12 @@ const paths: Record<WorkspaceSection, ReactNode> = {
     <>
       <path d="M6 3h12a2 2 0 0 1 2 2v16l-8-4-8 4V5a2 2 0 0 1 2-2Z" />
       <path d="M8 12V9m4 3V6m4 6v-2" />
+    </>
+  ),
+  reports: (
+    <>
+      <path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3-7 3V5a2 2 0 0 1 2-2Z" />
+      <path d="M9.5 9h5M9.5 13h5M9.5 17h3" />
     </>
   ),
 };

@@ -1,0 +1,64 @@
+.report-intro {
+  margin: 0 0 12px;
+}
+
+.report-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.report-form-errors {
+  margin-bottom: 12px;
+}
+
+.report-form-errors ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.report-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-sections-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-section-row {
+  display: grid;
+  grid-template-columns: 64px minmax(160px, 1.2fr) minmax(180px, 1fr) minmax(200px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-order {
+  color: var(--evia-text-muted, #5b6472);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.report-cell-description {
+  margin-top: 2px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .report-section-row {
+    grid-template-columns: 1fr;
+  }
+}
