@@ -25,59 +25,18 @@ func dedicatedEquivalenceCatalog(t *testing.T) *propertycatalog.Catalog {
 	return catalog
 }
 
-// dedicatedDatabase provisions the full schema, adds the catalog's slot
-// columns and recreates the view so the winning tuple carries them. This is
-// the test-only projection of the future slot-view migration.
+// dedicatedDatabase provisions the full schema and applies the production
+// migration generator's output, so the test exercises the exact DDL an
+// operator would obtain from evia-catalog-migration rather than a hand-built
+// test-only view.
 func dedicatedDatabase(t *testing.T, catalog *propertycatalog.Catalog) *ClickHouse {
 	t.Helper()
 	client := clickHouseDatabase(t)
 	for _, ddl := range catalog.SlotDDL() {
 		chExec(t, client, ddl)
 	}
-	columns := catalog.Columns()
-	projections := ""
-	tupleSlots := ""
-	for index, column := range columns {
-		projections += ",\n    fact." + itoa(30+index) + " AS " + column
-		tupleSlots += ", " + column
-	}
-	view := "CREATE OR REPLACE VIEW event_facts AS " +
-		"SELECT project_id, environment, source_id, event_id," +
-		" fact.1 AS event_key, fact.2 AS schema_version, fact.3 AS release_revision," +
-		" fact.4 AS occurred_at, fact.5 AS event_time, fact.6 AS received_at, fact.7 AS canonical_hash," +
-		" fact.8 AS uid, fact.9 AS anonymous_id, fact.10 AS session_id, fact.11 AS tab_id, fact.12 AS sequence," +
-		" fact.13 AS page_view_id, fact.14 AS source_page_view_id, fact.15 AS navigation_id, fact.16 AS operation_id," +
-		" fact.17 AS route_name, fact.18 AS route_template, fact.19 AS source_module, fact.20 AS navigation_type," +
-		" fact.21 AS previous_page_view_id, fact.22 AS sdk_name, fact.23 AS sdk_version, fact.24 AS context_json," +
-		" fact.25 AS properties_json, fact.26 AS source_kind, fact.27 AS property_layout_version," +
-		" fact.28 AS property_tokens, fact.29 AS dedicated_layout_version" + projections +
-		" FROM (SELECT project_id, environment, source_id, event_id," +
-		" argMin(tuple(event_key, schema_version, release_revision," +
-		" coalesce(occurred_at_precise, toDateTime64(occurred_at, 9, 'UTC'))," +
-		" coalesce(event_time_precise, toDateTime64(event_time, 9, 'UTC'))," +
-		" received_at, canonical_hash, uid, anonymous_id, session_id, tab_id, sequence, page_view_id," +
-		" source_page_view_id, navigation_id, operation_id, route_name, route_template, source_module," +
-		" navigation_type, previous_page_view_id, sdk_name, sdk_version, context_json, properties_json, source_kind," +
-		" property_layout_version, property_tokens, dedicated_layout_version" + tupleSlots + ")," +
-		" tuple(received_at, canonical_hash, coalesce(occurred_at_precise, toDateTime64(occurred_at, 9, 'UTC'))," +
-		" coalesce(event_time_precise, toDateTime64(event_time, 9, 'UTC')))) AS fact" +
-		" FROM event_facts_raw GROUP BY project_id, environment, source_id, event_id)"
-	chExec(t, client, view)
+	chExec(t, client, catalog.ViewDDL())
 	return client
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [4]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
 }
 
 // dedicatedFactRow enriches a fixture row with the catalog marker and the
