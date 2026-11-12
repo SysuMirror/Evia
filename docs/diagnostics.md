@@ -14,7 +14,7 @@
 
 ### Collection budget
 
-`budget` is present only when collection is enabled. It combines a live Redis `Ping` with the exact configured policy snapshot from `budget.Limiter.SnapshotPolicies`: the default rate/burst and one effective policy per supported environment, marking explicit overrides. A failed ping renders status `unavailable` with code `DIAGNOSTICS_BUDGET_UNAVAILABLE` while still returning the configured policy. With collection disabled the section renders `disabled` and performs no Redis I/O.
+`budget` is present only when collection is enabled. It combines a live Redis `Ping` with the exact configured policy snapshot from `budget.Limiter.SnapshotPolicies`: the default rate/burst and one effective policy per supported environment, marking explicit overrides. Owner-managed overrides are persisted and published through the quota management API described in [quotas.md](quotas.md). A failed ping renders status `unavailable` with code `DIAGNOSTICS_BUDGET_UNAVAILABLE` while still returning the configured policy. With collection disabled the section renders `disabled` and performs no Redis I/O.
 
 ### Pipeline readiness
 
