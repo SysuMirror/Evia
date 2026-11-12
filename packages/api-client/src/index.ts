@@ -51,6 +51,13 @@ export type Diagnostics = components['schemas']['Diagnostics'];
 export type CollectionQuota = components['schemas']['CollectionQuota'];
 export type CollectionQuotaInput = components['schemas']['CollectionQuotaInput'];
 export type TypeScriptArtifact = components['schemas']['TypeScriptArtifact'];
+export type Report = components['schemas']['Report'];
+export type ReportInput = components['schemas']['ReportInput'];
+export type ReportList = components['schemas']['ReportList'];
+export type ReportSection = components['schemas']['ReportSection'];
+export type ReportSectionInput = components['schemas']['ReportSectionInput'];
+export type ReportDefinition = components['schemas']['ReportDefinition'];
+export type ReportDefinitionInput = components['schemas']['ReportDefinitionInput'];
 // The generator exposes JSON Schema's annotation as a property; it is not wire data.
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
@@ -1198,4 +1205,61 @@ export const api = {
   // Relative capability path; callers resolve it against their API origin and
   // fetch it directly with the one-time token, without session headers.
   exportDownloadPath: (token: string) => `/api/v1/exports/downloads/${encodeURIComponent(token)}`,
+  listReports: (
+    projectID: string,
+    environment: ReportInput['environment'],
+    page: { cursor?: string; limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    request<ReportList>(
+      `${projectPath(projectID)}/reports${catalogQuery({
+        environment,
+        cursor: page.cursor,
+        limit: page.limit,
+      })}`,
+      { signal },
+    ),
+  createReport: (
+    projectID: string,
+    body: ReportInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<Report>(`${projectPath(projectID)}/reports`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'If-Match': '"0"', 'Idempotency-Key': idempotencyKey },
+    }),
+  getReport: (projectID: string, reportID: string, signal?: AbortSignal) =>
+    request<Report>(`${projectPath(projectID)}/reports/${encodeURIComponent(reportID)}`, {
+      signal,
+    }),
+  updateReport: (
+    projectID: string,
+    reportID: string,
+    body: ReportInput,
+    expectedRevision: number,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<Report>(`${projectPath(projectID)}/reports/${encodeURIComponent(reportID)}`, {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+      headers: {
+        'If-Match': `"${expectedRevision}"`,
+        'Idempotency-Key': idempotencyKey,
+      },
+    }),
+  deleteReport: (projectID: string, reportID: string, csrf: string, signal?: AbortSignal) =>
+    request<void>(`${projectPath(projectID)}/reports/${encodeURIComponent(reportID)}`, {
+      method: 'DELETE',
+      csrf,
+      signal,
+    }),
 };

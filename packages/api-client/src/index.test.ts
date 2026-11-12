@@ -1303,3 +1303,79 @@ test('release typescript artifact read encodes the nested release path', async (
   controller.abort();
   assert.equal((init as RequestInit).signal?.aborted, true);
 });
+
+test('reports lifecycle encodes scope, revision, idempotency and cursor', async () => {
+  const report = {
+    report_id: '66666666-6666-4666-8666-666666666666',
+    project_id: 'p',
+    environment: 'development',
+    revision: 1,
+    definition: {
+      title: '周报',
+      description: '合成说明',
+      sections: [
+        {
+          section_id: '77777777-7777-4777-8777-777777777777',
+          reading_order: 1,
+          section_title: '第一章',
+          analysis_id: '44444444-4444-4444-8444-444444444444',
+          analysis_version: 1,
+        },
+      ],
+    },
+    created_at: '2026-11-12T00:00:00Z',
+    updated_at: '2026-11-12T00:00:00Z',
+  };
+  const fetch = respond(200, report);
+  const input = {
+    environment: 'development' as const,
+    definition: {
+      title: '周报',
+      description: '合成说明',
+      sections: [
+        {
+          reading_order: 1,
+          section_title: '第一章',
+          analysis_id: '44444444-4444-4444-8444-444444444444',
+          analysis_version: 1,
+        },
+      ],
+    },
+  };
+  await api.listReports('p', 'development', { cursor: 'cur', limit: 20 });
+  await api.createReport('p', input, 'create-key', 'csrf');
+  await api.getReport('p', report.report_id);
+  const updated = await api.updateReport('p', report.report_id, input, 2, 'update-key', 'csrf');
+  const urls = fetch.mock.calls.map((call) => call.arguments[0]);
+  assert.equal(urls[0], '/api/v1/projects/p/reports?environment=development&cursor=cur&limit=20');
+  assert.equal(urls[1], '/api/v1/projects/p/reports');
+  assert.equal(urls[2], '/api/v1/projects/p/reports/66666666-6666-4666-8666-666666666666');
+  assert.equal(urls[3], '/api/v1/projects/p/reports/66666666-6666-4666-8666-666666666666');
+  const postInit = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(postInit.method, 'POST');
+  const postHeaders = postInit.headers as Headers;
+  assert.equal(postHeaders.get('If-Match'), '"0"');
+  assert.equal(postHeaders.get('Idempotency-Key'), 'create-key');
+  const patchInit = fetch.mock.calls[3]!.arguments[1] as RequestInit;
+  assert.equal(patchInit.method, 'PATCH');
+  const patchHeaders = patchInit.headers as Headers;
+  assert.equal(patchHeaders.get('If-Match'), '"2"');
+  assert.equal(patchHeaders.get('Idempotency-Key'), 'update-key');
+  assert.equal(patchHeaders.get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(patchInit.body as string), input);
+  assert.equal(updated.report_id, report.report_id);
+});
+
+test('report delete sends CSRF and accepts an empty 204 body', async () => {
+  const fetch = mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 204, headers: { 'X-Request-ID': 'request-1' } }),
+  );
+  const result = await api.deleteReport('p', '66666666-6666-4666-8666-666666666666', 'csrf');
+  assert.equal(result, undefined);
+  const [url, init] = fetch.mock.calls[0]!.arguments;
+  assert.equal(url, '/api/v1/projects/p/reports/66666666-6666-4666-8666-666666666666');
+  assert.equal((init as RequestInit).method, 'DELETE');
+  assert.equal(((init as RequestInit).headers as Headers).get('X-CSRF-Token'), 'csrf');
+});
