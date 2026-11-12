@@ -2,6 +2,8 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
+**2026-11-13，专用列阶段 4c-1：events 路径端到端 reader 等价验证（真实 ClickHouse）**：在隔离库把目录槽位列加入 raw 表并重建视图（槽位作为 fact.30+ 进入同一 argMin 元组，测试专用投影，预览未来槽位视图迁移），写入带标记与逐字槽位 token 的行后，目录引擎与文档引擎对同一份数据返回逐行一致的事件结果（6 种过滤形态），零标记/空槽位的旧行经文档回退仍被命中。首次运行暴露查询类型误用（baseRequest 为 trend，走不含槽位的自建元组），改为 events 类（identityFactsSource 的 SELECT * 读视图）后通过，明确了 trend 元组追加（4c-2）是剩余前置。analysis 完整真实 CH 集成套件 62.8s 全绿。
+
 **2026-11-13，专用列阶段 4b：查询引擎目录注入（默认禁用，生产查询零变化）**：新增 `CompileWithCatalog` 承载目录，原 `Compile` 以 nil 委托保持逐字节 SQL；analysis ClickHouse 引擎持有目录（nil 规范化为禁用目录），`Execute` 走目录感知编译，`runtime.queryEngine` 传入启动目录。单测钉住：nil/未命中字段 SQL 与 Compile 逐字节一致，仅命中目录条目的字段才出现 `dedicated_layout_version` 门控且保留 map 回退与绑定参数；analysis 与 cmd `-race` 套件全绿。未配置目录时所有生产查询不变。trend 获胜元组追加与三布局端到端等价（4c）刻意排在首个槽位迁移之后——当前视图只暴露 fact.29 标记而无槽位列，无法端到端验证，不提前写未经验证的 SQL。
 
 **2026-11-13，专用列阶段 4a：reader 选择内核与 planner nil 安全接线（默认查询逐字节不变）**：新增 `analysis.selectDedicated`/`applyDedicatedTier` 纯函数，把专用列读取实现为 map/文档表达式之外的外层分支——行门控 `dedicated_layout_version=<修订号> AND <p_hex 列>!=''` 同时校验目录修订标记与非空列，命中时以合成单字段文档读取逐字 token，未命中回退顺序为 专用列→version-1 token map→权威文档。`planner.field` 经 nil 即禁用的 catalog 字段调用该层，禁用时 `applyDedicatedTier` 原样返回，现有 Compile 产出的 SQL 逐字节不变。7 项 `-race` 单测钉住门控、空字符串（两字节 token 命中）与属性缺失（零字节不命中）区分、身份匹配、回退嵌套与编码列名安全；analysis 单元套件与真实 ClickHouse 集成（62s）全绿。运行时尚未注入目录，故无任何生产查询变化，engine 注入与 trend 元组追加留给 4b。
