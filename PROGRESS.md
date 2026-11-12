@@ -2,6 +2,8 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
+**2026-11-13，专用列阶段 4c-3：确定性迁移生成器与 CLI（机械可评审的生产迁移路径）**：propertycatalog 新增 `ViewDDL`/`MigrationSQL`，固定 29 槽视图体与迁移 009 对齐，槽位列从 fact.30 起按目录列序确定性追加，等价目录无论条目顺序产出逐字节相同 SQL；新增 `evia-catalog-migration` 命令，从经评审目录 JSON 输出多语句迁移、不触碰 ClickHouse（缺失/非法 fail-closed，含单测）。集成测试的测试视图改由生成器产出（移除手写 DDL 与 itoa 辅助），真实 ClickHouse 验证完整操作员工作流：CLI 输出经 clickhouse-client --multiquery 应用、重复应用幂等、raw 与视图均出现 String 槽位列、视图可查询、临时库清理零残留；analysis 完整真实 CH 集成 64.1s 全绿。剩余：首个获批目录及其生成迁移入库 deploy/clickhouse，随后 G2/G3。
+
 **2026-11-13，专用列阶段 4c-2：trend 获胜元组追加与端到端等价（默认禁用，SQL 逐字节不变）**：`trendFactsSource` 在 WalkFields 时收集目录命中，把 `dedicated_layout_version` 与所需槽位列追加到 argMin 元组固定列之后，元组偏移永不平移；禁用目录零追加，trend SQL 与现状逐字节一致（单测钉死）。trend 直读 raw 表故不依赖视图。真实 ClickHouse 新增 `TestClickHouseDedicatedTrendMatchesDocumentTrend`：count/sum/avg/min/max、按 title 分组与 4 种过滤形态下，目录引擎与文档引擎结果逐行一致，零标记回退行同样正确；analysis 完整真实 CH 集成 63.6s 全绿。剩余 4c-3：首个获批目录、生产槽位迁移与暴露槽位的视图迁移（events 路径所需），随后 G2/G3。
 
 **2026-11-13，专用列阶段 4c-1：events 路径端到端 reader 等价验证（真实 ClickHouse）**：在隔离库把目录槽位列加入 raw 表并重建视图（槽位作为 fact.30+ 进入同一 argMin 元组，测试专用投影，预览未来槽位视图迁移），写入带标记与逐字槽位 token 的行后，目录引擎与文档引擎对同一份数据返回逐行一致的事件结果（6 种过滤形态），零标记/空槽位的旧行经文档回退仍被命中。首次运行暴露查询类型误用（baseRequest 为 trend，走不含槽位的自建元组），改为 events 类（identityFactsSource 的 SELECT * 读视图）后通过，明确了 trend 元组追加（4c-2）是剩余前置。analysis 完整真实 CH 集成套件 62.8s 全绿。
