@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/howtomakeaname/Evia/backend/internal/propertycatalog"
 	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
 )
 
@@ -21,6 +22,10 @@ type Plan struct {
 type planner struct {
 	params map[string]string
 	next   int
+	// catalog optionally enables dedicated hot-key reads. A nil or disabled
+	// catalog makes applyDedicatedTier return the map/document SQL unchanged,
+	// so the default planner emits byte-identical queries.
+	catalog *propertycatalog.Catalog
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`)
@@ -97,6 +102,10 @@ func (p *planner) field(f Field) (fieldSQL, error) {
 	hit := "(property_layout_version=1 AND mapContains(property_tokens," + encodedKey + "))"
 	doc := "if(" + hit + ",concat('{\"f\":',property_tokens[" + encodedKey + "],'}'),properties_json)"
 	keyExpr := "if(" + hit + ",'f'," + key + ")"
+	// Outer dedicated tier; a nil/disabled catalog leaves both expressions
+	// byte-identical, so existing plans and tests are unchanged until a catalog
+	// is explicitly injected through the query engine.
+	doc, keyExpr, _ = applyDedicatedTier(p.catalog, f, doc, keyExpr)
 	present := "JSONHas(" + doc + "," + keyExpr + ")"
 	jsonType := "JSONType(" + doc + "," + keyExpr + ")"
 	extract := ""
