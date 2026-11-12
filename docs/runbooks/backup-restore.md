@@ -161,6 +161,36 @@ Safety and transport notes:
   PG restore always preserves the resurrection barrier even when event facts
   are rebuilt from Kafka rather than restored.
 
+## Retention archives (archive-before-delete)
+
+The retention worker can materialize expired facts into checksummed JSONL
+artifacts before deleting them, giving every enforced deletion a recoverable
+copy. The feature is off by default and independent of the dry-run/enforcement
+switch:
+
+```sh
+EVIA_RETENTION_ENFORCEMENT_ENABLED=true \
+EVIA_ARCHIVE_ENABLED=true \
+EVIA_ARCHIVE_DIR=/var/lib/evia/archives \
+./bin/evia retention-worker
+```
+
+* `EVIA_ARCHIVE_ENABLED=true` without `EVIA_ARCHIVE_DIR` is rejected at startup.
+* On each enforced scope with candidate rows the worker first runs an archive:
+  bounded `SELECT ... FORMAT JSONEachRow` using the same bound-parameter cutoff
+  predicate as the deletion, streamed into `<manifest-id>.jsonl` (mode 0600)
+  with a running sha256 and a 256 MiB / 100,000 row ceiling.
+* A manifest row records the scope, cutoff, observed event_time window, row
+  count, artifact checksum and the triggering sweep id. Owners browse them via
+  `GET /api/v1/projects/{project_id}/archive-manifests`.
+* Fail-closed: any archive error (count failure, over-cap scope, stream error,
+  row-count drift, manifest persistence error) aborts the sweep before
+  `ALTER DELETE`, so facts are never removed without a verified copy. Empty
+  scopes produce no manifest and need no deletion.
+* Backfill (re-ingesting an archive JSONL back into ClickHouse) is planned as
+  the companion operation; until it ships, archive artifacts plus the Kafka
+  retention window are the recovery sources.
+
 ## Local container verification
 
 The development Compose stack runs PostgreSQL inside a container without a
