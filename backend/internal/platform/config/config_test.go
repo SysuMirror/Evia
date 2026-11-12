@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -290,6 +292,48 @@ func TestMetricsListenIsOptionalAndValidated(t *testing.T) {
 		if err != nil || c.MetricsListen != "127.0.0.1:19090" {
 			t.Fatalf("metrics listener not accepted for %s: %+v err=%v", command, c, err)
 		}
+	}
+}
+
+func TestPropertyCatalogDefaultsToDisabled(t *testing.T) {
+	values := runtimeValues()
+	c, err := ReadFor("ingest-worker", func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.PropertyCatalogPath != "" || c.PropertyCatalog == nil || c.PropertyCatalog.Enabled() {
+		t.Fatalf("catalog must default to a non-nil disabled catalog: %+v", c.PropertyCatalog)
+	}
+}
+
+func TestPropertyCatalogFileIsValidatedAndFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	validPath := filepath.Join(dir, "catalog.json")
+	valid := `{"revision":2,"entries":[{"event_key":"page_opened","schema_version":1,"property_key":"score","resolved_type":"integer"}]}`
+	if err := os.WriteFile(validPath, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	values := runtimeValues()
+	values["EVIA_PROPERTY_CATALOG_PATH"] = validPath
+	for _, command := range []string{"serve", "ingest-worker"} {
+		c, err := ReadFor(command, func(k string) string { return values[k] })
+		if err != nil || !c.PropertyCatalog.Enabled() || c.PropertyCatalog.Revision != 2 {
+			t.Fatalf("valid catalog not accepted for %s: %+v err=%v", command, c, err)
+		}
+	}
+
+	values["EVIA_PROPERTY_CATALOG_PATH"] = filepath.Join(dir, "missing.json")
+	if _, err := ReadFor("ingest-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("missing catalog file must fail startup closed")
+	}
+
+	invalidPath := filepath.Join(dir, "invalid.json")
+	if err := os.WriteFile(invalidPath, []byte(`{"revision":1,"entries":[{"event_key":"BAD","schema_version":1,"property_key":"k","resolved_type":"string"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	values["EVIA_PROPERTY_CATALOG_PATH"] = invalidPath
+	if _, err := ReadFor("ingest-worker", func(k string) string { return values[k] }); err == nil {
+		t.Fatal("invalid catalog content must fail startup closed")
 	}
 }
 

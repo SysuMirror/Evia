@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
+	"github.com/howtomakeaname/Evia/backend/internal/propertycatalog"
 )
 
 type Kafka struct {
@@ -57,6 +58,13 @@ type Config struct {
 	// a wedged shutdown from hanging the supervisor; zero keeps the legacy
 	// immediate-shutdown behavior for non-serve processes.
 	ShutdownDelay time.Duration
+	// PropertyCatalogPath optionally points to a versioned hot-key catalog
+	// JSON file. Empty disables dedicated property columns and leaves every
+	// read on the authoritative document. PropertyCatalog holds the parsed,
+	// immutable catalog (never nil after a successful Read) so runtime code
+	// needs no nil check.
+	PropertyCatalogPath string
+	PropertyCatalog     *propertycatalog.Catalog
 }
 
 var (
@@ -98,6 +106,20 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		if _, port, err := net.SplitHostPort(c.MetricsListen); err != nil || !validPort(port) {
 			return c, errors.New("EVIA_METRICS_LISTEN must be host:port with a valid TCP port or empty to disable")
 		}
+	}
+	c.PropertyCatalogPath = get("EVIA_PROPERTY_CATALOG_PATH")
+	if c.PropertyCatalogPath == "" {
+		// Default-off: no file means the disabled catalog, so deployments
+		// without dedicated columns keep their exact current behavior.
+		c.PropertyCatalog = propertycatalog.Disabled()
+	} else {
+		// Fail closed: an unreadable or invalid catalog must stop startup
+		// instead of silently downgrading every hot-key read to the document.
+		catalog, err := propertycatalog.LoadFile(c.PropertyCatalogPath)
+		if err != nil {
+			return c, err
+		}
+		c.PropertyCatalog = catalog
 	}
 	if command == "serve" {
 		if err = c.readHTTP(get); err != nil {
