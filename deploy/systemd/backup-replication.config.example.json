@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "state_dir": "/var/lib/evia/backup/replication",
+  "store": {
+    "endpoint": "https://s3.example-corp.internal",
+    "region": "cn-north-1",
+    "bucket": "evia-offsite-backup",
+    "access_key_env": "EVIA_S3_ACCESS_KEY",
+    "secret_key_env": "EVIA_S3_SECRET_KEY",
+    "path_style": true,
+    "insecure_http": false,
+    "timeout_seconds": 120
+  },
+  "sources": [
+    {
+      "name": "control-pg",
+      "kind": "postgres",
+      "directory": "/var/lib/evia/backup/postgres",
+      "prefix": "postgres/",
+      "retention_keep": 14,
+      "verify": "download"
+    },
+    {
+      "name": "events-ch",
+      "kind": "clickhouse",
+      "directory": "/var/lib/evia/backup/clickhouse",
+      "prefix": "clickhouse/",
+      "retention_keep": 14,
+      "verify": "download"
+    }
+  ]
+}

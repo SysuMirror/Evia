@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily Evia offsite backup replication
+Documentation=https://github.com/howtomakeaname/Evia/blob/main/docs/runbooks/backup-restore.md
+
+[Timer]
+# Run after the local drill window so only verified artifacts are copied.
+# Persistent=true catches up after downtime instead of skipping the day.
+OnCalendar=*-*-* 03:23:00
+RandomizedDelaySec=900
+Persistent=true
+Unit=evia-backup-replication.service
+
+[Install]
+WantedBy=timers.target

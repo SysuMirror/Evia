@@ -22,5 +22,6 @@
       "timeout_seconds": 600,
       "retention_keep": 7
     }
-  ]
+  ],
+  "replication_config": "/etc/evia/backup-replication.json"
 }

@@ -1,0 +1,27 @@
+[Unit]
+Description=Evia offsite backup replication to S3-compatible storage
+Documentation=https://github.com/howtomakeaname/Evia/blob/main/docs/runbooks/backup-restore.md
+After=network-online.target evia-backup-drill.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Object-store credentials live in this EnvironmentFile; the config JSON
+# references the variable names only, so no secret reaches the command line.
+EnvironmentFile=/etc/evia/backup-replication.env
+ExecStartPre=/usr/bin/python3 /opt/evia/tooling/backup/replicate.py validate --config /etc/evia/backup-replication.json
+ExecStart=/usr/bin/python3 /opt/evia/tooling/backup/replicate.py run-once --config /etc/evia/backup-replication.json
+# A failed upload or checksum mismatch must fail the unit and page on-call.
+SuccessExitStatus=0
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/evia/backup
+ReadOnlyPaths=/etc/evia /opt/evia
+
+[Install]
+WantedBy=multi-user.target
