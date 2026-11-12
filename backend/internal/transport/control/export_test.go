@@ -201,6 +201,45 @@ func TestExportDownloadRedeemsAndStreamsArtifact(t *testing.T) {
 	governanceStatus(t, w, http.StatusForbidden)
 }
 
+func TestExportDownloadUsesCsvMediaType(t *testing.T) {
+	dir := t.TempDir()
+	downloads, err := exporting.NewFileArtifactStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactPath := filepath.Join(dir, exportJobID+".csv")
+	payload := "subject,count\nuser1,2\n"
+	if err = os.WriteFile(artifactPath, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := sampleExportJob()
+	job.Format = exporting.FormatCSV
+	job.ArtifactPath = &artifactPath
+	svc := &fakeExportService{redeemJob: job}
+	_, handler := exportAPI(t, svc, downloads)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/exports/downloads/"+strings.Repeat("7", 64), nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	// The artifact stream is not the JSON envelope, so assert the shared
+	// boundary headers directly instead of using governanceStatus.
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("X-Request-ID") == "" {
+		t.Fatalf("missing shared response boundary: %v", w.Header())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Fatalf("csv content type wrong: %s", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, exportJobID+".csv") {
+		t.Fatalf("csv filename extension wrong: %s", cd)
+	}
+	if w.Body.String() != payload {
+		t.Fatalf("streamed csv payload mismatch: %q", w.Body.String())
+	}
+}
+
 func TestExportRoutesRequireSession(t *testing.T) {
 	svc := &fakeExportService{job: sampleExportJob()}
 	_, handler := exportAPI(t, svc, nil)

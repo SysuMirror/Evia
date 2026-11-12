@@ -42,6 +42,7 @@ type exportPosition struct {
 type exportRequestBody struct {
 	Name             string          `json:"name"`
 	Environment      string          `json:"environment"`
+	Format           string          `json:"format,omitempty"`
 	Query            json.RawMessage `json:"query"`
 	ArtifactExpiryAt *string         `json:"artifact_expiry_at,omitempty"`
 }
@@ -137,6 +138,7 @@ func (a *ExportAPI) create(w http.ResponseWriter, r *http.Request, actor authori
 		Environment:    body.Environment,
 		ActorID:        actor.ID,
 		Name:           body.Name,
+		Format:         body.Format,
 		Request:        request,
 		IdempotencyKey: key,
 		RequestHash:    hash,
@@ -257,6 +259,16 @@ func (a *ExportAPI) grant(w http.ResponseWriter, r *http.Request, actor authoriz
 	})
 }
 
+// artifactMediaType maps a persisted export format to its streaming media
+// type and filename extension. The database CHECK constrains the vocabulary;
+// unknown values fall back to json rather than failing an authorized download.
+func artifactMediaType(format string) (string, string) {
+	if format == exporting.FormatCSV {
+		return "text/csv; charset=utf-8", ".csv"
+	}
+	return "application/json; charset=utf-8", ".json"
+}
+
 // download redeems a one-time grant and streams the JSON artifact. The token
 // is the sole credential; responses carry no-store headers and a sha256
 // checksum so clients can verify the materialized output.
@@ -277,8 +289,9 @@ func (a *ExportAPI) download(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer handle.Close()
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+job.JobID+".json\"")
+	contentType, extension := artifactMediaType(job.Format)
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+job.JobID+extension+"\"")
 	if job.ArtifactSHA256 != nil {
 		w.Header().Set("X-Content-SHA256", *job.ArtifactSHA256)
 	}

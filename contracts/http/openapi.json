@@ -17715,6 +17715,14 @@
               "production"
             ]
           },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv"
+            ],
+            "default": "json"
+          },
           "query": {
             "$ref": "../query/query-request.schema.json"
           },
@@ -17759,7 +17767,8 @@
           "format": {
             "type": "string",
             "enum": [
-              "json"
+              "json",
+              "csv"
             ]
           },
           "state": {

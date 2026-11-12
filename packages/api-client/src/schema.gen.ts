@@ -1761,6 +1761,11 @@ export interface components {
             name: string;
             /** @enum {string} */
             environment: "development" | "staging" | "production";
+            /**
+             * @default json
+             * @enum {string}
+             */
+            format: "json" | "csv";
             query: components["schemas"]["query-request.schema"];
             /** Format: date-time */
             artifact_expiry_at?: string | null;
@@ -1774,7 +1779,7 @@ export interface components {
             environment: "development" | "staging" | "production";
             name: string;
             /** @enum {string} */
-            format: "json";
+            format: "json" | "csv";
             /** @enum {string} */
             state: "queued" | "running" | "completed" | "failed" | "cancelled";
             error_code: string | null;

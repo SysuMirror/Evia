@@ -465,6 +465,7 @@ type ExportGrant struct {
 type ExportInput struct {
 	Name             string       `json:"name"`
 	Environment      string       `json:"environment"`
+	Format           *string      `json:"format,omitempty"`
 	Query            QueryRequest `json:"query"`
 	ArtifactExpiryAt *string      `json:"artifact_expiry_at,omitempty"`
 }
