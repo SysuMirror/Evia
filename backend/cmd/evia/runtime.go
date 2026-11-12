@@ -33,6 +33,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
+	"github.com/howtomakeaname/Evia/backend/internal/quotas"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/howtomakeaname/Evia/backend/internal/retention"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
@@ -250,6 +251,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	}
 	var collectionLimiter *budget.Limiter
 	var admissionRecorder *admissionstats.Recorder
+	var quotaAdapter *quotaRuntime
 	if c.CollectionEnabled {
 		limiter, err := budget.New(c.Budget)
 		if err != nil {
@@ -273,6 +275,23 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 				result = errors.Join(result, stageError("admission stats shutdown", err))
 			}
 		}()
+		quotaService := quotas.NewService(store)
+		quotaCtx, quotaCancel := context.WithTimeout(ctx, 5*time.Second)
+		persisted, err := quotaService.List(quotaCtx)
+		quotaCancel()
+		if err != nil {
+			return stageError("collection quota override load", err)
+		}
+		overrideMap := make(map[budget.Scope]budget.Policy, len(persisted))
+		for _, row := range persisted {
+			overrideMap[budget.Scope{ProjectID: row.ProjectID, Environment: row.Environment}] = budget.Policy{Rate: row.Rate, Burst: row.Burst}
+		}
+		if err = limiter.ReplacePolicies(c.Budget.Default, overrideMap); err != nil {
+			return stageError("collection quota override publish", err)
+		}
+		quotaAdapter = newQuotaRuntime(limiter, c.Budget.Default, overrideMap)
+		api.Quotas = quotaService
+		api.QuotaRuntime = quotaAdapter
 		producer, err := pipeline.NewKafkaProducer(kafkaConfig(c, "collect"))
 		if err != nil {
 			return stageError("Kafka producer configuration", err)
