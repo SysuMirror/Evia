@@ -102,6 +102,7 @@ The probe materialized two keys out of twenty-five. A production table cannot gr
 - A row-level marker `dedicated_layout_version UInt8 DEFAULT 0` records the catalog revision at write time. The reader gate is marker **and** non-empty token, never the column alone: an empty string means "not materialized on this row" (old part, pre-catalog key), while a legitimate empty-string property still stores the two-byte token `""`.
 - Migration 009 recreates `event_facts` appending the marker and slots as fact.29 onward; the existing 28 slots, winner weight and ordering are untouched, so applying it alone cannot change a served result, exactly as 007 did for the map.
 - Column deprecation is two-phase (stop writes with reader fallback verified, then a later removal migration); no slot is reused for a different property key.
+- Implementation note (2026-11-13): migration 008 landed as marker-only. Because no production hot-key catalog has been approved, inventing slot columns now would bake synthetic keys into the schema; the first slot-column migration is therefore deferred to stage 3b and must name the exact encoded columns of the first approved catalog.
 
 ### D4. Writer changes
 
@@ -133,7 +134,8 @@ If re-gates justify it: a Go-driven, partition-bounded rewrite using the verifie
 0. This design reviewed; D1/D2 decisions signed off.
 1. ~~Pure-Go catalog package (bounded config, encoded naming, validation) with unit tests; no ClickHouse change.~~ Done 2026-11-13 as `internal/propertycatalog`: eight-slot cap, UInt8 revision bounds, identity dedupe, shared-column resolution and config parsing with 12 race-tested unit cases; no writer/reader wiring yet.
 2. ~~G1 probe extension and verdict documentation (tooling only).~~ Done 2026-11-12; verdict recorded in the verification doc and D2.
-3. Migrations 008/009; writer materialization behind the catalog; storage integration tests pin byte-identical tokens and mixed-version rows. No reader change.
+3a. ~~Marker migration and config plumbing.~~ Done 2026-11-13: migration 008 adds only `dedicated_layout_version UInt8 DEFAULT 0` (metadata-only, no slot columns until the first catalog is approved), 009 appends it as view fact.29 with the winner tuple unchanged; `EVIA_PROPERTY_CATALOG_PATH` loads the catalog fail-closed at startup, empty means the non-nil disabled catalog and zero behavior change. Real-ClickHouse integration tests pin the UInt8 types, structural default 0 and mixed-winner marker isolation; full analysis and pipeline integration suites stay green.
+3b. Pending: slot-column migrations per the first approved catalog revision, then writer materialization behind the catalog with byte-identical token and mixed-version tests. No reader change.
 4. Reader dedicated branch with map/document fallback; extended equivalence and view tests; full `make check`.
 5. G2 view-layer measurements on the isolated 512 MiB environment.
 6. Backfill procedure and drill, only after explicit approval; then G3 and the go/no-go for the reader switch.
