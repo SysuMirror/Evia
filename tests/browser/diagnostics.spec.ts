@@ -126,7 +126,8 @@ test('member reads the collection diagnostics workspace', async ({ page }) => {
 
   const budget = page.locator('section[aria-label="采集预算"]');
   await expect(budget.getByText('项目覆盖')).toBeVisible();
-  await expect(budget.getByText('2000')).toBeVisible();
+  await expect(budget.getByText('60')).toBeVisible();
+  await expect(budget.getByText('5')).toBeVisible();
 
   const pipeline = page.locator('section[aria-label="管道就绪探针"]');
   await expect(pipeline.getByText('1 分钟')).toBeVisible();
