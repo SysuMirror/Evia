@@ -158,6 +158,25 @@ python3 tooling/ha/zipf_distribution_drill.py
 python3 -m unittest tooling.ha.test_zipf_distribution_drill
 ```
 
-实测两轮：500 身份全覆盖、观测斜率 -1.0295（理论 -1.0，容差 0.15）、最热/最冷 589/1、抽样计数与 Top-5 顺序精确、三类查询 p95 26-30ms，详见[验证记录](../verification/zipf-distribution-2026-11-13.md)。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十个演练）。
+实测两轮：500 身份全覆盖、观测斜率 -1.0295（理论 -1.0，容差 0.15）、最热/最冷 589/1、抽样计数与 Top-5 顺序精确、三类查询 p95 26-30ms，详见[验证记录](../verification/zipf-distribution-2026-11-13.md)。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十一个演练）。
 
 指数支持生产拟合入口：`--exponent s`（同步注入 Go 侧 `EVIA_TEST_ZIPF_EXPONENT`），闭集 `(0, 3]`，默认 1.0，非法值在任何网络检查前 fail-closed；评估器按摘要中的指数自动对齐理论斜率，容差不变。固定 4000 事件/500 身份负载下，Hamilton 全覆盖成立域为 s ≤ 1.1805（二分数值证明），更陡指数会在深尾产生零席位并由 Go 断言 fail-closed，需先扩大事件总量。dev 栈 512 MiB tmpfs 上连续演练曾因异步 `DROP DATABASE` 延迟删除与系统日志膨胀耗尽磁盘（NOT_ENOUGH_SPACE），共享测试助手已改为 `DROP DATABASE ... SYNC`；连续演练前仍应核对 `system.disks` 空闲空间与 `metadata_dropped` 为空。生产验收应先从真实事件采样估计 s，再以同一演练重放，当前实测指数仍为人为选取。
+
+## 长保留期强制回收容量
+
+保留策略与执行器的功能正确性已有单元与小样本集成测试，本演练补上强制回收的物理容量与多租户隔离证据：真实 `SweepWorker` 驱动真实 `RetentionExecutor`，对 3 项目 × 2 环境共 6 个策略作用域（各 1500 行过期 + 400 行近期）加 1 个无策略对照（800 行过期）共 12200 行数据，依次执行 dry-run、enforce 与幂等重扫。
+
+运行：
+
+```sh
+EVIA_TEST_CLICKHOUSE_USERNAME=evia EVIA_TEST_CLICKHOUSE_PASSWORD=*** \
+python3 tooling/ha/retention_enforcement_drill.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.ha.test_retention_enforcement_drill
+```
+
+实测两轮（数字逐值一致）：dry-run 候选 9000 且零修改；强制删除 9000、近期 2400 行与无策略 800 行逐行保留、`system.mutations` 6/6 同步完成；重扫零新 mutation、表字节零漂移；物理回收 148,188 字节，50ms 并发轮询实测旧/新 part 共存峰值达基线 **6.36 倍**——同步 mutation 重写全部命中 part，小磁盘排期必须按作用域体积预留 headroom 并错峰执行。`system.part_log` 受缓冲刷新影响仅作软证据，权威门控为 `system.mutations` 与表级字节；磁盘全局空闲因系统表噪声不参与断言，详见[验证记录](../verification/retention-enforcement-2026-11-14.md)。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十一个演练）。12200 行单节点结果不外推 TB 级生产表，大规模 headroom 需在独立基准盘重测。
