@@ -98,9 +98,12 @@ job starts only Kafka and ClickHouse, uses fresh private credentials and runs th
 same race-enabled target. A workflow definition does not prove a hosted CI run
 passed; record the actual run with the module evidence.
 
-`make budget-test` selects `./internal/platform/budget` with the integration tag
-and race detector, and requires `EVIA_TEST_REDIS_URL`. Its independent CI matrix
-job starts only Redis and verifies the atomic budget against that real service.
+`make budget-test` selects `./internal/platform/budget` and `./internal/ingestion`
+with the integration tag and race detector, and requires `EVIA_TEST_REDIS_URL`.
+Its independent CI matrix job starts only Redis and verifies the atomic budget
+against that real service, including the full Collector admission chain. Redis
+Cluster and Sentinel baseline tests skip with a stated reason when their topology
+variables are absent; the HA drills supply them and run those tests explicitly.
 
 `make query-test` selects `./internal/analysis` with the integration tag and race
 detector, requires the ClickHouse URL/username/password and creates isolated

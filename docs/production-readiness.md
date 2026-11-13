@@ -1,6 +1,6 @@
 # 生产就绪证据索引（Production Readiness Evidence Index）
 
-更新日期：2026-11-14 UTC。本文件把分散在 `docs/verification/` 的 33 份验证
+更新日期：2026-11-14 UTC。本文件把分散在 `docs/verification/` 的 37 份验证
 记录按「推动到正式生产规模使用」的硬阻塞主题归并，明确每个主题：已由
 哪些真实依赖证据闭环、还差什么、剩余项为何不能在单机环境完成。它是
 目标推进的导航，不替代各验证记录的原始数据；结论以被引用记录为准。
@@ -33,6 +33,7 @@
 | 积压恢复 | [backlog-recovery](verification/backlog-recovery-2026-11-13.md)：故障期不提交偏移、恢复后去重视图计数精确 |
 | 混合读写 | [mixed-read-write](verification/mixed-read-write-2026-11-13.md)：600 事件精确一次、并发读零失败 |
 | 身份分布 | [long-tail](verification/long-tail-distribution-2026-11-13.md)、[zipf](verification/zipf-distribution-2026-11-13.md)：倾斜/幂律分布计数精确，Zipf 开放生产拟合入口 |
+| 采集预算准入 | [budget-admission](verification/budget-admission-collector-2026-11-14.md)：真实 Redis 经 Collector 耗尽即 Limited 且不入队、作用域隔离、回补有界恢复，两轮 -race 零残留 |
 | 准备度套件 | [ha-readiness-suite](verification/ha-readiness-suite-2026-11-13.md)：11 个演练统一注册表、声明式前置、0/1/2 退出码 |
 
 **待运营决策**：Zipf 指数的真实生产拟合值（需真实事件采样，固定负载
