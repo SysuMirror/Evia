@@ -121,3 +121,22 @@ python3 -m unittest tooling.ha.test_mixed_workload_drill
 ```
 
 实测两轮（单 broker、单 CH、600 事件约 5 秒写入、4 并发读）：读样本 974/993 个零失败、p50 10ms、p95 66/67ms、峰值查询内存约 14.3 MiB、视图计数严格等于生产数、四个读协程计数全部单调非降，详见[验证记录](../verification/mixed-read-write-2026-11-13.md)。该结果是存储层小规模基线，读绕过公开 API（鉴权/排队/异步轮询），端到端延迟仍以 514/728 矩阵为准；高基数长尾分布与多副本拓扑容量仍需独立专项。
+
+## 高基数长尾身份分布
+
+混合读写演练使用接近均匀的身份分布，长尾演练补上真实倾斜：4000 个事件按确定性规则分布到 800 个身份——20 个热点身份吸收 80% 事件（各 160 个），780 个稀疏身份轮转其余 20%（最稀疏仅 1 个）。Go 装载器与 Python 评估器共享同一零基分配规则，逐身份计数与 `uniqExact` 基数都做精确断言。
+
+运行：
+
+```sh
+EVIA_TEST_CLICKHOUSE_USERNAME=evia EVIA_TEST_CLICKHOUSE_PASSWORD=*** \
+python3 tooling/ha/long_tail_drill.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.ha.test_long_tail_drill
+```
+
+实测两轮：800 身份全覆盖、观测热点份额 0.8、抽样热点/稀疏身份计数与分布期望逐一精确、`uniqExact(uid)=800`、热点/深尾/基数三类查询 p95 均 31-34ms，详见[验证记录](../verification/long-tail-distribution-2026-11-13.md)。该倾斜是确定性两段均匀轮转（头尾比 160），复现数量级差异但不等同真实 Zipf；单机小数据结果不外推多节点，真实分布压测需先从生产事件采样。
