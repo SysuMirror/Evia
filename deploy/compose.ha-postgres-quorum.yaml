@@ -1,0 +1,180 @@
+# Standalone PostgreSQL synchronous-quorum topology for the split-brain drill.
+#
+# Ephemeral by design: all three data directories live on named volumes and
+# the drill always removes the project with `down -v`. Published ports stay
+# on loopback and the topology runs with a hard-coded drill password and no
+# TLS, so it must never be used as a production template; production
+# deployments require managed credentials, TLS and cross-failure-domain
+# placement.
+#
+# One primary and two standbys use quorum-based synchronous replication
+# (`ANY 1`): once both standbys stream, the drill enables
+# synchronous_standby_names at runtime so a commit returns only after at
+# least one standby has flushed the WAL. Enabling it at first boot would
+# deadlock initial database creation against standbys that do not exist
+# yet. Each standby pins its replication application_name so the
+# synchronous_standby_names list can address it explicitly. wal_log_hints
+# stays on so pg_rewind can reattach a divergent old primary after a real
+# network partition, and wal_keep_size retains the pre-divergence WAL that
+# pg_rewind has to reread (production would use a WAL archive instead).
+#
+# Static IPs on an isolated bridge keep addresses stable across container
+# recreations. Shell variables inside command blocks are written with $$ so
+# Docker Compose passes a single $ through to the container shell instead of
+# interpolating them on the host. The environment: block uses normal host
+# interpolation.
+services:
+  pg-primary:
+    image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+    environment:
+      POSTGRES_USER: evia
+      POSTGRES_PASSWORD: evia-ha-drill
+      POSTGRES_DB: evia
+      # standby-join is used by the drill after pg_rewind has prepared the
+      # data directory; the default primary role runs the writable node.
+      EVIA_PG_ROLE: ${EVIA_HA_PG_ROLE_PRIMARY:-primary}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ "$$EVIA_PG_ROLE" = "standby-join" ]; then
+          exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on -c wal_keep_size=256MB
+        fi
+        # synchronous_standby_names is applied later by the drill via
+        # ALTER SYSTEM + pg_reload_conf: setting it at first boot would make
+        # CREATE DATABASE wait for a standby that cannot exist yet.
+        exec docker-entrypoint.sh postgres \
+          -c wal_level=replica \
+          -c max_wal_senders=10 \
+          -c hot_standby=on \
+          -c wal_log_hints=on \
+          -c wal_keep_size=256MB \
+          -c synchronous_commit=on
+    ports:
+      - "127.0.0.1:15440:5432"
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    volumes:
+      - pg-quorum-primary-data:/var/lib/postgresql/data
+    configs:
+      - source: pg-quorum-hba
+        target: /docker-entrypoint-initdb.d/10-replication-hba.sh
+        mode: 0555
+    networks:
+      ha-pg-quorum-net:
+        ipv4_address: 172.31.81.10
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U evia -d evia && test \"$$(psql -U evia -d evia -tAc 'SELECT pg_is_in_recovery()')\" = f"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  pg-standby-a:
+    image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+    environment:
+      POSTGRES_USER: evia
+      POSTGRES_PASSWORD: evia-ha-drill
+      POSTGRES_DB: evia
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ -f "$$PGDATA/standby.signal" ]; then
+          exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on -c wal_keep_size=256MB
+        fi
+        until pg_isready -h 172.31.81.10 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
+        install -d -o postgres -g postgres -m 700 "$$PGDATA"
+        chown -R postgres:postgres "$$PGDATA"
+        find "$$PGDATA" -mindepth 1 -delete
+        su postgres -c "PGPASSWORD='$$POSTGRES_PASSWORD' pg_basebackup -h 172.31.81.10 -p 5432 -U '$$POSTGRES_USER' -D '$$PGDATA' -X stream -R -P"
+        echo "primary_conninfo='host=172.31.81.10 port=5432 user=evia password=evia-ha-drill application_name=evia_standby_a'" >> "$$PGDATA/postgresql.auto.conf"
+        exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on -c wal_keep_size=256MB
+    ports:
+      - "127.0.0.1:15441:5432"
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+    volumes:
+      - pg-quorum-standby-a-data:/var/lib/postgresql/data
+    networks:
+      ha-pg-quorum-net:
+        ipv4_address: 172.31.81.11
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U evia -d evia && test \"$$(psql -U evia -d evia -tAc 'SELECT pg_is_in_recovery()')\" = t"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  pg-standby-b:
+    image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+    environment:
+      POSTGRES_USER: evia
+      POSTGRES_PASSWORD: evia-ha-drill
+      POSTGRES_DB: evia
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ -f "$$PGDATA/standby.signal" ]; then
+          exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on -c wal_keep_size=256MB
+        fi
+        until pg_isready -h 172.31.81.10 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
+        install -d -o postgres -g postgres -m 700 "$$PGDATA"
+        chown -R postgres:postgres "$$PGDATA"
+        find "$$PGDATA" -mindepth 1 -delete
+        su postgres -c "PGPASSWORD='$$POSTGRES_PASSWORD' pg_basebackup -h 172.31.81.10 -p 5432 -U '$$POSTGRES_USER' -D '$$PGDATA' -X stream -R -P"
+        echo "primary_conninfo='host=172.31.81.10 port=5432 user=evia password=evia-ha-drill application_name=evia_standby_b'" >> "$$PGDATA/postgresql.auto.conf"
+        exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on -c wal_keep_size=256MB
+    ports:
+      - "127.0.0.1:15442:5432"
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+    volumes:
+      - pg-quorum-standby-b-data:/var/lib/postgresql/data
+    networks:
+      ha-pg-quorum-net:
+        ipv4_address: 172.31.81.12
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U evia -d evia && test \"$$(psql -U evia -d evia -tAc 'SELECT pg_is_in_recovery()')\" = t"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+networks:
+  ha-pg-quorum-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.81.0/24
+
+configs:
+  pg-quorum-hba:
+    content: |
+      # Drill-only: permit streaming-replication connections from the isolated
+      # HA bridge. Production deployments provision pg_hba through managed tooling.
+      echo "host replication all 172.31.81.0/24 scram-sha-256" >> "$$PGDATA/pg_hba.conf"
+
+volumes:
+  pg-quorum-primary-data:
+  pg-quorum-standby-a-data:
+  pg-quorum-standby-b-data:
