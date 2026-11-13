@@ -212,3 +212,14 @@ EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py \
 ```
 
 两轮独立运行逐值一致：同分数下两模式 headroom 比率差 ≤0.006（如 25% 档 8.1346 vs 8.1323），「混合分区更贵」的假设被否定——峰值由连续 6 个同步 mutation 的 part 世代叠加主导，而非整分区丢弃与带幸存者重写之别；回收比例两模式都与设定分数偏差 ≤0.0004，过期零残留、幸存行精确。结论：9 倍余量对边界月份同样有效，无需为混合分区单设预算；但该不敏感性仅在每分区单 part 形态下证实，多 part 生产表需复测。
+
+## 多 Part 形态回收对照
+
+边界对照只覆盖每分区单 part；本探针再引入 part 形态维度，覆盖高频写入表在合并间隙累积多 part 的真实形态。`--shapes merged,unmerged` 中 unmerged 以 5000 行/批装载并对临时表设置 `merge_selecting_sleep_ms=60000` 拖慢普通合并（不能用 `SYSTEM STOP MERGES`——它会同时冻结 mutation 依赖的 merge 路径，导致 `mutations_sync=1` 永久等待，这是本切片先红后绿确认的引擎事实）。
+
+```sh
+EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py \
+  --scales 300000 --fractions 0.5 --modes segregated,boundary --shapes merged,unmerged
+```
+
+两轮独立运行逐值一致：30 万行下 unmerged 实测保住 6–7 个活跃 part（计划 60），headroom 比率仅比 merged 高约 3–4%（segregated 7.2636→7.5305、boundary 7.2577→7.4865），mutation 6/6、过期零残留、回收偏差 ≤0.002。结论：headroom 对 part 数同样不敏感，9 倍余量覆盖多 part 形态，无需为高频写入表单设预算。unmerged 的 part 数是减速下的实测值而非精确受控，几十上百 part 的极端形态需另调参数复测，详见[验证记录](../verification/retention-multipart-headroom-2026-11-14.md)。
