@@ -379,7 +379,7 @@ band and clean replica rejoin before tearing everything down. See
 
 The individual failover and capacity drills each own a compose topology or
 shared test stack. Operators run them as one release gate through
-`tooling/ha/ha_suite.py`, a declarative orchestrator that registers all nine
+`tooling/ha/ha_suite.py`, a declarative orchestrator that registers all ten
 drills with their tier, compose file, required environment and timeout:
 
 * six `topology` drills need the Docker daemon and spin up isolated compose

@@ -140,3 +140,22 @@ python3 -m unittest tooling.ha.test_long_tail_drill
 ```
 
 实测两轮：800 身份全覆盖、观测热点份额 0.8、抽样热点/稀疏身份计数与分布期望逐一精确、`uniqExact(uid)=800`、热点/深尾/基数三类查询 p95 均 31-34ms，详见[验证记录](../verification/long-tail-distribution-2026-11-13.md)。该倾斜是确定性两段均匀轮转（头尾比 160），复现数量级差异但不等同真实 Zipf；单机小数据结果不外推多节点，真实分布压测需先从生产事件采样。
+
+## Zipf 幂律身份分布
+
+两段均匀的长尾合成不是幂律；Zipf 演练按 P(rank) ∝ 1/rank^1.0 生成身份，配额经 Hamilton 最大余数法取整为严格守恒的整数席位（Go 装载器与 Python 评估器同构，实测双对数斜率跨语言六位小数一致），再验证秩-频双对数斜率、逐身份精确计数与 Top-K 排序。
+
+运行：
+
+```sh
+EVIA_TEST_CLICKHOUSE_USERNAME=evia EVIA_TEST_CLICKHOUSE_PASSWORD=*** \
+python3 tooling/ha/zipf_distribution_drill.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.ha.test_zipf_distribution_drill
+```
+
+实测两轮：500 身份全覆盖、观测斜率 -1.0295（理论 -1.0，容差 0.15）、最热/最冷 589/1、抽样计数与 Top-5 顺序精确、三类查询 p95 26-30ms，详见[验证记录](../verification/zipf-distribution-2026-11-13.md)。该指数为参数化标准 Zipf 而非生产拟合值；生产验收应先从真实事件估计指数 s 再重跑同一演练。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十个演练）。
