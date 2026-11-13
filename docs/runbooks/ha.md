@@ -70,8 +70,8 @@ the terminating state.
   own managed HA (streaming replication/failover, Redis Sentinel/Cluster,
   replicated ClickHouse Keeper). Evia treats them as external dependencies
   and surfaces their health through `/readyz`; it does not embed failover.
-  Redis Sentinel discovery is supported directly by the admission clients,
-  see the dedicated section below.
+  Redis Sentinel discovery and PostgreSQL multi-host failover are supported
+  directly by the clients, see the dedicated sections below.
 * Keep `EVIA_SHUTDOWN_DELAY` greater than the load balancer's health-check
   interval plus propagation time. With 5-second checks the 5-second default
   is appropriate; faster checks can reduce it.
@@ -124,6 +124,60 @@ It brings up one master, one replica and three Sentinels, stops the master,
 waits for promotion, and proves fail-closed debits, same-process recovery and
 exact Redis-side token accounting before tearing everything down. See
 [verification/redis-sentinel-failover-2026-11-13.md](../verification/redis-sentinel-failover-2026-11-13.md).
+
+## PostgreSQL multi-host failover semantics
+
+Every Evia process opens PostgreSQL through one pgx connection pool
+(`storage/postgres.Open`). The DSN accepts an optional comma-separated host
+list, following the libpq multi-host convention:
+
+```
+postgres://evia:secret@pg-1:5432,pg-2:5432/evia?sslmode=verify-full&target_session_attrs=read-write
+```
+
+`config.ValidateDatabaseURL` enforces a closed contract before the pool is
+constructed:
+
+* one to eight `host:port` entries (ports default to 5432 when omitted);
+* the only accepted query parameters are `sslmode` (the six libpq modes) and
+  `target_session_attrs`, whose sole accepted value is `read-write` because
+  every Evia runtime role writes; any other parameter fails startup;
+* fragments, escaped paths and repeated parameters are rejected.
+
+Single-host DSNs, including the existing `sslmode=disable` development URI,
+keep their exact historical behavior; the validator adds no default session
+attribute when `target_session_attrs` is absent.
+
+With a multi-host DSN, pgx builds an ordered fallback list and applies the
+read-write check to every connection attempt: a standby still in recovery is
+refused and the next host is tried, so the pool can never silently execute
+writes against a replica. When the primary stops, in-flight transactions
+return their normal errors and `/readyz` fails (the pool `Ping` cannot reach
+a read-write node); once a replica is promoted, new acquisitions connect to
+it automatically, with no process restart or configuration change. Idle
+connections are health-checked every minute and connections are recycled
+after thirty minutes, so stale primary addresses leave the pool bounded.
+
+The drill topology uses asynchronous streaming replication, which is enough
+to prove the client-side failover contract. Production deployments must
+choose their own replication durability (for example synchronous
+replication with a bounded `synchronous_standby_names` quorum), provision
+promotion through Patroni/repmgr or a managed control plane, enable TLS with
+certificate verification, and place primaries and standbys across failure
+domains. Evia does not perform promotion itself.
+
+The full sequence is reproducible with:
+
+```
+python3 tooling/ha/postgres_failover_drill.py
+```
+
+It brings up a primary and a streaming standby, stops the primary, promotes
+the standby with `pg_promote`, and proves bounded write failures, same-pool
+recovery, an exactly contiguous committed sequence and an independent
+read-back match before rejoining the old primary and tearing everything
+down. See
+[verification/postgres-streaming-failover-2026-11-13.md](../verification/postgres-streaming-failover-2026-11-13.md).
 
 ## Evidence
 
