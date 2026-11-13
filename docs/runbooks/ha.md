@@ -70,9 +70,10 @@ the terminating state.
   own managed HA (streaming replication/failover, Redis Sentinel/Cluster,
   replicated ClickHouse Keeper). Evia treats them as external dependencies
   and surfaces their health through `/readyz`; it does not embed failover.
-  Redis Sentinel discovery and PostgreSQL multi-host failover are supported
-  directly by the clients, and ClickHouse replication is consumed through a
-  failover proxy; see the dedicated sections below.
+  Redis Sentinel discovery, Redis Cluster slot routing and PostgreSQL
+  multi-host failover are supported directly by the clients, while ClickHouse
+  replication is consumed through a failover proxy; see the dedicated
+  sections below.
 * Keep `EVIA_SHUTDOWN_DELAY` greater than the load balancer's health-check
   interval plus propagation time. With 5-second checks the 5-second default
   is appropriate; faster checks can reduce it.
@@ -225,6 +226,55 @@ Keeper (three votes), stops one server mid-write, and proves proxy failover,
 same-process sink recovery, Keeper-led replica reattachment and two-node
 count convergence before tearing everything down. See
 [verification/clickhouse-keeper-failover-2026-11-13.md](../verification/clickhouse-keeper-failover-2026-11-13.md).
+
+## Redis Cluster sharding and automatic failover
+
+In addition to the single-master Sentinel mode, the budget and admission
+stats clients support a sharded Redis Cluster selected with
+`EVIA_REDIS_CLUSTER_ADDRS`. The three connection modes (single URL,
+Sentinel, Cluster) are mutually exclusive and fail closed at startup.
+
+The application's keys were already hash-tagged per project/environment, so
+every key of one admission bucket resolves to one stable slot and the Lua
+reserve transaction always executes on a single node. The `ClusterClient`
+discovers the 16384-slot map from the seed list and follows MOVED/ASK
+redirects and replica promotions itself, so a failover needs no process
+restart. Because the connection uses RESP2, which has no push notifications,
+the client sets `ClusterStateReloadInterval` to three seconds: this bounds how
+long a stale slot map can survive after an automatic master/replica failover
+instead of relying on the 60-second default.
+
+The safety invariants of the other two modes are preserved exactly:
+
+* The limiter keeps `MaxRetries=-1`. MOVED/ASK only reroute commands that
+  never executed, while node-level ambiguous debits are never replayed.
+* Admission stats keep `MaxRetries=0` and remain fail-open: a failover window
+  only increments the dropped-write counter, never changes an admission
+  decision.
+* Both pools keep RESP2, bounded timeouts, the closed pool caps and
+  five-minute connection lifetime, with TLS verifying each dialed endpoint.
+
+When a master stops, its replica is promoted automatically by the cluster;
+writes to the affected slot fail with `COLLECTION_BUDGET_UNAVAILABLE` until
+the client reloads topology and routes to the promoted node. The stopped
+master rejoins as a replica using its persisted `nodes.conf`.
+
+Production deployments must run at least three masters with replicas across
+failure domains, enable TLS and credentials on every client and cluster-bus
+port, and use durable storage for the cluster configuration. The drill
+topology is plaintext, loopback-only and ephemeral.
+
+The full sequence is reproducible with:
+
+```
+python3 tooling/ha/redis_cluster_failover_drill.py
+```
+
+It brings up a three-master/three-replica cluster, stops the master that owns
+the bucket's hash-tag slot mid-write, and proves fail-closed behavior,
+same-process recovery through topology reload, an exact no-double-spend debit
+band and clean replica rejoin before tearing everything down. See
+[verification/redis-cluster-failover-2026-11-13.md](../verification/redis-cluster-failover-2026-11-13.md).
 
 ## Evidence
 
