@@ -79,3 +79,26 @@ python3 -m unittest discover -s tooling/benchmark -p 'test_*.py'
 原始安全报告、命令配置、硬件/依赖版本、后台任务数量、开始结束时间、二进制哈希和失败分析一起归档。通过 ClickHouse `system.query_log` 的 `evia-analysis-` 查询记录补充 `read_rows`、`read_bytes`、`memory_usage` 和 `query_duration_ms`，将排队/轮询时间与引擎时间区分。业务事实只能从公开接收接口产生。
 
 规模成功不自动证明千万用户并发。持续混合读写、长保留期、高基数、多租户、故障恢复、多副本和真实磁盘介质仍需独立测量。当前配置只是一套可复现的单机基线。
+
+## 摄取积压恢复与故障注入
+
+只读查询矩阵（见 [query-capacity 验证](../verification/query-capacity-2026-11-09.md)）不覆盖写入侧在依赖故障期的行为。积压恢复演练在真实 Kafka→ingest-worker→ClickHouse 管线上注入一次有界 sink 故障，量化「积压形成→冻结→恢复排空」：
+
+- 故障期 worker 对持有的批次无限指数退避重试、停止 Poll 且不提交偏移，消费组滞后随生产增长并冻结；故障期零事件落库。
+- 恢复后同一 worker 排空积压、滞后归零，去重视图计数严格等于生产数（精确一次）。
+- 滞后经生产 `KafkaReader.SampleLag` 采样，与 `LagMonitor` 上报走同一代码路径。
+
+运行（凭据经环境变量传入，默认指向 dev 测试栈）：
+
+```sh
+EVIA_TEST_CLICKHOUSE_USERNAME=evia EVIA_TEST_CLICKHOUSE_PASSWORD=*** \
+python3 tooling/ha/backlog_recovery_drill.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.ha.test_backlog_recovery_drill
+```
+
+实测两轮（单 broker、单分区、200 事件含 180 积压）：故障窗口约 9.3 秒内滞后冻结于 180、零新增落库，恢复后排空约 320ms（约 560 事件/秒）、最终滞后为 0、无重复无丢失、无主题/数据库残留，详见[验证记录](../verification/backlog-recovery-2026-11-13.md)。该速率是当前批大小与退避配置下的单机基线，不能外推多分区水平扩展；稳态混合读写与长尾分布容量仍需独立专项。
