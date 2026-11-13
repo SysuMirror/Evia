@@ -26,12 +26,14 @@ const (
 	maxPolicyValue         = 1_000_000
 	tokenUnits             = int64(1_000_000)
 	maxIdleMilliseconds    = int64((24 * time.Hour) / time.Millisecond)
+	maxSentinelAddrs       = 8
 )
 
 var (
-	prefixPattern  = regexp.MustCompile(`^[a-z][a-z0-9:_-]{0,63}$`)
-	projectPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	reserveScript  = redis.NewScript(reserveLua)
+	prefixPattern       = regexp.MustCompile(`^[a-z][a-z0-9:_-]{0,63}$`)
+	projectPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	sentinelNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+	reserveScript       = redis.NewScript(reserveLua)
 )
 
 // Policy is an event rate per second and an event burst, shared by all replicas.
@@ -55,6 +57,24 @@ type Config struct {
 	// AllowInsecureLocal permits redis:// only for localhost or a loopback IP.
 	// Non-local connections always require rediss:// with certificate validation.
 	AllowInsecureLocal bool
+	// Sentinel optionally enables Redis Sentinel discovery. The zero value
+	// keeps the single-endpoint URL path; when set, URL must stay empty.
+	Sentinel SentinelConfig
+}
+
+// SentinelConfig configures discovery of the current Redis master through a
+// Sentinel quorum. The client follows promoted replicas automatically, so a
+// failover needs no process restart.
+type SentinelConfig struct {
+	MasterName string
+	Addrs      []string
+	// Password authenticates against Redis data nodes.
+	Password string
+	// SentinelPassword authenticates against the Sentinel nodes themselves.
+	SentinelPassword string
+	// TLSEnabled must be true for every non-loopback deployment. Plaintext is
+	// accepted only together with AllowInsecureLocal and loopback endpoints.
+	TLSEnabled bool
 }
 
 // DefaultConfig returns explicit initial operating limits, not measured capacity.
@@ -150,6 +170,70 @@ func clientOptions(c Config) (*redis.Options, error) {
 	return opts, nil
 }
 
+// failoverOptions mirrors every safety invariant of clientOptions for the
+// Sentinel discovery path: bounded timeouts, the same pool caps, RESP2 and the
+// no-replay retry policy. It performs no network I/O.
+func failoverOptions(c Config) (*redis.FailoverOptions, error) {
+	if c.URL != "" {
+		return nil, errors.New("collection budget Redis URL and Sentinel discovery are mutually exclusive")
+	}
+	if !sentinelNamePattern.MatchString(c.Sentinel.MasterName) {
+		return nil, errors.New("collection budget Sentinel master name must be 1 to 64 letters, digits, dots, underscores or hyphens")
+	}
+	if len(c.Sentinel.Addrs) < 1 || len(c.Sentinel.Addrs) > maxSentinelAddrs {
+		return nil, errors.New("collection budget requires between 1 and 8 Sentinel endpoints")
+	}
+	addrs := make([]string, len(c.Sentinel.Addrs))
+	for i, raw := range c.Sentinel.Addrs {
+		host, port, err := net.SplitHostPort(raw)
+		if err != nil || host == "" || len(host) > 253 || !validTCPPort(port) {
+			return nil, errors.New("collection budget Sentinel endpoint must be a valid TCP address")
+		}
+		if !c.Sentinel.TLSEnabled && (!c.AllowInsecureLocal || !loopbackHost(host)) {
+			return nil, errors.New("plaintext Sentinel connections require explicit loopback development configuration")
+		}
+		addrs[i] = net.JoinHostPort(host, port)
+	}
+	fo := &redis.FailoverOptions{
+		MasterName:            c.Sentinel.MasterName,
+		SentinelAddrs:         addrs,
+		Password:              c.Sentinel.Password,
+		SentinelPassword:      c.Sentinel.SentinelPassword,
+		Protocol:              2,
+		DialTimeout:           c.Timeout,
+		ReadTimeout:           c.Timeout,
+		WriteTimeout:          c.Timeout,
+		PoolTimeout:           c.Timeout,
+		ContextTimeoutEnabled: true,
+		MaxRetries:            -1, // An ambiguous debit must not be automatically replayed.
+		DialerRetries:         1,
+		PipelinePoolSize:      -1,
+		PoolSize:              c.PoolSize,
+		MaxActiveConns:        c.PoolSize,
+		MaxIdleConns:          c.PoolSize,
+		MinIdleConns:          0,
+		ConnMaxIdleTime:       time.Minute,
+		ConnMaxLifetime:       5 * time.Minute,
+	}
+	if c.Sentinel.TLSEnabled {
+		// Endpoints are learned at runtime, so leave ServerName empty:
+		// crypto/tls then verifies each dialed connection against the hostname
+		// it actually connects to instead of a single static name.
+		fo.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return fo, nil
+}
+
+func validTCPPort(port string) bool {
+	n, err := strconv.Atoi(port)
+	return err == nil && n >= 1 && n <= 65535
+}
+
+func loopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	return host == "localhost" || ip != nil && ip.IsLoopback()
+}
+
 // New validates and snapshots configuration without performing network I/O.
 // Policy disagreements for an existing bucket fail closed rather than resetting it.
 func New(c Config) (*Limiter, error) {
@@ -180,16 +264,26 @@ func New(c Config) (*Limiter, error) {
 		}
 		overrides[scope] = normalized
 	}
-	opts, err := clientOptions(c)
-	if err != nil {
-		return nil, err
+	var client *redis.Client
+	if c.Sentinel.MasterName != "" {
+		failover, err := failoverOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewFailoverClient(failover)
+	} else {
+		opts, err := clientOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewClient(opts)
 	}
 	overrideCfgs := make(map[Scope]Policy, len(c.Overrides))
 	for scope, candidate := range c.Overrides {
 		overrideCfgs[scope] = candidate
 	}
 	limiter := &Limiter{
-		client:   redis.NewClient(opts),
+		client:   client,
 		prefix:   c.KeyPrefix,
 		maxBatch: c.MaxBatchEvents,
 		timeout:  c.Timeout,
