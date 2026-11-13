@@ -180,3 +180,24 @@ python3 -m unittest tooling.ha.test_retention_enforcement_drill
 ```
 
 实测两轮（数字逐值一致）：dry-run 候选 9000 且零修改；强制删除 9000、近期 2400 行与无策略 800 行逐行保留、`system.mutations` 6/6 同步完成；重扫零新 mutation、表字节零漂移；物理回收 148,188 字节，50ms 并发轮询实测旧/新 part 共存峰值达基线 **6.36 倍**——同步 mutation 重写全部命中 part，小磁盘排期必须按作用域体积预留 headroom 并错峰执行。`system.part_log` 受缓冲刷新影响仅作软证据，权威门控为 `system.mutations` 与表级字节；磁盘全局空闲因系统表噪声不参与断言，详见[验证记录](../verification/retention-enforcement-2026-11-14.md)。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十一个演练）。12200 行单节点结果不外推 TB 级生产表，大规模 headroom 需在独立基准盘重测。
+
+## 保留期回收磁盘 Headroom 规模矩阵
+
+上述 12200 行演练给出机理系数后，独立基准 ClickHouse（`compose.benchmark.yaml`，4 GiB 内存、宿主命名卷）上的规模探针把系数推进为排期模型。探针在 `evia_probe_ret_*` 隔离库应用全部 9 个生产迁移，按 10 万/50 万行 × 25/50/75% 过期分数建 6 个单元格，每格 OPTIMIZE FINAL 稳定 part 后对 6 个作用域依次执行与 `RetentionExecutor` 同构的同步 mutation，250ms 轮询 part 字节捕获共存峰值，逐格 SYNC 清理。
+
+仅启动基准 ClickHouse（仓库外私有 env 文件提供口令）：
+
+```sh
+docker --host=unix:///var/run/docker.sock compose \
+  --project-name evia-benchmark --env-file /tmp/retention-headroom/bench.env \
+  -f deploy/compose.dev.yaml -f deploy/compose.benchmark.yaml up -d --wait clickhouse
+EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.benchmark.test_retention_headroom_probe
+```
+
+两轮独立运行核心指标逐值一致：headroom 比率落在 **5.39–7.94 倍**且规模稳定（5 倍行规模下比率不发散），随过期分数升高而下降；逐作用域比率从约 3x 单调累积到 7x（连续 mutation 的非活跃 part 世代叠加）；回收比例与过期分数偏差 ≤0.001，50 万行单 mutation ≤486ms。生产排期保守按稳定表体积 **8 倍**预留临时磁盘，或在作用域间插入 settle 间隔压向单 mutation 约 3x，详见[验证记录](../verification/retention-headroom-scale-2026-11-14.md)。该余量仅覆盖双月分区的实测 part 形态，TB 级与边界月份混合分区需扩规模复测。
