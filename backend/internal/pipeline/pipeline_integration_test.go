@@ -122,7 +122,10 @@ func preparePipelineDependencies(t *testing.T, ctx context.Context, k KafkaConfi
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if _, e := clickhouseQuery(cleanup, c, "DROP DATABASE "+c.Database); e != nil {
+		// SYNC makes the physical removal complete before the test returns so
+		// back-to-back drills cannot accumulate deferred-delete residue and
+		// exhaust a small tmpfs ClickHouse disk (NOT_ENOUGH_SPACE at insert).
+		if _, e := clickhouseQuery(cleanup, c, "DROP DATABASE "+c.Database+" SYNC"); e != nil {
 			t.Error(e)
 		}
 	})
