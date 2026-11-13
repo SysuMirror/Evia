@@ -68,9 +68,10 @@ type Config struct {
 }
 
 var (
-	topicPattern      = regexp.MustCompile(`^[A-Za-z0-9._-]{1,249}$`)
-	identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
-	instancePattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	topicPattern          = regexp.MustCompile(`^[A-Za-z0-9._-]{1,249}$`)
+	identifierPattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
+	instancePattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	sentinelMasterPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 )
 
 func Read(get func(string) string) (Config, error) { return ReadFor("serve", get) }
@@ -248,10 +249,29 @@ func (c *Config) readHTTP(get func(string) string) error {
 }
 
 func (c *Config) readBudget(get func(string) string) error {
-	c.Budget = budget.DefaultConfig(get("EVIA_REDIS_URL"))
+	rawURL := get("EVIA_REDIS_URL")
+	sentinelAddrs := get("EVIA_REDIS_SENTINEL_ADDRS")
+	masterName := get("EVIA_REDIS_SENTINEL_MASTER")
+	c.Budget = budget.DefaultConfig(rawURL)
 	c.Budget.AllowInsecureLocal = c.AllowInsecureDependencies
-	if err := dependencyURL(c.Budget.URL, "redis", "rediss", true, c.AllowInsecureDependencies); err != nil {
-		return errors.New("EVIA_REDIS_URL must be a secure Redis URL or explicitly allowed loopback development URL")
+	switch {
+	case sentinelAddrs != "" || masterName != "":
+		if rawURL != "" {
+			return errors.New("EVIA_REDIS_URL and EVIA_REDIS_SENTINEL_ADDRS are mutually exclusive")
+		}
+		if sentinelAddrs == "" || masterName == "" {
+			return errors.New("EVIA_REDIS_SENTINEL_ADDRS and EVIA_REDIS_SENTINEL_MASTER must be configured together")
+		}
+		sentinel, err := readRedisSentinel(get, sentinelAddrs, masterName, c.AllowInsecureDependencies)
+		if err != nil {
+			return err
+		}
+		c.Budget.Sentinel = sentinel
+		c.Budget.URL = ""
+	default:
+		if err := dependencyURL(c.Budget.URL, "redis", "rediss", true, c.AllowInsecureDependencies); err != nil {
+			return errors.New("EVIA_REDIS_URL must be a secure Redis URL or explicitly allowed loopback development URL")
+		}
 	}
 	if value := get("EVIA_REDIS_KEY_PREFIX"); value != "" {
 		c.Budget.KeyPrefix = value
@@ -273,6 +293,50 @@ func (c *Config) readBudget(get func(string) string) error {
 		}
 	}
 	return nil
+}
+
+// readRedisSentinel validates the closed Sentinel configuration set. The
+// default TLS posture matches Kafka: TLS on unless every endpoint is loopback
+// and insecure dependencies are explicitly enabled for local development.
+func readRedisSentinel(get func(string) string, rawAddrs, masterName string, allowLocal bool) (budget.SentinelConfig, error) {
+	if !sentinelMasterPattern.MatchString(masterName) {
+		return budget.SentinelConfig{}, errors.New("EVIA_REDIS_SENTINEL_MASTER must be 1 to 64 letters, digits, dots, underscores or hyphens")
+	}
+	parts := strings.Split(rawAddrs, ",")
+	if len(parts) < 1 || len(parts) > 8 {
+		return budget.SentinelConfig{}, errors.New("EVIA_REDIS_SENTINEL_ADDRS supports between 1 and 8 endpoints")
+	}
+	addrs := make([]string, 0, len(parts))
+	for _, raw := range parts {
+		addr := strings.TrimSpace(raw)
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil || host == "" || len(host) > 253 || strings.ContainsAny(host, " /?#@\r\n\t") || !validPort(port) {
+			return budget.SentinelConfig{}, errors.New("EVIA_REDIS_SENTINEL_ADDRS contains an invalid TCP endpoint")
+		}
+		addrs = append(addrs, addr)
+	}
+	tlsEnabled, err := boolean(get, "EVIA_REDIS_SENTINEL_TLS_ENABLED", true)
+	if err != nil {
+		return budget.SentinelConfig{}, err
+	}
+	if !tlsEnabled {
+		if !allowLocal {
+			return budget.SentinelConfig{}, errors.New("plaintext Redis Sentinel requires EVIA_ALLOW_INSECURE_DEPENDENCIES=true")
+		}
+		for _, addr := range addrs {
+			host, _, _ := net.SplitHostPort(addr)
+			if !loopback(host) {
+				return budget.SentinelConfig{}, errors.New("plaintext Redis Sentinel endpoints must all be loopback addresses")
+			}
+		}
+	}
+	return budget.SentinelConfig{
+		MasterName:       masterName,
+		Addrs:            addrs,
+		Password:         get("EVIA_REDIS_PASSWORD"),
+		SentinelPassword: get("EVIA_REDIS_SENTINEL_PASSWORD"),
+		TLSEnabled:       tlsEnabled,
+	}, nil
 }
 
 func (c *Config) readKafka(get func(string) string, worker bool) error {
