@@ -239,3 +239,19 @@ python3 -m unittest tooling.benchmark.test_tenant_query_isolation_probe
 ```
 
 两轮独立运行结论一致：护栏确定性触发——`groupArray` 在读取上限内于 552.6MiB 处被 Code 241（MEMORY_LIMIT_EXCEEDED）拒绝、超量扫描被 Code 158（TOO_MANY_ROWS）拒绝；并发 4/8 下 16 个有界租户查询全部成功、单查询峰值仅 18–19MiB（约预算 3.5%）；嘈杂邻居波里重查询被拒的同时有界查询 100% 存活、p95 23–27ms 与纯有界波无差异；实测聚合峰值最高 445MiB，仅占 4 并发演绎上界（2GiB）的 21%。聚合上界由单查询硬封顶演绎保证（N 并发 ≤ N×512MiB），毫秒级有界查询的轮询采样为下界，详见[验证记录](../verification/tenant-query-isolation-2026-11-14.md)。
+
+## 查询护栏完整性与取消隔离
+
+内存/读取护栏之外，探针收口分析 SETTINGS 闭集的其余护栏与 Go 引擎的 KILL QUERY 取消路径，复用同一份生产 SETTINGS 单一事实源。
+
+```sh
+EVIA_CH_PASSWORD=*** python3 tooling/benchmark/query_guard_probe.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.benchmark.test_query_guard_probe
+```
+
+两轮独立运行逐值一致：readonly=2 写拒绝（Code164）、执行超时（Code159，用 `sleep(2)` 覆盖 `max_execution_time=1` 以避开读取护栏抢先）、结果行数/字节溢出（共用 Code396，按异常文本 max rows/max bytes 细分，字节护栏需 groupArray 物化才触发）、KILL QUERY ASYNC 后长查询从 system.processes 消失并返回 Code394 且兄弟查询不受影响。分类器以异常类型名为主、错误码为辅，因为码存在复用（396 兼两行护栏、159 多语境）。先红后绿记录了 CREATE DATABASE 不接受 readonly 键（改 CREATE TABLE）、大 numbers 先撞读取上限、流式 SELECT 不累计 result bytes 三个触发陷阱，详见[验证记录](../verification/query-guard-rails-2026-11-14.md)。
