@@ -29,7 +29,7 @@ class RegistryValidationTest(unittest.TestCase):
         self.assertTrue(validate_registry(DRILLS))
         names = [entry["name"] for entry in DRILLS]
         self.assertEqual(len(names), len(set(names)))
-        self.assertEqual(len(DRILLS), 9)
+        self.assertEqual(len(DRILLS), 10)
 
     def test_rejects_duplicate_names(self):
         with self.assertRaises(SuiteError):
