@@ -27,6 +27,11 @@ const (
 	tokenUnits             = int64(1_000_000)
 	maxIdleMilliseconds    = int64((24 * time.Hour) / time.Millisecond)
 	maxSentinelAddrs       = 8
+	maxClusterAddrs        = 8
+
+	// clusterStateReloadInterval bounds how long the ClusterClient may keep a
+	// stale slot map after an automatic master/replica failover.
+	clusterStateReloadInterval = 3 * time.Second
 )
 
 var (
@@ -60,6 +65,21 @@ type Config struct {
 	// Sentinel optionally enables Redis Sentinel discovery. The zero value
 	// keeps the single-endpoint URL path; when set, URL must stay empty.
 	Sentinel SentinelConfig
+	// Cluster optionally enables sharded Redis Cluster routing. When set,
+	// both URL and Sentinel must stay empty.
+	Cluster ClusterConfig
+}
+
+// ClusterConfig configures Redis Cluster slot routing from a seed list. The
+// client discovers the full slot map and follows MOVED/ASK redirects and
+// replica promotions itself, so a failover needs no process restart.
+type ClusterConfig struct {
+	Addrs []string
+	// Password authenticates against every cluster data node.
+	Password string
+	// TLSEnabled must be true for every non-loopback deployment. Plaintext is
+	// accepted only together with AllowInsecureLocal and loopback endpoints.
+	TLSEnabled bool
 }
 
 // SentinelConfig configures discovery of the current Redis master through a
@@ -97,7 +117,7 @@ type budgetState struct {
 }
 
 type Limiter struct {
-	client   *redis.Client
+	client   redis.UniversalClient
 	prefix   string
 	maxBatch int
 	timeout  time.Duration
@@ -224,6 +244,60 @@ func failoverOptions(c Config) (*redis.FailoverOptions, error) {
 	return fo, nil
 }
 
+// clusterOptions mirrors every safety invariant of clientOptions for the
+// sharded Redis Cluster path: bounded timeouts, per-node pool caps, RESP2 and
+// the no-replay retry policy. MOVED/ASK redirects are routing decisions for
+// commands that never executed, so MaxRedirects keeps its default while
+// node-level command retries stay disabled. It performs no network I/O.
+func clusterOptions(c Config) (*redis.ClusterOptions, error) {
+	if c.URL != "" || c.Sentinel.MasterName != "" {
+		return nil, errors.New("Redis Cluster routing is mutually exclusive with the URL and Sentinel discovery modes")
+	}
+	if len(c.Cluster.Addrs) < 1 || len(c.Cluster.Addrs) > maxClusterAddrs {
+		return nil, errors.New("collection budget requires between 1 and 8 Redis Cluster seed endpoints")
+	}
+	addrs := make([]string, len(c.Cluster.Addrs))
+	for i, raw := range c.Cluster.Addrs {
+		host, port, err := net.SplitHostPort(raw)
+		if err != nil || host == "" || len(host) > 253 || !validTCPPort(port) {
+			return nil, errors.New("collection budget Redis Cluster endpoint must be a valid TCP address")
+		}
+		if !c.Cluster.TLSEnabled && (!c.AllowInsecureLocal || !loopbackHost(host)) {
+			return nil, errors.New("plaintext Redis Cluster connections require explicit loopback development configuration")
+		}
+		addrs[i] = net.JoinHostPort(host, port)
+	}
+	co := &redis.ClusterOptions{
+		Addrs:                    addrs,
+		Password:                 c.Cluster.Password,
+		Protocol:                 2,
+		DialTimeout:              c.Timeout,
+		ReadTimeout:              c.Timeout,
+		WriteTimeout:             c.Timeout,
+		PoolTimeout:              c.Timeout,
+		ContextTimeoutEnabled:    true,
+		MaxRetries:               -1, // An ambiguous debit must not be replayed at node level.
+		DialerRetries:            1,
+		PipelinePoolSize:         -1,
+		PoolSize:                 c.PoolSize,
+		MaxActiveConns:           c.PoolSize,
+		MaxIdleConns:             c.PoolSize,
+		MinIdleConns:             0,
+		ConnMaxIdleTime:          time.Minute,
+		ConnMaxLifetime:          5 * time.Minute,
+		MaintNotificationsConfig: &maintnotifications.Config{Mode: maintnotifications.ModeDisabled},
+		// RESP2 has no push notifications; bound slot-map staleness after a
+		// failover instead of relying on the 60s default reload interval.
+		ClusterStateReloadInterval: clusterStateReloadInterval,
+	}
+	if c.Cluster.TLSEnabled {
+		// Node addresses are learned from CLUSTER SLOTS at runtime, so leave
+		// ServerName empty and verify each dialed endpoint hostname directly.
+		co.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return co, nil
+}
+
 func validTCPPort(port string) bool {
 	n, err := strconv.Atoi(port)
 	return err == nil && n >= 1 && n <= 65535
@@ -264,13 +338,19 @@ func New(c Config) (*Limiter, error) {
 		}
 		overrides[scope] = normalized
 	}
-	var client *redis.Client
+	var client redis.UniversalClient
 	if c.Sentinel.MasterName != "" {
 		failover, err := failoverOptions(c)
 		if err != nil {
 			return nil, err
 		}
 		client = redis.NewFailoverClient(failover)
+	} else if len(c.Cluster.Addrs) > 0 {
+		clusterOpts, err := clusterOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewClusterClient(clusterOpts)
 	} else {
 		opts, err := clientOptions(c)
 		if err != nil {

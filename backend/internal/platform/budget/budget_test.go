@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/redis/go-redis/v9"
 )
 
 const testProject = "a3b09cf1-4ec3-4d54-a9c8-a18570deba40"
@@ -95,7 +96,7 @@ func TestClientBoundsAndTLS(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer limiter.Close()
-			o := limiter.client.Options()
+			o := limiter.client.(*redis.Client).Options()
 			// go-redis normalizes the explicit -1 retry setting to zero retries.
 			if o.MaxRetries != 0 || o.DialerRetries != 1 || o.PipelinePoolSize != -1 || o.PoolSize != 7 || o.MaxActiveConns != 7 || o.MaxIdleConns != 7 || o.PoolTimeout != c.Timeout || o.ReadTimeout != c.Timeout || o.WriteTimeout != c.Timeout || o.DialTimeout != c.Timeout || !o.ContextTimeoutEnabled {
 				t.Fatal("client escaped configured retry, connection or timeout bounds")

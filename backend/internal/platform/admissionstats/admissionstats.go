@@ -30,6 +30,9 @@ const (
 	maxWindows       = 48
 	maxPoolSize      = 64
 	maxSentinelAddrs = 8
+	maxClusterAddrs  = 8
+
+	clusterStateReloadInterval = 3 * time.Second
 	// windowRetention keeps one full day plus a grace hour for late reads.
 	windowRetention = 25 * time.Hour
 	hourWindow      = time.Hour
@@ -78,6 +81,17 @@ type Config struct {
 	// Sentinel optionally enables Redis Sentinel discovery. The zero value
 	// keeps the single-endpoint URL path; when set, URL must stay empty.
 	Sentinel SentinelConfig
+	// Cluster optionally enables sharded Redis Cluster routing. When set,
+	// both URL and Sentinel must stay empty.
+	Cluster ClusterConfig
+}
+
+// ClusterConfig configures Redis Cluster slot routing from a seed list. The
+// recorder discovers the slot map and follows redirects and promotions itself.
+type ClusterConfig struct {
+	Addrs      []string
+	Password   string
+	TLSEnabled bool
 }
 
 // SentinelConfig configures discovery of the current Redis master through a
@@ -122,7 +136,7 @@ type ProjectRead struct {
 
 // Recorder is the fail-open rejection counter for one Redis namespace.
 type Recorder struct {
-	client  *redis.Client
+	client  redis.UniversalClient
 	prefix  string
 	timeout time.Duration
 	now     func() time.Time
@@ -140,13 +154,19 @@ func New(c Config) (*Recorder, error) {
 	if c.PoolSize < 1 || c.PoolSize > maxPoolSize {
 		return nil, errors.New("admission stats pool size must be between 1 and 64")
 	}
-	var client *redis.Client
+	var client redis.UniversalClient
 	if c.Sentinel.MasterName != "" {
 		failover, err := failoverOptions(c)
 		if err != nil {
 			return nil, err
 		}
 		client = redis.NewFailoverClient(failover)
+	} else if len(c.Cluster.Addrs) > 0 {
+		clusterOpts, err := clusterOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewClusterClient(clusterOpts)
 	} else {
 		opts, err := clientOptions(c)
 		if err != nil {
@@ -238,6 +258,54 @@ func failoverOptions(c Config) (*redis.FailoverOptions, error) {
 		fo.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 	return fo, nil
+}
+
+// clusterOptions mirrors the safety invariants of clientOptions for the
+// sharded Redis Cluster path: bounded timeouts, per-node pool caps, RESP2 and
+// MaxRetries=0 so a failover window only drops writes. MOVED/ASK redirects
+// route commands that never executed and keep their default behavior.
+func clusterOptions(c Config) (*redis.ClusterOptions, error) {
+	if c.URL != "" || c.Sentinel.MasterName != "" {
+		return nil, errors.New("Redis Cluster routing is mutually exclusive with the URL and Sentinel discovery modes")
+	}
+	if len(c.Cluster.Addrs) < 1 || len(c.Cluster.Addrs) > maxClusterAddrs {
+		return nil, errors.New("admission stats requires between 1 and 8 Redis Cluster seed endpoints")
+	}
+	addrs := make([]string, len(c.Cluster.Addrs))
+	for i, raw := range c.Cluster.Addrs {
+		host, port, err := net.SplitHostPort(raw)
+		if err != nil || host == "" || len(host) > 253 || !validTCPPort(port) {
+			return nil, errors.New("admission stats Redis Cluster endpoint must be a valid TCP address")
+		}
+		if !c.Cluster.TLSEnabled && (!c.AllowInsecureLocal || !loopbackHost(host)) {
+			return nil, errors.New("plaintext Redis Cluster connections require explicit loopback development configuration")
+		}
+		addrs[i] = net.JoinHostPort(host, port)
+	}
+	co := &redis.ClusterOptions{
+		Addrs:                 addrs,
+		Password:              c.Cluster.Password,
+		Protocol:              2,
+		DialTimeout:           c.Timeout,
+		ReadTimeout:           c.Timeout,
+		WriteTimeout:          c.Timeout,
+		PoolTimeout:           c.Timeout,
+		ContextTimeoutEnabled: true,
+		MaxRetries:            0,
+		PoolSize:              c.PoolSize,
+		MaxActiveConns:        c.PoolSize,
+		MaxIdleConns:          c.PoolSize,
+		MinIdleConns:          0,
+		ConnMaxIdleTime:       time.Minute,
+		ConnMaxLifetime:       5 * time.Minute,
+		// RESP2 has no push notifications; bound slot-map staleness after a
+		// failover instead of relying on the 60s default reload interval.
+		ClusterStateReloadInterval: clusterStateReloadInterval,
+	}
+	if c.Cluster.TLSEnabled {
+		co.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return co, nil
 }
 
 func validTCPPort(port string) bool {
