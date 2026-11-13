@@ -181,6 +181,60 @@ read-back match before rejoining the old primary and tearing everything
 down. See
 [verification/postgres-streaming-failover-2026-11-13.md](../verification/postgres-streaming-failover-2026-11-13.md).
 
+## Synchronous quorum and split-brain semantics
+
+The asynchronous multi-host contract above proves client failover; it does
+not bound data loss. For deployments that require every acknowledged commit
+to survive primary loss, the standalone quorum topology runs one primary
+with two standbys under `synchronous_standby_names = 'ANY 1 (...)'` and
+`synchronous_commit = on`: a commit returns only after at least one standby
+has flushed the WAL. The quorum is enabled with `ALTER SYSTEM` +
+`pg_reload_conf()` only after both standbys stream; setting it at first boot
+deadlocks initial database creation against standbys that do not exist yet.
+
+Three behaviors observed on PostgreSQL 17 shape the application contract:
+
+* `statement_timeout` does not interrupt a synchronous-replication wait,
+  because the wait happens inside commit after the statement boundary. The
+  production bound is therefore the caller's context deadline: pgx cancels
+  or closes within its per-request timeout instead of hanging, while
+  `Open` keeps the five-second connect timeout and ten-second statement
+  timeout for every other failure mode.
+* Canceling a SyncRep wait is ambiguous. PostgreSQL logs `canceling wait
+  for synchronous replication due to user request` and still completes the
+  local commit, so the client receives an error for a transaction that may
+  be durable. Write paths must treat that error as ambiguous and retry with
+  the same idempotency key; Evia's `Idempotency-Key` ledger and the budget
+  limiter's `MaxRetries=-1` already follow that rule. The drill's Go pool
+  proves the pattern: the retried sequence hits SQLSTATE 23505 when the
+  canceled commit landed, and the final table stays contiguous.
+* The quorum itself fences a partitioned primary. While
+  `synchronous_standby_names` stays enforced, an isolated primary cannot
+  complete any write because no standby can acknowledge it. Only relaxing
+  the setting (an asynchronous or misconfigured deployment) lets a stale
+  primary diverge; the drill models that case deliberately, then rewinds the
+  old node with `pg_rewind`, re-points it at the promoted primary and proves
+  timeline 2 convergence with the divergent rows removed on every node.
+
+Evia performs neither promotion nor fencing. Production deployments must
+provide Patroni/repmgr or a managed control plane that isolates the old
+primary, rewinds or rebuilds it, and only then restores client traffic;
+retain the pre-divergence WAL through an archive or replication slot rather
+than relying on a fixed `wal_keep_size`. The Evia-side requirement is
+limited to bounded caller contexts and idempotent retry keys, both already
+in place.
+
+The full sequence, including the runtime quorum activation, bounded stall
+with ambiguous-commit handling, a real bridge disconnect, standby
+promotion, self-fencing proof and `pg_rewind` rejoin, is reproducible with:
+
+```
+python3 tooling/ha/postgres_quorum_drill.py
+```
+
+See
+[verification/postgres-sync-quorum-2026-11-13.md](../verification/postgres-sync-quorum-2026-11-13.md).
+
 ## ClickHouse Keeper replication and proxy failover
 
 ClickHouse high availability has two layers, and Evia intentionally keeps
