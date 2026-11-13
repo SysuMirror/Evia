@@ -70,11 +70,60 @@ the terminating state.
   own managed HA (streaming replication/failover, Redis Sentinel/Cluster,
   replicated ClickHouse Keeper). Evia treats them as external dependencies
   and surfaces their health through `/readyz`; it does not embed failover.
+  Redis Sentinel discovery is supported directly by the admission clients,
+  see the dedicated section below.
 * Keep `EVIA_SHUTDOWN_DELAY` greater than the load balancer's health-check
   interval plus propagation time. With 5-second checks the 5-second default
   is appropriate; faster checks can reduce it.
 * Rolling updates must replace one replica at a time and wait for the new
   replica to report 204 on `/readyz` before draining the next.
+
+## Redis Sentinel topology and failover semantics
+
+The collection budget and the admission rejection counters both use Redis and
+support two mutually exclusive connection modes, selected at startup:
+
+* **Single endpoint (default).** `EVIA_REDIS_URL` points at one Redis or a
+  managed virtual endpoint. Leaving Sentinel unset keeps this path
+  byte-identical to previous releases.
+* **Sentinel discovery.** `EVIA_REDIS_SENTINEL_ADDRS` (one to eight
+  `host:port` seeds) and `EVIA_REDIS_SENTINEL_MASTER` replace the URL, which
+  must then stay empty. `EVIA_REDIS_SENTINEL_TLS_ENABLED` defaults to true;
+  plaintext is accepted only for loopback endpoints together with
+  `EVIA_ALLOW_INSECURE_DEPENDENCIES=true`. Data-node and Sentinel passwords
+  come from `EVIA_REDIS_PASSWORD` and `EVIA_REDIS_SENTINEL_PASSWORD`.
+
+In Sentinel mode the process resolves the current master through the quorum
+and follows promotions automatically, so a failover needs no restart or
+configuration change. The safety invariants of the single-endpoint path are
+preserved exactly:
+
+* The budget limiter keeps `MaxRetries=-1`. While no master is available the
+  admission call fails closed with `COLLECTION_BUDGET_UNAVAILABLE`; an
+  ambiguous debit is never replayed, so token buckets cannot be charged twice.
+* Admission stats keep `MaxRetries=0` and remain fail-open: a failover window
+  only increments the dropped-write counter, never changes an admission
+  decision.
+* Both pools keep their bounded timeouts (at most five seconds), pool caps,
+  RESP2 and five-minute connection lifetime. TLS verifies each dialed
+  Sentinel or data endpoint against its own hostname because addresses are
+  learned at runtime.
+
+Production deployments must run at least three Sentinels across failure
+domains with quorum two, enable `requirepass` and Sentinel authentication,
+and use TLS on every endpoint. The local drill topology is plaintext and
+loopback-only; it is never a production template.
+
+The full failover sequence is reproducible with the standalone drill:
+
+```
+python3 tooling/ha/redis_failover_drill.py
+```
+
+It brings up one master, one replica and three Sentinels, stops the master,
+waits for promotion, and proves fail-closed debits, same-process recovery and
+exact Redis-side token accounting before tearing everything down. See
+[verification/redis-sentinel-failover-2026-11-13.md](../verification/redis-sentinel-failover-2026-11-13.md).
 
 ## Evidence
 
