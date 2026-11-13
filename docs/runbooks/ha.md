@@ -71,7 +71,8 @@ the terminating state.
   replicated ClickHouse Keeper). Evia treats them as external dependencies
   and surfaces their health through `/readyz`; it does not embed failover.
   Redis Sentinel discovery and PostgreSQL multi-host failover are supported
-  directly by the clients, see the dedicated sections below.
+  directly by the clients, and ClickHouse replication is consumed through a
+  failover proxy; see the dedicated sections below.
 * Keep `EVIA_SHUTDOWN_DELAY` greater than the load balancer's health-check
   interval plus propagation time. With 5-second checks the 5-second default
   is appropriate; faster checks can reduce it.
@@ -178,6 +179,52 @@ recovery, an exactly contiguous committed sequence and an independent
 read-back match before rejoining the old primary and tearing everything
 down. See
 [verification/postgres-streaming-failover-2026-11-13.md](../verification/postgres-streaming-failover-2026-11-13.md).
+
+## ClickHouse Keeper replication and proxy failover
+
+ClickHouse high availability has two layers, and Evia intentionally keeps
+both outside the application:
+
+* **Data replication.** Tables use `ReplicatedMergeTree` coordinated by a
+  ClickHouse Keeper quorum. Replicas of one shard fetch parts through Keeper
+  metadata, so a write accepted by one node becomes readable on every node
+  after the replication queue drains. The production single-node
+  `MergeTree` migrations are untouched: the replicated schema is a
+  separately reviewed drill artifact under `deploy/clickhouse-ha/`, matching
+  the warning already recorded in migration 001.
+* **Endpoint failover.** The application keeps its single
+  `EVIA_CLICKHOUSE_URL` and points it at an L4/L7 tier (chproxy, HAProxy or
+  the drill's dependency-free TCP proxy in `tooling/ha/ch_tcp_proxy.py`).
+  The proxy health-checks each ClickHouse HTTP port, marks a node down after
+  bounded dial failures, and routes new connections to the first healthy
+  node, so the long-lived Go HTTP client needs no multi-host code.
+
+When a node stops, in-flight inserts return the sink's existing
+`ErrSinkUnavailable` and `/readyz` fails while no healthy endpoint remains;
+the pipeline's Kafka lease and dead-letter flow already bound the retry
+behavior. Once the proxy routes to the surviving node, inserts resume from
+the same process with no restart. When the stopped node returns, Keeper
+re-attaches its replica and drains the missed parts automatically; the drill
+asserts `system.replicas.is_readonly = 0` with an empty queue before
+declaring recovery.
+
+A production deployment needs at least three Keeper votes across failure
+domains, replicated tables reviewed through the normal migration process,
+TLS and credentials on every client and inter-server port, and a managed
+load balancer with its own health checks. The drill topology is plaintext,
+loopback-only and ephemeral.
+
+The full sequence is reproducible with:
+
+```
+python3 tooling/ha/clickhouse_failover_drill.py
+```
+
+It brings up two ClickHouse servers with embedded Keepers plus a standalone
+Keeper (three votes), stops one server mid-write, and proves proxy failover,
+same-process sink recovery, Keeper-led replica reattachment and two-node
+count convergence before tearing everything down. See
+[verification/clickhouse-keeper-failover-2026-11-13.md](../verification/clickhouse-keeper-failover-2026-11-13.md).
 
 ## Evidence
 
