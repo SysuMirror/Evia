@@ -102,3 +102,22 @@ python3 -m unittest tooling.ha.test_backlog_recovery_drill
 ```
 
 实测两轮（单 broker、单分区、200 事件含 180 积压）：故障窗口约 9.3 秒内滞后冻结于 180、零新增落库，恢复后排空约 320ms（约 560 事件/秒）、最终滞后为 0、无重复无丢失、无主题/数据库残留，详见[验证记录](../verification/backlog-recovery-2026-11-13.md)。该速率是当前批大小与退避配置下的单机基线，不能外推多分区水平扩展；稳态混合读写与长尾分布容量仍需独立专项。
+
+## 稳态混合读写
+
+只读矩阵测量冻结数据，积压演练测量无读流量下的写故障，混合读写演练补上「边写边读」的稳态证据：一个生产 ingest worker 持续写 ClickHouse 的同时，4 个读协程并发跑有界分析（总数、分组、UID 切片），断言精确一次落地、零读失败、计数单调非降、p95 延迟在执行预算内，并从 `system.query_log` 取峰值内存。
+
+运行：
+
+```sh
+EVIA_TEST_CLICKHOUSE_USERNAME=evia EVIA_TEST_CLICKHOUSE_PASSWORD=*** \
+python3 tooling/ha/mixed_workload_drill.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.ha.test_mixed_workload_drill
+```
+
+实测两轮（单 broker、单 CH、600 事件约 5 秒写入、4 并发读）：读样本 974/993 个零失败、p50 10ms、p95 66/67ms、峰值查询内存约 14.3 MiB、视图计数严格等于生产数、四个读协程计数全部单调非降，详见[验证记录](../verification/mixed-read-write-2026-11-13.md)。该结果是存储层小规模基线，读绕过公开 API（鉴权/排队/异步轮询），端到端延迟仍以 514/728 矩阵为准；高基数长尾分布与多副本拓扑容量仍需独立专项。
