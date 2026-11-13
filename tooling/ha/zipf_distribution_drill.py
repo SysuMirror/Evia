@@ -55,6 +55,17 @@ def zipf_weights(cardinality, exponent):
     return [1.0 / (rank ** exponent) for rank in range(1, cardinality + 1)]
 
 
+def parse_exponent(raw):
+    """Validate a CLI-provided Zipf exponent; the Go loader enforces the same range."""
+    try:
+        exponent = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise DrillError(f"invalid Zipf exponent {raw!r}: {exc}") from exc
+    if not (0.0 < exponent <= 3.0):
+        raise DrillError(f"Zipf exponent must be within (0, 3], got {exponent}")
+    return exponent
+
+
 def hamilton_apportion(weights, total):
     """Round fractional quotas to integers summing exactly to total."""
     if not isinstance(total, int) or total <= 0:
@@ -188,9 +199,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--slope-tolerance", type=float, default=0.15,
                         help="maximum accepted deviation from the theoretical log-log slope")
+    parser.add_argument("--exponent", default="1.0",
+                        help="Zipf exponent s in (0, 3]; pass a value fitted from production events")
     parser.add_argument("--keep-output", action="store_true")
     args = parser.parse_args(argv)
 
+    exponent = parse_exponent(args.exponent)
     brokers, ch_url, user, password = require_env()
     phases = []
     check_tcp(brokers.split(",")[0])
@@ -200,6 +214,7 @@ def main(argv=None):
 
     env = dict(os.environ)
     env["EVIA_TEST_ZIPF_DRILL"] = "1"
+    env["EVIA_TEST_ZIPF_EXPONENT"] = str(exponent)
     env.setdefault("EVIA_TEST_KAFKA_BROKERS", brokers)
     env.setdefault("EVIA_TEST_CLICKHOUSE_URL", ch_url)
     started = time.monotonic()
@@ -217,7 +232,7 @@ def main(argv=None):
     summary = parse_zipf_summary(proc.stdout)
     verdict = evaluate_zipf(summary, args.slope_tolerance)
     phases.append({"phase": "zipf_distribution", "status": "ok",
-                   "elapsed_ms": elapsed_ms, "verdict": verdict})
+                   "elapsed_ms": elapsed_ms, "exponent": exponent, "verdict": verdict})
 
     print(json.dumps({"status": "passed", "project": "evia-dev-pipeline",
                       "phases": phases}, indent=2, sort_keys=True))

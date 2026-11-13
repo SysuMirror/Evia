@@ -11,6 +11,7 @@ from zipf_distribution_drill import (
     hamilton_apportion,
     head_tail_ratio,
     log_log_slope,
+    parse_exponent,
     parse_zipf_summary,
     zipf_weights,
 )
@@ -37,6 +38,25 @@ class ZipfWeightsTest(unittest.TestCase):
         for exponent in (0.0, -1.0, 4.0):
             with self.assertRaises(DrillError):
                 zipf_weights(10, exponent)
+
+
+class ParseExponentTest(unittest.TestCase):
+    def test_accepts_closed_range(self):
+        self.assertEqual(parse_exponent("1.0"), 1.0)
+        self.assertEqual(parse_exponent("0.5"), 0.5)
+        self.assertEqual(parse_exponent("2.25"), 2.25)
+        # Upper bound is inclusive and matches the Go loader.
+        self.assertEqual(parse_exponent("3"), 3.0)
+
+    def test_rejects_non_numeric(self):
+        for raw in ("abc", "", None):
+            with self.assertRaises(DrillError):
+                parse_exponent(raw)
+
+    def test_rejects_outside_range(self):
+        for raw in ("0", "-0.1", "3.01", "nan", "inf"):
+            with self.assertRaises(DrillError):
+                parse_exponent(raw)
 
 
 class HamiltonApportionTest(unittest.TestCase):
