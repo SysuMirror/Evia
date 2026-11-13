@@ -56,7 +56,7 @@ pipeline-test:
 
 budget-test:
 	@test -n "$$EVIA_TEST_REDIS_URL" || { echo 'EVIA_TEST_REDIS_URL is required'; exit 1; }
-	cd backend && $(GO) test -race -tags=integration ./internal/platform/budget -count=1
+	cd backend && $(GO) test -race -tags=integration ./internal/platform/budget ./internal/ingestion -count=1
 
 query-test:
 	@test -n "$$EVIA_TEST_CLICKHOUSE_URL" && test -n "$$EVIA_TEST_CLICKHOUSE_USERNAME" && test -n "$$EVIA_TEST_CLICKHOUSE_PASSWORD" || { echo 'EVIA_TEST_CLICKHOUSE_URL, EVIA_TEST_CLICKHOUSE_USERNAME and EVIA_TEST_CLICKHOUSE_PASSWORD are required'; exit 1; }
