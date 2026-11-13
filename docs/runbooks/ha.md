@@ -281,6 +281,51 @@ same-process sink recovery, Keeper-led replica reattachment and two-node
 count convergence before tearing everything down. See
 [verification/clickhouse-keeper-failover-2026-11-13.md](../verification/clickhouse-keeper-failover-2026-11-13.md).
 
+## Keeper majority loss and read/write separation
+
+The single-node failover drill stops one vote out of three, so a majority
+always survives. The majority-loss drill removes two votes and proves the
+boundaries of what the surviving node may do:
+
+* With no Raft leader, `system.keeper_cluster` reports zero leaders and
+  `system.replicas` flips the ReplicatedMergeTree table to
+  `is_readonly=1` with an expired session. Inserts do not fail fast: they
+  park in `WaitForAsyncInsert` until `wait_for_async_insert_timeout`
+  (120 seconds by default) ends in `TIMEOUT_EXCEEDED` (Code 159). The
+  production sink's bounded HTTP client expires first and surfaces
+  `ErrSinkUnavailable`, so the Kafka lease is never acknowledged and the
+  batch is retried through the existing dead-letter path.
+* SELECT is independent of the Keeper quorum and keeps serving the last
+  durable local data for the whole outage. The drill asserts the visible
+  row count never changes while no leader exists.
+* A timed-out async insert is ambiguous: the server can retain the block
+  and commit it after the quorum returns, so a client timeout must never be
+  treated as a confirmed loss. ReplicatedMergeTree block deduplication and
+  the argMin identity dedup make identical retries idempotent; the drill
+  reports every ambiguous sequence instead of assuming the row vanished.
+* Losing only one of three votes is tolerated: two votes re-elect a leader
+  within seconds and writes resume. Restoring just one vote after a
+  majority outage re-establishes the quorum before the stopped data replica
+  is back; once it returns, Keeper reattachment drains its replication
+  queue and both replicas converge to identical row sets.
+
+Evia does not operate the Raft electorate. Production deployments must place
+the three (or five) Keeper votes across failure domains, monitor leader
+existence and replica readonly flags, and treat sustained Code 159 storms as
+a quorum incident. The application-side requirements stay limited to bounded
+client timeouts and idempotent retries, both already implemented.
+
+The full sequence, including minority tolerance, a frozen-count outage
+proof, a production-sink victim loop and staged one-vote recovery, is
+reproducible with:
+
+```
+python3 tooling/ha/clickhouse_keeper_quorum_drill.py
+```
+
+See
+[verification/clickhouse-keeper-quorum-2026-11-13.md](../verification/clickhouse-keeper-quorum-2026-11-13.md).
+
 ## Redis Cluster sharding and automatic failover
 
 In addition to the single-master Sentinel mode, the budget and admission
