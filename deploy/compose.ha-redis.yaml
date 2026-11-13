@@ -1,0 +1,202 @@
+# Standalone Redis Sentinel failover topology for the HA drill.
+#
+# Ephemeral by design: every node stores state on tmpfs and the drill always
+# removes the project with `down -v`. Published ports stay on loopback and the
+# topology runs without authentication or TLS, so it must never be used as a
+# production template; production deployments require requirepass, Sentinel
+# auth and TLS on every endpoint.
+#
+# Nodes use static IPs on an isolated bridge because Redis 8 Sentinel resolves
+# the monitored hostname once at startup and rejects names its musl resolver
+# cannot answer deterministically. The host participates through the standard
+# Docker bridge route, so the addresses Sentinel returns are directly dialable
+# from the Linux host running the drill; the loopback port publications only
+# support manual inspection and the drill's independent cross-checks.
+services:
+  redis-master:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    user: redis
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        printf 'bind 0.0.0.0\nprotected-mode no\nport 6379\nsave ""\nappendonly no\n' > /tmp/redis.conf
+        exec redis-server /tmp/redis.conf
+    ports:
+      - "127.0.0.1:16390:6379"
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
+    tmpfs:
+      - /data:size=16m,uid=999,gid=999,mode=0700
+      - /tmp:size=2m,mode=1777
+    networks:
+      ha-net:
+        ipv4_address: 172.31.77.10
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli ping | grep -q PONG']
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-replica:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    user: redis
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        printf 'bind 0.0.0.0\nprotected-mode no\nport 6379\nsave ""\nappendonly no\nreplicaof 172.31.77.10 6379\n' > /tmp/redis.conf
+        exec redis-server /tmp/redis.conf
+    ports:
+      - "127.0.0.1:16391:6379"
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
+    tmpfs:
+      - /data:size=16m,uid=999,gid=999,mode=0700
+      - /tmp:size=2m,mode=1777
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      ha-net:
+        ipv4_address: 172.31.77.11
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli info replication | grep -q "master_link_status:up"']
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-sentinel-1:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    user: redis
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        : > /tmp/sentinel.conf
+        exec redis-server /tmp/sentinel.conf --sentinel --port 26379 \
+          --sentinel monitor evia-redis 172.31.77.10 6379 2 \
+          --sentinel down-after-milliseconds evia-redis 5000 \
+          --sentinel failover-timeout evia-redis 10000 \
+          --sentinel parallel-syncs evia-redis 1
+    ports:
+      - "127.0.0.1:26379:26379"
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    tmpfs:
+      - /tmp:size=2m,mode=1777
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      ha-net:
+        ipv4_address: 172.31.77.21
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -p 26379 ping | grep -q PONG']
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-sentinel-2:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    user: redis
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        : > /tmp/sentinel.conf
+        exec redis-server /tmp/sentinel.conf --sentinel --port 26379 \
+          --sentinel monitor evia-redis 172.31.77.10 6379 2 \
+          --sentinel down-after-milliseconds evia-redis 5000 \
+          --sentinel failover-timeout evia-redis 10000 \
+          --sentinel parallel-syncs evia-redis 1
+    ports:
+      - "127.0.0.1:26380:26379"
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    tmpfs:
+      - /tmp:size=2m,mode=1777
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      ha-net:
+        ipv4_address: 172.31.77.22
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -p 26379 ping | grep -q PONG']
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-sentinel-3:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    user: redis
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        : > /tmp/sentinel.conf
+        exec redis-server /tmp/sentinel.conf --sentinel --port 26379 \
+          --sentinel monitor evia-redis 172.31.77.10 6379 2 \
+          --sentinel down-after-milliseconds evia-redis 5000 \
+          --sentinel failover-timeout evia-redis 10000 \
+          --sentinel parallel-syncs evia-redis 1
+    ports:
+      - "127.0.0.1:26381:26379"
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    tmpfs:
+      - /tmp:size=2m,mode=1777
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      ha-net:
+        ipv4_address: 172.31.77.23
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -p 26379 ping | grep -q PONG']
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+networks:
+  ha-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.77.0/24
