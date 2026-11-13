@@ -267,9 +267,20 @@ func (c *Config) readBudget(get func(string) string) error {
 	rawURL := get("EVIA_REDIS_URL")
 	sentinelAddrs := get("EVIA_REDIS_SENTINEL_ADDRS")
 	masterName := get("EVIA_REDIS_SENTINEL_MASTER")
+	clusterAddrs := get("EVIA_REDIS_CLUSTER_ADDRS")
 	c.Budget = budget.DefaultConfig(rawURL)
 	c.Budget.AllowInsecureLocal = c.AllowInsecureDependencies
 	switch {
+	case clusterAddrs != "":
+		if rawURL != "" || sentinelAddrs != "" || masterName != "" {
+			return errors.New("EVIA_REDIS_CLUSTER_ADDRS is mutually exclusive with EVIA_REDIS_URL and the Sentinel variables")
+		}
+		addrs, tlsEnabled, err := readRedisCluster(get, clusterAddrs, c.AllowInsecureDependencies)
+		if err != nil {
+			return err
+		}
+		c.Budget.Cluster = budget.ClusterConfig{Addrs: addrs, Password: get("EVIA_REDIS_PASSWORD"), TLSEnabled: tlsEnabled}
+		c.Budget.URL = ""
 	case sentinelAddrs != "" || masterName != "":
 		if rawURL != "" {
 			return errors.New("EVIA_REDIS_URL and EVIA_REDIS_SENTINEL_ADDRS are mutually exclusive")
@@ -313,6 +324,33 @@ func (c *Config) readBudget(get func(string) string) error {
 // readRedisSentinel validates the closed Sentinel configuration set. The
 // default TLS posture matches Kafka: TLS on unless every endpoint is loopback
 // and insecure dependencies are explicitly enabled for local development.
+// readRedisCluster validates the closed Redis Cluster seed set and its TLS
+// posture, sharing the same host bounds and loopback-only plaintext rule as
+// the Sentinel path. It performs no network I/O.
+func readRedisCluster(get func(string) string, rawAddrs string, allowLocal bool) ([]string, bool, error) {
+	parts := strings.Split(rawAddrs, ",")
+	if len(parts) < 1 || len(parts) > 8 {
+		return nil, false, errors.New("EVIA_REDIS_CLUSTER_ADDRS supports between 1 and 8 endpoints")
+	}
+	tlsEnabled, err := boolean(get, "EVIA_REDIS_CLUSTER_TLS_ENABLED", true)
+	if err != nil {
+		return nil, false, err
+	}
+	addrs := make([]string, 0, len(parts))
+	for _, raw := range parts {
+		addr := strings.TrimSpace(raw)
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil || host == "" || len(host) > 253 || strings.ContainsAny(host, " /?#@\r\n\t") || !validPort(port) {
+			return nil, false, errors.New("EVIA_REDIS_CLUSTER_ADDRS contains an invalid TCP endpoint")
+		}
+		if !tlsEnabled && (!allowLocal || !loopback(host)) {
+			return nil, false, errors.New("plaintext Redis Cluster requires EVIA_ALLOW_INSECURE_DEPENDENCIES=true and loopback endpoints")
+		}
+		addrs = append(addrs, addr)
+	}
+	return addrs, tlsEnabled, nil
+}
+
 func readRedisSentinel(get func(string) string, rawAddrs, masterName string, allowLocal bool) (budget.SentinelConfig, error) {
 	if !sentinelMasterPattern.MatchString(masterName) {
 		return budget.SentinelConfig{}, errors.New("EVIA_REDIS_SENTINEL_MASTER must be 1 to 64 letters, digits, dots, underscores or hyphens")

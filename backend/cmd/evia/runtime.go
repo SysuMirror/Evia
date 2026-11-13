@@ -135,6 +135,11 @@ func admissionStatsConfig(b budget.Config) admissionstats.Config {
 		SentinelPassword: b.Sentinel.SentinelPassword,
 		TLSEnabled:       b.Sentinel.TLSEnabled,
 	}
+	cfg.Cluster = admissionstats.ClusterConfig{
+		Addrs:      append([]string(nil), b.Cluster.Addrs...),
+		Password:   b.Cluster.Password,
+		TLSEnabled: b.Cluster.TLSEnabled,
+	}
 	return cfg
 }
 
