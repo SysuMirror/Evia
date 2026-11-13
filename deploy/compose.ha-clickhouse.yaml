@@ -1,0 +1,291 @@
+# Standalone ClickHouse Keeper replicated topology for the HA drill.
+#
+# Two clickhouse-server nodes run embedded Keepers (ids 1 and 2); a standalone
+# clickhouse-keeper container adds the third vote, so the quorum tolerates one
+# keeper failure. Both servers attach ReplicatedMergeTree tables to the same
+# Keeper-coordinated zk path and replicate one shard with two replicas.
+#
+# A dependency-free TCP failover proxy (tooling/ha/ch_tcp_proxy.py) fronts the
+# HTTP ports behind one stable loopback endpoint, mirroring the production
+# chproxy/LB placement while keeping the Evia application on its single-URL
+# configuration.
+#
+# Ephemeral by design: named volumes are removed with `down -v`. Drill-only
+# credentials and no TLS; never use this file as a production template.
+services:
+  ch-1:
+    image: clickhouse/clickhouse-server:26.8.36.3@sha256:d426d2f612e1e189c90f9a3f8dcd85a03c6851273833817a296bb327e63aa7a7
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    configs:
+      - source: ch-server-1-config
+        target: /etc/clickhouse-server/config.d/ha-server.xml
+        mode: 0444
+      - source: ch-users-config
+        target: /etc/clickhouse-server/users.d/ha-users.xml
+        mode: 0444
+    ports:
+      - "127.0.0.1:18132:8123"
+      - "127.0.0.1:19010:9000"
+    cpus: 2
+    mem_limit: 2560m
+    memswap_limit: 2560m
+    pids_limit: 1024
+    volumes:
+      - ch-1-data:/var/lib/clickhouse
+      - ch-1-logs:/var/log/clickhouse-server
+    networks:
+      ha-ch-net:
+        ipv4_address: 172.31.79.10
+    healthcheck:
+      test: [CMD-SHELL, "clickhouse-client -u evia --password evia-ha-drill -q 'SELECT 1' | grep -q 1"]
+      interval: 4s
+      timeout: 3s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  ch-2:
+    image: clickhouse/clickhouse-server:26.8.36.3@sha256:d426d2f612e1e189c90f9a3f8dcd85a03c6851273833817a296bb327e63aa7a7
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    configs:
+      - source: ch-server-2-config
+        target: /etc/clickhouse-server/config.d/ha-server.xml
+        mode: 0444
+      - source: ch-users-config
+        target: /etc/clickhouse-server/users.d/ha-users.xml
+        mode: 0444
+    ports:
+      - "127.0.0.1:18133:8123"
+      - "127.0.0.1:19011:9000"
+    cpus: 2
+    mem_limit: 2560m
+    memswap_limit: 2560m
+    pids_limit: 1024
+    depends_on:
+      keeper-3:
+        condition: service_started
+    volumes:
+      - ch-2-data:/var/lib/clickhouse
+      - ch-2-logs:/var/log/clickhouse-server
+    networks:
+      ha-ch-net:
+        ipv4_address: 172.31.79.11
+    healthcheck:
+      test: [CMD-SHELL, "clickhouse-client -u evia --password evia-ha-drill -q 'SELECT 1' | grep -q 1"]
+      interval: 4s
+      timeout: 3s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  keeper-3:
+    image: clickhouse/clickhouse-server:26.8.36.3@sha256:d426d2f612e1e189c90f9a3f8dcd85a03c6851273833817a296bb327e63aa7a7
+    entrypoint: ["clickhouse-keeper", "--config-file=/etc/clickhouse-keeper/keeper.xml"]
+    configs:
+      - source: ch-keeper-3-config
+        target: /etc/clickhouse-keeper/keeper.xml
+        mode: 0444
+    cpus: 0.5
+    mem_limit: 384m
+    memswap_limit: 384m
+    pids_limit: 128
+    volumes:
+      - keeper-3-data:/var/lib/clickhouse
+    networks:
+      ha-ch-net:
+        ipv4_address: 172.31.79.12
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  ch-lb:
+    image: python:3.12-slim
+    entrypoint: ["python", "/opt/evia/ch_tcp_proxy.py"]
+    command:
+      - "--listen-port=8123"
+      - "--backends=172.31.79.10:8123,172.31.79.11:8123"
+      - "--probe-interval=1.0"
+    configs:
+      - source: ch-tcp-proxy
+        target: /opt/evia/ch_tcp_proxy.py
+        mode: 0555
+    ports:
+      - "127.0.0.1:18131:8123"
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 64
+    depends_on:
+      ch-1:
+        condition: service_healthy
+      ch-2:
+        condition: service_healthy
+    networks:
+      ha-ch-net:
+        ipv4_address: 172.31.79.20
+    healthcheck:
+      test: [CMD-SHELL, "python -c \"import socket,sys; sys.exit(0 if socket.create_connection(('127.0.0.1',8123),2) else 1)\""]
+      interval: 4s
+      timeout: 3s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+networks:
+  ha-ch-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.79.0/24
+
+volumes:
+  ch-1-data:
+  ch-2-data:
+  ch-1-logs:
+  ch-2-logs:
+  keeper-3-data:
+
+configs:
+  ch-users-config:
+    content: |
+      <clickhouse>
+        <profiles>
+          <default>
+            <max_threads>32</max_threads>
+            <max_insert_threads>2</max_insert_threads>
+            <max_final_threads>2</max_final_threads>
+            <max_memory_usage>1073741824</max_memory_usage>
+          </default>
+        </profiles>
+        <users>
+          <evia>
+            <password>evia-ha-drill</password>
+            <networks><ip>::/0</ip></networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+          </evia>
+        </users>
+      </clickhouse>
+  ch-server-1-config:
+    content: &server-config
+      <clickhouse>
+        <listen_host>0.0.0.0</listen_host>
+        <http_port>8123</http_port>
+        <tcp_port>9000</tcp_port>
+        <max_server_memory_usage>2147483648</max_server_memory_usage>
+        <mark_cache_size>536870912</mark_cache_size>
+        <uncompressed_cache_size>134217728</uncompressed_cache_size>
+        <macros><shard>01</shard><replica>ch-1</replica></macros>
+        <keeper_server>
+          <tcp_port>9234</tcp_port>
+          <server_id>1</server_id>
+          <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+          <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+          <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>warning</raft_logs_level>
+          </coordination_settings>
+          <raft_configuration>
+            <server><id>1</id><hostname>172.31.79.10</hostname><port>9235</port></server>
+            <server><id>2</id><hostname>172.31.79.11</hostname><port>9235</port></server>
+            <server><id>3</id><hostname>172.31.79.12</hostname><port>9235</port></server>
+          </raft_configuration>
+        </keeper_server>
+        <zookeeper>
+          <node><host>172.31.79.10</host><port>9234</port></node>
+          <node><host>172.31.79.11</host><port>9234</port></node>
+          <node><host>172.31.79.12</host><port>9234</port></node>
+        </zookeeper>
+        <remote_servers>
+          <evia_ha_cluster>
+            <shard>
+              <replica><host>172.31.79.10</host><port>9000</port></replica>
+              <replica><host>172.31.79.11</host><port>9000</port></replica>
+            </shard>
+          </evia_ha_cluster>
+        </remote_servers>
+        <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
+      </clickhouse>
+  ch-server-2-config:
+    content:
+      <clickhouse>
+        <listen_host>0.0.0.0</listen_host>
+        <http_port>8123</http_port>
+        <tcp_port>9000</tcp_port>
+        <max_server_memory_usage>2147483648</max_server_memory_usage>
+        <mark_cache_size>536870912</mark_cache_size>
+        <uncompressed_cache_size>134217728</uncompressed_cache_size>
+        <macros><shard>01</shard><replica>ch-2</replica></macros>
+        <keeper_server>
+          <tcp_port>9234</tcp_port>
+          <server_id>2</server_id>
+          <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+          <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+          <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>warning</raft_logs_level>
+          </coordination_settings>
+          <raft_configuration>
+            <server><id>1</id><hostname>172.31.79.10</hostname><port>9235</port></server>
+            <server><id>2</id><hostname>172.31.79.11</hostname><port>9235</port></server>
+            <server><id>3</id><hostname>172.31.79.12</hostname><port>9235</port></server>
+          </raft_configuration>
+        </keeper_server>
+        <zookeeper>
+          <node><host>172.31.79.10</host><port>9234</port></node>
+          <node><host>172.31.79.11</host><port>9234</port></node>
+          <node><host>172.31.79.12</host><port>9234</port></node>
+        </zookeeper>
+        <remote_servers>
+          <evia_ha_cluster>
+            <shard>
+              <replica><host>172.31.79.10</host><port>9000</port></replica>
+              <replica><host>172.31.79.11</host><port>9000</port></replica>
+            </shard>
+          </evia_ha_cluster>
+        </remote_servers>
+        <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
+      </clickhouse>
+  ch-keeper-3-config:
+    content:
+      <clickhouse>
+        <keeper_server>
+          <tcp_port>9234</tcp_port>
+          <server_id>3</server_id>
+          <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+          <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+          <data_storage_path>/var/lib/clickhouse/coordination/data</data_storage_path>
+          <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>warning</raft_logs_level>
+          </coordination_settings>
+          <raft_configuration>
+            <server><id>1</id><hostname>172.31.79.10</hostname><port>9235</port></server>
+            <server><id>2</id><hostname>172.31.79.11</hostname><port>9235</port></server>
+            <server><id>3</id><hostname>172.31.79.12</hostname><port>9235</port></server>
+          </raft_configuration>
+        </keeper_server>
+        <logger>
+          <level>information</level>
+          <console>1</console>
+        </logger>
+      </clickhouse>
+  ch-tcp-proxy:
+    file: ../tooling/ha/ch_tcp_proxy.py
