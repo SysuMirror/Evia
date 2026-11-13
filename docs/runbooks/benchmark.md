@@ -223,3 +223,19 @@ EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py \
 ```
 
 两轮独立运行逐值一致：30 万行下 unmerged 实测保住 6–7 个活跃 part（计划 60），headroom 比率仅比 merged 高约 3–4%（segregated 7.2636→7.5305、boundary 7.2577→7.4865），mutation 6/6、过期零残留、回收偏差 ≤0.002。结论：headroom 对 part 数同样不敏感，9 倍余量覆盖多 part 形态，无需为高频写入表单设预算。unmerged 的 part 数是减速下的实测值而非精确受控，几十上百 part 的极端形态需另调参数复测，详见[验证记录](../verification/retention-multipart-headroom-2026-11-14.md)。
+
+## 多租户查询内存隔离
+
+514/728 矩阵的资源拒绝主题需要多租户隔离证据。探针在按租户分区的表（8 租户 × 25 万行）上对每个查询附加与 `analysis/clickhouse.go` 逐项相同的 SETTINGS（单查询 512MiB、2 线程、读取/结果上限、readonly=2），设置闭集由纯函数单测锁定漂移。
+
+```sh
+EVIA_CH_PASSWORD=*** python3 tooling/benchmark/tenant_query_isolation_probe.py
+```
+
+纯逻辑门控：
+
+```sh
+python3 -m unittest tooling.benchmark.test_tenant_query_isolation_probe
+```
+
+两轮独立运行结论一致：护栏确定性触发——`groupArray` 在读取上限内于 552.6MiB 处被 Code 241（MEMORY_LIMIT_EXCEEDED）拒绝、超量扫描被 Code 158（TOO_MANY_ROWS）拒绝；并发 4/8 下 16 个有界租户查询全部成功、单查询峰值仅 18–19MiB（约预算 3.5%）；嘈杂邻居波里重查询被拒的同时有界查询 100% 存活、p95 23–27ms 与纯有界波无差异；实测聚合峰值最高 445MiB，仅占 4 并发演绎上界（2GiB）的 21%。聚合上界由单查询硬封顶演绎保证（N 并发 ≤ N×512MiB），毫秒级有界查询的轮询采样为下界，详见[验证记录](../verification/tenant-query-isolation-2026-11-14.md)。
