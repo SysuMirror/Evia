@@ -7,8 +7,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from retention_headroom_probe import (
     AGED_DAYS,
     BOUNDARY,
+    MERGED,
     SEGREGATED,
     SCOPE_COUNT,
+    UNMERGED,
+    UNMERGED_PART_ROWS,
     Cell,
     CellMeasurement,
     PartsBytePoller,
@@ -20,6 +23,7 @@ from retention_headroom_probe import (
     evaluate_cell,
     format_datetime,
     headroom_ratio,
+    insert_batch_sizes,
     month_key,
     plan_cells,
     plan_timestamps,
@@ -56,8 +60,8 @@ class ValidationTest(unittest.TestCase):
             validate_environment("admin")
 
     def test_cell_database_deterministic(self):
-        self.assertEqual(cell_database(100_000, 0.25), "evia_probe_ret_s100000_f25")
-        self.assertEqual(cell_database(500_000, 0.75), "evia_probe_ret_s500000_f75")
+        self.assertEqual(cell_database(100_000, 0.25), "evia_probe_ret_s100000_f25_m")
+        self.assertEqual(cell_database(500_000, 0.75), "evia_probe_ret_s500000_f75_m")
 
     def test_datetime_format(self):
         literal = format_datetime(0.0)
@@ -68,8 +72,8 @@ class MatrixPlanTest(unittest.TestCase):
     def test_plans_cartesian_product(self):
         cells = plan_cells((100_000, 500_000), (0.25, 0.5, 0.75))
         self.assertEqual(len(cells), 6)
-        self.assertEqual(cells[0].database, "evia_probe_ret_s100000_f25")
-        self.assertEqual(cells[-1].database, "evia_probe_ret_s500000_f75")
+        self.assertEqual(cells[0].database, "evia_probe_ret_s100000_f25_m")
+        self.assertEqual(cells[-1].database, "evia_probe_ret_s500000_f75_m")
 
     def test_band_totals_reconcile(self):
         for cell in plan_cells((100_000, 500_000), (0.25, 0.5, 0.75)):
@@ -196,6 +200,9 @@ def measurement(**overrides):
         expected_partitions=2,
         partitions_before=2,
         partitions_after=1,
+        planned_parts=2,
+        parts_before=2,
+        parts_after=1,
     )
     from retention_headroom_probe import ScopeMeasurement
     for index in range(SCOPE_COUNT):
@@ -304,12 +311,12 @@ class TimestampPlannerTest(unittest.TestCase):
 
 class LayoutModeCellTest(unittest.TestCase):
     def test_database_name_encodes_mode(self):
-        self.assertEqual(cell_database(100_000, 0.5, SEGREGATED),
-                         "evia_probe_ret_s100000_f50")
-        self.assertEqual(cell_database(100_000, 0.5, BOUNDARY),
-                         "evia_probe_ret_b100000_f50")
-        self.assertEqual(Cell(100_000, 0.5, BOUNDARY).database,
-                         "evia_probe_ret_b100000_f50")
+        self.assertEqual(cell_database(100_000, 0.5, SEGREGATED, MERGED),
+                         "evia_probe_ret_s100000_f50_m")
+        self.assertEqual(cell_database(100_000, 0.5, BOUNDARY, MERGED),
+                         "evia_probe_ret_b100000_f50_m")
+        self.assertEqual(Cell(100_000, 0.5, BOUNDARY, MERGED).database,
+                         "evia_probe_ret_b100000_f50_m")
 
     def test_plan_cells_cartesian_modes(self):
         cells = plan_cells((300_000,), (0.5,), (SEGREGATED, BOUNDARY))
@@ -326,7 +333,8 @@ class PartitionEvaluationTest(unittest.TestCase):
         boundary_cell = Cell(100_000, 0.5, BOUNDARY)
         verdict = evaluate_cell(measurement(
             cell=boundary_cell, expected_partitions=1,
-            partitions_before=1, partitions_after=1))
+            partitions_before=1, partitions_after=1,
+            planned_parts=1, parts_before=1, parts_after=1))
         self.assertTrue(verdict["passed"], verdict["failures"])
         self.assertEqual(verdict["mode"], BOUNDARY)
 
@@ -337,6 +345,85 @@ class PartitionEvaluationTest(unittest.TestCase):
     def test_surviving_partition_count_must_be_one(self):
         self.assertFalse(evaluate_cell(measurement(partitions_after=2))["passed"])
 
+
+
+class InsertBatchSizesTest(unittest.TestCase):
+    def test_even_split(self):
+        self.assertEqual(insert_batch_sizes(10_000, 5_000), [5_000, 5_000])
+
+    def test_remainder_part(self):
+        self.assertEqual(insert_batch_sizes(12_000, 5_000), [5_000, 5_000, 2_000])
+
+    def test_single_small_part(self):
+        self.assertEqual(insert_batch_sizes(300, 5_000), [300])
+
+    def test_rejects_non_positive(self):
+        with self.assertRaises(ProbeError):
+            insert_batch_sizes(0, 5_000)
+        with self.assertRaises(ProbeError):
+            insert_batch_sizes(100, 0)
+
+    def test_part_count_is_list_length(self):
+        cell = Cell(300_000, 0.5, SEGREGATED, UNMERGED)
+        self.assertEqual(cell.part_rows, UNMERGED_PART_ROWS)
+        self.assertEqual(cell.planned_parts,
+                         len(insert_batch_sizes(300_000, UNMERGED_PART_ROWS)))
+        self.assertEqual(cell.planned_parts, 60)
+
+
+class PartShapeCellTest(unittest.TestCase):
+    def test_database_name_encodes_shape(self):
+        self.assertEqual(cell_database(300_000, 0.5, SEGREGATED, UNMERGED),
+                         "evia_probe_ret_s300000_f50_u")
+        self.assertEqual(cell_database(300_000, 0.5, BOUNDARY, UNMERGED),
+                         "evia_probe_ret_b300000_f50_u")
+
+    def test_merged_uses_large_part_batch(self):
+        cell = Cell(300_000, 0.5, SEGREGATED, MERGED)
+        self.assertGreater(cell.part_rows, UNMERGED_PART_ROWS)
+
+    def test_plan_cells_cartesian_shapes(self):
+        cells = plan_cells((300_000,), (0.5,), (SEGREGATED,), (MERGED, UNMERGED))
+        self.assertEqual([cell.shape for cell in cells], [MERGED, UNMERGED])
+        self.assertEqual(len({cell.database for cell in cells}), 2)
+
+    def test_rejects_unknown_shape(self):
+        with self.assertRaises(ProbeError):
+            plan_cells((300_000,), (0.5,), (SEGREGATED,), ("nope",))
+
+
+class PartEvaluationTest(unittest.TestCase):
+    def test_merged_requires_one_part_per_partition(self):
+        cell = Cell(300_000, 0.5, SEGREGATED, MERGED)
+        good = evaluate_cell(measurement(
+            cell=cell, planned_parts=1, parts_before=2, parts_after=1,
+            expected_partitions=2, partitions_before=2, partitions_after=1,
+            recent_after=150_000, rows_after=150_000))
+        self.assertTrue(good["passed"], good["failures"])
+        bad = evaluate_cell(measurement(
+            cell=cell, planned_parts=1, parts_before=5, parts_after=1,
+            expected_partitions=2, partitions_before=2, partitions_after=1,
+            recent_after=150_000, rows_after=150_000))
+        self.assertFalse(bad["passed"])
+
+    def test_unmerged_requires_more_parts_than_partitions(self):
+        cell = Cell(300_000, 0.5, SEGREGATED, UNMERGED)
+        # Many surviving parts (exact count not asserted) pass.
+        good = evaluate_cell(measurement(
+            cell=cell, planned_parts=60, parts_before=42, parts_after=40,
+            expected_partitions=2, partitions_before=2, partitions_after=1,
+            recent_after=150_000, rows_after=150_000))
+        self.assertTrue(good["passed"], good["failures"])
+        self.assertEqual(good["shape"], UNMERGED)
+        # Collapsing to one part per partition proves the slowdown failed.
+        bad = evaluate_cell(measurement(
+            cell=cell, planned_parts=60, parts_before=2, parts_after=2,
+            expected_partitions=2, partitions_before=2, partitions_after=1,
+            recent_after=150_000, rows_after=150_000))
+        self.assertFalse(bad["passed"])
+
+    def test_zero_parts_after_fails(self):
+        self.assertFalse(evaluate_cell(measurement(parts_after=0))["passed"])
 
 
 if __name__ == "__main__":

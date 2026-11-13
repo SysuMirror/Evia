@@ -21,6 +21,10 @@ benchmark ClickHouse (4 GiB memory, host-named disk volume):
   rows in separate monthly partitions, while boundary mode pins both bands
   into the cutoff month so every mutated part retains survivors; the two
   modes run at identical rows and fractions for a controlled comparison;
+* the multi-part penalty: merged shape settles one part per partition while
+  unmerged pauses background merges and loads fixed-size parts, so a mutation
+  rewrites many parts per partition; the two shapes run at identical rows to
+  show whether headroom stays layout-insensitive once parts proliferate;
 * whether the production invariants (one synchronous mutation per scope,
   expired rows gone, in-window rows byte-exact retained) hold at scale.
 
@@ -70,6 +74,22 @@ RECENT_DAYS = 5
 SEGREGATED = "segregated"
 BOUNDARY = "boundary"
 LAYOUT_MODES = (SEGREGATED, BOUNDARY)
+
+# Part shapes describe how loaded rows settle before the sweep. merged runs
+# OPTIMIZE FINAL so each partition holds one part (the existing matrix);
+# unmerged pauses background merges and loads fixed-size parts so a mutation
+# must rewrite many parts per partition, the production table shape the
+# boundary report explicitly left unverified.
+MERGED = "merged"
+UNMERGED = "unmerged"
+PART_SHAPES = (MERGED, UNMERGED)
+UNMERGED_PART_ROWS = 5_000
+# Slow (never freeze) the background merge selector for unmerged cells so the
+# loaded parts largely survive until the sweep while mutations still run:
+# SYSTEM STOP MERGES would also freeze the merge that executes a mutation,
+# making mutations_sync=1 block indefinitely, so it must not be used here.
+# 60s is the server ceiling for merge_selecting_sleep_ms.
+UNMERGED_MERGE_SELECTOR_SLEEP_MS = 60_000
 
 # Distinct valid UUIDs; never reuse pipeline test constants inside a probe.
 PROJECTS = (
@@ -174,12 +194,17 @@ def plan_timestamps(now_epoch: float, retention_days: int, mode: str) -> Timesta
         recent_month=month_key(recent))
 
 
-def cell_database(rows: int, fraction: float, mode: str = SEGREGATED) -> str:
+def cell_database(rows: int, fraction: float, mode: str = SEGREGATED,
+                  shape: str = MERGED) -> str:
     validate_identifier(RAW_TABLE)
     if mode not in LAYOUT_MODES:
         raise ProbeError(f"unknown layout mode {mode!r}")
-    letter = "s" if mode == SEGREGATED else "b"
-    name = f"{PROBE_DB_PREFIX}_{letter}{rows}_f{int(round(fraction * 100)):02d}"
+    if shape not in PART_SHAPES:
+        raise ProbeError(f"unknown part shape {shape!r}")
+    layout_letter = "s" if mode == SEGREGATED else "b"
+    shape_letter = "m" if shape == MERGED else "u"
+    name = (f"{PROBE_DB_PREFIX}_{layout_letter}{rows}_f"
+            f"{int(round(fraction * 100)):02d}_{shape_letter}")
     validate_probe_database(name)
     return name
 
@@ -189,10 +214,22 @@ class Cell:
     rows: int
     aged_fraction: float
     mode: str = SEGREGATED
+    shape: str = MERGED
 
     @property
     def database(self) -> str:
-        return cell_database(self.rows, self.aged_fraction, self.mode)
+        return cell_database(self.rows, self.aged_fraction, self.mode, self.shape)
+
+    @property
+    def part_rows(self) -> int:
+        return INSERT_BATCH if self.shape == MERGED else UNMERGED_PART_ROWS
+
+    @property
+    def planned_parts(self) -> int:
+        """Number of INSERT batches (intended parts) before background merges.
+        Merged cells collapse these via OPTIMIZE FINAL; unmerged cells retain
+        most of them because the merge selector is slowed, not frozen."""
+        return len(insert_batch_sizes(self.rows, self.part_rows))
 
     @property
     def aged_rows(self) -> int:
@@ -204,11 +241,15 @@ class Cell:
 
 
 def plan_cells(scales: tuple[int, ...], fractions: tuple[float, ...],
-               modes: tuple[str, ...] = (SEGREGATED,)) -> list[Cell]:
+               modes: tuple[str, ...] = (SEGREGATED,),
+               shapes: tuple[str, ...] = (MERGED,)) -> list[Cell]:
     cells = []
     for mode in modes:
         if mode not in LAYOUT_MODES:
             raise ProbeError(f"unknown layout mode {mode!r}")
+    for shape in shapes:
+        if shape not in PART_SHAPES:
+            raise ProbeError(f"unknown part shape {shape!r}")
     for rows in scales:
         if not isinstance(rows, int) or rows < SCOPE_COUNT:
             raise ProbeError(f"scale must be an integer >= {SCOPE_COUNT}: {rows}")
@@ -216,11 +257,12 @@ def plan_cells(scales: tuple[int, ...], fractions: tuple[float, ...],
             if not isinstance(fraction, (int, float)) or not 0.0 < fraction < 1.0:
                 raise ProbeError(f"aged fraction must be within (0, 1): {fraction}")
             for mode in modes:
-                cell = Cell(rows, float(fraction), mode)
-                if cell.aged_rows < SCOPE_COUNT or cell.recent_rows < SCOPE_COUNT:
-                    raise ProbeError(
-                        f"cell rows={rows} fraction={fraction} leaves a band under {SCOPE_COUNT}")
-                cells.append(cell)
+                for shape in shapes:
+                    cell = Cell(rows, float(fraction), mode, shape)
+                    if cell.aged_rows < SCOPE_COUNT or cell.recent_rows < SCOPE_COUNT:
+                        raise ProbeError(
+                            f"cell rows={rows} fraction={fraction} leaves a band under {SCOPE_COUNT}")
+                    cells.append(cell)
     return cells
 
 
@@ -246,6 +288,23 @@ def allocate_bands(cell: Cell, scopes: int = SCOPE_COUNT) -> list[tuple[int, int
     if any(aged < 1 or recent < 1 for aged, recent in bands):
         raise ProbeError("band allocation left a scope uncovered")
     return bands
+
+
+def insert_batch_sizes(total_rows: int, part_rows: int) -> list[int]:
+    """Deterministic per-INSERT row counts that yield fixed-size parts plus a
+    final remainder part. With background merges paused, one INSERT makes one
+    part, so the list length equals the resulting active part count."""
+    if not isinstance(total_rows, int) or total_rows <= 0:
+        raise ProbeError(f"total_rows must be positive: {total_rows}")
+    if not isinstance(part_rows, int) or part_rows <= 0:
+        raise ProbeError(f"part_rows must be positive: {part_rows}")
+    full, remainder = divmod(total_rows, part_rows)
+    sizes = [part_rows] * full
+    if remainder:
+        sizes.append(remainder)
+    if sum(sizes) != total_rows:
+        raise ProbeError("batch planning lost rows")
+    return sizes
 
 
 def scope_pairs() -> list[tuple[str, str]]:
@@ -338,6 +397,9 @@ class CellMeasurement:
     partitions_after: int = 0
     partitions_before_rows: dict = field(default_factory=dict)
     partitions_after_rows: dict = field(default_factory=dict)
+    planned_parts: int = 0
+    parts_before: int = 0
+    parts_after: int = 0
 
     @property
     def max_peak_bytes(self) -> int:
@@ -352,6 +414,10 @@ class CellMeasurement:
             "database": self.cell.database,
             "rows": self.cell.rows,
             "mode": self.cell.mode,
+            "shape": self.cell.shape,
+            "planned_parts": self.planned_parts,
+            "parts_before": self.parts_before,
+            "parts_after": self.parts_after,
             "aged_fraction": self.cell.aged_fraction,
             "aged_rows": self.cell.aged_rows,
             "recent_rows": self.cell.recent_rows,
@@ -419,9 +485,27 @@ def evaluate_cell(measurement: CellMeasurement) -> dict:
     # segregated partition empties out.
     if measurement.partitions_after != 1:
         failures.append(f"partitions after {measurement.partitions_after} must be 1")
+    if measurement.cell.shape == MERGED:
+        # OPTIMIZE FINAL settles one active part per populated partition.
+        if measurement.parts_before != measurement.expected_partitions:
+            failures.append(
+                f"merged parts before {measurement.parts_before} != "
+                f"partitions {measurement.expected_partitions}")
+    else:
+        # Unmerged only guarantees more parts than partitions: the slowed
+        # merge selector may still combine a minority of loaded parts, so an
+        # exact count is not asserted, but a single-part table would prove the
+        # slowdown failed and invalidate the multi-part premise.
+        if measurement.parts_before <= measurement.expected_partitions:
+            failures.append(
+                f"unmerged parts before {measurement.parts_before} must exceed "
+                f"partition count {measurement.expected_partitions}")
+    if measurement.parts_after < 1:
+        failures.append("parts after sweep must stay positive")
     return {
         "database": measurement.cell.database,
         "mode": measurement.cell.mode,
+        "shape": measurement.cell.shape,
         "passed": not failures,
         "failures": failures,
         "max_headroom_ratio": headroom_ratio(
@@ -528,8 +612,10 @@ class HeadroomHarness:
         prefix = shlex.join(self.client.argv_prefix) + f" --database {database}"
         return ClickHouseProbe(prefix, self.client.username, self.client.password)
 
-    def provision(self, database: str) -> None:
+    def provision(self, database: str, shape: str = MERGED) -> None:
         validate_probe_database(database)
+        if shape not in PART_SHAPES:
+            raise ProbeError(f"unknown part shape {shape!r}")
         admin = self.client
         admin.run(f"DROP DATABASE IF EXISTS {database} SYNC")
         admin.run(f"CREATE DATABASE {database}")
@@ -537,6 +623,11 @@ class HeadroomHarness:
         for path in sorted(self.migrations_dir.glob("*.sql")):
             for statement in split_sql_migrations(path.read_text(encoding="utf-8")):
                 db_client.run(statement)
+        if shape == UNMERGED:
+            # Slow ordinary background merges without blocking mutations.
+            db_client.run(
+                f"ALTER TABLE {RAW_TABLE} MODIFY SETTING "
+                f"merge_selecting_sleep_ms={UNMERGED_MERGE_SELECTOR_SLEEP_MS}")
 
     def drop(self, database: str) -> None:
         validate_probe_database(database)
@@ -545,6 +636,8 @@ class HeadroomHarness:
     def stream_load(self, database: str, cell: Cell, aged_ts: str, recent_ts: str,
                     received_ts: str) -> None:
         db_client = self._database_client(database)
+        # Unmerged tables already carry the slowed merge selector from
+        # provision; merged tables keep default merges and settle explicitly.
         remaining = list(allocate_bands(cell))
         pairs = scope_pairs()
         ordinal = 0
@@ -560,8 +653,10 @@ class HeadroomHarness:
             )
             batch = []
 
-        # Round-robin scopes (and both bands per scope) so every merged part
-        # holds all tenants and age bands: worst case for a scoped rewrite.
+        # Round-robin scopes (and both bands per scope) so every part holds all
+        # tenants and age bands: worst case for a scoped rewrite. The flush
+        # threshold is the cell's part size, so unmerged loads produce a known
+        # number of parts while merged loads use the large throughput batch.
         while any(aged > 0 or recent > 0 for aged, recent in remaining):
             for scope_index, (project, environment) in enumerate(pairs):
                 aged_left, recent_left = remaining[scope_index]
@@ -578,12 +673,16 @@ class HeadroomHarness:
                     ordinal += 1
                     recent_left -= 1
                 remaining[scope_index] = (aged_left, recent_left)
-                if len(batch) >= INSERT_BATCH:
+                if len(batch) >= cell.part_rows:
                     flush()
         flush()
         if ordinal != cell.rows:
             raise ProbeError(f"loaded {ordinal} rows, want {cell.rows}")
-        db_client.run(f"OPTIMIZE TABLE {RAW_TABLE} FINAL")
+        if cell.shape == MERGED:
+            db_client.run(f"OPTIMIZE TABLE {RAW_TABLE} FINAL")
+        # Unmerged cells intentionally skip OPTIMIZE; the resulting part count
+        # is measured (not assumed) because the slowed selector may still merge
+        # a minority of parts during loading.
 
     def table_bytes(self, database: str, active_only: bool) -> int:
         clause = "AND active" if active_only else ""
@@ -654,12 +753,13 @@ def run_probe(client: ClickHouseProbe, migrations_dir: Path, cells: list[Cell],
         plan = plan_timestamps(now, RETENTION_DAYS, cell.mode)
         cutoff_ts = plan.cutoff
         try:
-            harness.provision(cell.database)
+            harness.provision(cell.database, cell.shape)
             harness.stream_load(
                 cell.database, cell, plan.aged_ts, plan.recent_ts, received_ts)
             before_partitions = harness.partition_months(cell.database)
             baseline = harness.table_bytes(cell.database, active_only=True)
             baseline_parts = harness.active_parts(cell.database)
+            parts_before = baseline_parts
             free_before = harness.disk_free()
             scopes = harness.sweep(cell.database, cutoff_ts)
             client.run("SYSTEM FLUSH LOGS")
@@ -684,7 +784,10 @@ def run_probe(client: ClickHouseProbe, migrations_dir: Path, cells: list[Cell],
                 partitions_before=len(before_partitions),
                 partitions_after=len(after_partitions),
                 partitions_before_rows=before_partitions,
-                partitions_after_rows=after_partitions)
+                partitions_after_rows=after_partitions,
+                planned_parts=cell.planned_parts,
+                parts_before=parts_before,
+                parts_after=after_parts)
             results.append(measurement.as_dict())
             verdicts.append(evaluate_cell(measurement))
         finally:
@@ -714,6 +817,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fractions", default=",".join(str(value) for value in DEFAULT_FRACTIONS))
     run.add_argument("--modes", default=SEGREGATED,
                      help="comma-separated layout modes: segregated,boundary")
+    run.add_argument("--shapes", default=MERGED,
+                     help="comma-separated part shapes: merged,unmerged")
     run.add_argument("--keep", action="store_true")
     return parser
 
@@ -723,7 +828,8 @@ def main(argv: list[str] | None = None) -> int:
     scales = tuple(int(value) for value in args.scales.split(",") if value)
     fractions = tuple(float(value) for value in args.fractions.split(",") if value)
     modes = tuple(value.strip() for value in args.modes.split(",") if value.strip())
-    cells = plan_cells(scales, fractions, modes)
+    shapes = tuple(value.strip() for value in args.shapes.split(",") if value.strip())
+    cells = plan_cells(scales, fractions, modes, shapes)
     client = ClickHouseProbe(args.client, args.username, args.password)
     report = run_probe(client, Path(args.migrations_dir), cells, args.keep)
     print(json.dumps(report, indent=2, sort_keys=True))
