@@ -3,7 +3,7 @@ GO ?= go
 GOFMT ?= gofmt
 PNPM ?= pnpm
 
-.PHONY: generate generated-check check contracts-check naming-check boundaries-check monitoring-check backup-tools-test benchmark-tools-test integration-assets-test backend-test integration-test pipeline-test budget-test query-test web-check browser-test
+.PHONY: generate generated-check check contracts-check naming-check boundaries-check monitoring-check backup-tools-test benchmark-tools-test integration-assets-test backend-test integration-test pipeline-test budget-test query-test web-check browser-test ha-tools-test
 
 generate:
 	$(PYTHON) tooling/codegen/generate.py
@@ -13,7 +13,7 @@ generate:
 generated-check: generate
 	git diff --exit-code -- backend/internal/gen/wire packages/api-client/src/schema.gen.ts
 
-check: naming-check contracts-check boundaries-check monitoring-check backup-tools-test benchmark-tools-test integration-assets-test backend-test web-check
+check: naming-check contracts-check boundaries-check monitoring-check backup-tools-test benchmark-tools-test integration-assets-test ha-tools-test backend-test web-check
 
 naming-check:
 	$(PYTHON) tooling/check_naming.py
@@ -34,6 +34,9 @@ benchmark-tools-test:
 
 integration-assets-test:
 	$(PYTHON) -m unittest discover -s integrations/tests -p 'test_*.py'
+
+ha-tools-test:
+	$(PYTHON) -m unittest discover -s tooling/ha -p 'test_*.py'
 
 contracts-check:
 	$(PYTHON) tooling/verify_contracts.py
