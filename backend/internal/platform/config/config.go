@@ -74,6 +74,18 @@ var (
 	sentinelMasterPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 )
 
+const maxDatabaseHosts = 8
+
+// PostgreSQL libpq TLS modes accepted by pgx, kept as an explicit closed set.
+var databaseSSLModes = map[string]struct{}{
+	"disable":     {},
+	"allow":       {},
+	"prefer":      {},
+	"require":     {},
+	"verify-ca":   {},
+	"verify-full": {},
+}
+
 func Read(get func(string) string) (Config, error) { return ReadFor("serve", get) }
 
 // ReadFor separates worker dependency settings from browser session settings.
@@ -85,6 +97,9 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	}
 	if c.DatabaseURL == "" {
 		return c, errors.New("EVIA_DATABASE_URL is required")
+	}
+	if err := ValidateDatabaseURL(c.DatabaseURL); err != nil {
+		return c, err
 	}
 	var err error
 	if c.CollectionEnabled, err = boolean(get, "EVIA_COLLECTION_ENABLED", false); err != nil {
@@ -408,6 +423,85 @@ func dependencyURL(raw, plain, secure string, credentials, allowLocal bool) erro
 	}
 	return nil
 }
+
+// ValidateDatabaseURL enforces the closed Evia contract for PostgreSQL
+// connection URIs. Single-host URIs keep their existing shape, including
+// sslmode=disable for local development; the only accepted extension is a
+// comma-separated host list together with target_session_attrs=read-write,
+// which lets pgx dial each host in order and reconnect to a promoted primary
+// without an application restart. Unknown query parameters fail closed.
+func ValidateDatabaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return errors.New("EVIA_DATABASE_URL must be a postgres:// or postgresql:// connection URI")
+	}
+	if u.Fragment != "" || u.RawPath != "" {
+		return errors.New("EVIA_DATABASE_URL must not contain a fragment or an escaped path")
+	}
+	if u.Host == "" {
+		return errors.New("EVIA_DATABASE_URL requires at least one host")
+	}
+	entries := strings.Split(u.Host, ",")
+	if len(entries) > maxDatabaseHosts {
+		return errors.New("EVIA_DATABASE_URL supports at most 8 hosts")
+	}
+	for _, entry := range entries {
+		host, port, splitErr := net.SplitHostPort(entry)
+		if splitErr != nil {
+			// A bare entry is allowed only without a colon, so unbracketed
+			// IPv6 literals cannot slip through; pgx then defaults to 5432.
+			if strings.Contains(entry, ":") {
+				return errors.New("EVIA_DATABASE_URL host must use host:port or a bracketed IPv6 literal")
+			}
+			host, port = entry, ""
+		}
+		if host == "" || len(host) > 253 || strings.ContainsAny(host, " /?#@\r\n\t") {
+			return errors.New("EVIA_DATABASE_URL contains an invalid host")
+		}
+		if port != "" && !validPort(port) {
+			return errors.New("EVIA_DATABASE_URL contains an invalid TCP port")
+		}
+	}
+	if u.Path != "" && u.Path != "/" {
+		database := strings.TrimPrefix(u.Path, "/")
+		if database == "" || strings.Contains(database, "/") {
+			return errors.New("EVIA_DATABASE_URL database name must be a single path segment")
+		}
+	}
+	if u.RawQuery != "" {
+		seen := make(map[string]string)
+		for _, pair := range strings.Split(u.RawQuery, "&") {
+			key, value, ok := strings.Cut(pair, "=")
+			if !ok || key == "" {
+				return errors.New("EVIA_DATABASE_URL contains an invalid query parameter")
+			}
+			if _, duplicate := seen[key]; duplicate {
+				return errors.New("EVIA_DATABASE_URL query parameters must not repeat")
+			}
+			decoded, decodeErr := url.QueryUnescape(value)
+			if decodeErr != nil {
+				return errors.New("EVIA_DATABASE_URL contains an invalid query parameter")
+			}
+			switch key {
+			case "sslmode":
+				if _, allowed := databaseSSLModes[decoded]; !allowed {
+					return errors.New("EVIA_DATABASE_URL sslmode is outside the supported PostgreSQL TLS modes")
+				}
+			case "target_session_attrs":
+				// Evia writes on every connection, so read-only and standby
+				// sessions cannot satisfy any runtime role.
+				if decoded != "read-write" {
+					return errors.New("EVIA_DATABASE_URL target_session_attrs must be read-write")
+				}
+			default:
+				return errors.New("EVIA_DATABASE_URL contains an unsupported query parameter")
+			}
+			seen[key] = decoded
+		}
+	}
+	return nil
+}
+
 func validTopic(s string) bool { return topicPattern.MatchString(s) && s != "." && s != ".." }
 func validPort(s string) bool  { n, err := strconv.Atoi(s); return err == nil && n >= 1 && n <= 65535 }
 func loopback(host string) bool {

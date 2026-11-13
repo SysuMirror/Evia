@@ -41,6 +41,9 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 		if cfg.DatabaseURL == "" {
 			return errors.New("EVIA_DATABASE_URL is required")
 		}
+		if err := config.ValidateDatabaseURL(cfg.DatabaseURL); err != nil {
+			return err
+		}
 	} else {
 		cfg, err = config.ReadFor(command, get)
 		if err != nil {
