@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,21 +19,77 @@ import (
 )
 
 // Zipf load constants, mirrored from tooling/ha/zipf_distribution_drill.py.
-// 4000 events over 500 identities following P(rank) ~ 1/rank**1.0, apportioned
-// with the Hamilton largest-remainder method so integer counts sum exactly to
-// the total and every identity is covered.
+// 4000 events over 500 identities following P(rank) ~ 1/rank**s, where s
+// defaults to 1.0 and is overridable through EVIA_TEST_ZIPF_EXPONENT,
+// apportioned with the Hamilton largest-remainder method so integer counts
+// sum exactly to the total and every identity is covered.
 const (
-	zfTotal       = 4000
-	zfCardinality = 500
-	zfExponent    = 1.0
-	zfBatchSize   = 40
-	zfMarker      = "/* evia_zipf_drill */"
+	zfTotal             = 4000
+	zfCardinality       = 500
+	defaultZipfExponent = 1.0
+	zfBatchSize         = 40
+	zfMarker            = "/* evia_zipf_drill */"
 )
 
-func zipfWeights() []float64 {
+// parseZipfExponent resolves the production-fitted Zipf exponent from
+// EVIA_TEST_ZIPF_EXPONENT so operators can rerun the drill with an exponent
+// estimated from real events instead of rebuilding the test. The closed range
+// matches the Python evaluator and rejects zero or negative power laws.
+func parseZipfExponent() (float64, error) {
+	raw := os.Getenv("EVIA_TEST_ZIPF_EXPONENT")
+	if raw == "" {
+		return defaultZipfExponent, nil
+	}
+	exponent, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid EVIA_TEST_ZIPF_EXPONENT %q: %w", raw, err)
+	}
+	if exponent <= 0 || exponent > 3 {
+		return 0, fmt.Errorf("EVIA_TEST_ZIPF_EXPONENT must be within (0, 3], got %v", exponent)
+	}
+	return exponent, nil
+}
+
+func TestParseZipfExponent(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		want    float64
+		wantErr bool
+	}{
+		{name: "empty uses default", raw: "", want: defaultZipfExponent},
+		{name: "mild exponent", raw: "0.5", want: 0.5},
+		{name: "unit exponent", raw: "1.0", want: 1.0},
+		{name: "upper bound inclusive", raw: "3", want: 3.0},
+		{name: "zero rejected", raw: "0", wantErr: true},
+		{name: "negative rejected", raw: "-1.2", wantErr: true},
+		{name: "above range rejected", raw: "3.01", wantErr: true},
+		{name: "non numeric rejected", raw: "abc", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("EVIA_TEST_ZIPF_EXPONENT", tc.raw)
+			got, err := parseZipfExponent()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseZipfExponent(%q) = %v, want error", tc.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseZipfExponent(%q) unexpected error: %v", tc.raw, err)
+			}
+			if got != tc.want {
+				t.Fatalf("parseZipfExponent(%q) = %v, want %v", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func zipfWeights(exponent float64) []float64 {
 	weights := make([]float64, zfCardinality)
 	for i := range weights {
-		weights[i] = 1.0 / math.Pow(float64(i+1), zfExponent)
+		weights[i] = 1.0 / math.Pow(float64(i+1), exponent)
 	}
 	return weights
 }
@@ -40,8 +97,8 @@ func zipfWeights() []float64 {
 // hamiltonZipfApportion rounds fractional quotas to integer seats summing
 // exactly to zfTotal; equal remainders resolve to the lowest rank via a
 // stable sort, matching the Python evaluator.
-func hamiltonZipfApportion() []int {
-	weights := zipfWeights()
+func hamiltonZipfApportion(exponent float64) []int {
+	weights := zipfWeights(exponent)
 	sum := 0.0
 	for _, weight := range weights {
 		sum += weight
@@ -102,7 +159,11 @@ func TestZipfDistribution(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	expected := hamiltonZipfApportion()
+	exponent, err := parseZipfExponent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := hamiltonZipfApportion(exponent)
 	if len(expected) != zfCardinality || sumInts(expected) != zfTotal {
 		t.Fatalf("apportionment invariant broken: seats=%d total=%d", len(expected), sumInts(expected))
 	}
@@ -254,7 +315,7 @@ func TestZipfDistribution(t *testing.T) {
 		"type":               "zipf_distribution_summary",
 		"total_events":       zfTotal,
 		"cardinality":        zfCardinality,
-		"exponent":           zfExponent,
+		"exponent":           exponent,
 		"covered_identities": zfCardinality,
 		"observed_slope":     observedSlope,
 		"exact_counts_match": true,
