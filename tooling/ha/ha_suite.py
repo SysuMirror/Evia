@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """High-availability and capacity readiness suite for Evia.
 
-The HA and capacity work produced ten standalone drills, each with its own
+The HA and capacity work produced eleven standalone drills, each with its own
 compose topology or shared test stack and its own JSON report. Operators
 preparing a release previously had to invoke them one by one and reconcile the
 results manually. This suite turns them into one repeatable readiness gate:
@@ -136,6 +136,14 @@ DRILLS = (
         "compose": None,
         "required_env": DEV_CLICKHOUSE_ENV,
         "timeout_seconds": 240,
+    },
+    {
+        "name": "retention-enforcement",
+        "script": "retention_enforcement_drill.py",
+        "tier": TIER_DEV_STACK,
+        "compose": None,
+        "required_env": DEV_CLICKHOUSE_ENV,
+        "timeout_seconds": 300,
     },
 )
 
