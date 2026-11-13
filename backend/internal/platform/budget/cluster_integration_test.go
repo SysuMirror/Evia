@@ -22,7 +22,7 @@ func realClusterLimiter(t *testing.T) (*Limiter, Config) {
 	t.Helper()
 	rawAddrs := os.Getenv("EVIA_TEST_REDIS_CLUSTER_ADDRS")
 	if rawAddrs == "" {
-		t.Fatal("EVIA_TEST_REDIS_CLUSTER_ADDRS is required for Redis Cluster integration tests")
+		t.Skip("EVIA_TEST_REDIS_CLUSTER_ADDRS is required for Redis Cluster integration tests")
 	}
 	c := DefaultConfig("")
 	c.AllowInsecureLocal = true
