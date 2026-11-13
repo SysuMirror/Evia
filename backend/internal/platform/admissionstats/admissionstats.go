@@ -26,17 +26,19 @@ const (
 	// DefaultKeyPrefix is the independent namespace for rejection windows.
 	DefaultKeyPrefix = "evia:admission"
 	// DefaultWindows is the diagnostic lookback in one-hour buckets.
-	DefaultWindows = 24
-	maxWindows     = 48
-	maxPoolSize    = 64
+	DefaultWindows   = 24
+	maxWindows       = 48
+	maxPoolSize      = 64
+	maxSentinelAddrs = 8
 	// windowRetention keeps one full day plus a grace hour for late reads.
 	windowRetention = 25 * time.Hour
 	hourWindow      = time.Hour
 )
 
 var (
-	prefixPattern  = regexp.MustCompile(`^[a-z][a-z0-9:_-]{0,63}$`)
-	projectPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	prefixPattern       = regexp.MustCompile(`^[a-z][a-z0-9:_-]{0,63}$`)
+	projectPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	sentinelNamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 	// Reasons is the bounded rejection vocabulary. Codes outside this set are
 	// dropped on write so Redis hash cardinality stays controlled.
 	Reasons = []string{
@@ -73,6 +75,19 @@ type Config struct {
 	Timeout            time.Duration
 	PoolSize           int
 	AllowInsecureLocal bool
+	// Sentinel optionally enables Redis Sentinel discovery. The zero value
+	// keeps the single-endpoint URL path; when set, URL must stay empty.
+	Sentinel SentinelConfig
+}
+
+// SentinelConfig configures discovery of the current Redis master through a
+// Sentinel quorum. The recorder follows promoted replicas automatically.
+type SentinelConfig struct {
+	MasterName       string
+	Addrs            []string
+	Password         string
+	SentinelPassword string
+	TLSEnabled       bool
 }
 
 // DefaultConfig returns explicit operating bounds for local development.
@@ -125,11 +140,21 @@ func New(c Config) (*Recorder, error) {
 	if c.PoolSize < 1 || c.PoolSize > maxPoolSize {
 		return nil, errors.New("admission stats pool size must be between 1 and 64")
 	}
-	opts, err := clientOptions(c)
-	if err != nil {
-		return nil, err
+	var client *redis.Client
+	if c.Sentinel.MasterName != "" {
+		failover, err := failoverOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewFailoverClient(failover)
+	} else {
+		opts, err := clientOptions(c)
+		if err != nil {
+			return nil, err
+		}
+		client = redis.NewClient(opts)
 	}
-	return &Recorder{client: redis.NewClient(opts), prefix: c.KeyPrefix, timeout: c.Timeout, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Recorder{client: client, prefix: c.KeyPrefix, timeout: c.Timeout, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func clientOptions(c Config) (*redis.Options, error) {
@@ -162,6 +187,67 @@ func clientOptions(c Config) (*redis.Options, error) {
 	opts.MinIdleConns = 0
 	opts.ConnMaxIdleTime, opts.ConnMaxLifetime = time.Minute, 5*time.Minute
 	return opts, nil
+}
+
+// failoverOptions mirrors the safety invariants of clientOptions for Sentinel
+// discovery: bounded timeouts, the same pool caps and no automatic retries. It
+// performs no network I/O.
+func failoverOptions(c Config) (*redis.FailoverOptions, error) {
+	if c.URL != "" {
+		return nil, errors.New("admission stats Redis URL and Sentinel discovery are mutually exclusive")
+	}
+	if !sentinelNamePattern.MatchString(c.Sentinel.MasterName) {
+		return nil, errors.New("admission stats Sentinel master name must be 1 to 64 letters, digits, dots, underscores or hyphens")
+	}
+	if len(c.Sentinel.Addrs) < 1 || len(c.Sentinel.Addrs) > maxSentinelAddrs {
+		return nil, errors.New("admission stats requires between 1 and 8 Sentinel endpoints")
+	}
+	addrs := make([]string, len(c.Sentinel.Addrs))
+	for i, raw := range c.Sentinel.Addrs {
+		host, port, err := net.SplitHostPort(raw)
+		if err != nil || host == "" || len(host) > 253 || !validTCPPort(port) {
+			return nil, errors.New("admission stats Sentinel endpoint must be a valid TCP address")
+		}
+		if !c.Sentinel.TLSEnabled && (!c.AllowInsecureLocal || !loopbackHost(host)) {
+			return nil, errors.New("plaintext Sentinel connections require explicit loopback development configuration")
+		}
+		addrs[i] = net.JoinHostPort(host, port)
+	}
+	fo := &redis.FailoverOptions{
+		MasterName:            c.Sentinel.MasterName,
+		SentinelAddrs:         addrs,
+		Password:              c.Sentinel.Password,
+		SentinelPassword:      c.Sentinel.SentinelPassword,
+		Protocol:              2,
+		DialTimeout:           c.Timeout,
+		ReadTimeout:           c.Timeout,
+		WriteTimeout:          c.Timeout,
+		PoolTimeout:           c.Timeout,
+		ContextTimeoutEnabled: true,
+		MaxRetries:            0,
+		PoolSize:              c.PoolSize,
+		MaxActiveConns:        c.PoolSize,
+		MaxIdleConns:          c.PoolSize,
+		MinIdleConns:          0,
+		ConnMaxIdleTime:       time.Minute,
+		ConnMaxLifetime:       5 * time.Minute,
+	}
+	if c.Sentinel.TLSEnabled {
+		// Endpoints are learned at runtime, so leave ServerName empty and let
+		// crypto/tls verify each connection against its actual dialed host.
+		fo.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return fo, nil
+}
+
+func validTCPPort(port string) bool {
+	n, err := strconv.Atoi(port)
+	return err == nil && n >= 1 && n <= 65535
+}
+
+func loopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	return host == "localhost" || ip != nil && ip.IsLoopback()
 }
 
 // Close releases the connection pool.
