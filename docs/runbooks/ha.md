@@ -375,6 +375,31 @@ same-process recovery through topology reload, an exact no-double-spend debit
 band and clean replica rejoin before tearing everything down. See
 [verification/redis-cluster-failover-2026-11-13.md](../verification/redis-cluster-failover-2026-11-13.md).
 
+## Readiness suite
+
+The individual failover and capacity drills each own a compose topology or
+shared test stack. Operators run them as one release gate through
+`tooling/ha/ha_suite.py`, a declarative orchestrator that registers all nine
+drills with their tier, compose file, required environment and timeout:
+
+* six `topology` drills need the Docker daemon and spin up isolated compose
+  projects; three `dev-stack` drills (backlog recovery, mixed read/write,
+  long tail) target the running test containers and only require ClickHouse
+  credentials without in-script defaults;
+* missing preconditions become explicit `skipped` results with a reason, not
+  crashes; each drill runs in an isolated timeout-bounded subprocess so one
+  failure never blocks the others;
+* the suite emits one JSON report and uses deterministic exit codes: 0 when
+  nothing failed (skips allowed), 1 when a selected drill failed, 2 for
+  configuration or selection errors.
+
+Selection supports `--only`, `--exclude`, `--tier`, `--dry-run` and
+`--report`. The selection, precondition and aggregation logic is pure and
+covered by unit tests; see
+[verification/ha-readiness-suite-2026-11-13.md](../verification/ha-readiness-suite-2026-11-13.md).
+The suite orchestrates evidence collection but does not replace each drill's
+own two-run container verification referenced in the sections above.
+
 ## Evidence
 
 The drain ordering is covered by unit tests in
