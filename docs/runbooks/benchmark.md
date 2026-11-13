@@ -200,4 +200,15 @@ EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py
 python3 -m unittest tooling.benchmark.test_retention_headroom_probe
 ```
 
-两轮独立运行核心指标逐值一致：headroom 比率落在 **5.39–7.94 倍**且规模稳定（5 倍行规模下比率不发散），随过期分数升高而下降；逐作用域比率从约 3x 单调累积到 7x（连续 mutation 的非活跃 part 世代叠加）；回收比例与过期分数偏差 ≤0.001，50 万行单 mutation ≤486ms。生产排期保守按稳定表体积 **8 倍**预留临时磁盘，或在作用域间插入 settle 间隔压向单 mutation 约 3x，详见[验证记录](../verification/retention-headroom-scale-2026-11-14.md)。该余量仅覆盖双月分区的实测 part 形态，TB 级与边界月份混合分区需扩规模复测。
+两轮独立运行核心指标逐值一致：headroom 比率落在 **5.39–7.94 倍**且规模稳定（5 倍行规模下比率不发散），随过期分数升高而下降；逐作用域比率从约 3x 单调累积到 7x（连续 mutation 的非活跃 part 世代叠加）；回收比例与过期分数偏差 ≤0.001，50 万行单 mutation ≤486ms。生产排期保守按稳定表体积 **9 倍**预留临时磁盘（初版按 8 倍，边界月份复测实测最大 8.14x 后上调留约 10% 边距），或在作用域间插入 settle 间隔压向单 mutation 约 3x，详见[验证记录](../verification/retention-headroom-scale-2026-11-14.md)与[边界月份对照](../verification/retention-boundary-partition-2026-11-14.md)。该余量覆盖单 part/分区的实测形态，TB 级与多 part/分区仍需扩规模复测。
+
+## 边界月份混合分区对照
+
+前述矩阵的过期行与幸存行分居两个月分区；边界月份探针补上 cutoff 月内两者混合的最坏情形。探针 `--modes segregated,boundary` 在相同 30 万行、相同过期分数下做受控对照，boundary 模式把两个年龄带压入 cutoff 同一自然月（`plan_timestamps` 纯函数保证跨 cutoff 夹取，退化月 fail-closed），并断言分区结构（segregated 2→1 个月、boundary 1→1 个月）。
+
+```sh
+EVIA_CH_PASSWORD=*** python3 tooling/benchmark/retention_headroom_probe.py \
+  --scales 300000 --fractions 0.25,0.5,0.75 --modes segregated,boundary
+```
+
+两轮独立运行逐值一致：同分数下两模式 headroom 比率差 ≤0.006（如 25% 档 8.1346 vs 8.1323），「混合分区更贵」的假设被否定——峰值由连续 6 个同步 mutation 的 part 世代叠加主导，而非整分区丢弃与带幸存者重写之别；回收比例两模式都与设定分数偏差 ≤0.0004，过期零残留、幸存行精确。结论：9 倍余量对边界月份同样有效，无需为混合分区单设预算；但该不敏感性仅在每分区单 part 形态下证实，多 part 生产表需复测。
