@@ -16,8 +16,9 @@ Kafka→ingest-worker→ClickHouse 落库后，同时验证**逐身份整数分�
 
 - `backend/internal/pipeline/zipf_distribution_integration_test.go`：
   `TestZipfDistribution`（integration 标签，`EVIA_TEST_ZIPF_DRILL=1` 门控）。
-- `tooling/ha/zipf_distribution_drill.py` 与 22 项纯逻辑单测（纳入
-  `make ha-tools-test`，HA 工具累计 201 项）。
+- `tooling/ha/zipf_distribution_drill.py` 与纯逻辑单测（初始 22 项；
+  2026-11-14 参数化后扩为 25 项，纳入 `make ha-tools-test`，HA 工具累计
+  204 项）。
 - `tooling/ha/ha_suite.py` 注册表新增 `zipf-distribution`（dev-stack 层）。
 
 ## 确定性 Zipf 分配规则（跨语言同构）
@@ -91,3 +92,78 @@ python3 tooling/ha/zipf_distribution_drill.py
   缩小事件/身份比，需重新评估取整噪声与全覆盖前提。
 - 本证据不改变 514/728 读侧失败记录；生产拓扑分发（跨故障域/TLS）、
   长保留期与多租户隔离容量仍需独立专项。
+
+## 2026-11-14 追加：生产拟合指数入口与多指数矩阵
+
+### 参数化改造（默认路径行为不变）
+
+- Go 装载器：删除硬编码 `zfExponent = 1.0`，改由 `EVIA_TEST_ZIPF_EXPONENT`
+  环境变量解析（`parseZipfExponent`）；未设置或空值回落默认 1.0，闭集
+  `(0, 3]`，解析失败或越界 fail-closed。权重、Hamilton 分配与摘要
+  `exponent` 字段全部按解析值传递。新增 8 个表驱动子测试（integration
+  标签，纯函数不连依赖即可运行）。
+- Python 演练：新增 `--exponent`（默认 `"1.0"`）与同范围纯函数
+  `parse_exponent`，透传到同一环境变量，报告 phase 记录实际指数。
+  新增 3 个 `ParseExponentTest` 用例（合法闭集/非数字/越界含 nan、inf），
+  模块 25 项全绿。CLI 坏指数（非数字、0、9）在任何网络检查之前即
+  fail-closed，已实测。
+- 评估器 `expected_slope = -summary["exponent"]` 本就按摘要指数计算，
+  多指数下斜率门控自动对齐，0.15 容差无需放宽。
+
+### 固定负载下的全覆盖边界（数值证明）
+
+4000 事件 / 500 身份时，Hamilton 取整对陡指数会在深尾产生零席位。
+二分求解：**全覆盖成立域为 s ≤ 1.1805**；s=1.5 需 N ≥ 约 16500，
+s=2.0 在 N=40000 仍不能全覆盖。Go 测试对零席位显式 `t.Fatal`
+（"Zipf apportionment left an identity uncovered"），超边界组合
+fail-closed 而非静默产出偏斜数据。本轮矩阵选取边界内三点
+0.5 / 1.0 / 1.1。
+
+### 真实容器矩阵（dev Kafka 19092 / ClickHouse 18123）
+
+修复后完整四场连续演练全部 `rc=0`，两场独立运行的同指数斜率六位一致，
+Hamilton 数学确定性可复现：
+
+| 指数 s | 观测斜率（理论） | 偏差 | 最热/最冷（头尾比） | 热点/深尾/基数 p95 ms | 精确计数 |
+| --- | --- | --- | --- | --- | --- |
+| 0.5 | -0.5038（-0.5） | 0.0038 | 92 / 4（23） | 35 / 32 / 32 | 逐一精确 |
+| 1.0 | -1.0295（-1.0） | 0.0295 | 589 / 1（589） | 29 / 28 / 30 | 逐一精确 |
+| 1.1 | -1.1051（-1.1） | 0.0051 | 767 / 1（767） | 36 / 35 / 31 | 逐一精确 |
+| 默认（不传 `--exponent`） | -1.0295（-1.0） | 0.0295 | 589 / 1（589） | 31 / 30 / 29 | 逐一精确 |
+
+每场均为 4000 事件 / 500 身份全覆盖、`uniqExact(uid)=500`、Top-5 热秩
+顺序严格匹配；实测头尾比与 Hamilton 纯数学期望（23 / 589 / 767）逐值
+相等，跨语言同构在三个指数下全部成立。
+
+### 先红后绿：tmpfs 耗尽与 SYNC 清理修复
+
+首轮矩阵前三场（0.5/1.0/1.1）通过，第四场默认路径失败：90 秒排空窗口
+`event_facts` 仅落地 3751/4000，facts 阶段重试 148 次。取证确认容器
+健康、服务日志无异常，而 `system.errors` 的 `NOT_ENOUGH_SPACE` 累计
+251→254，512 MiB tmpfs 空闲一度仅 913 KB。占用构成：四个
+`evia_pipeline_*` 演练库（约 315 MiB）滞留 `metadata_dropped`（Atomic
+引擎默认延迟 480 秒物理删除），叠加 `system.query_log`/`part_log`
+合并膨胀（约 175 MiB 非活跃 parts）。
+
+代码根因：共享助手 `preparePipelineDependencies` 的清理使用无 SYNC 的
+`DROP DATABASE`，连续演练时物理回收速度跟不上分配速度；而
+precision/erasure/replicated 三个集成测试本就使用 SYNC。处置：
+
+1. 环境修复：`SYSTEM FLUSH LOGS` 后截断两个系统日志（空闲恢复至
+   414 MiB），对 8 个 `metadata_dropped` 登记执行 `DROP TABLE ... SYNC`
+   （最终 `metadata_dropped=0`、空闲 472 MiB）。
+2. 代码修复：共享助手改为 `DROP DATABASE ... SYNC` 并注释 tmpfs 耗尽
+   机理，六个共用该助手的集成测试共同受益。
+3. 复验：完整四场矩阵全部 `rc=0`；`NOT_ENOUGH_SPACE` 维持 254 基线
+   零新增；`metadata_dropped` 恒为 0、无 `evia_pipeline_*` 库与 zipf
+   主题残留、磁盘稳定在 13% 占用。
+
+### 更新后的边界
+
+- 拟合入口已就绪：操作员可用生产事件估计的 s 经 `--exponent` 直接重跑
+  同一演练；但当前三个指数仍是人为选取，**真实生产拟合值尚未取得**，
+  属运营数据决策，与专用列热键选键同类。
+- 固定 4000/500 负载可执行域为 s ≤ 1.1805；更陡的拟合指数需要先扩大
+  事件总量（Go 侧会以全覆盖断言 fail-closed 提示），该扩展未在本切片实现。
+- 单 broker、单 ClickHouse、4000 事件的小数据基线不变，延迟与内存数字
+  不外推多节点或生产量级。

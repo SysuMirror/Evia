@@ -158,4 +158,6 @@ python3 tooling/ha/zipf_distribution_drill.py
 python3 -m unittest tooling.ha.test_zipf_distribution_drill
 ```
 
-实测两轮：500 身份全覆盖、观测斜率 -1.0295（理论 -1.0，容差 0.15）、最热/最冷 589/1、抽样计数与 Top-5 顺序精确、三类查询 p95 26-30ms，详见[验证记录](../verification/zipf-distribution-2026-11-13.md)。该指数为参数化标准 Zipf 而非生产拟合值；生产验收应先从真实事件估计指数 s 再重跑同一演练。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十个演练）。
+实测两轮：500 身份全覆盖、观测斜率 -1.0295（理论 -1.0，容差 0.15）、最热/最冷 589/1、抽样计数与 Top-5 顺序精确、三类查询 p95 26-30ms，详见[验证记录](../verification/zipf-distribution-2026-11-13.md)。该演练已注册进 `tooling/ha/ha_suite.py`（套件现为十个演练）。
+
+指数支持生产拟合入口：`--exponent s`（同步注入 Go 侧 `EVIA_TEST_ZIPF_EXPONENT`），闭集 `(0, 3]`，默认 1.0，非法值在任何网络检查前 fail-closed；评估器按摘要中的指数自动对齐理论斜率，容差不变。固定 4000 事件/500 身份负载下，Hamilton 全覆盖成立域为 s ≤ 1.1805（二分数值证明），更陡指数会在深尾产生零席位并由 Go 断言 fail-closed，需先扩大事件总量。dev 栈 512 MiB tmpfs 上连续演练曾因异步 `DROP DATABASE` 延迟删除与系统日志膨胀耗尽磁盘（NOT_ENOUGH_SPACE），共享测试助手已改为 `DROP DATABASE ... SYNC`；连续演练前仍应核对 `system.disks` 空闲空间与 `metadata_dropped` 为空。生产验收应先从真实事件采样估计 s，再以同一演练重放，当前实测指数仍为人为选取。
