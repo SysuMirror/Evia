@@ -122,6 +122,22 @@ func kafkaConfig(c config.Config, command string) pipeline.KafkaConfig {
 	return out
 }
 
+// admissionStatsConfig mirrors the budget Redis topology (single endpoint or
+// Sentinel discovery) into the independent admission stats pool. Sentinel
+// addresses are copied so the two configs never share a mutable slice.
+func admissionStatsConfig(b budget.Config) admissionstats.Config {
+	cfg := admissionstats.DefaultConfig(b.URL)
+	cfg.AllowInsecureLocal = b.AllowInsecureLocal
+	cfg.Sentinel = admissionstats.SentinelConfig{
+		MasterName:       b.Sentinel.MasterName,
+		Addrs:            append([]string(nil), b.Sentinel.Addrs...),
+		Password:         b.Sentinel.Password,
+		SentinelPassword: b.Sentinel.SentinelPassword,
+		TLSEnabled:       b.Sentinel.TLSEnabled,
+	}
+	return cfg
+}
+
 func httpClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns, transport.MaxIdleConnsPerHost, transport.MaxConnsPerHost = 32, 16, 32
@@ -265,8 +281,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 				result = errors.Join(result, stageError("Redis shutdown", err))
 			}
 		}()
-		statsConfig := admissionstats.DefaultConfig(c.Budget.URL)
-		statsConfig.AllowInsecureLocal = c.Budget.AllowInsecureLocal
+		statsConfig := admissionStatsConfig(c.Budget)
 		recorder, err := admissionstats.New(statsConfig)
 		if err != nil {
 			return stageError("admission stats configuration", err)
