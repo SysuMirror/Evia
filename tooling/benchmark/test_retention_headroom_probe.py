@@ -6,6 +6,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from retention_headroom_probe import (
     AGED_DAYS,
+    BOUNDARY,
+    SEGREGATED,
     SCOPE_COUNT,
     Cell,
     CellMeasurement,
@@ -18,7 +20,9 @@ from retention_headroom_probe import (
     evaluate_cell,
     format_datetime,
     headroom_ratio,
+    month_key,
     plan_cells,
+    plan_timestamps,
     reclaimed_fraction,
     scope_pairs,
     scope_predicate,
@@ -27,6 +31,7 @@ from retention_headroom_probe import (
     validate_probe_database,
     validate_uuid,
 )
+import datetime
 
 
 class ValidationTest(unittest.TestCase):
@@ -188,6 +193,9 @@ def measurement(**overrides):
         recent_after=50_000,
         disk_free_before=10_000_000,
         disk_free_after=10_500_000,
+        expected_partitions=2,
+        partitions_before=2,
+        partitions_after=1,
     )
     from retention_headroom_probe import ScopeMeasurement
     for index in range(SCOPE_COUNT):
@@ -247,6 +255,88 @@ class PollerConstructTest(unittest.TestCase):
         # Construction validation only; no client calls in this unit test.
         with self.assertRaises(ProbeError):
             PartsBytePoller(None, "evia_pipeline_x")
+
+
+class TimestampPlannerTest(unittest.TestCase):
+    # tz-aware UTC so .timestamp() is independent of the host zone.
+    NOW = datetime.datetime(2026, 11, 14, 12, 0, 0,
+                            tzinfo=datetime.timezone.utc).timestamp()
+
+    def test_segregated_uses_two_distinct_months(self):
+        plan = plan_timestamps(self.NOW, 30, SEGREGATED)
+        self.assertEqual(plan.mode, SEGREGATED)
+        self.assertEqual(plan.distinct_months, 2)
+        self.assertNotEqual(plan.aged_month, plan.recent_month)
+        self.assertTrue(plan.aged_ts < plan.cutoff < plan.recent_ts)
+
+    def test_boundary_pins_both_bands_into_cutoff_month(self):
+        plan = plan_timestamps(self.NOW, 30, BOUNDARY)
+        self.assertEqual(plan.mode, BOUNDARY)
+        self.assertEqual(plan.aged_month, "2026-10")
+        self.assertEqual(plan.recent_month, "2026-10")
+        self.assertEqual(plan.distinct_months, 1)
+        # One day on each side of the mid-month cutoff.
+        self.assertTrue(plan.aged_ts < plan.cutoff < plan.recent_ts)
+
+    def test_unknown_mode_fails_closed(self):
+        with self.assertRaises(ProbeError):
+            plan_timestamps(self.NOW, 30, "nope")
+
+    def test_boundary_fails_when_cutoff_opens_the_month(self):
+        # Cutoff exactly on the first day leaves no in-month day before it.
+        cutoff_edge = datetime.datetime(2026, 10, 1, 0, 0, 0,
+                                        tzinfo=datetime.timezone.utc)
+        now_edge = (cutoff_edge + datetime.timedelta(days=30)).timestamp()
+        with self.assertRaises(ProbeError):
+            plan_timestamps(now_edge, 30, BOUNDARY)
+
+    def test_bands_straddle_cutoff_in_both_modes(self):
+        for mode in (SEGREGATED, BOUNDARY):
+            plan = plan_timestamps(self.NOW, 30, mode)
+            self.assertTrue(plan.aged_ts < plan.cutoff)
+            self.assertTrue(plan.recent_ts >= plan.cutoff)
+        # Segregated keeps survivors in the current month; boundary relocates
+        # them into the cutoff month by design.
+        current_month = month_key(datetime.datetime.utcfromtimestamp(self.NOW))
+        segregated = plan_timestamps(self.NOW, 30, SEGREGATED)
+        self.assertEqual(segregated.recent_month, current_month)
+
+
+class LayoutModeCellTest(unittest.TestCase):
+    def test_database_name_encodes_mode(self):
+        self.assertEqual(cell_database(100_000, 0.5, SEGREGATED),
+                         "evia_probe_ret_s100000_f50")
+        self.assertEqual(cell_database(100_000, 0.5, BOUNDARY),
+                         "evia_probe_ret_b100000_f50")
+        self.assertEqual(Cell(100_000, 0.5, BOUNDARY).database,
+                         "evia_probe_ret_b100000_f50")
+
+    def test_plan_cells_cartesian_modes(self):
+        cells = plan_cells((300_000,), (0.5,), (SEGREGATED, BOUNDARY))
+        self.assertEqual([cell.mode for cell in cells], [SEGREGATED, BOUNDARY])
+        self.assertEqual(len({cell.database for cell in cells}), 2)
+
+    def test_plan_cells_rejects_unknown_mode(self):
+        with self.assertRaises(ProbeError):
+            plan_cells((300_000,), (0.5,), ("nope",))
+
+
+class PartitionEvaluationTest(unittest.TestCase):
+    def test_boundary_single_partition_passes(self):
+        boundary_cell = Cell(100_000, 0.5, BOUNDARY)
+        verdict = evaluate_cell(measurement(
+            cell=boundary_cell, expected_partitions=1,
+            partitions_before=1, partitions_after=1))
+        self.assertTrue(verdict["passed"], verdict["failures"])
+        self.assertEqual(verdict["mode"], BOUNDARY)
+
+    def test_partition_count_mismatch_fails(self):
+        # Helper defaults to an expected 2 partitions; reporting only 1 fails.
+        self.assertFalse(evaluate_cell(measurement(partitions_before=1))["passed"])
+
+    def test_surviving_partition_count_must_be_one(self):
+        self.assertFalse(evaluate_cell(measurement(partitions_after=2))["passed"])
+
 
 
 if __name__ == "__main__":

@@ -17,6 +17,10 @@ benchmark ClickHouse (4 GiB memory, host-named disk volume):
   OPTIMIZE FINAL settles parts;
 * how the ratio responds to the expired fraction, since wholly-expired
   partitions are dropped while mixed parts must be rewritten with survivors;
+* the boundary-month penalty: segregated mode keeps expired and surviving
+  rows in separate monthly partitions, while boundary mode pins both bands
+  into the cutoff month so every mutated part retains survivors; the two
+  modes run at identical rows and fractions for a controlled comparison;
 * whether the production invariants (one synchronous mutation per scope,
   expired rows gone, in-window rows byte-exact retained) hold at scale.
 
@@ -59,6 +63,14 @@ RETENTION_DAYS = 30
 AGED_DAYS = 400
 RECENT_DAYS = 5
 
+# Layout modes describe where expired and surviving rows sit relative to the
+# monthly partition key. segregated reproduces the clean two-partition matrix;
+# boundary forces both bands into the cutoff month so every mutated part keeps
+# survivors (the real worst case for retention rewrites).
+SEGREGATED = "segregated"
+BOUNDARY = "boundary"
+LAYOUT_MODES = (SEGREGATED, BOUNDARY)
+
 # Distinct valid UUIDs; never reuse pipeline test constants inside a probe.
 PROJECTS = (
     "44444444-4444-4444-8444-444444444444",
@@ -99,9 +111,75 @@ def format_datetime(instant: float) -> str:
     return moment.strftime("%Y-%m-%d %H:%M:%S.") + f"{moment.microsecond // 1000:03d}"
 
 
-def cell_database(rows: int, fraction: float) -> str:
+def format_moment(moment: datetime.datetime) -> str:
+    """Format a UTC datetime for DateTime64(3) literals."""
+    return moment.strftime("%Y-%m-%d %H:%M:%S.") + f"{moment.microsecond // 1000:03d}"
+
+
+def month_key(moment: datetime.datetime) -> str:
+    return moment.strftime("%Y-%m")
+
+
+@dataclass(frozen=True)
+class TimestampPlan:
+    mode: str
+    cutoff: str
+    aged_ts: str
+    recent_ts: str
+    aged_month: str
+    recent_month: str
+
+    @property
+    def distinct_months(self) -> int:
+        return len({self.aged_month, self.recent_month})
+
+
+def plan_timestamps(now_epoch: float, retention_days: int, mode: str) -> TimestampPlan:
+    """Plan the two band timestamps for a layout mode.
+
+    segregated places expired rows in a deep aged month and survivors in the
+    current month (two partitions). boundary pins both bands inside the
+    cutoff's own calendar month, one day on each side of the cutoff, so the
+    mutated partition always retains survivors. The boundary planner is
+    fail-closed: if the cutoff month cannot host a day on both sides, it
+    refuses rather than silently crossing a month boundary.
+    """
+    if mode not in LAYOUT_MODES:
+        raise ProbeError(f"unknown layout mode {mode!r}")
+    now = datetime.datetime.utcfromtimestamp(now_epoch)
+    cutoff = now - datetime.timedelta(days=retention_days)
+    if mode == SEGREGATED:
+        aged = now - datetime.timedelta(days=AGED_DAYS)
+        recent = now - datetime.timedelta(days=RECENT_DAYS)
+    else:
+        month_start = cutoff.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_month = (month_start + datetime.timedelta(days=32)).replace(day=1)
+        month_end = (next_month - datetime.timedelta(days=1)).replace(
+            hour=23, minute=59, second=59, microsecond=0)
+        aged = cutoff - datetime.timedelta(days=1)
+        recent = cutoff + datetime.timedelta(days=1)
+        if aged < month_start:
+            aged = month_start
+        if recent > month_end:
+            recent = month_end
+        if not (aged < cutoff < recent):
+            raise ProbeError("boundary timestamps do not straddle the cutoff")
+        if not (month_key(aged) == month_key(cutoff) == month_key(recent)):
+            raise ProbeError("boundary timestamps escape the cutoff month")
+    if not (aged < cutoff < recent):
+        raise ProbeError("band timestamps must straddle the cutoff")
+    return TimestampPlan(
+        mode=mode, cutoff=format_moment(cutoff), aged_ts=format_moment(aged),
+        recent_ts=format_moment(recent), aged_month=month_key(aged),
+        recent_month=month_key(recent))
+
+
+def cell_database(rows: int, fraction: float, mode: str = SEGREGATED) -> str:
     validate_identifier(RAW_TABLE)
-    name = f"{PROBE_DB_PREFIX}_s{rows}_f{int(round(fraction * 100)):02d}"
+    if mode not in LAYOUT_MODES:
+        raise ProbeError(f"unknown layout mode {mode!r}")
+    letter = "s" if mode == SEGREGATED else "b"
+    name = f"{PROBE_DB_PREFIX}_{letter}{rows}_f{int(round(fraction * 100)):02d}"
     validate_probe_database(name)
     return name
 
@@ -110,10 +188,11 @@ def cell_database(rows: int, fraction: float) -> str:
 class Cell:
     rows: int
     aged_fraction: float
+    mode: str = SEGREGATED
 
     @property
     def database(self) -> str:
-        return cell_database(self.rows, self.aged_fraction)
+        return cell_database(self.rows, self.aged_fraction, self.mode)
 
     @property
     def aged_rows(self) -> int:
@@ -124,19 +203,24 @@ class Cell:
         return self.rows - self.aged_rows
 
 
-def plan_cells(scales: tuple[int, ...], fractions: tuple[float, ...]) -> list[Cell]:
+def plan_cells(scales: tuple[int, ...], fractions: tuple[float, ...],
+               modes: tuple[str, ...] = (SEGREGATED,)) -> list[Cell]:
     cells = []
+    for mode in modes:
+        if mode not in LAYOUT_MODES:
+            raise ProbeError(f"unknown layout mode {mode!r}")
     for rows in scales:
         if not isinstance(rows, int) or rows < SCOPE_COUNT:
             raise ProbeError(f"scale must be an integer >= {SCOPE_COUNT}: {rows}")
         for fraction in fractions:
             if not isinstance(fraction, (int, float)) or not 0.0 < fraction < 1.0:
                 raise ProbeError(f"aged fraction must be within (0, 1): {fraction}")
-            cell = Cell(rows, float(fraction))
-            if cell.aged_rows < SCOPE_COUNT or cell.recent_rows < SCOPE_COUNT:
-                raise ProbeError(
-                    f"cell rows={rows} fraction={fraction} leaves a band under {SCOPE_COUNT}")
-            cells.append(cell)
+            for mode in modes:
+                cell = Cell(rows, float(fraction), mode)
+                if cell.aged_rows < SCOPE_COUNT or cell.recent_rows < SCOPE_COUNT:
+                    raise ProbeError(
+                        f"cell rows={rows} fraction={fraction} leaves a band under {SCOPE_COUNT}")
+                cells.append(cell)
     return cells
 
 
@@ -249,6 +333,11 @@ class CellMeasurement:
     recent_after: int = 0
     disk_free_before: int = 0
     disk_free_after: int = 0
+    expected_partitions: int = 0
+    partitions_before: int = 0
+    partitions_after: int = 0
+    partitions_before_rows: dict = field(default_factory=dict)
+    partitions_after_rows: dict = field(default_factory=dict)
 
     @property
     def max_peak_bytes(self) -> int:
@@ -262,10 +351,16 @@ class CellMeasurement:
         return {
             "database": self.cell.database,
             "rows": self.cell.rows,
+            "mode": self.cell.mode,
             "aged_fraction": self.cell.aged_fraction,
             "aged_rows": self.cell.aged_rows,
             "recent_rows": self.cell.recent_rows,
             "scopes": SCOPE_COUNT,
+            "expected_partitions": self.expected_partitions,
+            "partitions_before": self.partitions_before,
+            "partitions_after": self.partitions_after,
+            "partitions_before_rows": self.partitions_before_rows,
+            "partitions_after_rows": self.partitions_after_rows,
             "baseline_bytes": self.baseline_bytes,
             "baseline_active_parts": self.baseline_active_parts,
             "max_peak_bytes": self.max_peak_bytes,
@@ -315,8 +410,18 @@ def evaluate_cell(measurement: CellMeasurement) -> dict:
         failures.append("measured peak cannot be below the settled baseline")
     if len(measurement.scopes) != SCOPE_COUNT:
         failures.append(f"scope measurements {len(measurement.scopes)} != {SCOPE_COUNT}")
+    if measurement.partitions_before != measurement.expected_partitions:
+        failures.append(
+            f"partitions before {measurement.partitions_before} != "
+            f"expected {measurement.expected_partitions} for mode {measurement.cell.mode}")
+    # After the sweep only surviving rows remain, so exactly one event month is
+    # visible; a boundary (mixed) partition survives while a wholly-expired
+    # segregated partition empties out.
+    if measurement.partitions_after != 1:
+        failures.append(f"partitions after {measurement.partitions_after} must be 1")
     return {
         "database": measurement.cell.database,
+        "mode": measurement.cell.mode,
         "passed": not failures,
         "failures": failures,
         "max_headroom_ratio": headroom_ratio(
@@ -500,6 +605,19 @@ class HeadroomHarness:
         return int(self.client.scalar(
             f"SELECT count() FROM {database}.{RAW_TABLE} WHERE {where} FORMAT TSV"))
 
+    def partition_months(self, database: str) -> dict:
+        """Map each populated event month (YYYY-MM) to its visible row count."""
+        sql = (
+            f"SELECT formatDateTime(event_time, '%Y-%m') AS month, count() "
+            f"FROM {database}.{RAW_TABLE} GROUP BY month ORDER BY month FORMAT TSV")
+        rows = {}
+        for line in self.client.run(sql).strip().splitlines():
+            if not line.strip():
+                continue
+            month, count = line.split("\t")
+            rows[month] = int(count)
+        return rows
+
     def mutation_status(self, database: str) -> tuple[int, int]:
         row = self.client.scalar(
             "SELECT count(), countIf(is_done=1) FROM system.mutations WHERE database='"
@@ -526,18 +644,20 @@ def run_probe(client: ClickHouseProbe, migrations_dir: Path, cells: list[Cell],
               keep: bool) -> dict:
     harness = HeadroomHarness(client, migrations_dir)
     now = time.time()
-    aged_ts = format_datetime(now - AGED_DAYS * 86400)
-    recent_ts = format_datetime(now - RECENT_DAYS * 86400)
-    cutoff_ts = format_datetime(now - RETENTION_DAYS * 86400)
     moment = datetime.datetime.utcfromtimestamp(now)
     received_ts = moment.strftime("%Y-%m-%d %H:%M:%S.") + f"{moment.microsecond:06d}000"
 
     results = []
     verdicts = []
+    cutoff_ts = ""
     for cell in cells:
+        plan = plan_timestamps(now, RETENTION_DAYS, cell.mode)
+        cutoff_ts = plan.cutoff
         try:
             harness.provision(cell.database)
-            harness.stream_load(cell.database, cell, aged_ts, recent_ts, received_ts)
+            harness.stream_load(
+                cell.database, cell, plan.aged_ts, plan.recent_ts, received_ts)
+            before_partitions = harness.partition_months(cell.database)
             baseline = harness.table_bytes(cell.database, active_only=True)
             baseline_parts = harness.active_parts(cell.database)
             free_before = harness.disk_free()
@@ -547,6 +667,7 @@ def run_probe(client: ClickHouseProbe, migrations_dir: Path, cells: list[Cell],
             after = harness.table_bytes(cell.database, active_only=True)
             after_parts = harness.active_parts(cell.database)
             free_after = harness.disk_free()
+            after_partitions = harness.partition_months(cell.database)
             expired_after = 0
             for project, environment in scope_pairs():
                 expired_after += harness.row_count(
@@ -559,7 +680,11 @@ def run_probe(client: ClickHouseProbe, migrations_dir: Path, cells: list[Cell],
                 mutations_total=total, mutations_done=done,
                 rows_after=harness.row_count(cell.database), expired_after=expired_after,
                 recent_after=recent_after, disk_free_before=free_before,
-                disk_free_after=free_after)
+                disk_free_after=free_after, expected_partitions=plan.distinct_months,
+                partitions_before=len(before_partitions),
+                partitions_after=len(after_partitions),
+                partitions_before_rows=before_partitions,
+                partitions_after_rows=after_partitions)
             results.append(measurement.as_dict())
             verdicts.append(evaluate_cell(measurement))
         finally:
@@ -587,6 +712,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--migrations-dir", default=str(DEFAULT_MIGRATIONS))
     run.add_argument("--scales", default=",".join(str(value) for value in DEFAULT_SCALES))
     run.add_argument("--fractions", default=",".join(str(value) for value in DEFAULT_FRACTIONS))
+    run.add_argument("--modes", default=SEGREGATED,
+                     help="comma-separated layout modes: segregated,boundary")
     run.add_argument("--keep", action="store_true")
     return parser
 
@@ -595,7 +722,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     scales = tuple(int(value) for value in args.scales.split(",") if value)
     fractions = tuple(float(value) for value in args.fractions.split(",") if value)
-    cells = plan_cells(scales, fractions)
+    modes = tuple(value.strip() for value in args.modes.split(",") if value.strip())
+    cells = plan_cells(scales, fractions, modes)
     client = ClickHouseProbe(args.client, args.username, args.password)
     report = run_probe(client, Path(args.migrations_dir), cells, args.keep)
     print(json.dumps(report, indent=2, sort_keys=True))
