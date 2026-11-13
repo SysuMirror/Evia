@@ -1,0 +1,287 @@
+# Standalone Redis Cluster topology for the HA drill.
+#
+# Six nodes form a three-master, three-replica sharded cluster. An init
+# service runs `redis-cli --cluster create` once the data nodes are healthy;
+# the cluster state lives on named volumes and is removed with `down -v`.
+# Ephemeral by design: hard-coded drill password, no TLS, loopback-only port
+# publication, so this file is never a production template.
+#
+# Static IPs on an isolated bridge keep the inter-node cluster bus
+# (port + 10000) and client ports stable across recreations. The host reaches
+# the seed nodes through the published loopback client ports.
+services:
+  redis-node-1:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16479:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-1:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.10
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-node-2:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16480:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-2:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.11
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-node-3:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16481:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-3:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.12
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-node-4:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16482:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-4:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.13
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-node-5:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16483:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-5:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.14
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  redis-node-6:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    command:
+      - "/bin/sh"
+      - "-ec"
+      - |
+        exec redis-server \
+          --port 6379 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly no \
+          --save "" \
+          --protected-mode no \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction
+    ports:
+      - "127.0.0.1:16484:6379"
+    cpus: 0.5
+    mem_limit: 320m
+    memswap_limit: 320m
+    pids_limit: 128
+    volumes:
+      - node-data-6:/data
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.15
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  cluster-init:
+    image: redis:8.10.3-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until [ "$(redis-cli -h 172.31.80.15 ping 2>/dev/null)" = "PONG" ]; do sleep 1; done
+        if ! redis-cli -h 172.31.80.10 cluster info | grep -q "cluster_state:ok"; then
+          redis-cli --cluster create \
+            172.31.80.10:6379 172.31.80.11:6379 172.31.80.12:6379 \
+            172.31.80.13:6379 172.31.80.14:6379 172.31.80.15:6379 \
+            --cluster-replicas 1 --cluster-yes
+        fi
+        for i in $(seq 1 30); do
+          if redis-cli -h 172.31.80.10 cluster info | grep -q "cluster_state:ok"; then
+            echo "cluster initialized"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "cluster did not reach ok state" >&2
+        exit 1
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+      redis-node-4:
+        condition: service_healthy
+      redis-node-5:
+        condition: service_healthy
+      redis-node-6:
+        condition: service_healthy
+    networks:
+      ha-redis-cluster-net:
+        ipv4_address: 172.31.80.20
+    restart: "no"
+
+volumes:
+  node-data-1:
+  node-data-2:
+  node-data-3:
+  node-data-4:
+  node-data-5:
+  node-data-6:
+
+networks:
+  ha-redis-cluster-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.80.0/24
