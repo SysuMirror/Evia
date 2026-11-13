@@ -1,0 +1,119 @@
+# Standalone PostgreSQL streaming-replication failover topology for the HA drill.
+#
+# Ephemeral by design: both data directories live on named volumes and the
+# drill always removes the project with `down -v`. Published ports stay on
+# loopback and the topology runs with a hard-coded drill password and no TLS,
+# so it must never be used as a production template; production deployments
+# require managed credentials, TLS and cross-failure-domain placement.
+#
+# Static IPs on an isolated bridge keep the addresses stable across container
+# recreations, which lets the old primary rejoin as a standby by simply
+# re-running pg_basebackup against the promoted node. The host participates
+# through the standard Docker bridge route, so Go tests dial the same
+# internal addresses the replication uses.
+#
+# Shell variables inside command blocks are written with $$ so Docker Compose
+# passes a single $ through to the container shell instead of interpolating
+# them on the host. The environment: block uses normal host interpolation.
+services:
+  pg-primary:
+    image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+    environment:
+      POSTGRES_USER: evia
+      POSTGRES_PASSWORD: evia-ha-drill
+      POSTGRES_DB: evia
+      # Overridden by the drill when the old primary must rejoin as a standby.
+      EVIA_PG_ROLE: ${EVIA_HA_PG_ROLE_PRIMARY:-primary}
+      EVIA_PG_PEER: ${EVIA_HA_PG_PEER_PRIMARY:-}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ "$$EVIA_PG_ROLE" = "standby" ]; then
+          until pg_isready -h "$$EVIA_PG_PEER" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
+          install -d -o postgres -g postgres -m 700 "$$PGDATA"
+          chown -R postgres:postgres "$$PGDATA"
+          find "$$PGDATA" -mindepth 1 -delete
+          su postgres -c "PGPASSWORD='$$POSTGRES_PASSWORD' pg_basebackup -h '$$EVIA_PG_PEER' -p 5432 -U '$$POSTGRES_USER' -D '$$PGDATA' -X stream -R -P"
+          exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on
+        fi
+        exec docker-entrypoint.sh postgres -c wal_level=replica -c max_wal_senders=10 -c hot_standby=on -c wal_log_hints=on
+    ports:
+      - "127.0.0.1:15432:5432"
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    volumes:
+      - pg-primary-data:/var/lib/postgresql/data
+    configs:
+      - source: pg-ha-replication-hba
+        target: /docker-entrypoint-initdb.d/10-replication-hba.sh
+        mode: 0555
+    networks:
+      ha-pg-net:
+        ipv4_address: 172.31.78.10
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U evia -d evia"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  pg-standby:
+    image: postgres:17.9-bookworm@sha256:47f917f7409eacd22fc5dfb1dee634e1b55cf0c01d1a7eb701be2227a03e0641
+    environment:
+      POSTGRES_USER: evia
+      POSTGRES_PASSWORD: evia-ha-drill
+      POSTGRES_DB: evia
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until pg_isready -h 172.31.78.10 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
+        install -d -o postgres -g postgres -m 700 "$$PGDATA"
+        chown -R postgres:postgres "$$PGDATA"
+        su postgres -c "PGPASSWORD='$$POSTGRES_PASSWORD' pg_basebackup -h 172.31.78.10 -p 5432 -U '$$POSTGRES_USER' -D '$$PGDATA' -X stream -R -P"
+        exec gosu postgres postgres -c hot_standby=on -c wal_level=replica -c max_wal_senders=10 -c wal_log_hints=on
+    ports:
+      - "127.0.0.1:15433:5432"
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+    volumes:
+      - pg-standby-data:/var/lib/postgresql/data
+    networks:
+      ha-pg-net:
+        ipv4_address: 172.31.78.11
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U evia -d evia && test \"$$(psql -U evia -d evia -tAc 'SELECT pg_is_in_recovery()')\" = t"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    logging:
+      options:
+        max-size: 5m
+        max-file: '2'
+
+networks:
+  ha-pg-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.78.0/24
+
+configs:
+  pg-ha-replication-hba:
+    content: |
+      # Drill-only: permit streaming-replication connections from the isolated
+      # HA bridge. Production deployments provision pg_hba through managed tooling.
+      echo "host replication all 172.31.78.0/24 scram-sha-256" >> "$$PGDATA/pg_hba.conf"
+
+volumes:
+  pg-primary-data:
+  pg-standby-data:
