@@ -6,6 +6,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -41,4 +42,45 @@ func (s *Store) ProvisionAccount(ctx context.Context, user access.User) error {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// SetAccountDisabled toggles the accounts.disabled flag under the same
+// installation advisory lock as provisioning. Disabling the last enabled
+// account is rejected because it would lock every operator out and leave no
+// account able to provision or bootstrap further access. Existing sessions are
+// rejected automatically because every authenticated read filters NOT disabled.
+func (s *Store) SetAccountDisabled(ctx context.Context, username string, disabled bool) (access.User, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return access.User{}, err
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7314202)`); err != nil {
+		return access.User{}, err
+	}
+	var user access.User
+	err = tx.QueryRow(ctx, `SELECT id::text,username,display_name,password_hash,disabled FROM accounts WHERE username=$1`, username).
+		Scan(&user.ID, &user.Username, &user.DisplayName, &user.PasswordHash, &user.Disabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return access.User{}, fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist")
+	}
+	if err != nil {
+		return access.User{}, err
+	}
+	// Only guard an actual transition: re-disabling an already disabled account
+	// must not trip the last-enabled protection.
+	if disabled && !user.Disabled {
+		var enabled int
+		if err = tx.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE NOT disabled`).Scan(&enabled); err != nil {
+			return access.User{}, err
+		}
+		if enabled <= 1 {
+			return access.User{}, fault.New(fault.Conflict, "LAST_ENABLED_ACCOUNT", "cannot disable the last enabled account")
+		}
+	}
+	if _, err = tx.Exec(ctx, `UPDATE accounts SET disabled=$1 WHERE id=$2`, disabled, user.ID); err != nil {
+		return access.User{}, err
+	}
+	user.Disabled = disabled
+	return user, tx.Commit(ctx)
 }

@@ -12,6 +12,7 @@ import (
 // event atomically. It must reject an uninitialized installation and duplicates.
 type ProvisionStore interface {
 	ProvisionAccount(context.Context, User) error
+	SetAccountDisabled(ctx context.Context, username string, disabled bool) (User, error)
 }
 
 // ProvisionAccount is an operator action, separate from bootstrap and project
@@ -33,6 +34,23 @@ func ProvisionAccount(ctx context.Context, store ProvisionStore, username, displ
 		return User{}, err
 	}
 	// Password hashes belong only at the persistence boundary.
+	user.PasswordHash = ""
+	return user, nil
+}
+
+// SetAccountDisabled is an operator action that toggles an account's disabled
+// flag. The persistence layer enforces the last-enabled-account guard and
+// returns a not-found fault for an unknown username. Password hashes never
+// cross back to the caller.
+func SetAccountDisabled(ctx context.Context, store ProvisionStore, username string, disabled bool) (User, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if !usernamePattern.MatchString(username) {
+		return User{}, fault.New(fault.Invalid, "INVALID_USERNAME", "username must contain 1 to 100 ASCII letters, digits or ._@-")
+	}
+	user, err := store.SetAccountDisabled(ctx, username, disabled)
+	if err != nil {
+		return User{}, err
+	}
 	user.PasswordHash = ""
 	return user, nil
 }
