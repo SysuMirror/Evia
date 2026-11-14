@@ -306,6 +306,20 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await funnel.getByRole('button', { name: '完成', exact: true }).click();
   await query();
   await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).toHaveCount(2);
+  await page.getByRole('tab', { name: '留存分析', exact: true }).click();
+  await page.getByRole('button', { name: '配置留存', exact: true }).click();
+  const retention = page.getByRole('dialog', { name: '配置留存分析', exact: true });
+  await retention
+    .getByLabel('起始事件（已发布事件）', { exact: true })
+    .selectOption('browser_action');
+  await retention
+    .getByLabel('回访事件（已发布事件）', { exact: true })
+    .selectOption('browser_action');
+  await retention.getByRole('button', { name: '完成', exact: true }).click();
+  await query();
+  await expect(page.getByText('期按天留存')).toBeVisible();
+  await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
+  await expect(page.getByRole('cell', { name: '100.00%' })).toBeVisible();
   await page.getByRole('tab', { name: '用户旅程', exact: true }).click();
   await page.getByLabel('原始 UID', { exact: true }).fill('synthetic-absent');
   await query();

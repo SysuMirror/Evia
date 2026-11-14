@@ -533,6 +533,11 @@ export function AnalysisPage({
               step_index: '步骤',
               subjects: '到达主体数',
               conversion_rate: '相对首步转化率',
+              cohort_index: '队列序号',
+              cohort_start: '队列起始',
+              cohort_size: '队列规模',
+              retained: '各期留存主体数',
+              retention_rate: '各期留存率',
             }[column.key] ??
             column.label ??
             column.key),
@@ -541,7 +546,15 @@ export function AnalysisPage({
           ? `${((row[column.key] as number) * 100).toFixed(2)}%`
           : column.key === 'step_index' && typeof row[column.key] === 'number'
             ? String((row[column.key] as number) + 1)
-            : cell(row[column.key], column.type, snapshot!.request.timezone),
+            : column.key === 'retention_rate' && Array.isArray(row[column.key])
+              ? (row[column.key] as unknown[])
+                  .map((value) =>
+                    typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
+                  )
+                  .join('，')
+              : column.key === 'retained' && Array.isArray(row[column.key])
+                ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
+                : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
   const queryEditor = (
     <form
@@ -559,7 +572,7 @@ export function AnalysisPage({
         <ErrorPanel message={catalog.error.message} retry={() => void catalog.refetch()} />
       ) : (
         <div className="analysis-query-bar">
-          {form.mode !== 'funnel' && (
+          {form.mode !== 'funnel' && form.mode !== 'retention' && (
             <Field
               label="事件（跨已发布版本）"
               error={validationTarget === 'event' ? validationError : undefined}
@@ -652,6 +665,25 @@ export function AnalysisPage({
               </span>
             </div>
           )}
+          {form.mode === 'retention' && (
+            <div className="analysis-funnel-overview">
+              <h3>留存分析</h3>
+              <Button onClick={() => setEditor('retention')} aria-haspopup="dialog">
+                配置留存
+              </Button>
+              <span className="field-help">
+                起始：
+                {form.retentionStart.event
+                  ? `${form.retentionStart.event} v${form.retentionStart.version}`
+                  : '未选择事件'}
+                ；回访：
+                {form.retentionReturn.event
+                  ? `${form.retentionReturn.event} v${form.retentionReturn.version}`
+                  : '未选择事件'}
+                ；{form.retentionGranularity === 'day' ? '按天' : '按周'} {form.retentionPeriods} 期
+              </span>
+            </div>
+          )}
         </div>
       )}
       {isMetric && form.metric === 'pv' && (
@@ -662,6 +694,12 @@ export function AnalysisPage({
           {form.subject === 'uid'
             ? '按事实原始 UID 统计，不关联登录前的匿名事件。'
             : '按事实原始匿名标识统计，同一设备不代表同一人。'}
+        </p>
+      )}
+      {form.mode === 'retention' && (
+        <p className="field-help">
+          按原始 UID 统计：主体在最早起始事件所在日历周期入队，0 期留存恒为
+          100%；周粒度以周一为起点，时间范围不能超过期数乘以粒度（最多 84 天）。
         </p>
       )}
       {catalog.hasNextPage && (
@@ -715,7 +753,9 @@ export function AnalysisPage({
         {form.filters.length > 0 && <span>{filterSummary}</span>}
       </div>
       {blockedDetails && (
-        <p role="status">事件明细和用户旅程需要项目编辑权限，当前可使用指标、趋势和漏斗。</p>
+        <p role="status">
+          事件明细和用户旅程需要项目编辑权限，当前可使用指标、趋势、漏斗和留存分析。
+        </p>
       )}
     </form>
   );
@@ -767,7 +807,9 @@ export function AnalysisPage({
                     {snapshot.request.event_keys?.join('、') ||
                       (snapshot.request.kind === 'funnel'
                         ? `${snapshot.request.funnel?.steps.length ?? 0} 步有序漏斗`
-                        : '全部事件')}
+                        : snapshot.request.kind === 'retention'
+                          ? `${snapshot.request.retention?.periods ?? 0} 期${snapshot.request.retention?.granularity === 'week' ? '按周' : '按天'}留存`
+                          : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
@@ -1091,7 +1133,11 @@ export function AnalysisPage({
           </div>
           <p className="field-help">
             时间范围为左闭右开，
-            {form.mode === 'metrics' || form.mode === 'trend' ? '最多 31 天' : '最多 7 天'}
+            {form.mode === 'metrics' || form.mode === 'trend'
+              ? '最多 31 天'
+              : form.mode === 'retention'
+                ? `最多 ${Number(form.retentionPeriods) * (form.retentionGranularity === 'week' ? 7 : 1)} 天`
+                : '最多 7 天'}
             。输入采用 UTC，分桶与结果采用所选时区。
           </p>
         </form>
@@ -1562,6 +1608,106 @@ export function AnalysisPage({
           </Toolbar>
           <p className="field-help">
             按顺序到达步骤，允许穿插其他事件；每个主体每步最多计一次，窗口从候选首步开始。同一条事件不能占据两个步骤。
+          </p>
+        </form>
+      </Modal>
+      <Modal
+        open={editor === 'retention'}
+        title="配置留存分析"
+        onRequestClose={() => setEditor(null)}
+        footer={
+          <Button variant="primary" type="submit" form={`${queryFormID}-retention`}>
+            完成
+          </Button>
+        }
+      >
+        {validationError && validationTarget === 'retention' && editor === 'retention' && (
+          <p id={`${queryFormID}-retention-error`} role="alert">
+            {validationError}
+          </p>
+        )}
+        <form
+          id={`${queryFormID}-retention`}
+          aria-describedby={
+            validationTarget === 'retention' && validationError
+              ? `${queryFormID}-retention-error`
+              : undefined
+          }
+          className="section-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            finishEditor('retention');
+          }}
+        >
+          {(
+            [
+              { key: 'retentionStart', label: '起始事件' },
+              { key: 'retentionReturn', label: '回访事件' },
+            ] as const
+          ).map(({ key, label }) => (
+            <div className="analysis-funnel-step" data-retention-step={key} key={key}>
+              <Field label={`${label}（已发布事件）`}>
+                <Select
+                  required
+                  value={form[key].event}
+                  onChange={(event) => {
+                    const eventKey = event.target.value;
+                    patch(key, {
+                      event: eventKey,
+                      version: String(
+                        events
+                          .find((definition) => definition.event_key === eventKey)
+                          ?.published_versions.at(-1) ?? '',
+                      ),
+                    });
+                  }}
+                  options={[{ value: '', label: '选择已发布事件' }, ...eventOptions.slice(1)]}
+                />
+              </Field>
+              <Field label={`${label}版本`}>
+                <Select
+                  required
+                  value={form[key].version}
+                  onChange={(event) => patch(key, { ...form[key], version: event.target.value })}
+                  options={[
+                    { value: '', label: '选择版本' },
+                    ...(
+                      events.find((event) => event.event_key === form[key].event)
+                        ?.published_versions ?? []
+                    ).map((version) => ({ value: String(version), label: `v${version}` })),
+                  ]}
+                />
+              </Field>
+            </div>
+          ))}
+          <Field label="留存粒度">
+            <Select
+              value={form.retentionGranularity}
+              onChange={(event) =>
+                patch(
+                  'retentionGranularity',
+                  event.target.value as AnalysisForm['retentionGranularity'],
+                )
+              }
+              options={[
+                { value: 'day', label: '按天（时区对齐日历日）' },
+                { value: 'week', label: '按周（周一开始）' },
+              ]}
+            />
+          </Field>
+          <Field label="留存期数（1 至 12）">
+            <Input
+              type="number"
+              required
+              min="1"
+              max="12"
+              value={form.retentionPeriods}
+              onChange={(event) => patch('retentionPeriods', event.target.value)}
+            />
+          </Field>
+          <p className="field-help">
+            主体在最早起始事件所在周期入队，回访事件按相对队列的周期偏移计数，0 期留存恒为
+            100%。统计主体固定为原始 UID。
           </p>
         </form>
       </Modal>

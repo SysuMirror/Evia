@@ -1,6 +1,6 @@
 import type { Environment, QueryRequest } from '@evia/api-client';
 
-export type AnalysisMode = 'metrics' | 'trend' | 'events' | 'journey' | 'funnel';
+export type AnalysisMode = 'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention';
 export type QueryField = NonNullable<QueryRequest['group_by']>[number];
 export type QueryFilter = NonNullable<QueryRequest['filter']>;
 export type PublishedField = { id: string; label: string; type: string; reference: QueryField };
@@ -27,6 +27,10 @@ export type AnalysisForm = {
   filterJoin: 'and' | 'or';
   steps: { event: string; version: string }[];
   window: string;
+  retentionStart: { event: string; version: string };
+  retentionReturn: { event: string; version: string };
+  retentionGranularity: 'day' | 'week';
+  retentionPeriods: string;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -34,6 +38,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'events', label: '事件明细' },
   { id: 'journey', label: '用户旅程' },
   { id: 'funnel', label: '有序漏斗' },
+  { id: 'retention', label: '留存分析' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },
@@ -126,10 +131,14 @@ export function initialForm(timezone: string): AnalysisForm {
       { event: '', version: '' },
     ],
     window: '3600',
+    retentionStart: { event: '', version: '' },
+    retentionReturn: { event: '', version: '' },
+    retentionGranularity: 'day',
+    retentionPeriods: '7',
   };
 }
 export type AnalysisValidationTarget =
-  'range' | 'settings' | 'event' | 'interval' | 'filters' | 'identity' | 'funnel';
+  'range' | 'settings' | 'event' | 'interval' | 'filters' | 'identity' | 'funnel' | 'retention';
 export class AnalysisValidationError extends Error {
   constructor(
     public readonly target: AnalysisValidationTarget,
@@ -143,7 +152,12 @@ export class AnalysisValidationError extends Error {
 function readTimeRange(form: AnalysisForm) {
   const from = new Date(`${form.from}Z`),
     to = new Date(`${form.to}Z`);
-  const days = form.mode === 'metrics' || form.mode === 'trend' ? 31 : 7;
+  const days =
+    form.mode === 'metrics' || form.mode === 'trend'
+      ? 31
+      : form.mode === 'retention'
+        ? retentionSpanDays(form)
+        : 7;
   if (
     !Number.isFinite(from.getTime()) ||
     !Number.isFinite(to.getTime()) ||
@@ -162,6 +176,35 @@ function readTimeRange(form: AnalysisForm) {
     throw new AnalysisValidationError('range', '请选择有效的 IANA 时区。');
   }
   return { from, to };
+}
+
+// retentionSpanDays mirrors the backend window: periods multiplied by the
+// calendar granularity, with an 84-day hard ceiling.
+function retentionSpanDays(form: AnalysisForm): number {
+  const periods = Number(form.retentionPeriods);
+  const safePeriods = Number.isInteger(periods) && periods >= 1 && periods <= 12 ? periods : 12;
+  return safePeriods * (form.retentionGranularity === 'week' ? 7 : 1);
+}
+function readRetentionStep(
+  step: { event: string; version: string },
+  label: string,
+): NonNullable<QueryRequest['retention']>['start_event'] {
+  if (!step.event || !Number.isSafeInteger(Number(step.version)) || Number(step.version) < 1)
+    throw new AnalysisValidationError('retention', `请为${label}选择已发布事件及版本。`);
+  return { event_key: step.event, schema_version: Number(step.version) };
+}
+function readRetention(form: AnalysisForm): NonNullable<QueryRequest['retention']> {
+  if (form.retentionGranularity !== 'day' && form.retentionGranularity !== 'week')
+    throw new AnalysisValidationError('retention', '留存粒度须为按天或按周。');
+  const periods = Number(form.retentionPeriods);
+  if (!Number.isInteger(periods) || periods < 1 || periods > 12)
+    throw new AnalysisValidationError('retention', '留存期数须为 1 至 12 的整数。');
+  return {
+    start_event: readRetentionStep(form.retentionStart, '起始事件'),
+    return_event: readRetentionStep(form.retentionReturn, '回访事件'),
+    granularity: form.retentionGranularity,
+    periods,
+  };
 }
 function readLimit(form: AnalysisForm) {
   const limit = Number(form.limit);
@@ -264,12 +307,13 @@ function readFunnel(form: AnalysisForm): NonNullable<QueryRequest['funnel']> {
     mode: 'ordered_with_interleaving',
   };
 }
-export type AnalysisEditorSection = 'range' | 'settings' | 'filters' | 'funnel';
+export type AnalysisEditorSection = 'range' | 'settings' | 'filters' | 'funnel' | 'retention';
 export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEditorSection): void {
   if (section === 'range') readTimeRange(form);
   else if (section === 'settings') readLimit(form);
   else if (section === 'filters') readFilters(form);
-  else readFunnel(form);
+  else if (section === 'funnel') readFunnel(form);
+  else readRetention(form);
 }
 
 export function buildRequest(form: AnalysisForm, environment: Environment): QueryRequest {
@@ -282,7 +326,8 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     timezone: form.timezone,
     limit,
   };
-  if (form.mode !== 'funnel' && form.event) request.event_keys = [form.event];
+  if (form.mode !== 'funnel' && form.mode !== 'retention' && form.event)
+    request.event_keys = [form.event];
   if (form.mode === 'metrics' || form.mode === 'trend') {
     if (form.metric === 'pv' && !form.event)
       throw new AnalysisValidationError('event', '请选择代表页面访问的已发布事件，再统计 PV。');
@@ -321,6 +366,11 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   if (form.mode === 'funnel') {
     request.subject = form.subject;
     request.funnel = readFunnel(form);
+  }
+  if (form.mode === 'retention') {
+    // v1 retention is uid-only; the backend rejects every other subject.
+    request.subject = 'uid';
+    request.retention = readRetention(form);
   }
   return request;
 }

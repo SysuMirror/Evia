@@ -116,6 +116,80 @@ test('analysis typed filters preserve empty strings, zero, false and JSON arrays
     expect(() => filterValue(type!, op!, value!)).toThrow();
 });
 
+test('retention builds a uid-only cohort request and closes the validation surface', () => {
+  const input = form();
+  input.mode = 'retention';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-08T00:00';
+  input.retentionStart = { event: 'sign_up', version: '1' };
+  input.retentionReturn = { event: 'login', version: '2' };
+  input.retentionGranularity = 'day';
+  input.retentionPeriods = '7';
+  const request = buildRequest(input, 'development');
+  expect(request.kind).toBe('retention');
+  expect(request.subject).toBe('uid');
+  expect(request.event_keys).toBeUndefined();
+  expect(request.metrics).toBeUndefined();
+  expect(request.group_by).toBeUndefined();
+  expect(request.interval).toBeUndefined();
+  expect(request.retention).toEqual({
+    start_event: { event_key: 'sign_up', schema_version: 1 },
+    return_event: { event_key: 'login', schema_version: 2 },
+    granularity: 'day',
+    periods: 7,
+  });
+
+  // Missing pinned events fail on the retention editor section, not range.
+  const missingEvents = { ...input, retentionStart: { event: '', version: '' } };
+  expect(() => buildRequest(missingEvents, 'development')).toThrow('起始事件');
+  try {
+    buildRequest(missingEvents, 'development');
+  } catch (error) {
+    expect(error).toMatchObject({ target: 'retention' });
+  }
+
+  // Periods are a 1..12 closed set.
+  for (const periods of ['0', '13', '1.5', '']) {
+    const bad = { ...input, retentionPeriods: periods };
+    expect(() => buildRequest(bad, 'development')).toThrow(AnalysisValidationError);
+  }
+
+  // Section validation isolates retention errors from the other editors.
+  expect(() => validateAnalysisSection(input, 'retention')).not.toThrow();
+  const badGranularity = { ...input, retentionGranularity: 'hour' as 'day' };
+  expect(() => validateAnalysisSection(badGranularity, 'retention')).toThrow();
+});
+
+test('retention time window follows periods multiplied by granularity', () => {
+  const input = form();
+  input.mode = 'retention';
+  input.retentionStart = { event: 'sign_up', version: '1' };
+  input.retentionReturn = { event: 'login', version: '1' };
+  input.retentionGranularity = 'day';
+  input.retentionPeriods = '7';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-09T00:00'; // 8 days exceeds a 7-period day matrix
+  expect(() => buildRequest(input, 'development')).toThrow('最多 7 天');
+
+  // A week matrix permits up to periods × 7 days.
+  input.retentionGranularity = 'week';
+  input.retentionPeriods = '2';
+  input.to = '2026-11-15T00:00'; // 14 days, exactly the two-week window
+  const weekly = buildRequest(input, 'development');
+  expect(weekly.retention?.granularity).toBe('week');
+  expect(weekly.retention?.periods).toBe(2);
+
+  input.to = '2026-11-16T00:00'; // 15 days exceeds the 14-day window
+  expect(() => buildRequest(input, 'development')).toThrow('最多 14 天');
+
+  // The 84-day hard ceiling: 12 weekly periods are allowed, 12 day periods are not 84 days.
+  input.retentionGranularity = 'week';
+  input.retentionPeriods = '12';
+  input.from = '2026-11-01T00:00';
+  input.to = '2027-02-01T00:00'; // 92 days, beyond 84
+  expect(() => buildRequest(input, 'development')).toThrow('最多 84 天');
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {
