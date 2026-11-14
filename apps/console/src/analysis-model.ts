@@ -1,6 +1,7 @@
 import type { Environment, QueryRequest } from '@evia/api-client';
 
-export type AnalysisMode = 'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention';
+export type AnalysisMode =
+  'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention' | 'segment';
 export type QueryField = NonNullable<QueryRequest['group_by']>[number];
 export type QueryFilter = NonNullable<QueryRequest['filter']>;
 export type PublishedField = { id: string; label: string; type: string; reference: QueryField };
@@ -31,6 +32,9 @@ export type AnalysisForm = {
   retentionReturn: { event: string; version: string };
   retentionGranularity: 'day' | 'week';
   retentionPeriods: string;
+  segmentEvent: { event: string; version: string };
+  segmentField: string;
+  segmentProperty?: PublishedField;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -39,6 +43,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'journey', label: '用户旅程' },
   { id: 'funnel', label: '有序漏斗' },
   { id: 'retention', label: '留存分析' },
+  { id: 'segment', label: '主体分群' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },
@@ -135,10 +140,20 @@ export function initialForm(timezone: string): AnalysisForm {
     retentionReturn: { event: '', version: '' },
     retentionGranularity: 'day',
     retentionPeriods: '7',
+    segmentEvent: { event: '', version: '' },
+    segmentField: '',
   };
 }
 export type AnalysisValidationTarget =
-  'range' | 'settings' | 'event' | 'interval' | 'filters' | 'identity' | 'funnel' | 'retention';
+  | 'range'
+  | 'settings'
+  | 'event'
+  | 'interval'
+  | 'filters'
+  | 'identity'
+  | 'funnel'
+  | 'retention'
+  | 'segment';
 export class AnalysisValidationError extends Error {
   constructor(
     public readonly target: AnalysisValidationTarget,
@@ -307,13 +322,48 @@ function readFunnel(form: AnalysisForm): NonNullable<QueryRequest['funnel']> {
     mode: 'ordered_with_interleaving',
   };
 }
-export type AnalysisEditorSection = 'range' | 'settings' | 'filters' | 'funnel' | 'retention';
+const scalarSegmentTypes = ['string', 'boolean', 'number', 'integer'];
+function readSegment(form: AnalysisForm): NonNullable<QueryRequest['segment']> {
+  if (
+    !form.segmentEvent.event ||
+    !Number.isSafeInteger(Number(form.segmentEvent.version)) ||
+    Number(form.segmentEvent.version) < 1
+  )
+    throw new AnalysisValidationError('segment', '请为分群选择已发布事件及版本。');
+  const property = form.segmentProperty;
+  const reference = property?.reference;
+  if (
+    !property ||
+    !reference ||
+    reference.kind !== 'property' ||
+    reference.event_key !== form.segmentEvent.event ||
+    reference.schema_version !== Number(form.segmentEvent.version)
+  )
+    throw new AnalysisValidationError('segment', '请选择该事件版本上的标量属性字段。');
+  if (!scalarSegmentTypes.includes(property.type))
+    throw new AnalysisValidationError('segment', '分群字段必须是字符串、布尔或数值标量。');
+  return {
+    event: {
+      event_key: form.segmentEvent.event,
+      schema_version: Number(form.segmentEvent.version),
+    },
+    field: {
+      kind: 'property',
+      event_key: reference.event_key,
+      schema_version: reference.schema_version,
+      key: reference.key,
+    },
+  };
+}
+export type AnalysisEditorSection =
+  'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment';
 export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEditorSection): void {
   if (section === 'range') readTimeRange(form);
   else if (section === 'settings') readLimit(form);
   else if (section === 'filters') readFilters(form);
   else if (section === 'funnel') readFunnel(form);
-  else readRetention(form);
+  else if (section === 'retention') readRetention(form);
+  else readSegment(form);
 }
 
 export function buildRequest(form: AnalysisForm, environment: Environment): QueryRequest {
@@ -326,7 +376,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     timezone: form.timezone,
     limit,
   };
-  if (form.mode !== 'funnel' && form.mode !== 'retention' && form.event)
+  if (form.mode !== 'funnel' && form.mode !== 'retention' && form.mode !== 'segment' && form.event)
     request.event_keys = [form.event];
   if (form.mode === 'metrics' || form.mode === 'trend') {
     if (form.metric === 'pv' && !form.event)
@@ -370,6 +420,10 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   if (form.mode === 'retention') {
     request.subject = form.subject;
     request.retention = readRetention(form);
+  }
+  if (form.mode === 'segment') {
+    request.subject = form.subject;
+    request.segment = readSegment(form);
   }
   return request;
 }

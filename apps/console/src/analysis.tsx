@@ -197,6 +197,13 @@ export function AnalysisPage({
         : [],
     [version.data, propertyEvent, propertyVersion],
   );
+  const scalarSegmentFields = useMemo(
+    () =>
+      propertyFields.filter((field) =>
+        ['string', 'boolean', 'number', 'integer'].includes(field.type),
+      ),
+    [propertyFields],
+  );
   const filterFields = [
     ...propertyFields,
     ...form.filters.flatMap((filter) =>
@@ -507,6 +514,7 @@ export function AnalysisPage({
     form.mode === 'journey' ||
     form.mode === 'funnel' ||
     form.mode === 'retention' ||
+    form.mode === 'segment' ||
     (isMetric && form.metric === 'uv');
   const filterSummary = `${form.filterJoin === 'and' ? '全部满足' : '任一满足'}：${form.filters
     .map((filter) => {
@@ -541,6 +549,8 @@ export function AnalysisPage({
               cohort_size: '队列规模',
               retained: '各期留存主体数',
               retention_rate: '各期留存率',
+              segment_value: '分群标签',
+              share: '群体占比',
             }[column.key] ??
             column.label ??
             column.key),
@@ -549,15 +559,17 @@ export function AnalysisPage({
           ? `${((row[column.key] as number) * 100).toFixed(2)}%`
           : column.key === 'step_index' && typeof row[column.key] === 'number'
             ? String((row[column.key] as number) + 1)
-            : column.key === 'retention_rate' && Array.isArray(row[column.key])
-              ? (row[column.key] as unknown[])
-                  .map((value) =>
-                    typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
-                  )
-                  .join('，')
-              : column.key === 'retained' && Array.isArray(row[column.key])
-                ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
-                : cell(row[column.key], column.type, snapshot!.request.timezone),
+            : column.key === 'share' && typeof row[column.key] === 'number'
+              ? `${((row[column.key] as number) * 100).toFixed(2)}%`
+              : column.key === 'retention_rate' && Array.isArray(row[column.key])
+                ? (row[column.key] as unknown[])
+                    .map((value) =>
+                      typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
+                    )
+                    .join('，')
+                : column.key === 'retained' && Array.isArray(row[column.key])
+                  ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
+                  : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
   const queryEditor = (
     <form
@@ -575,7 +587,7 @@ export function AnalysisPage({
         <ErrorPanel message={catalog.error.message} retry={() => void catalog.refetch()} />
       ) : (
         <div className="analysis-query-bar">
-          {form.mode !== 'funnel' && form.mode !== 'retention' && (
+          {form.mode !== 'funnel' && form.mode !== 'retention' && form.mode !== 'segment' && (
             <Field
               label="事件（跨已发布版本）"
               error={validationTarget === 'event' ? validationError : undefined}
@@ -687,6 +699,27 @@ export function AnalysisPage({
               </span>
             </div>
           )}
+          {form.mode === 'segment' && (
+            <div className="analysis-funnel-overview">
+              <h3>主体分群</h3>
+              <Button
+                onClick={() => {
+                  setPropertyEvent(form.segmentEvent.event);
+                  setPropertyVersion(form.segmentEvent.version);
+                  setEditor('segment');
+                }}
+                aria-haspopup="dialog"
+              >
+                配置分群
+              </Button>
+              <span className="field-help">
+                {form.segmentEvent.event
+                  ? `${form.segmentEvent.event} v${form.segmentEvent.version}`
+                  : '未选择事件'}
+                ；字段：{form.segmentProperty ? form.segmentProperty.label : '未选择字段'}
+              </span>
+            </div>
+          )}
         </div>
       )}
       {isMetric && form.metric === 'pv' && (
@@ -703,6 +736,12 @@ export function AnalysisPage({
         <p className="field-help">
           主体在最早起始事件所在日历周期入队，0 期留存恒为
           100%；周粒度以周一为起点，时间范围不能超过期数乘以粒度（最多 84 天）。
+        </p>
+      )}
+      {form.mode === 'segment' && (
+        <p className="field-help">
+          每个主体按其最早一条分群事件的标量字段值归入唯一群体，后续事件不会使其换组；缺失或空值归入固定缺失组。字段限字符串、布尔或数值，时间范围最多
+          7 天。
         </p>
       )}
       {catalog.hasNextPage && (
@@ -812,7 +851,9 @@ export function AnalysisPage({
                         ? `${snapshot.request.funnel?.steps.length ?? 0} 步有序漏斗`
                         : snapshot.request.kind === 'retention'
                           ? `${snapshot.request.retention?.periods ?? 0} 期${snapshot.request.retention?.granularity === 'week' ? '按周' : '按天'}留存`
-                          : '全部事件')}
+                          : snapshot.request.kind === 'segment'
+                            ? `按 ${snapshot.request.segment?.field.key ?? ''} 分群`
+                            : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
@@ -1711,6 +1752,112 @@ export function AnalysisPage({
           <p className="field-help">
             主体在最早起始事件所在周期入队，回访事件按相对队列的周期偏移计数，0 期留存恒为
             100%。统计主体在查询栏的「统计主体」中选择原始 UID 或原始匿名标识。
+          </p>
+        </form>
+      </Modal>
+      <Modal
+        open={editor === 'segment'}
+        title="配置主体分群"
+        onRequestClose={() => setEditor(null)}
+        footer={
+          <Button variant="primary" type="submit" form={`${queryFormID}-segment`}>
+            完成
+          </Button>
+        }
+      >
+        {validationError && validationTarget === 'segment' && editor === 'segment' && (
+          <p id={`${queryFormID}-segment-error`} role="alert">
+            {validationError}
+          </p>
+        )}
+        <form
+          id={`${queryFormID}-segment`}
+          aria-describedby={
+            validationTarget === 'segment' && validationError
+              ? `${queryFormID}-segment-error`
+              : undefined
+          }
+          className="section-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            finishEditor('segment');
+          }}
+        >
+          <div className="analysis-funnel-step" data-segment-config>
+            <Field label="分群事件（已发布）">
+              <Select
+                required
+                value={form.segmentEvent.event}
+                onChange={(event) => {
+                  const eventKey = event.target.value;
+                  const version = String(
+                    events
+                      .find((definition) => definition.event_key === eventKey)
+                      ?.published_versions.at(-1) ?? '',
+                  );
+                  patch('segmentEvent', { event: eventKey, version });
+                  patch('segmentField', '');
+                  patch('segmentProperty', undefined);
+                  setPropertyEvent(eventKey);
+                  setPropertyVersion(version);
+                }}
+                options={[{ value: '', label: '选择已发布事件' }, ...eventOptions.slice(1)]}
+              />
+            </Field>
+            <Field label="分群事件版本">
+              <Select
+                required
+                value={form.segmentEvent.version}
+                onChange={(event) => {
+                  const version = event.target.value;
+                  patch('segmentEvent', { ...form.segmentEvent, version });
+                  patch('segmentField', '');
+                  patch('segmentProperty', undefined);
+                  setPropertyVersion(version);
+                }}
+                options={[
+                  { value: '', label: '选择版本' },
+                  ...(
+                    events.find((event) => event.event_key === form.segmentEvent.event)
+                      ?.published_versions ?? []
+                  ).map((version) => ({ value: String(version), label: `v${version}` })),
+                ]}
+              />
+            </Field>
+          </div>
+          {form.segmentEvent.event && version.isFetching && (
+            <LoadingPanel label="正在读取已发布属性类型" />
+          )}
+          {form.segmentEvent.event && version.isError && (
+            <ErrorPanel message={version.error.message} retry={() => void version.refetch()} />
+          )}
+          {form.segmentEvent.event && version.data && (
+            <Field label="分群标量字段">
+              <Select
+                required
+                value={form.segmentField}
+                onChange={(event) => {
+                  const property = scalarSegmentFields.find(
+                    (field) => field.id === event.target.value,
+                  );
+                  patch('segmentField', event.target.value);
+                  patch('segmentProperty', property);
+                }}
+                options={[
+                  { value: '', label: '选择标量属性字段' },
+                  ...scalarSegmentFields.map((field) => ({
+                    value: field.id,
+                    label: field.label,
+                  })),
+                ]}
+              />
+            </Field>
+          )}
+          {form.segmentEvent.event && version.data && !scalarSegmentFields.length && (
+            <p className="field-help">此版本没有可用于分群的标量属性字段。</p>
+          )}
+          <p className="field-help">
+            每个主体按最早一条分群事件的该字段值归入唯一群体；缺失或空值归入固定缺失组。不支持数组与日期时间字段。
           </p>
         </form>
       </Modal>

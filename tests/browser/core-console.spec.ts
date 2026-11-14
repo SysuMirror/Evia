@@ -320,6 +320,18 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await expect(page.getByText('期按天留存')).toBeVisible();
   await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
   await expect(page.getByRole('cell', { name: '100.00%' })).toBeVisible();
+  await page.getByRole('tab', { name: '主体分群', exact: true }).click();
+  await page.getByRole('button', { name: '配置分群', exact: true }).click();
+  const segment = page.getByRole('dialog', { name: '配置主体分群', exact: true });
+  await segment.getByLabel('分群事件（已发布）', { exact: true }).selectOption('browser_action');
+  await segment
+    .getByLabel('分群标量字段', { exact: true })
+    .selectOption({ label: 'browser_action:1:page (string)' });
+  await segment.getByRole('button', { name: '完成', exact: true }).click();
+  await query();
+  await expect(page.getByText('按 page 分群')).toBeVisible();
+  await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
+  await expect(page.getByRole('cell', { name: '100.00%' })).toBeVisible();
   await page.getByRole('tab', { name: '用户旅程', exact: true }).click();
   await page.getByLabel('原始 UID', { exact: true }).fill('synthetic-absent');
   await query();

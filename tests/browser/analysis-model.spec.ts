@@ -197,6 +197,68 @@ test('retention time window follows periods multiplied by granularity', () => {
   expect(() => buildRequest(input, 'development')).toThrow('最多 84 天');
 });
 
+test('segmentation builds unique-subject group requests and closes the validation surface', () => {
+  const scalarField = publishedFields(
+    {
+      properties: { plan: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } },
+    },
+    'sign_up',
+    1,
+  ).find((field) => field.reference.key === 'plan')!;
+  const input = form();
+  input.mode = 'segment';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.segmentEvent = { event: 'sign_up', version: '1' };
+  input.segmentField = scalarField.id;
+  input.segmentProperty = scalarField;
+  const request = buildRequest(input, 'development');
+  expect(request.kind).toBe('segment');
+  expect(request.subject).toBe('uid');
+  expect(request.event_keys).toBeUndefined();
+  expect(request.group_by).toBeUndefined();
+  expect(request.metrics).toBeUndefined();
+  expect(request.interval).toBeUndefined();
+  expect(request.segment).toEqual({
+    event: { event_key: 'sign_up', schema_version: 1 },
+    field: { kind: 'property', event_key: 'sign_up', schema_version: 1, key: 'plan' },
+  });
+
+  // Anonymous subject is accepted and selects the same event scope.
+  input.subject = 'anonymous';
+  const anonymousRequest = buildRequest(input, 'production');
+  expect(anonymousRequest.subject).toBe('anonymous');
+  expect(anonymousRequest.environment).toBe('production');
+  input.subject = 'uid';
+
+  // Missing event/version or field fails on the segment editor section.
+  const noEvent = { ...input, segmentEvent: { event: '', version: '' } };
+  expect(() => buildRequest(noEvent, 'development')).toThrow('事件');
+  try {
+    buildRequest(noEvent, 'development');
+  } catch (error) {
+    expect(error).toMatchObject({ target: 'segment' });
+  }
+  const noField = { ...input, segmentField: '', segmentProperty: undefined };
+  expect(() => buildRequest(noField, 'development')).toThrow(AnalysisValidationError);
+
+  // Non-scalar (array) properties are rejected even when selected.
+  const arrayField = publishedFields(
+    { properties: { tags: { type: 'array', items: { type: 'string' } } } },
+    'sign_up',
+    1,
+  )[0]!;
+  const arrayInput = {
+    ...input,
+    segmentField: arrayField.id,
+    segmentProperty: arrayField,
+  };
+  expect(() => buildRequest(arrayInput, 'development')).toThrow('标量');
+
+  // Section validation isolates segment errors from other editors.
+  expect(() => validateAnalysisSection(input, 'segment')).not.toThrow();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {
