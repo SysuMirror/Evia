@@ -8,6 +8,7 @@ import type {
   EventOutcome,
   FlushResult,
   NavigationLink,
+  OperationFailure,
   PageOptions,
   Properties,
   PublicConfig,
@@ -33,6 +34,9 @@ const pageViewEventKey = 'sys.page_view';
 // identityLinkEventKey is the reserved system event recorded after a successful
 // identify(); uid and anonymous id travel in identity, never in properties.
 const identityLinkEventKey = 'sys.identity_link';
+// operationFailedEventKey records one sanitized terminal logical-operation failure.
+const operationFailedEventKey = 'sys.operation_failed';
+const operationErrorCategories = new Set(['validation', 'network', 'timeout', 'http', 'business']);
 interface Entry {
   eventId: string;
   draft: Omit<Envelope, 'schema_version' | 'release_revision'>;
@@ -269,6 +273,30 @@ class Client implements BrowserClient {
     if (typeof eventKey !== 'string' || !customEventPattern.test(eventKey))
       throw new EviaSDKError('INVALID_CUSTOM_EVENT_KEY');
     return this.enqueue(eventKey, properties, options);
+  }
+
+  // reportOperationFailure enqueues one reserved sys.operation_failed event. The
+  // payload is rebuilt from bounded, validated fields rather than spread from the
+  // caller object, so arbitrary data, raw exceptions and request bodies can never
+  // enter the event (the schema sets additionalProperties=false).
+  reportOperationFailure(failure: OperationFailure): Emission {
+    this.assertEnabled();
+    if (failure === null || typeof failure !== 'object')
+      throw new EviaSDKError('INVALID_OPERATION_FAILURE');
+    requireText(failure.operation, 128, true);
+    if (!operationErrorCategories.has(failure.errorCategory))
+      throw new EviaSDKError('INVALID_ERROR_CATEGORY');
+    if (typeof failure.retryable !== 'boolean') throw new EviaSDKError('INVALID_RETRYABLE');
+    const properties: Record<string, string | boolean> = {
+      operation: failure.operation,
+      error_category: failure.errorCategory,
+      retryable: failure.retryable,
+    };
+    if (failure.errorCode !== undefined) {
+      requireText(failure.errorCode, 128, true);
+      properties.error_code = failure.errorCode;
+    }
+    return this.enqueue(operationFailedEventKey, properties, {});
   }
 
   // enqueue builds and queues one envelope. Public callers validate the custom

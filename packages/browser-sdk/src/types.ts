@@ -96,6 +96,20 @@ export interface Emission {
   readonly result: Promise<EventOutcome>;
 }
 
+export type OperationErrorCategory = 'validation' | 'network' | 'timeout' | 'http' | 'business';
+
+/**
+ * Structured, sanitized description of a terminal logical-operation failure.
+ * Raw exceptions and request bodies are intentionally not accepted, so the SDK
+ * never collects credentials or arbitrary payloads in sys.operation_failed.
+ */
+export interface OperationFailure {
+  operation: string;
+  errorCategory: OperationErrorCategory;
+  retryable: boolean;
+  errorCode?: string;
+}
+
 export interface FlushResult {
   pending: number;
 }
@@ -131,6 +145,7 @@ export interface BrowserClient {
   init(): Promise<PublicConfig>;
   refreshConfig(): Promise<PublicConfig>;
   emit(eventKey: string, properties?: Properties, options?: EventOptions): Emission;
+  reportOperationFailure(failure: OperationFailure): Emission;
   identify(uid: string): void;
   reset(): void;
   beginNavigation(): NavigationLink;

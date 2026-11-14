@@ -11,6 +11,8 @@ export type {
   EventOutcome,
   FlushResult,
   NavigationLink,
+  OperationErrorCategory,
+  OperationFailure,
   PageOptions,
   Properties,
   PublicConfig,
