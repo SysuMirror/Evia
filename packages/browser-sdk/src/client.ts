@@ -30,6 +30,9 @@ type Page = Omit<EventContext, 'sequence'>;
 // pageViewEventKey is the reserved system event used by automatic page
 // collection. It is not reachable through the public custom-event emit().
 const pageViewEventKey = 'sys.page_view';
+// identityLinkEventKey is the reserved system event recorded after a successful
+// identify(); uid and anonymous id travel in identity, never in properties.
+const identityLinkEventKey = 'sys.identity_link';
 interface Entry {
   eventId: string;
   draft: Omit<Envelope, 'schema_version' | 'release_revision'>;
@@ -91,6 +94,7 @@ class Client implements BrowserClient {
   private readonly maxBatchBytes: number;
   private readonly sessionTimeout: number;
   private readonly autoPageViews: boolean;
+  private readonly autoIdentityLink: boolean;
   private enabled = true;
   private destroyed = false;
   private generation = 0;
@@ -148,6 +152,7 @@ class Client implements BrowserClient {
       24 * 60 * 60 * 1000,
     );
     this.autoPageViews = options.autoPageViews === true;
+    this.autoIdentityLink = options.autoIdentityLink === true;
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     let stored: string | null = null;
@@ -351,7 +356,10 @@ class Client implements BrowserClient {
     this.assertEnabled();
     requireText(uid, 128, true);
     if (uid.includes('\0')) throw new EviaSDKError('INVALID_UID');
+    // Assign before enqueue so the identity-link envelope carries the new uid
+    // together with the anonymous id, exactly as the contract fixture specifies.
     this.uid = uid;
+    this.emitIdentityLink();
   }
 
   reset(): void {
@@ -420,18 +428,28 @@ class Client implements BrowserClient {
     });
   }
 
-  // emitAutoPageView records one reserved sys.page_view for the current page.
-  // Backpressure must never break navigation, so a full queue drops the auto
-  // event; an unpublished sys.page_view still fails closed via the normal
-  // configuration check with EVENT_NOT_PUBLISHED.
-  private emitAutoPageView(): void {
-    if (!this.autoPageViews || this.destroyed || !this.enabled) return;
+  // emitSystemEvent records one reserved sys.* event with empty properties.
+  // Backpressure must never break the underlying SDK action (navigation or
+  // identify), so a full queue drops the automatic event; an unpublished system
+  // event still fails closed via the configuration check (EVENT_NOT_PUBLISHED).
+  private emitSystemEvent(eventKey: string, enabled: boolean): void {
+    if (!enabled || this.destroyed || !this.enabled) return;
     try {
-      this.enqueue(pageViewEventKey, {}, {});
+      this.enqueue(eventKey, {}, {});
     } catch (error) {
       if (error instanceof EviaSDKError && error.code === 'QUEUE_FULL') return;
       throw error;
     }
+  }
+
+  // emitAutoPageView records one reserved sys.page_view for the current page.
+  private emitAutoPageView(): void {
+    this.emitSystemEvent(pageViewEventKey, this.autoPageViews);
+  }
+
+  // emitIdentityLink records one reserved sys.identity_link after identify().
+  private emitIdentityLink(): void {
+    this.emitSystemEvent(identityLinkEventKey, this.autoIdentityLink);
   }
 
   navigate(options: PageOptions = {}): Readonly<Page> {

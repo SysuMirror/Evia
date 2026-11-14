@@ -43,6 +43,13 @@ export interface ClientOptions {
    * that produces a new page_view_id. Defaults to false so existing behavior is unchanged.
    */
   autoPageViews?: boolean;
+  /**
+   * Opt-in automatic sys.identity_link collection. When enabled each successful
+   * identify(uid) enqueues one reserved identity-link event (empty properties) whose
+   * identity carries both the new uid and the anonymous id; no credentials are collected.
+   * Defaults to false so existing behavior is unchanged.
+   */
+  autoIdentityLink?: boolean;
   configTtlMs?: number;
   requestTimeoutMs?: number;
   flushIntervalMs?: number;
