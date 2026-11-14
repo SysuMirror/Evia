@@ -79,7 +79,7 @@ Set `autoPageViews: true` at client construction to enable reserved automatic pa
 
 The reserved key is not reachable through the public `emit()` API, which still rejects `sys.*` with `INVALID_CUSTOM_EVENT_KEY`; automatic collection is the only internal producer. The event is subject to the same publication gate as custom events, so a source that has not published `sys.page_view` settles each automatic event as `rejected` with `EVENT_NOT_PUBLISHED` and never transmits it. Backpressure never breaks navigation: when the queue is full the automatic page event is dropped instead of throwing, while explicit `emit()` calls still surface `QUEUE_FULL`.
 
-Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement and session-end system events remain contract samples only and are not auto-collected. Operation failures are reported explicitly rather than auto-collected (see [Operation failure reporting](#operation-failure-reporting)). Cross-document session continuity is not reconstructed.
+Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll and engagement system events remain contract samples only and are not auto-collected. Session ends are emitted opt-in (see [Automatic session ends](#automatic-session-ends)). Operation failures are reported explicitly rather than auto-collected (see [Operation failure reporting](#operation-failure-reporting)). Cross-document session continuity is not reconstructed.
 
 ## Automatic identity links
 
@@ -90,6 +90,16 @@ Set `autoIdentityLink: true` to record a reserved `sys.identity_link` after ever
 Call `reportOperationFailure(failure)` to record one reserved `sys.operation_failed` event for a terminal logical-operation failure. Unlike automatic collection this is an explicit application call and needs no opt-in flag, but it still passes through the publication gate: an unpublished `sys.operation_failed` settles as `rejected` with `EVENT_NOT_PUBLISHED`.
 
 The input is a bounded structured object, not an exception: `operation` (1–128 characters), `errorCategory` restricted to `validation`, `network`, `timeout`, `http` or `business`, `retryable` boolean, and optional `errorCode` (1–128 characters). Unknown categories fail with `INVALID_ERROR_CATEGORY`, non-boolean `retryable` with `INVALID_RETRYABLE`. The event properties are rebuilt from these validated fields and mapped to snake_case; caller objects are never spread, so raw exceptions, request bodies, credentials and any unknown fields cannot leak into the event (the schema sets `additionalProperties=false`). The reserved key cannot be forged through the public `emit()` API, which still rejects `sys.*`.
+
+## Automatic session ends
+
+Set `autoSessionEnd: true` to record a reserved `sys.session_end` event with a closed `reason` before an observable session ends. It is opt-in and defaults to `false`, so existing integrations are unchanged. The reasons and their triggers are:
+
+- `logout`: `reset()` clears identity; the event is enqueued before rotation so it keeps the ending session and the cleared uid in its context.
+- `account_switch`: `identify(uid)` replaces an already-established different uid; the event is emitted before the uid changes, so it describes the prior account. Re-identifying the same uid and the first identify do not emit an event.
+- `idle`: when inactivity reaches `sessionTimeoutMs`, the next activity rotates the session inside `touchSession`; activity is refreshed before the event is enqueued to prevent re-entrancy, and the event still carries the ending session id while the triggering event uses the new session.
+
+Each event carries only the `reason` property and reuses the bounded queue, retry and receipt pipeline plus the publication gate: an unpublished `sys.session_end` settles as `rejected` with `EVENT_NOT_PUBLISHED`, and a full queue drops the automatic event without breaking `reset()`, `identify()` or the in-flight event. The reserved key cannot be forged through the public `emit()` API. The SDK does not reconstruct cross-document session continuity.
 
 ## Bounded delivery and receipts
 
