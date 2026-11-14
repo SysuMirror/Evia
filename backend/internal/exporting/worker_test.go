@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,5 +168,111 @@ func TestFileArtifactStorePathContainment(t *testing.T) {
 	}
 	if _, err = NewFileArtifactStore("relative/path"); err == nil {
 		t.Fatal("relative artifact root must be rejected")
+	}
+}
+
+// nativeEvaluatorEngineResult mirrors the in-process evaluators that emit
+// native int/float64 and concrete slice types without a JSON round-trip.
+func nativeEvaluatorEngineResult() analysis.Result {
+	return analysis.Result{
+		Columns: []analysis.Column{
+			{Key: "subjects", Type: "integer"},
+			{Key: "share", Type: "number"},
+			{Key: "path", Type: "array"},
+			{Key: "retained", Type: "array"},
+		},
+		Rows: []map[string]any{
+			{
+				"subjects": 2,   // native int
+				"share":    0.5, // native float64
+				"path":     []string{"open", "view"},
+				"retained": []int{1, 0, 1},
+			},
+		},
+	}
+}
+
+// TestWorkerExportsNativeEvaluatorResultAsCSV drives the exact production
+// chain (RunOnce -> Artifacts.Write -> renderCSV) with a CSV job whose engine
+// returns native evaluator types. Before the csvCell native-type fix this job
+// failed with EXPORT_CSV_UNSUPPORTED instead of producing an artifact.
+func TestWorkerExportsNativeEvaluatorResultAsCSV(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	artifacts, err := NewFileArtifactStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim := &Claim{Job: Job{
+		JobID:       "66666666-6666-4666-8666-666666666666",
+		ProjectID:   "p",
+		Environment: "development",
+		State:       StateQueued,
+		Format:      FormatCSV,
+	}}
+	store := &stubStore{claim: claim, done: make(chan struct{})}
+	worker := &Worker{
+		Store: store, Engine: stubEngine{result: nativeEvaluatorEngineResult()},
+		Artifacts: artifacts, ID: "export-worker-test", Lease: time.Minute, Logger: discardLogger(),
+	}
+	if worked, e := worker.RunOnce(context.Background()); e != nil || !worked {
+		t.Fatalf("RunOnce worked=%v err=%v", worked, e)
+	}
+	<-store.done
+	if store.failedCode != "" {
+		t.Fatalf("native evaluator CSV export must not fail, got code %q", store.failedCode)
+	}
+	if filepath.Ext(store.completedArtifact.Path) != ".csv" || store.completedArtifact.Rows != 1 {
+		t.Fatalf("bad csv artifact: %+v", store.completedArtifact)
+	}
+	handle, e := artifacts.Open(context.Background(), store.completedArtifact.Path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer handle.Close()
+	payload, e := io.ReadAll(handle)
+	if e != nil {
+		t.Fatal(e)
+	}
+	text := string(payload)
+	if !strings.HasPrefix(text, "subjects,share,path,retained\n") {
+		t.Fatalf("csv header missing: %q", text)
+	}
+	if !strings.Contains(text, `2,0.5,"[""open"",""view""]","[1,0,1]"`) {
+		t.Fatalf("native evaluator row not rendered through worker: %q", text)
+	}
+}
+
+// TestWorkerExportsNativeEvaluatorResultAsJSON confirms the JSON path also
+// materializes native evaluator output through the worker (json.Marshal handles
+// the native types, so this guards against regressions in the shared chain).
+func TestWorkerExportsNativeEvaluatorResultAsJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	artifacts, err := NewFileArtifactStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim := &Claim{Job: Job{
+		JobID:       "77777777-7777-4777-8777-777777777777",
+		ProjectID:   "p",
+		Environment: "development",
+		State:       StateQueued,
+		Format:      FormatJSON,
+	}}
+	store := &stubStore{claim: claim, done: make(chan struct{})}
+	worker := &Worker{
+		Store: store, Engine: stubEngine{result: nativeEvaluatorEngineResult()},
+		Artifacts: artifacts, ID: "export-worker-test", Lease: time.Minute, Logger: discardLogger(),
+	}
+	if _, e := worker.RunOnce(context.Background()); e != nil {
+		t.Fatalf("RunOnce error: %v", e)
+	}
+	<-store.done
+	if store.failedCode != "" {
+		t.Fatalf("native evaluator JSON export must not fail, got code %q", store.failedCode)
+	}
+	if filepath.Ext(store.completedArtifact.Path) != ".json" || store.completedArtifact.Rows != 1 {
+		t.Fatalf("bad json artifact: %+v", store.completedArtifact)
 	}
 }
