@@ -60,6 +60,15 @@ type Retention struct {
 	Periods     int    `json:"periods"`
 }
 
+// Segment partitions subjects into mutually exclusive groups. Each subject is
+// labeled once, using the field value on its earliest matching segment event,
+// so a subject can never be counted in two groups. Missing or blank values
+// fall into an explicit missing group.
+type Segment struct {
+	Event Step  `json:"event"`
+	Field Field `json:"field"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -81,6 +90,7 @@ type Request struct {
 	Interval         string          `json:"interval,omitempty"`
 	Funnel           *Funnel         `json:"funnel,omitempty"`
 	Retention        *Retention      `json:"retention,omitempty"`
+	Segment          *Segment        `json:"segment,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the

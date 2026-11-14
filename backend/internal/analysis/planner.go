@@ -394,6 +394,32 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}
+	case "segment":
+		subject := "uid"
+		if r.Subject == "anonymous" {
+			subject = "anonymous_id"
+		}
+		value, e := p.field(r.Segment.Field)
+		if e != nil {
+			return Plan{}, e
+		}
+		eventFilter, e := p.filter(r.Segment.Event.Filter)
+		if e != nil {
+			return Plan{}, e
+		}
+		eventMatch := "(event_key=" + p.bind("String", r.Segment.Event.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(r.Segment.Event.SchemaVersion, 10)) + " AND " + eventFilter + ")"
+		selectSQL := []string{
+			subject + " AS subject_id",
+			"event_id",
+			"toUnixTimestamp64Nano(event_time) AS event_time_ns",
+			"toUnixTimestamp64Nano(received_at) AS received_at_ns",
+			value.value + " AS segment_value",
+			value.present + " AS segment_present",
+		}
+		base += " AND isNotNull(" + subject + ") AND " + subject + "!='' AND " + eventMatch
+		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
+		plan.Accuracy = "exact"
+		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

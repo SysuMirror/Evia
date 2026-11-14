@@ -514,3 +514,71 @@ func TestClickHouseRetentionMatrix(t *testing.T) {
 		t.Fatalf("anonymous retained matrix wrong: %#v", anonymousRow["retained"])
 	}
 }
+
+// TestClickHouseSegmentation proves subject-level segmentation against the
+// real migrated view: one group per subject via the earliest event value,
+// an explicit missing group, shares, and project scoping.
+func TestClickHouseSegmentation(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(hour int) time.Time { return day.Add(time.Duration(hour) * time.Hour) }
+	rows := []map[string]any{
+		// u1's earliest plan is pro; a later enterprise value must not reassign it.
+		fact("u1-first", "sign_up", "u1", "", "source-one", 0, map[string]any{"plan": "pro"}),
+		fact("u1-later", "sign_up", "u1", "", "source-one", 0, map[string]any{"plan": "enterprise"}),
+		fact("u2", "sign_up", "u2", "", "source-one", 0, map[string]any{"plan": "pro"}),
+		fact("u3", "sign_up", "u3", "", "source-one", 0, map[string]any{"plan": "enterprise"}),
+		// u4 has no plan property and joins the missing group.
+		fact("u4", "sign_up", "u4", "", "source-one", 0, map[string]any{}),
+		// Unrelated project must be invisible.
+		fact("outsider", "sign_up", "outsider", "", "source-one", 0, map[string]any{"plan": "pro"}),
+	}
+	rows[0]["event_time"] = at(9).Format("2006-01-02 15:04:05.000")
+	rows[0]["occurred_at"] = rows[0]["event_time"]
+	rows[1]["event_time"] = at(15).Format("2006-01-02 15:04:05.000")
+	rows[1]["occurred_at"] = rows[1]["event_time"]
+	rows[2]["event_time"] = at(10).Format("2006-01-02 15:04:05.000")
+	rows[2]["occurred_at"] = rows[2]["event_time"]
+	rows[3]["event_time"] = at(11).Format("2006-01-02 15:04:05.000")
+	rows[3]["occurred_at"] = rows[3]["event_time"]
+	rows[4]["event_time"] = at(12).Format("2006-01-02 15:04:05.000")
+	rows[4]["occurred_at"] = rows[4]["event_time"]
+	rows[5]["project_id"] = "project-two"
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "segment", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Segment: &Segment{
+			Event: Step{EventKey: "sign_up", SchemaVersion: 1},
+			Field: Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "plan", ResolvedType: "string"},
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 3 || result.Metadata.Accuracy != "exact" {
+		t.Fatalf("segment result contract wrong: %+v", result.Columns)
+	}
+	if len(result.Rows) != 3 {
+		t.Fatalf("want pro, enterprise, missing groups, got %v", result.Rows)
+	}
+	want := []struct {
+		value    string
+		subjects int
+		share    float64
+	}{
+		{"pro", 2, 0.5},
+		{"__missing__", 1, 0.25},
+		{"enterprise", 1, 0.25},
+	}
+	for i, expected := range want {
+		row := result.Rows[i]
+		if row["segment_value"] != expected.value || row["subjects"] != expected.subjects {
+			t.Fatalf("group %d mismatch: %v", i, row)
+		}
+		share, ok := row["share"].(float64)
+		if !ok || share != expected.share {
+			t.Fatalf("group %d share=%v want %v", i, row["share"], expected.share)
+		}
+	}
+}

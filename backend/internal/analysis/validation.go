@@ -50,7 +50,7 @@ func Parse(raw []byte, validator Validator) (Request, error) {
 	return out, nil
 }
 func Validate(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.Environment != "development" && r.Environment != "staging" && r.Environment != "production" {
@@ -66,7 +66,7 @@ func Validate(r *Request) error {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
 	window := 31 * 24 * time.Hour
-	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" {
+	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" {
 		window = 7 * 24 * time.Hour
 	}
 	if r.Kind == "retention" {
@@ -98,7 +98,7 @@ func Validate(r *Request) error {
 // system field types. It does not validate environment, time range or timezone;
 // execution callers must use Validate with the actual execution context.
 func ValidateConfiguration(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
@@ -230,6 +230,41 @@ func ValidateConfiguration(r *Request) error {
 		}
 	} else if r.Retention != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有留存查询接受 retention 参数", "/retention")
+	}
+	if r.Kind == "segment" {
+		if e := validateSegment(r); e != nil {
+			return e
+		}
+	} else if r.Segment != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有分群查询接受 segment 参数", "/segment")
+	}
+	return nil
+}
+
+// validateSegment enforces subject-level segmentation: an explicit uid or
+// anonymous subject, one pinned event, and one scalar field whose earliest
+// per-subject value becomes that subject's unique group label. Arrays and
+// datetimes are rejected because they do not define a unique label.
+func validateSegment(r *Request) error {
+	if r.Subject != "uid" && r.Subject != "anonymous" {
+		return Invalid("SUBJECT_REQUIRED", "分群查询必须指定 uid 或 anonymous 统计主体", "/subject")
+	}
+	sg := r.Segment
+	if sg == nil {
+		return Invalid("INVALID_SEGMENT", "分群配置缺失", "/segment")
+	}
+	if len(r.EventKeys) > 0 {
+		return Invalid("INVALID_EVENT_SELECTION", "分群查询通过分群事件固定事件版本", "/event_keys")
+	}
+	if !eventKey.MatchString(sg.Event.EventKey) || sg.Event.SchemaVersion < 1 || sg.Event.SchemaVersion > MaxSafeInteger {
+		return Invalid("INVALID_SEGMENT_EVENT", "分群事件或版本无效", "/segment/event")
+	}
+	if e := validateField(&sg.Field); e != nil {
+		return e
+	}
+	nodes := 0
+	if e := validateFilter(sg.Event.Filter, 0, &nodes); e != nil {
+		return e
 	}
 	return nil
 }
@@ -402,8 +437,8 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention") {
-		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗或留存查询", "/event_versions")
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment") {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存或分群查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {
 		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {

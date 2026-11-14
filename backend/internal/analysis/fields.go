@@ -58,6 +58,14 @@ func WalkFields(r *Request, visit func(*Field) error) error {
 			}
 		}
 	}
+	if r.Segment != nil {
+		if e := visit(&r.Segment.Field); e != nil {
+			return e
+		}
+		if e := filter(r.Segment.Event.Filter); e != nil {
+			return e
+		}
+	}
 	return nil
 }
 func CheckResolved(r Request) error {
@@ -175,6 +183,16 @@ func CheckResolved(r Request) error {
 			if e := filter(s.Filter); e != nil {
 				return e
 			}
+		}
+	}
+	if r.Segment != nil {
+		if e := filter(r.Segment.Event.Filter); e != nil {
+			return e
+		}
+		switch r.Segment.Field.ResolvedType {
+		case "string", "boolean", "number", "integer":
+		default:
+			return Invalid("INVALID_SEGMENT_FIELD", "分群字段必须是字符串、布尔或数值标量")
 		}
 	}
 	return nil
