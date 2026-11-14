@@ -27,6 +27,9 @@ import {
 import { defaultClock, readJSON, retryAfter, Transport, validateReceipt } from './transport.js';
 
 type Page = Omit<EventContext, 'sequence'>;
+// pageViewEventKey is the reserved system event used by automatic page
+// collection. It is not reachable through the public custom-event emit().
+const pageViewEventKey = 'sys.page_view';
 interface Entry {
   eventId: string;
   draft: Omit<Envelope, 'schema_version' | 'release_revision'>;
@@ -87,6 +90,7 @@ class Client implements BrowserClient {
   private readonly maxBatchEvents: number;
   private readonly maxBatchBytes: number;
   private readonly sessionTimeout: number;
+  private readonly autoPageViews: boolean;
   private enabled = true;
   private destroyed = false;
   private generation = 0;
@@ -143,6 +147,7 @@ class Client implements BrowserClient {
       60000,
       24 * 60 * 60 * 1000,
     );
+    this.autoPageViews = options.autoPageViews === true;
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     let stored: string | null = null;
@@ -175,6 +180,7 @@ class Client implements BrowserClient {
         () => window.removeEventListener('pagehide', pagehide),
       );
     }
+    if (this.autoPageViews) this.emitAutoPageView();
   }
 
   get pending(): number {
@@ -257,6 +263,13 @@ class Client implements BrowserClient {
     this.assertEnabled();
     if (typeof eventKey !== 'string' || !customEventPattern.test(eventKey))
       throw new EviaSDKError('INVALID_CUSTOM_EVENT_KEY');
+    return this.enqueue(eventKey, properties, options);
+  }
+
+  // enqueue builds and queues one envelope. Public callers validate the custom
+  // event key in emit(); automatic collection passes the reserved sys.* key.
+  private enqueue(eventKey: string, properties: Properties, options: EventOptions): Emission {
+    this.assertEnabled();
     if (this.queue.length >= this.maxQueueEvents) throw new EviaSDKError('QUEUE_FULL');
     const copied = copyProperties(properties);
     if (options.operationId !== undefined) requireText(options.operationId, 128, true);
@@ -349,6 +362,7 @@ class Client implements BrowserClient {
     this.sessionId = this.uuid();
     this.lastActivity = this.clock.now();
     this.page = this.newPage({ navigationType: 'initial' });
+    this.emitAutoPageView();
   }
 
   private touchSession(): void {
@@ -406,11 +420,26 @@ class Client implements BrowserClient {
     });
   }
 
+  // emitAutoPageView records one reserved sys.page_view for the current page.
+  // Backpressure must never break navigation, so a full queue drops the auto
+  // event; an unpublished sys.page_view still fails closed via the normal
+  // configuration check with EVENT_NOT_PUBLISHED.
+  private emitAutoPageView(): void {
+    if (!this.autoPageViews || this.destroyed || !this.enabled) return;
+    try {
+      this.enqueue(pageViewEventKey, {}, {});
+    } catch (error) {
+      if (error instanceof EviaSDKError && error.code === 'QUEUE_FULL') return;
+      throw error;
+    }
+  }
+
   navigate(options: PageOptions = {}): Readonly<Page> {
     this.assertEnabled();
     this.touchSession();
     if (options.link) this.checkLink(options.link);
     this.page = this.newPage(options, this.page.page_view_id);
+    this.emitAutoPageView();
     return this.page;
   }
 

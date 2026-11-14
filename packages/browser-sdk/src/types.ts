@@ -37,6 +37,12 @@ export interface ClientOptions {
   clock?: Clock;
   randomUUID?: () => string;
   lifecycle?: boolean;
+  /**
+   * Opt-in automatic sys.page_view collection. When enabled the client emits one
+   * reserved page-view event for the initial load and after every navigate()/reset()
+   * that produces a new page_view_id. Defaults to false so existing behavior is unchanged.
+   */
+  autoPageViews?: boolean;
   configTtlMs?: number;
   requestTimeoutMs?: number;
   flushIntervalMs?: number;
