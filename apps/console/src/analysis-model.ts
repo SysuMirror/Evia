@@ -368,8 +368,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     request.funnel = readFunnel(form);
   }
   if (form.mode === 'retention') {
-    // v1 retention is uid-only; the backend rejects every other subject.
-    request.subject = 'uid';
+    request.subject = form.subject;
     request.retention = readRetention(form);
   }
   return request;

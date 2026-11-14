@@ -504,7 +504,10 @@ export function AnalysisPage({
   ];
   const isMetric = form.mode === 'metrics' || form.mode === 'trend';
   const usesSubject =
-    form.mode === 'journey' || form.mode === 'funnel' || (isMetric && form.metric === 'uv');
+    form.mode === 'journey' ||
+    form.mode === 'funnel' ||
+    form.mode === 'retention' ||
+    (isMetric && form.metric === 'uv');
   const filterSummary = `${form.filterJoin === 'and' ? '全部满足' : '任一满足'}：${form.filters
     .map((filter) => {
       const label =
@@ -698,7 +701,7 @@ export function AnalysisPage({
       )}
       {form.mode === 'retention' && (
         <p className="field-help">
-          按原始 UID 统计：主体在最早起始事件所在日历周期入队，0 期留存恒为
+          主体在最早起始事件所在日历周期入队，0 期留存恒为
           100%；周粒度以周一为起点，时间范围不能超过期数乘以粒度（最多 84 天）。
         </p>
       )}
@@ -1707,7 +1710,7 @@ export function AnalysisPage({
           </Field>
           <p className="field-help">
             主体在最早起始事件所在周期入队，回访事件按相对队列的周期偏移计数，0 期留存恒为
-            100%。统计主体固定为原始 UID。
+            100%。统计主体在查询栏的「统计主体」中选择原始 UID 或原始匿名标识。
           </p>
         </form>
       </Modal>

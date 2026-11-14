@@ -116,7 +116,7 @@ test('analysis typed filters preserve empty strings, zero, false and JSON arrays
     expect(() => filterValue(type!, op!, value!)).toThrow();
 });
 
-test('retention builds a uid-only cohort request and closes the validation surface', () => {
+test('retention builds uid or anonymous cohort requests and closes the validation surface', () => {
   const input = form();
   input.mode = 'retention';
   input.from = '2026-11-01T00:00';
@@ -138,6 +138,13 @@ test('retention builds a uid-only cohort request and closes the validation surfa
     granularity: 'day',
     periods: 7,
   });
+
+  // The same form with the anonymous subject selects anonymous_id downstream.
+  input.subject = 'anonymous';
+  const anonymousRequest = buildRequest(input, 'development');
+  expect(anonymousRequest.subject).toBe('anonymous');
+  expect(anonymousRequest.retention).toEqual(request.retention);
+  input.subject = 'uid';
 
   // Missing pinned events fail on the retention editor section, not range.
   const missingEvents = { ...input, retentionStart: { event: '', version: '' } };
