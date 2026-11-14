@@ -76,9 +76,31 @@ u4 仅两个事件无法填满 depth-3 被排除；跨项目 outsider 三个事�
 3. **无用排序变量**：集成测试初稿残留未使用的 ordering 切片，清理避免
    死代码。
 
+## 控制台工作区（同日切片）
+
+路径后端能力通过即席分析工作区对人类会话开放：
+
+- `analysis-model.ts` 新增 `path` 模式与表单字段（可选起始事件+版本、
+  路径深度），`readPath` 校验深度为 2–8 整数；起始事件一旦填写必须带
+  合法固定版本，不填写时省略 `start_event`（从窗口内最早事件开始），
+  错误归因独立 `path` 编辑分区；`buildRequest` 透传 uid/anonymous 主体，
+  禁顶层 event_keys/event_versions/group_by/metrics/interval。
+- `analysis.tsx` 新增「聚合路径」页签与配置模态：复用已发布事件/版本
+  联动选择器，起始事件下拉含「不指定」选项，深度数字输入限定 2–8；
+  结果表把 `path` 字符串数组渲染为 `事件 → 事件` 可读链路，摘要显示
+  路径深度，查询栏隐藏跨版本事件选择器并展示主体选择与 7 天窗口说明。
+- 模型测试新增 `path analysis builds bounded ordered-sequence requests`
+  覆盖无起始/钉选起始请求形状、双主体、深度闭集拒绝、起始事件缺版本
+  fail-closed、分区校验；Playwright 模型套件 89 例全过。
+  `core-console.spec.ts` 全栈流程插入聚合路径页签→深度 2→运行→
+  「深度 2 事件路径」摘要与含 `→` 的路径单元格断言，随凭证化
+  browser-test 门禁执行。
+- pnpm typecheck、format:check、build 均通过。
+
 ## 诚实边界
 
-- 仅即席任务，无控制台工作区（下一切片）、无保存分析、无跨身份合并。
+- 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整
+  运行时（browser-test 门禁），默认 `make check` 不含该门禁。
 - 路径由原始 event_key 序列构成，不做连续重复事件折叠或会话切分；
   高基数下路径数量受 500 行结果上限与 7 天窗口约束，超大租户容量未
   专项压测。
