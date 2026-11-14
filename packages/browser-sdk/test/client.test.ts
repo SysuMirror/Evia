@@ -910,3 +910,187 @@ test('public emit still cannot forge sys.identity_link', async () => {
   );
   client.destroy();
 });
+
+// Reserved sys.operation_failed reporting via reportOperationFailure().
+const operationFailedConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.operation_failed',
+        schema_version: 1,
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            operation: { type: 'string' },
+            error_category: { type: 'string' },
+            error_code: { type: 'string' },
+            retryable: { type: 'boolean' },
+          },
+        },
+      },
+    ],
+  };
+};
+
+function setupOperation(
+  handler: (body: Body, init: RequestInit) => Response | Promise<Response>,
+  extra: Partial<ClientOptions> = {},
+  cfg: PublicConfig = operationFailedConfig(),
+) {
+  const clock = new TestClock();
+  let id = 100;
+  const bodies: string[] = [];
+  const fetcher: typeof fetch = async (input, init = {}) => {
+    if (String(input).includes('/v1/config')) return json(cfg, 200, { ETag: etag });
+    bodies.push(String(init.body));
+    return handler(JSON.parse(String(init.body)) as Body, init);
+  };
+  const client = createEviaClient({
+    endpoint: 'https://events.example',
+    writeKey: 'public-example',
+    projectId,
+    environment: 'development',
+    fetch: fetcher,
+    clock,
+    randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+    storage: null,
+    lifecycle: false,
+    requestTimeoutMs: 100,
+    flushIntervalMs: 10,
+    retryBaseMs: 10,
+    ...extra,
+  });
+  return { client, bodies };
+}
+
+test('reportOperationFailure sends a sanitized sys.operation_failed with snake_case properties', async () => {
+  const { client, bodies } = setupOperation((body) => receipt(body));
+  const emission = client.reportOperationFailure({
+    operation: 'post_like',
+    errorCategory: 'business',
+    retryable: false,
+    errorCode: 'REJECTED',
+  });
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.equal(sent.events.length, 1);
+  const event = sent.events[0]!;
+  assert.equal(event.event_key, 'sys.operation_failed');
+  assert.equal(event.schema_version, 1);
+  assert.deepEqual(event.properties, {
+    operation: 'post_like',
+    error_category: 'business',
+    retryable: false,
+    error_code: 'REJECTED',
+  });
+  client.destroy();
+});
+
+test('error code is optional and absent when omitted', async () => {
+  const { client, bodies } = setupOperation((body) => receipt(body));
+  client.reportOperationFailure({
+    operation: 'load_feed',
+    errorCategory: 'timeout',
+    retryable: true,
+  });
+  await pump();
+  await client.flush();
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.deepEqual(sent.events[0]!.properties, {
+    operation: 'load_feed',
+    error_category: 'timeout',
+    retryable: true,
+  });
+  assert.equal('error_code' in sent.events[0]!.properties, false);
+  client.destroy();
+});
+
+test('every closed error category is accepted', () => {
+  const { client } = setupOperation((body) => receipt(body));
+  for (const errorCategory of ['validation', 'network', 'timeout', 'http', 'business'] as const) {
+    assert.doesNotThrow(() =>
+      client.reportOperationFailure({ operation: 'op', errorCategory, retryable: false }),
+    );
+  }
+  client.destroy();
+});
+
+test('reportOperationFailure rejects unknown categories, non-boolean retryable and bad operation', () => {
+  const { client } = setupOperation((body) => receipt(body));
+  assert.throws(
+    () =>
+      client.reportOperationFailure({
+        operation: 'op',
+        errorCategory: 'kernel' as never,
+        retryable: false,
+      }),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_ERROR_CATEGORY',
+  );
+  assert.throws(
+    () =>
+      client.reportOperationFailure({
+        operation: 'op',
+        errorCategory: 'http',
+        retryable: 'yes' as never,
+      }),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_RETRYABLE',
+  );
+  assert.throws(
+    () => client.reportOperationFailure({ operation: '', errorCategory: 'http', retryable: false }),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_TEXT',
+  );
+  client.destroy();
+});
+
+test('reportOperationFailure rebuilds payload and drops unknown caller fields', async () => {
+  const { client, bodies } = setupOperation((body) => receipt(body));
+  // Extra fields on the caller object must not leak into the bounded event.
+  const dirty = {
+    operation: 'post_like',
+    errorCategory: 'network' as const,
+    retryable: true,
+    secret: 'must-not-leak',
+    rawError: new Error('boom'),
+  };
+  client.reportOperationFailure(dirty);
+  await pump();
+  await client.flush();
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.deepEqual(Object.keys(sent.events[0]!.properties).sort(), [
+    'error_category',
+    'operation',
+    'retryable',
+  ]);
+  assert.equal('secret' in sent.events[0]!.properties, false);
+  client.destroy();
+});
+
+test('unpublished operation failure fails closed via the publication gate', async () => {
+  // Configuration deliberately omits sys.operation_failed.
+  const { client, bodies } = setupOperation((body) => receipt(body), {}, config());
+  const emission = client.reportOperationFailure({
+    operation: 'post_like',
+    errorCategory: 'business',
+    retryable: false,
+  });
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).code, 'EVENT_NOT_PUBLISHED');
+  assert.equal(bodies.length, 0, 'unpublished reserved events must never be transmitted');
+  client.destroy();
+});
+
+test('public emit still cannot forge sys.operation_failed', () => {
+  const { client } = setupOperation((body) => receipt(body));
+  assert.throws(
+    () => client.emit('sys.operation_failed'),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
+  );
+  client.destroy();
+});
