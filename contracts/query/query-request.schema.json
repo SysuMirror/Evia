@@ -12,7 +12,8 @@
         "journey",
         "retention",
         "segment",
-        "path"
+        "path",
+        "attribution"
       ]
     },
     "environment": {
@@ -425,6 +426,40 @@
       },
       "required": [
         "depth"
+      ]
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "conversion": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "touchpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/retention_step"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "window_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        },
+        "model": {
+          "type": "string",
+          "enum": [
+            "last_touch"
+          ]
+        }
+      },
+      "required": [
+        "conversion",
+        "touchpoints",
+        "window_seconds",
+        "model"
       ]
     },
     "limit": {
@@ -891,6 +926,50 @@
       "then": {
         "required": [
           "path",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "event_keys"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "attribution"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "attribution",
           "subject"
         ],
         "not": {

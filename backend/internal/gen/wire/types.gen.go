@@ -1113,6 +1113,12 @@ type QueryRequest struct {
 		StartEvent json.RawMessage `json:"start_event,omitempty"`
 		Depth      int64           `json:"depth"`
 	} `json:"path,omitempty"`
+	Attribution *struct {
+		Conversion    json.RawMessage   `json:"conversion"`
+		Touchpoints   []json.RawMessage `json:"touchpoints"`
+		WindowSeconds int64             `json:"window_seconds"`
+		Model         string            `json:"model"`
+	} `json:"attribution,omitempty"`
 	Limit         *int64  `json:"limit,omitempty"`
 	Cursor        *string `json:"cursor,omitempty"`
 	EventVersions []struct {

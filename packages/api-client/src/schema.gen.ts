@@ -3029,7 +3029,7 @@ export interface components {
         };
         "query-request.schema": {
             /** @enum {unknown} */
-            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution";
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             time_range: {
@@ -3121,6 +3121,13 @@ export interface components {
                 start_event?: components["schemas"]["retention_step"];
                 depth: number;
             };
+            attribution?: {
+                conversion: components["schemas"]["retention_step"];
+                touchpoints: components["schemas"]["retention_step"][];
+                window_seconds: number;
+                /** @enum {string} */
+                model: "last_touch";
+            };
             limit?: number;
             cursor?: string;
             event_versions?: {
@@ -3182,7 +3189,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;
