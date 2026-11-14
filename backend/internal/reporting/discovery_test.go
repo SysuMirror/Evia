@@ -119,7 +119,7 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	hasRetention, hasSegment, hasPath := false, false, false
+	hasRetention, hasSegment, hasPath, hasAttribution := false, false, false, false
 	for _, kind := range capabilities.QueryKinds {
 		if kind == "retention" {
 			hasRetention = true
@@ -130,6 +130,9 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 		if kind == "path" {
 			hasPath = true
 		}
+		if kind == "attribution" {
+			hasAttribution = true
+		}
 	}
 	if !hasRetention {
 		t.Fatalf("retention must be advertised in query kinds: %v", capabilities.QueryKinds)
@@ -139,6 +142,9 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	}
 	if !hasPath {
 		t.Fatalf("path must be advertised in query kinds: %v", capabilities.QueryKinds)
+	}
+	if !hasAttribution {
+		t.Fatalf("attribution must be advertised in query kinds: %v", capabilities.QueryKinds)
 	}
 	if len(capabilities.RetentionGranularities) != 2 || capabilities.RetentionGranularities[0] != "day" || capabilities.RetentionGranularities[1] != "week" {
 		t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
