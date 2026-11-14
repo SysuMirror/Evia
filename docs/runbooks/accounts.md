@@ -73,3 +73,24 @@ These commands change account state but do not currently write a typed event to
 attribution for disable/enable stays in the operator's own access records and
 process logs until a follow-up migration adds an event type column. Password
 reset and invitation/registration self-service are still separate work.
+
+
+## Resetting an account password
+
+`evia account-reset-password` is the operator account-recovery path. It needs
+`EVIA_DATABASE_URL`, `EVIA_ACCOUNT_USERNAME` and a new `EVIA_ACCOUNT_PASSWORD`
+that satisfies the same 12–72 byte policy as creation, supplied through a `0600`
+environment file rather than positional arguments. The new password is hashed
+with bcrypt cost 12 and the old hash is replaced; the command never echoes the
+password or resulting hash and only logs the `account_id`.
+
+The hash replacement and session revocation run in one transaction under the
+installation advisory lock: every existing session for the account is deleted,
+so a reset used to recover a compromised account cannot leave an old session
+valid. The account's `disabled` flag is not changed; a disabled account must be
+re-enabled separately with `account-enable`. An unknown username fails with
+`ACCOUNT_NOT_FOUND`. The real-PostgreSQL test
+`TestResetAccountPasswordReplacesHashAndRevokesSessions` verifies the old
+credential stops verifying, the new one verifies at cost 12, and sessions are
+revoked. Typed operator audit for password changes still requires a follow-up
+migration that adds an event type to `account_provision_events`.
