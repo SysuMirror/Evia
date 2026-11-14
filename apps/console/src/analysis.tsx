@@ -516,6 +516,7 @@ export function AnalysisPage({
     form.mode === 'retention' ||
     form.mode === 'segment' ||
     form.mode === 'path' ||
+    form.mode === 'attribution' ||
     (isMetric && form.metric === 'uv');
   const filterSummary = `${form.filterJoin === 'and' ? '全部满足' : '任一满足'}：${form.filters
     .map((filter) => {
@@ -543,7 +544,7 @@ export function AnalysisPage({
               context: '上下文',
               properties: '属性',
               step_index: '步骤',
-              subjects: '到达主体数',
+              subjects: snapshot!.request.kind === 'attribution' ? '转化主体数' : '到达主体数',
               conversion_rate: '相对首步转化率',
               cohort_index: '队列序号',
               cohort_start: '队列起始',
@@ -551,8 +552,9 @@ export function AnalysisPage({
               retained: '各期留存主体数',
               retention_rate: '各期留存率',
               segment_value: '分群标签',
-              share: '群体占比',
+              share: snapshot!.request.kind === 'attribution' ? '归因占比' : '群体占比',
               path: '事件路径',
+              touchpoint: '归因触点',
             }[column.key] ??
             column.label ??
             column.key),
@@ -594,7 +596,8 @@ export function AnalysisPage({
           {form.mode !== 'funnel' &&
             form.mode !== 'retention' &&
             form.mode !== 'segment' &&
-            form.mode !== 'path' && (
+            form.mode !== 'path' &&
+            form.mode !== 'attribution' && (
               <Field
                 label="事件（跨已发布版本）"
                 error={validationTarget === 'event' ? validationError : undefined}
@@ -741,6 +744,21 @@ export function AnalysisPage({
               </span>
             </div>
           )}
+          {form.mode === 'attribution' && (
+            <div className="analysis-funnel-overview">
+              <h3>归因分析</h3>
+              <Button onClick={() => setEditor('attribution')} aria-haspopup="dialog">
+                配置归因
+              </Button>
+              <span className="field-help">
+                转化：
+                {form.attributionConversion.event
+                  ? `${form.attributionConversion.event} v${form.attributionConversion.version}`
+                  : '未选择事件'}
+                ；触点 {form.attributionTouchpoints.length} 个；窗口 {form.attributionWindow} 秒
+              </span>
+            </div>
+          )}
         </div>
       )}
       {isMetric && form.metric === 'pv' && (
@@ -768,6 +786,12 @@ export function AnalysisPage({
       {form.mode === 'path' && (
         <p className="field-help">
           统计主体实际遍历的有序事件序列，每个主体最多贡献一条固定长度路径；事件数不足深度的主体被排除，结果按主体数降序排列，时间范围最多
+          7 天。
+        </p>
+      )}
+      {form.mode === 'attribution' && (
+        <p className="field-help">
+          末次触点模型：每个转化主体在回溯窗口内记到因果序最晚的触点，窗口内无触点的转化归入直接来源；每个主体最多归因一次，结果按转化主体数降序排列，时间范围最多
           7 天。
         </p>
       )}
@@ -882,7 +906,9 @@ export function AnalysisPage({
                             ? `按 ${snapshot.request.segment?.field.key ?? ''} 分群`
                             : snapshot.request.kind === 'path'
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
-                              : '全部事件')}
+                              : snapshot.request.kind === 'attribution'
+                                ? `末次触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
+                                : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
@@ -1969,6 +1995,173 @@ export function AnalysisPage({
           <p className="field-help">
             指定起始事件时，从每个主体最早匹配事件起取后续深度个事件；不指定时从窗口内最早事件起取。事件数不足深度的主体不计入，每个主体最多贡献一条路径。统计主体在查询栏选择原始
             UID 或原始匿名标识。
+          </p>
+        </form>
+      </Modal>
+      <Modal
+        open={editor === 'attribution'}
+        title="配置归因分析"
+        onRequestClose={() => setEditor(null)}
+        footer={
+          <Button variant="primary" type="submit" form={`${queryFormID}-attribution`}>
+            完成
+          </Button>
+        }
+      >
+        {validationError && validationTarget === 'attribution' && editor === 'attribution' && (
+          <p id={`${queryFormID}-attribution-error`} role="alert">
+            {validationError}
+          </p>
+        )}
+        <form
+          id={`${queryFormID}-attribution`}
+          aria-describedby={
+            validationTarget === 'attribution' && validationError
+              ? `${queryFormID}-attribution-error`
+              : undefined
+          }
+          className="section-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            finishEditor('attribution');
+          }}
+        >
+          <div className="analysis-funnel-step" data-attribution-conversion>
+            <Field label="转化事件（已发布）">
+              <Select
+                required
+                value={form.attributionConversion.event}
+                onChange={(event) => {
+                  const eventKey = event.target.value;
+                  patch('attributionConversion', {
+                    event: eventKey,
+                    version: String(
+                      events
+                        .find((definition) => definition.event_key === eventKey)
+                        ?.published_versions.at(-1) ?? '',
+                    ),
+                  });
+                }}
+                options={[{ value: '', label: '选择已发布事件' }, ...eventOptions.slice(1)]}
+              />
+            </Field>
+            <Field label="转化事件版本">
+              <Select
+                required
+                value={form.attributionConversion.version}
+                onChange={(event) =>
+                  patch('attributionConversion', {
+                    ...form.attributionConversion,
+                    version: event.target.value,
+                  })
+                }
+                options={[
+                  { value: '', label: '选择版本' },
+                  ...(
+                    events.find((event) => event.event_key === form.attributionConversion.event)
+                      ?.published_versions ?? []
+                  ).map((version) => ({ value: String(version), label: `v${version}` })),
+                ]}
+              />
+            </Field>
+          </div>
+          <div className="editor-list" aria-label="归因触点">
+            {form.attributionTouchpoints.map((step, index) => (
+              <div className="analysis-funnel-step" data-attribution-touchpoint={index} key={index}>
+                <span>触点 {index + 1}</span>
+                <Field label={`触点 ${index + 1} 事件`}>
+                  <Select
+                    required
+                    value={step.event}
+                    onChange={(event) => {
+                      const eventKey = event.target.value;
+                      patch(
+                        'attributionTouchpoints',
+                        form.attributionTouchpoints.map((item, position) =>
+                          position === index
+                            ? {
+                                event: eventKey,
+                                version: String(
+                                  events
+                                    .find((definition) => definition.event_key === eventKey)
+                                    ?.published_versions.at(-1) ?? '',
+                                ),
+                              }
+                            : item,
+                        ),
+                      );
+                    }}
+                    options={[{ value: '', label: '选择已发布事件' }, ...eventOptions.slice(1)]}
+                  />
+                </Field>
+                <Field label={`触点 ${index + 1} 版本`}>
+                  <Select
+                    required
+                    value={step.version}
+                    onChange={(event) =>
+                      patch(
+                        'attributionTouchpoints',
+                        form.attributionTouchpoints.map((item, position) =>
+                          position === index ? { ...item, version: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    options={[
+                      { value: '', label: '选择版本' },
+                      ...(
+                        events.find((event) => event.event_key === step.event)
+                          ?.published_versions ?? []
+                      ).map((version) => ({ value: String(version), label: `v${version}` })),
+                    ]}
+                  />
+                </Field>
+                <div className="editor-row-actions">
+                  <Button
+                    size="small"
+                    aria-label={`删除触点 ${index + 1}`}
+                    disabled={form.attributionTouchpoints.length <= 1}
+                    onClick={() =>
+                      patch(
+                        'attributionTouchpoints',
+                        form.attributionTouchpoints.filter((_, position) => position !== index),
+                      )
+                    }
+                  >
+                    删除
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Toolbar
+            actions={
+              <Button
+                disabled={form.attributionTouchpoints.length >= 8}
+                onClick={() =>
+                  patch('attributionTouchpoints', [
+                    ...form.attributionTouchpoints,
+                    { event: '', version: '' },
+                  ])
+                }
+              >
+                添加触点
+              </Button>
+            }
+          >
+            <Field label="归因回溯窗口（秒，1 至 604800）">
+              <Input
+                type="number"
+                required
+                min="1"
+                max="604800"
+                value={form.attributionWindow}
+                onChange={(event) => patch('attributionWindow', event.target.value)}
+              />
+            </Field>
+          </Toolbar>
+          <p className="field-help">
+            触点 1–8 个且不能与转化事件相同、彼此不能重复；v1
+            仅支持末次触点（last_touch）模型。统计主体在查询栏选择原始 UID 或原始匿名标识。
           </p>
         </form>
       </Modal>

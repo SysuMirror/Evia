@@ -1,7 +1,15 @@
 import type { Environment, QueryRequest } from '@evia/api-client';
 
 export type AnalysisMode =
-  'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention' | 'segment' | 'path';
+  | 'metrics'
+  | 'trend'
+  | 'events'
+  | 'journey'
+  | 'funnel'
+  | 'retention'
+  | 'segment'
+  | 'path'
+  | 'attribution';
 export type QueryField = NonNullable<QueryRequest['group_by']>[number];
 export type QueryFilter = NonNullable<QueryRequest['filter']>;
 export type PublishedField = { id: string; label: string; type: string; reference: QueryField };
@@ -37,6 +45,9 @@ export type AnalysisForm = {
   segmentProperty?: PublishedField;
   pathStart: { event: string; version: string };
   pathDepth: string;
+  attributionConversion: { event: string; version: string };
+  attributionTouchpoints: { event: string; version: string }[];
+  attributionWindow: string;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -47,6 +58,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'retention', label: '留存分析' },
   { id: 'segment', label: '主体分群' },
   { id: 'path', label: '聚合路径' },
+  { id: 'attribution', label: '归因分析' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },
@@ -147,6 +159,9 @@ export function initialForm(timezone: string): AnalysisForm {
     segmentField: '',
     pathStart: { event: '', version: '' },
     pathDepth: '3',
+    attributionConversion: { event: '', version: '' },
+    attributionTouchpoints: [{ event: '', version: '' }],
+    attributionWindow: '86400',
   };
 }
 export type AnalysisValidationTarget =
@@ -159,7 +174,8 @@ export type AnalysisValidationTarget =
   | 'funnel'
   | 'retention'
   | 'segment'
-  | 'path';
+  | 'path'
+  | 'attribution';
 export class AnalysisValidationError extends Error {
   constructor(
     public readonly target: AnalysisValidationTarget,
@@ -376,8 +392,51 @@ function readPath(form: AnalysisForm): NonNullable<QueryRequest['path']> {
   }
   return path;
 }
+function readAttribution(form: AnalysisForm): NonNullable<QueryRequest['attribution']> {
+  if (
+    !form.attributionConversion.event ||
+    !Number.isSafeInteger(Number(form.attributionConversion.version)) ||
+    Number(form.attributionConversion.version) < 1
+  )
+    throw new AnalysisValidationError('attribution', '请为转化选择已发布事件及版本。');
+  const touchpoints = form.attributionTouchpoints;
+  if (touchpoints.length < 1 || touchpoints.length > 8)
+    throw new AnalysisValidationError('attribution', '归因触点须为 1 至 8 个。');
+  if (
+    touchpoints.some(
+      (step) =>
+        !step.event || !Number.isSafeInteger(Number(step.version)) || Number(step.version) < 1,
+    )
+  )
+    throw new AnalysisValidationError('attribution', '请为每个触点选择已发布事件及版本。');
+  const conversionPair = `${form.attributionConversion.event}@${form.attributionConversion.version}`;
+  const seen = new Set<string>();
+  for (const step of touchpoints) {
+    const pair = `${step.event}@${step.version}`;
+    if (pair === conversionPair)
+      throw new AnalysisValidationError('attribution', '触点不能与转化事件相同。');
+    if (seen.has(pair)) throw new AnalysisValidationError('attribution', '触点事件不能重复。');
+    seen.add(pair);
+  }
+  const window = Number(form.attributionWindow);
+  if (!Number.isInteger(window) || window < 1 || window > 604800)
+    throw new AnalysisValidationError('attribution', '归因窗口须为 1 至 604800 秒的整数。');
+  return {
+    conversion: {
+      event_key: form.attributionConversion.event,
+      schema_version: Number(form.attributionConversion.version),
+    },
+    touchpoints: touchpoints.map((step) => ({
+      event_key: step.event,
+      schema_version: Number(step.version),
+    })),
+    window_seconds: window,
+    // v1 exposes only the last-touch model; the backend enum is the authority.
+    model: 'last_touch',
+  };
+}
 export type AnalysisEditorSection =
-  'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment' | 'path';
+  'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment' | 'path' | 'attribution';
 export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEditorSection): void {
   if (section === 'range') readTimeRange(form);
   else if (section === 'settings') readLimit(form);
@@ -385,7 +444,8 @@ export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEdi
   else if (section === 'funnel') readFunnel(form);
   else if (section === 'retention') readRetention(form);
   else if (section === 'segment') readSegment(form);
-  else readPath(form);
+  else if (section === 'path') readPath(form);
+  else readAttribution(form);
 }
 
 export function buildRequest(form: AnalysisForm, environment: Environment): QueryRequest {
@@ -403,6 +463,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     form.mode !== 'retention' &&
     form.mode !== 'segment' &&
     form.mode !== 'path' &&
+    form.mode !== 'attribution' &&
     form.event
   )
     request.event_keys = [form.event];
@@ -456,6 +517,10 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   if (form.mode === 'path') {
     request.subject = form.subject;
     request.path = readPath(form);
+  }
+  if (form.mode === 'attribution') {
+    request.subject = form.subject;
+    request.attribution = readAttribution(form);
   }
   return request;
 }

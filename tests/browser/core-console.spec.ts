@@ -209,6 +209,71 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   } finally {
     await publicHTTP.dispose();
   }
+  const touchEventKey = 'attribution_touch';
+  {
+    const session = await (await page.request.get('/api/v1/session')).json();
+    const headers = {
+      Origin: 'http://127.0.0.1:5173',
+      'X-CSRF-Token': session.csrf_token as string,
+    };
+    const apiBase = `/api/v1/projects/${projectID}`;
+    await page.request.post(`${apiBase}/event-definitions`, {
+      headers,
+      data: { event_key: touchEventKey, display_name: 'Attribution touch event' },
+    });
+    const touchDraft = await (
+      await page.request.get(`${apiBase}/event-definitions/${touchEventKey}/draft`)
+    ).json();
+    const touchUpdated = await (
+      await page.request.patch(`${apiBase}/event-definitions/${touchEventKey}/draft`, {
+        headers: { ...headers, 'If-Match': `"${touchDraft.revision}"` },
+        data: {
+          display_name: 'Attribution touch event',
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { channel: { type: 'string', minLength: 1, maxLength: 64 } },
+            required: ['channel'],
+          },
+          trigger: 'Synthetic attribution touchpoint',
+          allowed_source_kinds: ['browser', 'server'],
+          fact_kind: 'client_observed',
+          example_properties: { channel: 'email' },
+        },
+      })
+    ).json();
+    const touchValidated = await (
+      await page.request.post(`${apiBase}/event-definitions/${touchEventKey}/validate`, {
+        headers,
+        data: {
+          draft_revision: touchUpdated.revision,
+          sample_properties: { channel: 'email' },
+        },
+      })
+    ).json();
+    expect(touchValidated.valid).toBe(true);
+    const activation = await (
+      await page.request.get(`${apiBase}/release-activations?environment=development`)
+    ).json();
+    const touchRelease = await (
+      await page.request.post(`${apiBase}/releases`, {
+        headers: { ...headers, 'Idempotency-Key': randomUUID() },
+        data: {
+          environment: 'development',
+          expected_active_revision: activation.active_release_revision as number,
+          events: [{ event_key: touchEventKey, draft_revision: touchUpdated.revision }],
+        },
+      })
+    ).json();
+    await expect
+      .poll(
+        async () =>
+          (await (await page.request.get(`${apiBase}/releases/${touchRelease.release_id}`)).json())
+            .state as string,
+        { timeout: 30_000 },
+      )
+      .toBe('published');
+  }
   await page.getByRole('link', { name: '数据分析', exact: true }).click();
   const rangeTrigger = page.getByRole('button', { name: '时间范围', exact: true });
   await rangeTrigger.focus();
@@ -341,6 +406,27 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await expect(page.getByText('深度 2 事件路径')).toBeVisible();
   await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
   await expect(page.getByRole('cell', { name: /→/ })).toBeVisible();
+  await page.getByRole('tab', { name: '归因分析', exact: true }).click();
+  await page.getByRole('button', { name: '配置归因', exact: true }).click();
+  const attributionModal = page.getByRole('dialog', {
+    name: '配置归因分析',
+    exact: true,
+  });
+  await attributionModal
+    .locator('[data-attribution-conversion]')
+    .getByLabel('转化事件（已发布）', { exact: true })
+    .selectOption('browser_action');
+  await attributionModal
+    .locator('[data-attribution-touchpoint]')
+    .first()
+    .getByLabel('触点 1 事件', { exact: true })
+    .selectOption(touchEventKey);
+  await attributionModal.getByRole('button', { name: '完成', exact: true }).click();
+  await query();
+  await expect(page.getByText('末次触点归因')).toBeVisible();
+  await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
+  // No touchpoint facts are ingested, so every converter lands in the direct bucket.
+  await expect(page.getByRole('cell', { name: '__direct__' })).toBeVisible();
   await page.getByRole('tab', { name: '用户旅程', exact: true }).click();
   await page.getByLabel('原始 UID', { exact: true }).fill('synthetic-absent');
   await query();

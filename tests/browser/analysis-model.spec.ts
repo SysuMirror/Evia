@@ -313,6 +313,87 @@ test('path analysis builds bounded ordered-sequence requests and closes the vali
   expect(() => validateAnalysisSection(noStart, 'path')).not.toThrow();
 });
 
+test('attribution builds last-touch credit requests and closes the validation surface', () => {
+  const input = form();
+  input.mode = 'attribution';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.attributionConversion = { event: 'purchase', version: '1' };
+  input.attributionTouchpoints = [{ event: 'ad_click', version: '1' }];
+  input.attributionWindow = '86400';
+  const request = buildRequest(input, 'development');
+  expect(request.kind).toBe('attribution');
+  expect(request.subject).toBe('uid');
+  expect(request.event_keys).toBeUndefined();
+  expect(request.event_versions).toBeUndefined();
+  expect(request.group_by).toBeUndefined();
+  expect(request.metrics).toBeUndefined();
+  expect(request.interval).toBeUndefined();
+  expect(request.attribution).toEqual({
+    conversion: { event_key: 'purchase', schema_version: 1 },
+    touchpoints: [{ event_key: 'ad_click', schema_version: 1 }],
+    window_seconds: 86400,
+    model: 'last_touch',
+  });
+
+  // Multiple distinct touchpoints and the anonymous subject pass through.
+  input.attributionTouchpoints = [
+    { event: 'ad_click', version: '1' },
+    { event: 'email_open', version: '2' },
+  ];
+  input.subject = 'anonymous';
+  const anonymousRequest = buildRequest(input, 'production');
+  expect(anonymousRequest.subject).toBe('anonymous');
+  expect(anonymousRequest.environment).toBe('production');
+  expect(anonymousRequest.attribution?.touchpoints).toHaveLength(2);
+  input.subject = 'uid';
+
+  // Missing conversion fails on the attribution editor section.
+  const noConversion = { ...input, attributionConversion: { event: '', version: '' } };
+  expect(() => buildRequest(noConversion, 'development')).toThrow('转化');
+  try {
+    buildRequest(noConversion, 'development');
+  } catch (error) {
+    expect(error).toMatchObject({ target: 'attribution' });
+  }
+
+  // A touchpoint equal to the conversion pair is rejected.
+  const overlap = {
+    ...input,
+    attributionTouchpoints: [{ event: 'purchase', version: '1' }],
+  };
+  expect(() => buildRequest(overlap, 'development')).toThrow('转化事件');
+
+  // Duplicate touchpoint pairs are rejected.
+  const duplicate = {
+    ...input,
+    attributionTouchpoints: [
+      { event: 'ad_click', version: '1' },
+      { event: 'ad_click', version: '1' },
+    ],
+  };
+  expect(() => buildRequest(duplicate, 'development')).toThrow('重复');
+
+  // Window is a 1..604800 integer closed set.
+  for (const windowValue of ['0', '604801', '1.5', '', '-1']) {
+    const bad = { ...input, attributionWindow: windowValue };
+    expect(() => buildRequest(bad, 'development')).toThrow(AnalysisValidationError);
+  }
+
+  // More than eight touchpoints exceed the closed set.
+  const tooMany = {
+    ...input,
+    attributionTouchpoints: Array.from({ length: 9 }, (_, index) => ({
+      event: `event_${index}`,
+      version: '1',
+    })),
+  };
+  expect(() => buildRequest(tooMany, 'development')).toThrow(AnalysisValidationError);
+
+  // Section validation isolates attribution errors from the other editors.
+  expect(() => validateAnalysisSection(input, 'attribution')).not.toThrow();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {
