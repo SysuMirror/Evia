@@ -10,7 +10,8 @@
         "trend",
         "funnel",
         "journey",
-        "retention"
+        "retention",
+        "segment"
       ]
     },
     "environment": {
@@ -392,6 +393,22 @@
         "periods"
       ]
     },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "field": {
+          "$ref": "#/$defs/segment_field"
+        }
+      },
+      "required": [
+        "event",
+        "field"
+      ]
+    },
     "limit": {
       "type": "integer",
       "minimum": 1,
@@ -456,6 +473,62 @@
       "required": [
         "event_key",
         "schema_version"
+      ]
+    },
+    "segment_field": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "system"
+            },
+            "key": {
+              "enum": [
+                "event_key",
+                "uid",
+                "anonymous_id",
+                "session_id",
+                "page_view_id",
+                "operation_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "key"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "property"
+            },
+            "event_key": {
+              "type": "string",
+              "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+              "maxLength": 68
+            },
+            "schema_version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            }
+          },
+          "required": [
+            "kind",
+            "event_key",
+            "schema_version",
+            "key"
+          ]
+        }
       ]
     },
     "filter": {
@@ -739,6 +812,50 @@
             {
               "required": [
                 "event_keys"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "segment"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "segment",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "event_keys"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
               ]
             }
           ]

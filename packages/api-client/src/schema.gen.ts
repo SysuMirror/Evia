@@ -3015,9 +3015,21 @@ export interface components {
             schema_version: number;
             filter?: components["schemas"]["filter"];
         };
+        segment_field: {
+            /** @constant */
+            kind: "system";
+            /** @enum {unknown} */
+            key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "operation_id";
+        } | {
+            /** @constant */
+            kind: "property";
+            event_key: string;
+            schema_version: number;
+            key: string;
+        };
         "query-request.schema": {
             /** @enum {unknown} */
-            kind: "events" | "trend" | "funnel" | "journey" | "retention";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment";
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             time_range: {
@@ -3101,6 +3113,10 @@ export interface components {
                 granularity: "day" | "week";
                 periods: number;
             };
+            segment?: {
+                event: components["schemas"]["retention_step"];
+                field: components["schemas"]["segment_field"];
+            };
             limit?: number;
             cursor?: string;
             event_versions?: {
@@ -3112,6 +3128,18 @@ export interface components {
                     event_key: string;
                     schema_version: number;
                     filter?: components["schemas"]["filter"];
+                };
+                segment_field: {
+                    /** @constant */
+                    kind: "system";
+                    /** @enum {unknown} */
+                    key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "operation_id";
+                } | {
+                    /** @constant */
+                    kind: "property";
+                    event_key: string;
+                    schema_version: number;
+                    key: string;
                 };
                 filter: {
                     /** @enum {unknown} */
@@ -3150,7 +3178,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;

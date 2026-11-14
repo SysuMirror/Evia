@@ -1105,6 +1105,10 @@ type QueryRequest struct {
 		Granularity string          `json:"granularity"`
 		Periods     int64           `json:"periods"`
 	} `json:"retention,omitempty"`
+	Segment *struct {
+		Event json.RawMessage `json:"event"`
+		Field json.RawMessage `json:"field"`
+	} `json:"segment,omitempty"`
 	Limit         *int64  `json:"limit,omitempty"`
 	Cursor        *string `json:"cursor,omitempty"`
 	EventVersions []struct {
