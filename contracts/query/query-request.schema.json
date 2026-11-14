@@ -455,7 +455,8 @@
         "model": {
           "type": "string",
           "enum": [
-            "last_touch"
+            "last_touch",
+            "first_touch"
           ]
         }
       },

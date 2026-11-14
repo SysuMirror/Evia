@@ -3128,7 +3128,7 @@ export interface components {
                 touchpoints: components["schemas"]["retention_step"][];
                 window_seconds: number;
                 /** @enum {string} */
-                model: "last_touch";
+                model: "last_touch" | "first_touch";
             };
             limit?: number;
             cursor?: string;
