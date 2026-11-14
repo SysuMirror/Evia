@@ -16,7 +16,7 @@ feature-coverage 明确「留存、分群、聚合路径、归因、热力图和
   `$defs/retention_step`；条件约束要求 retention 必须携带 subject 与
   retention 块，且禁止顶层 `event_keys`/`event_versions`。
 - Go 类型 `Retention`（types.go），请求严格解码器零未知字段接入。
-- 校验（validation.go）：uid 单主体、粒度/期数闭集、起止事件固定
+- 校验（validation.go）：uid/anonymous 双主体必填、粒度/期数闭集、起止事件固定
   event_key+schema_version、过滤器节点预算、时间窗不得超过
   `periods × granularity`（最大 84 天）；结构校验先于窗口推导，
   畸形值不会被窗口错误掩盖；非 retention 携带 retention 块 fail-closed。
@@ -41,8 +41,9 @@ feature-coverage 明确「留存、分群、聚合路径、归因、热力图和
 
 ## 语义口径（v1 冻结）
 
-1. 主体仅 `uid`；`anonymous` 与空主体以 `SUBJECT_REQUIRED` 拒绝，
-   不做任何跨身份合并（身份图本身未实现）。
+1. 主体为显式 `uid` 或 `anonymous`，缺主体以 `SUBJECT_REQUIRED`
+   拒绝；两种标识按所选列独占计算、互不混合，不做任何跨身份合并
+   （身份图本身未实现）。
 2. 队列由主体**最早** start 事件所在日历周期决定；周期 0 代表入队
    本身，留存率恒为 1.0。
 3. return 事件必须显式指定 event_key 与版本；return 早于入队记为
@@ -107,23 +108,36 @@ EVIA_TEST_CLICKHOUSE_PASSWORD=<runtime> \
 后端能力通过即席分析工作区对人类会话开放：
 
 - `analysis-model.ts` 新增 `retention` 模式与表单字段（起止事件+固定
-  版本、day/week 粒度、1–12 期），`buildRequest` 产出 uid 单主体请求，
-  前端预校验时间窗 ≤ 期数×粒度（与后端闭集一致，84 天硬顶），错误
-  归因到独立的 `retention` 编辑分区。
+  版本、day/week 粒度、1–12 期），`buildRequest` 透传 uid/anonymous
+  主体，前端预校验时间窗 ≤ 期数×粒度（与后端闭集一致，84 天硬顶），
+  错误归因到独立的 `retention` 编辑分区。
 - `analysis.tsx` 新增「留存分析」页签、留存配置模态（复用已发布事件
   选择器与版本联动）、结果表队列列头与数组列（各期留存数/留存率）
-  中文渲染，结果摘要显示期数与粒度；留存模式隐藏跨版本事件选择器与
-  主体选择器（主体固定 uid）。
+  中文渲染，结果摘要显示期数与粒度；留存模式隐藏跨版本事件选择器，
+  主体选择器在 uid 与原始匿名标识间切换。
 - `tests/browser/analysis-model.spec.ts` 新增两个纯模型测试（请求
   形状、闭集校验、窗口随粒度/期数变化、84 天硬顶），6 个用例全过；
   `core-console.spec.ts` 全栈流程新增留存页签→配置→运行→队列矩阵
   断言（100.00% 0 期留存可见），随凭证化 browser-test 门禁执行。
 - pnpm typecheck、format:check、build 均通过。
 
+## 匿名主体扩展（同日切片）
+
+uid-only 限制放开为 uid/anonymous 双主体：
+
+- `validateRetention` 接受两个显式主体，缺主体仍 fail-closed；
+  `planner.go` 按主体独占选择 `uid` 或 `anonymous_id` 列，两条矩阵
+  绝不混合标识。
+- Go 单测增加匿名 planner SQL 断言（列互斥、非空守卫）与匿名请求
+  接受用例；真实 CH 集成测试在同一隔离库补匿名设备队列：两台设备
+  同日入队规模 2，第 1/2 期各 1 台回访，两轮整包 ok 零残留。
+- 控制台主体选择器对留存模式可见，模型测试覆盖双主体请求形状。
+
 ## 诚实边界
 
-- v1 仅 uid 主体、仅即席任务：保存分析模板显式拒绝 retention
-  （`UNSUPPORTED_QUERY_KIND`），匿名主体、分群、归因不在本切片。
+- 仅即席任务：保存分析模板显式拒绝 retention
+  （`UNSUPPORTED_QUERY_KIND`），跨身份合并、分群、归因不在本切片；
+  匿名标识是设备标识，不做登录前后关联。
 - 控制台全栈规格需凭证化完整运行时（browser-test 门禁），默认
   `make check` 不含该门禁；前端逻辑由模型单测、后端由真实 ClickHouse
   集成测试分别覆盖。
