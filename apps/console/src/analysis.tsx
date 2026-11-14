@@ -1992,6 +1992,14 @@ export function AnalysisPage({
               onChange={(event) => patch('pathDepth', event.target.value)}
             />
           </Field>
+          <label className="evia-checkbox" data-path-collapse>
+            <input
+              type="checkbox"
+              checked={form.pathCollapseRepeats}
+              onChange={(event) => patch('pathCollapseRepeats', event.target.checked)}
+            />
+            <span>折叠连续重复事件（相邻相同事件合并为一个节点后再取深度）</span>
+          </label>
           <p className="field-help">
             指定起始事件时，从每个主体最早匹配事件起取后续深度个事件；不指定时从窗口内最早事件起取。事件数不足深度的主体不计入，每个主体最多贡献一条路径。统计主体在查询栏选择原始
             UID 或原始匿名标识。

@@ -45,6 +45,7 @@ export type AnalysisForm = {
   segmentProperty?: PublishedField;
   pathStart: { event: string; version: string };
   pathDepth: string;
+  pathCollapseRepeats: boolean;
   attributionConversion: { event: string; version: string };
   attributionTouchpoints: { event: string; version: string }[];
   attributionWindow: string;
@@ -159,6 +160,7 @@ export function initialForm(timezone: string): AnalysisForm {
     segmentField: '',
     pathStart: { event: '', version: '' },
     pathDepth: '3',
+    pathCollapseRepeats: false,
     attributionConversion: { event: '', version: '' },
     attributionTouchpoints: [{ event: '', version: '' }],
     attributionWindow: '86400',
@@ -382,6 +384,7 @@ function readPath(form: AnalysisForm): NonNullable<QueryRequest['path']> {
   if (!Number.isInteger(depth) || depth < 2 || depth > 8)
     throw new AnalysisValidationError('path', '路径深度须为 2 至 8 的整数。');
   const path: NonNullable<QueryRequest['path']> = { depth };
+  if (form.pathCollapseRepeats) path.collapse_repeats = true;
   if (form.pathStart.event) {
     if (!Number.isSafeInteger(Number(form.pathStart.version)) || Number(form.pathStart.version) < 1)
       throw new AnalysisValidationError('path', '请为起始事件选择已发布版本。');

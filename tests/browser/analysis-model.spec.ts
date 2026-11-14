@@ -313,6 +313,27 @@ test('path analysis builds bounded ordered-sequence requests and closes the vali
   expect(() => validateAnalysisSection(noStart, 'path')).not.toThrow();
 });
 
+test('path collapse_repeats is opt-in and omitted by default', () => {
+  const input = form();
+  input.mode = 'path';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.pathDepth = '3';
+
+  // Default requests stay byte-stable: the optional flag is not emitted.
+  const defaults = buildRequest(input, 'development');
+  expect(defaults.path).toEqual({ depth: 3 });
+  expect(defaults.path?.collapse_repeats).toBeUndefined();
+
+  // Opting in emits the boolean while keeping the rest of the path shape.
+  const collapsed = { ...input, pathCollapseRepeats: true };
+  const request = buildRequest(collapsed, 'development');
+  expect(request.path).toEqual({ depth: 3, collapse_repeats: true });
+
+  // Section validation still passes with the flag enabled.
+  expect(() => validateAnalysisSection(collapsed, 'path')).not.toThrow();
+});
+
 test('attribution builds last-touch credit requests and closes the validation surface', () => {
   const input = form();
   input.mode = 'attribution';
