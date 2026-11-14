@@ -679,3 +679,122 @@ test('an ordinary in-flight request remains keepalive-capable during pagehide', 
     else Reflect.deleteProperty(globalThis, 'document');
   }
 });
+
+// Automatic sys.page_view collection (opt-in autoPageViews).
+const pageViewConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.page_view',
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+      },
+    ],
+  };
+};
+
+function setupAuto(
+  handler: (body: Body, init: RequestInit) => Response | Promise<Response>,
+  extra: Partial<ClientOptions> = {},
+  cfg: PublicConfig = pageViewConfig(),
+) {
+  const clock = new TestClock();
+  let id = 100;
+  const bodies: string[] = [];
+  const fetcher: typeof fetch = async (input, init = {}) => {
+    if (String(input).includes('/v1/config')) return json(cfg, 200, { ETag: etag });
+    bodies.push(String(init.body));
+    return handler(JSON.parse(String(init.body)) as Body, init);
+  };
+  const client = createEviaClient({
+    endpoint: 'https://events.example',
+    writeKey: 'public-example',
+    projectId,
+    environment: 'development',
+    fetch: fetcher,
+    clock,
+    randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+    storage: null,
+    lifecycle: false,
+    requestTimeoutMs: 100,
+    flushIntervalMs: 10,
+    retryBaseMs: 10,
+    ...extra,
+  });
+  return { client, clock, bodies };
+}
+
+test('automatic page views stay disabled unless autoPageViews is opted in', async () => {
+  const { client, bodies } = setup((body) => receipt(body));
+  client.navigate({ navigationType: 'push' });
+  client.reset();
+  await pump();
+  await client.flush();
+  assert.equal(bodies.length, 0);
+  client.destroy();
+});
+
+test('auto page views emit sys.page_view for initial load, navigate and reset', async () => {
+  const { client, bodies } = setupAuto((body) => receipt(body), { autoPageViews: true });
+  const navPage = client.navigate({ navigationType: 'push' });
+  client.reset();
+  await pump();
+  await client.flush();
+
+  assert.equal(bodies.length, 1);
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.equal(sent.events.length, 3);
+  for (const event of sent.events) {
+    assert.equal(event.event_key, 'sys.page_view');
+    assert.deepEqual(event.properties, {});
+    assert.equal(event.schema_version, 1);
+  }
+  const pageViewIds = sent.events.map((event) => event.context.page_view_id);
+  assert.equal(new Set(pageViewIds).size, 3, 'each page view must use a distinct page_view_id');
+  assert.deepEqual(
+    sent.events.map((event) => event.context.navigation_type),
+    ['initial', 'push', 'initial'],
+  );
+  assert.ok(
+    sent.events.some((event) => event.context.page_view_id === navPage.page_view_id),
+    'the navigate page view must be reported with its new page_view_id',
+  );
+  client.destroy();
+});
+
+test('unpublished sys.page_view fails closed without breaking navigation', async () => {
+  // Configuration deliberately omits sys.page_view.
+  const { client, bodies } = setupAuto((body) => receipt(body), { autoPageViews: true }, config());
+  const page = client.navigate({ navigationType: 'replace' });
+  assert.equal(page.navigation_type, 'replace');
+  await pump();
+  await client.flush();
+  assert.equal(client.pending, 0, 'rejected automatic events must leave the queue cleanly');
+  assert.equal(bodies.length, 0, 'unpublished system events must never be transmitted');
+  client.destroy();
+});
+
+test('a full queue drops automatic page views instead of breaking navigation', async () => {
+  const { client } = setupAuto((body) => receipt(body), {
+    autoPageViews: true,
+    maxQueueEvents: 1,
+  });
+  // Construction already queued the initial automatic page view, so the cap is reached.
+  assert.equal(client.pending, 1);
+  const page = client.navigate({ navigationType: 'push' });
+  assert.equal(client.pending, 1, 'the back-pressured automatic event must be dropped, not queued');
+  assert.equal(page.page_view_id.length, 36);
+  client.destroy();
+});
+
+test('public emit still cannot forge reserved system events', async () => {
+  const { client } = setupAuto((body) => receipt(body), { autoPageViews: true });
+  assert.throws(
+    () => client.emit('sys.page_view'),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
+  );
+  client.destroy();
+});
