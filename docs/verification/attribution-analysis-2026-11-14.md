@@ -94,9 +94,32 @@ u4 无转化被排除；outsider 跨项目两事件被作用域过滤（转化�
    外部请求，但 Go 层对内部构造的请求会漏；补齐条件并新增
    `top_level_event_versions` 子测试钉住该拒绝路径。
 
+## 控制台工作区（同日切片）
+
+归因后端能力通过即席分析工作区对人类会话开放：
+
+- `analysis-model.ts` 新增 `attribution` 模式与表单字段（转化事件+版本、
+  1–8 个触点事件+版本、回溯窗口秒），`readAttribution` 校验转化与触点固定
+  版本、触点 1–8 且（事件,版本）去重、不得与转化同事件、窗口为 1–604800
+  整数，模型固定输出 `last_touch`（后端枚举为准），错误归因独立
+  `attribution` 编辑分区；`buildRequest` 透传 uid/anonymous 主体，禁顶层
+  event_keys/event_versions/group_by/metrics/interval。
+- `analysis.tsx` 新增「归因分析」页签与配置模态：复用已发布事件/版本联动
+  选择器，触点支持增删（1–8），结果表渲染归因触点（含 `__direct__` 直接
+  来源桶）、转化主体数与归因占比，摘要显示末次触点模型与窗口，查询栏隐藏
+  跨版本事件选择器并给出主体选择与 7 天窗口说明。
+- 模型测试新增 `attribution builds last-touch credit requests` 覆盖请求
+  形状、双主体、缺转化/触点重叠/触点重复/窗口闭集/超 8 触点拒绝、分区
+  校验；Playwright 模型套件 90 例全过。`core-console.spec.ts` 全栈流程先用
+  API 发布第二个未激活但已发布的事件（分析授权只校验 release 归属不要求
+  激活）作为触点，再走归因页签→配置转化/触点/窗口→运行→末次触点摘要与
+  `__direct__` 单元格断言，随凭证化 browser-test 门禁执行。
+- pnpm typecheck、format:check、build 均通过。
+
 ## 诚实边界
 
-- 仅即席任务，无控制台工作区（下一切片）、无保存分析、无跨身份合并。
+- 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整运行时
+  （browser-test 门禁），默认 `make check` 不含该门禁。
 - v1 仅 last_touch 单模型；首次触点、线性均分、时间衰减等模型待后续作为
   显式模型版本扩展，不回改已发布结果。
 - 归因基于原始 event_key 触点，不做渠道分组归并或多触点权重分摊；高基数
