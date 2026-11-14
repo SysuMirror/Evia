@@ -12,6 +12,7 @@ import type {
   PageOptions,
   Properties,
   PublicConfig,
+  SessionEndReason,
   StoragePort,
 } from './types.js';
 import {
@@ -37,6 +38,9 @@ const identityLinkEventKey = 'sys.identity_link';
 // operationFailedEventKey records one sanitized terminal logical-operation failure.
 const operationFailedEventKey = 'sys.operation_failed';
 const operationErrorCategories = new Set(['validation', 'network', 'timeout', 'http', 'business']);
+// sessionEndEventKey records the observable end of a session with a closed reason.
+const sessionEndEventKey = 'sys.session_end';
+const sessionEndReasons = new Set(['logout', 'account_switch', 'idle']);
 interface Entry {
   eventId: string;
   draft: Omit<Envelope, 'schema_version' | 'release_revision'>;
@@ -99,6 +103,7 @@ class Client implements BrowserClient {
   private readonly sessionTimeout: number;
   private readonly autoPageViews: boolean;
   private readonly autoIdentityLink: boolean;
+  private readonly autoSessionEnd: boolean;
   private enabled = true;
   private destroyed = false;
   private generation = 0;
@@ -157,6 +162,7 @@ class Client implements BrowserClient {
     );
     this.autoPageViews = options.autoPageViews === true;
     this.autoIdentityLink = options.autoIdentityLink === true;
+    this.autoSessionEnd = options.autoSessionEnd === true;
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     let stored: string | null = null;
@@ -384,6 +390,10 @@ class Client implements BrowserClient {
     this.assertEnabled();
     requireText(uid, 128, true);
     if (uid.includes('\0')) throw new EviaSDKError('INVALID_UID');
+    // A different established uid is an account switch: close the prior account's
+    // session before the identity changes, so the event keeps the old uid context.
+    const switching = this.uid !== undefined && this.uid !== uid;
+    if (switching) this.emitSessionEnd('account_switch');
     // Assign before enqueue so the identity-link envelope carries the new uid
     // together with the anonymous id, exactly as the contract fixture specifies.
     this.uid = uid;
@@ -392,6 +402,9 @@ class Client implements BrowserClient {
 
   reset(): void {
     this.assertEnabled();
+    // Explicit identity clear is an observable logout of the ending session;
+    // emit before rotating so the event keeps the prior session/identity context.
+    this.emitSessionEnd('logout');
     this.uid = undefined;
     this.anonymousId = this.uuid();
     this.persistAnonymous();
@@ -404,6 +417,12 @@ class Client implements BrowserClient {
   private touchSession(): void {
     const now = this.clock.now();
     if (now - this.lastActivity >= this.sessionTimeout || now < this.lastActivity) {
+      // Refresh activity before emitting so the nested enqueue's touchSession
+      // cannot re-enter this idle branch. The event is enqueued before rotation
+      // so it still captures the ending session, while the outer event that
+      // triggered the timeout captures the new session.
+      this.lastActivity = now;
+      this.emitSessionEnd('idle');
       this.sessionId = this.uuid();
       this.page = this.newPage({
         navigationType: 'initial',
@@ -460,10 +479,10 @@ class Client implements BrowserClient {
   // Backpressure must never break the underlying SDK action (navigation or
   // identify), so a full queue drops the automatic event; an unpublished system
   // event still fails closed via the configuration check (EVENT_NOT_PUBLISHED).
-  private emitSystemEvent(eventKey: string, enabled: boolean): void {
+  private emitSystemEvent(eventKey: string, enabled: boolean, properties: Properties = {}): void {
     if (!enabled || this.destroyed || !this.enabled) return;
     try {
-      this.enqueue(eventKey, {}, {});
+      this.enqueue(eventKey, properties, {});
     } catch (error) {
       if (error instanceof EviaSDKError && error.code === 'QUEUE_FULL') return;
       throw error;
@@ -478,6 +497,12 @@ class Client implements BrowserClient {
   // emitIdentityLink records one reserved sys.identity_link after identify().
   private emitIdentityLink(): void {
     this.emitSystemEvent(identityLinkEventKey, this.autoIdentityLink);
+  }
+
+  // emitSessionEnd records one reserved sys.session_end with a closed reason.
+  private emitSessionEnd(reason: SessionEndReason): void {
+    if (!sessionEndReasons.has(reason)) throw new EviaSDKError('INVALID_SESSION_END_REASON');
+    this.emitSystemEvent(sessionEndEventKey, this.autoSessionEnd, { reason });
   }
 
   navigate(options: PageOptions = {}): Readonly<Page> {

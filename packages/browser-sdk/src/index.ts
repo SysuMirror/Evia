@@ -16,6 +16,7 @@ export type {
   PageOptions,
   Properties,
   PublicConfig,
+  SessionEndReason,
   Scalar,
   StoragePort,
 } from './types.js';

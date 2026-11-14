@@ -50,6 +50,13 @@ export interface ClientOptions {
    * Defaults to false so existing behavior is unchanged.
    */
   autoIdentityLink?: boolean;
+  /**
+   * Opt-in automatic sys.session_end collection. When enabled the client records a
+   * reserved session-end event before an observed session ends: logout on reset(),
+   * account_switch when identify() changes the uid, and idle when the inactivity timeout
+   * rotates the session. Defaults to false so existing behavior is unchanged.
+   */
+  autoSessionEnd?: boolean;
   configTtlMs?: number;
   requestTimeoutMs?: number;
   flushIntervalMs?: number;
@@ -109,6 +116,8 @@ export interface OperationFailure {
   retryable: boolean;
   errorCode?: string;
 }
+
+export type SessionEndReason = 'logout' | 'account_switch' | 'idle';
 
 export interface FlushResult {
   pending: number;
