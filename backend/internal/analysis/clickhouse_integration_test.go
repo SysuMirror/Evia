@@ -767,3 +767,57 @@ func TestClickHouseAttribution(t *testing.T) {
 		t.Fatalf("tight window must credit every converter as direct: %v", tightResult.Rows)
 	}
 }
+
+// TestClickHousePathCollapseRepeats proves the opt-in loop compression
+// against the real migrated view: adjacent identical events fold into one
+// node before depth extraction, while the default request stays byte-stable.
+func TestClickHousePathCollapseRepeats(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		fact("u1-open-1", "open", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u1-open-2", "open", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u1-view", "view", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u1-buy", "buy", "u1", "", "source-one", 0, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"u1-open-1": 10, "u1-open-2": 20, "u1-view": 30, "u1-buy": 40,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	seedRows(t, client, rows)
+
+	base := Request{
+		Kind: "path", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Path:      &Path{Depth: 3},
+	}
+
+	// The default request preserves the adjacent duplicate open.
+	raw := execute(t, client, base)
+	if len(raw.Rows) != 1 {
+		t.Fatalf("raw path wants one group, got %v", raw.Rows)
+	}
+	rawSteps, _ := raw.Rows[0]["path"].([]string)
+	if strings.Join(rawSteps, ",") != "open,open,view" {
+		t.Fatalf("raw path must keep repeats: %v", rawSteps)
+	}
+
+	// Opt-in folding produces the three distinct consecutive nodes.
+	collapsed := base
+	collapsed.Path = &Path{Depth: 3, CollapseRepeats: true}
+	folded := execute(t, client, collapsed)
+	if len(folded.Rows) != 1 {
+		t.Fatalf("folded path wants one group, got %v", folded.Rows)
+	}
+	foldedSteps, _ := folded.Rows[0]["path"].([]string)
+	if strings.Join(foldedSteps, ",") != "open,view,buy" {
+		t.Fatalf("folded path mismatch: %v", foldedSteps)
+	}
+}

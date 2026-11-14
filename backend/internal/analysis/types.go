@@ -74,8 +74,9 @@ type Segment struct {
 // subject's earliest in-window event is the entry. Depth is the fixed number
 // of events that make up one path (2..8).
 type Path struct {
-	StartEvent *Step `json:"start_event,omitempty"`
-	Depth      int   `json:"depth"`
+	StartEvent      *Step `json:"start_event,omitempty"`
+	Depth           int   `json:"depth"`
+	CollapseRepeats bool  `json:"collapse_repeats,omitempty"`
 }
 
 // Attribution credits converting subjects to the last matching touchpoint

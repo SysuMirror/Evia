@@ -241,3 +241,129 @@ func TestPathRejectedFromSavedTemplates(t *testing.T) {
 		t.Fatalf("saved analyses must reject path: %v", e)
 	}
 }
+
+func TestEvaluatePathCollapseRepeatsOptIn(t *testing.T) {
+	// open, open, view: the raw depth-2 path repeats open; folding changes it.
+	rows := []map[string]any{
+		pathRow("u1", 10, "open"),
+		pathRow("u1", 20, "open"),
+		pathRow("u1", 30, "view"),
+	}
+
+	// Default behavior is byte-stable: repeats are preserved.
+	raw := pathRequest(2)
+	rawResult, e := EvaluatePath(raw, rows)
+	if e != nil || len(rawResult) != 1 {
+		t.Fatalf("default path must keep repeats: %v %v", rawResult, e)
+	}
+	rawSteps, _ := rawResult[0]["path"].([]string)
+	if len(rawSteps) != 2 || rawSteps[0] != "open" || rawSteps[1] != "open" {
+		t.Fatalf("default path must be open,open: %v", rawResult[0])
+	}
+
+	// Opt-in folding collapses the adjacent run before depth extraction.
+	collapsed := pathRequest(2)
+	collapsed.Path.CollapseRepeats = true
+	collapsedResult, e := EvaluatePath(collapsed, rows)
+	if e != nil || len(collapsedResult) != 1 {
+		t.Fatalf("collapsed path failed: %v %v", collapsedResult, e)
+	}
+	foldedSteps, _ := collapsedResult[0]["path"].([]string)
+	if len(foldedSteps) != 2 || foldedSteps[0] != "open" || foldedSteps[1] != "view" {
+		t.Fatalf("folded path must be open,view: %v", collapsedResult[0])
+	}
+}
+
+func TestEvaluatePathCollapseAppliesDepthAndExcludesShortSubjects(t *testing.T) {
+	// Six raw events fold to three distinct consecutive nodes.
+	rows := []map[string]any{
+		pathRow("u1", 10, "open"),
+		pathRow("u1", 20, "open"),
+		pathRow("u1", 30, "open"),
+		pathRow("u1", 40, "view"),
+		pathRow("u1", 50, "view"),
+		pathRow("u1", 60, "buy"),
+	}
+	collapsed := pathRequest(3)
+	collapsed.Path.CollapseRepeats = true
+	result, e := EvaluatePath(collapsed, rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("depth-3 folded path failed: %v %v", result, e)
+	}
+	steps, _ := result[0]["path"].([]string)
+	if len(steps) != 3 || steps[0] != "open" || steps[1] != "view" || steps[2] != "buy" {
+		t.Fatalf("folded depth-3 path mismatch: %v", steps)
+	}
+
+	// The same subject only has two distinct consecutive nodes, so a depth-3
+	// folded path excludes it even though the raw sequence has six events.
+	tooDeep := pathRequest(3)
+	tooDeep.Path.CollapseRepeats = true
+	excluded, e := EvaluatePath(tooDeep, []map[string]any{
+		pathRow("u2", 10, "open"),
+		pathRow("u2", 20, "open"),
+		pathRow("u2", 30, "view"),
+	})
+	if e != nil || len(excluded) != 0 {
+		t.Fatalf("subject too short after folding must be excluded: %v %v", excluded, e)
+	}
+
+	// Non-adjacent identical keys are distinct nodes and must not be folded.
+	nonAdjacent, e := EvaluatePath(collapsed, []map[string]any{
+		pathRow("u3", 10, "open"),
+		pathRow("u3", 20, "view"),
+		pathRow("u3", 30, "open"),
+	})
+	if e != nil || len(nonAdjacent) != 1 {
+		t.Fatalf("non-adjacent repeats must remain distinct: %v %v", nonAdjacent, e)
+	}
+	naSteps, _ := nonAdjacent[0]["path"].([]string)
+	if len(naSteps) != 3 || naSteps[0] != "open" || naSteps[1] != "view" || naSteps[2] != "open" {
+		t.Fatalf("non-adjacent nodes must not fold: %v", naSteps)
+	}
+}
+
+func TestEvaluatePathCollapseKeepsPinnedStart(t *testing.T) {
+	// A run of view events carries the start marker; folding must retain it so
+	// the pinned begin still resolves inside the compressed sequence.
+	rows := []map[string]any{
+		pathRow("u1", 10, "open"),
+		pathRow("u1", 20, "view"),
+		pathRow("u1", 30, "view"),
+		pathRow("u1", 40, "buy"),
+	}
+	rows[1]["is_start"] = true
+	rows[2]["is_start"] = true
+
+	r := pathRequest(2)
+	r.Path.CollapseRepeats = true
+	r.Path.StartEvent = &Step{EventKey: "view", SchemaVersion: 1}
+	result, e := EvaluatePath(r, rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("pinned start after folding failed: %v %v", result, e)
+	}
+	steps, _ := result[0]["path"].([]string)
+	if len(steps) != 2 || steps[0] != "view" || steps[1] != "buy" {
+		t.Fatalf("pinned folded path must begin at view: %v", steps)
+	}
+}
+
+func TestPathCollapseRepeatsContract(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	enabled := `{"kind":"path","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","path":{"depth":3,"collapse_repeats":true}}`
+	parsed, e := Parse([]byte(enabled), validator)
+	if e != nil {
+		t.Fatalf("collapse_repeats must be accepted: %v", e)
+	}
+	if !parsed.Path.CollapseRepeats {
+		t.Fatal("collapse_repeats must deserialize to true")
+	}
+	// A non-boolean value is rejected by the schema rather than coerced.
+	badType := `{"kind":"path","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","path":{"depth":3,"collapse_repeats":"yes"}}`
+	if _, e := Parse([]byte(badType), validator); e == nil {
+		t.Fatal("non-boolean collapse_repeats must be rejected")
+	}
+}

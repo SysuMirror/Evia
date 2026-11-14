@@ -31,6 +31,25 @@ func earlierPathEvent(previous, next pathEvent) bool {
 		previous.sequence > 0
 }
 
+// collapseRepeatedPathEvents folds adjacent events with the same event key
+// into a single node, preserving causal order. A folded node keeps the start
+// marker when any event in the run matched the pinned start. It is the concrete
+// form of the planned loop-compression behavior and runs only when the caller
+// opts in, so default path output stays byte-stable.
+func collapseRepeatedPathEvents(events []pathEvent) []pathEvent {
+	compressed := make([]pathEvent, 0, len(events))
+	for _, event := range events {
+		if last := len(compressed) - 1; last >= 0 && compressed[last].eventKey == event.eventKey {
+			if event.isStart {
+				compressed[last].isStart = true
+			}
+			continue
+		}
+		compressed = append(compressed, event)
+	}
+	return compressed
+}
+
 // EvaluatePath counts the distinct ordered event sequences subjects traverse.
 // Each subject contributes at most one path: either the depth events beginning
 // at its earliest pinned start event, or its first depth in-window events when
@@ -83,6 +102,9 @@ func evaluatePath(ctx context.Context, request Request, rows []map[string]any) (
 		sort.SliceStable(events, func(i, j int) bool {
 			return earlierPathEvent(events[i], events[j])
 		})
+		if request.Path.CollapseRepeats {
+			events = collapseRepeatedPathEvents(events)
+		}
 		begin := 0
 		if pinnedStart {
 			matched := -1
