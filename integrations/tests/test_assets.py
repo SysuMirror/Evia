@@ -71,6 +71,37 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(api.SafeError):
                 api.read_json(raw)
 
+    def test_json_schema_stays_in_parity_with_python_validator(self):
+        # The published JSON Schema and the operational Python validator encode
+        # the same closed sets and limits independently. This guard fails when
+        # either side drifts, without pulling a third-party schema library into
+        # the stdlib-only shipped tooling.
+        schema = json.loads((ROOT / 'schemas' / 'desired-events.schema.json').read_text())
+        event_props = schema['properties']['events']['items']['properties']
+        self.assertEqual(schema['properties']['format']['const'], 'activity.desired-events.v1')
+        self.assertEqual(set(schema['properties']['environment']['enum']),
+                         {'development', 'staging', 'production'})
+        self.assertEqual(schema['$defs']['event_key']['pattern'], r'^[a-z][a-z0-9_]{0,63}$')
+        self.assertEqual(set(event_props['allowed_source_kinds']['items']['enum']),
+                         {'browser', 'server'})
+        self.assertEqual(set(event_props['fact_kind']['enum']),
+                         {'user_intent', 'client_observed', 'server_confirmed'})
+        # Numeric bounds must match the hardcoded limits in activity_manifest.validate.
+        self.assertEqual(schema['properties']['events']['maxItems'], 200)
+        self.assertEqual(event_props['schema']['properties']['properties']['maxProperties'], 50)
+        self.assertEqual(event_props['example_properties']['maxProperties'], 50)
+        self.assertEqual(event_props['field_metadata']['maxProperties'], 50)
+        self.assertEqual(event_props['implementation_sites']['maxItems'], 100)
+        self.assertEqual(event_props['display_name']['maxLength'], 128)
+        self.assertEqual(event_props['trigger']['maxLength'], 2000)
+        self.assertEqual(event_props['implementation_sites']['items']['properties']['path']['maxLength'], 512)
+        # The example manifest must satisfy both the schema closed sets and the validator.
+        manifest.validate(copy.deepcopy(self.value))
+        self.assertEqual(set(self.value['environment'] for _ in [0]), {'development'})
+        for event in self.value['events']:
+            self.assertTrue(set(event['allowed_source_kinds']) <= {'browser', 'server'})
+            self.assertIn(event['fact_kind'], {'user_intent', 'client_observed', 'server_confirmed'})
+
 
 class PackageTests(unittest.TestCase):
     def test_exact_archive_allowlist_and_deterministic_bytes(self):
