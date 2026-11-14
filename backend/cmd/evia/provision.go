@@ -51,3 +51,21 @@ func accountDisable(ctx context.Context, store access.ProvisionStore, get func(s
 func accountEnable(ctx context.Context, store access.ProvisionStore, get func(string) string, logger *slog.Logger) error {
 	return accountSetDisabled(ctx, store, get, false, logger)
 }
+
+// accountResetPassword maps bounded recovery faults to safe CLI output and
+// never echoes the new password or resulting hash.
+func accountResetPassword(ctx context.Context, store access.ProvisionStore, get func(string) string, logger *slog.Logger) error {
+	user, err := access.ResetAccountPassword(ctx, store, get("EVIA_ACCOUNT_USERNAME"), get("EVIA_ACCOUNT_PASSWORD"))
+	if err != nil {
+		var known *fault.Error
+		if errors.As(err, &known) && (known.Kind == fault.Invalid || known.Kind == fault.NotFound) {
+			switch known.Code {
+			case "INVALID_USERNAME", "INVALID_PASSWORD", "ACCOUNT_NOT_FOUND":
+				return fault.New(known.Kind, known.Code, known.Message)
+			}
+		}
+		return stageError("account administration", err)
+	}
+	logger.Info("account password reset and sessions revoked", "account_id", user.ID)
+	return nil
+}

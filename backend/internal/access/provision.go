@@ -13,6 +13,7 @@ import (
 type ProvisionStore interface {
 	ProvisionAccount(context.Context, User) error
 	SetAccountDisabled(ctx context.Context, username string, disabled bool) (User, error)
+	ResetAccountPassword(ctx context.Context, username, passwordHash string) (User, error)
 }
 
 // ProvisionAccount is an operator action, separate from bootstrap and project
@@ -48,6 +49,28 @@ func SetAccountDisabled(ctx context.Context, store ProvisionStore, username stri
 		return User{}, fault.New(fault.Invalid, "INVALID_USERNAME", "username must contain 1 to 100 ASCII letters, digits or ._@-")
 	}
 	user, err := store.SetAccountDisabled(ctx, username, disabled)
+	if err != nil {
+		return User{}, err
+	}
+	user.PasswordHash = ""
+	return user, nil
+}
+
+// ResetAccountPassword is an operator account-recovery action. It reuses the
+// same bcrypt policy as provisioning and bootstrap. The persistence layer
+// replaces the hash and revokes the account's existing sessions in one
+// transaction, so a reset for a compromised account cannot leave an old session
+// alive. Password hashes never cross back to the caller.
+func ResetAccountPassword(ctx context.Context, store ProvisionStore, username, password string) (User, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if !usernamePattern.MatchString(username) {
+		return User{}, fault.New(fault.Invalid, "INVALID_USERNAME", "username must contain 1 to 100 ASCII letters, digits or ._@-")
+	}
+	hash, err := PasswordHash(password)
+	if err != nil {
+		return User{}, err
+	}
+	user, err := store.ResetAccountPassword(ctx, username, hash)
 	if err != nil {
 		return User{}, err
 	}

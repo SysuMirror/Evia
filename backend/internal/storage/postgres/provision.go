@@ -84,3 +84,35 @@ func (s *Store) SetAccountDisabled(ctx context.Context, username string, disable
 	user.Disabled = disabled
 	return user, tx.Commit(ctx)
 }
+
+// ResetAccountPassword replaces one account's password hash and revokes all of
+// its sessions in the same transaction under the installation advisory lock.
+// Revoking sessions is required for account recovery: an operator resetting a
+// compromised credential must not leave a previously issued session valid.
+func (s *Store) ResetAccountPassword(ctx context.Context, username, passwordHash string) (access.User, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return access.User{}, err
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7314202)`); err != nil {
+		return access.User{}, err
+	}
+	var user access.User
+	err = tx.QueryRow(ctx, `SELECT id::text,username,display_name,password_hash,disabled FROM accounts WHERE username=$1`, username).
+		Scan(&user.ID, &user.Username, &user.DisplayName, &user.PasswordHash, &user.Disabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return access.User{}, fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist")
+	}
+	if err != nil {
+		return access.User{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE accounts SET password_hash=$1 WHERE id=$2`, passwordHash, user.ID); err != nil {
+		return access.User{}, err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, user.ID); err != nil {
+		return access.User{}, err
+	}
+	user.PasswordHash = passwordHash
+	return user, tx.Commit(ctx)
+}
