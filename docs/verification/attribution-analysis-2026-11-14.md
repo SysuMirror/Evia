@@ -140,12 +140,39 @@ u4 无转化被排除；outsider 跨项目两事件被作用域过滤（转化�
   `attributionModel` 经 `readAttribution` 透传，概览与结果摘要按模型显示；
   模型套件 92 例全过。
 
+## 线性均分（linear）多触点权重模型
+
+在两种单触点全权重模型之上加入等权多触点模型，仍是显式模型枚举的一员，
+不改变请求形状，且只对 linear 输出附加加权列，单触模型结果字节稳定：
+
+- 契约 `attribution.model` 枚举扩展为 `last_touch`/`first_touch`/`linear`，
+  重跑 codegen；Go 校验闭集同步放开，未知模型（如 time_decay）仍 fail-closed。
+- 评估器重构：抽出 `loadAttributionSubjects` 复用主体加载，linear 走独立的
+  `evaluateLinearAttribution`，单触路径原样保留。语义：每个转化主体把单位
+  权重在窗内**去重后的触点 event_key** 间均分（N 个各得 1/N），同一触点
+  多次出现只算一个节点；窗内无触点的转化把完整权重 1 留在 `__direct__`。
+- 输出在 touchpoint/subjects/share 之外仅对 linear 增加 `credit`（float，
+  权重累加）；`subjects` 仍是到达该触点的去重转化主体数，`share =
+  credit/转化主体数`，全部行 share 之和恒为 1（浮点容差 1e-12）。按 credit
+  降序、触点字典序排序。
+- 先红后绿两处：① 旧负例再次把已合法的 `linear` 当未知模型，统一改回仍未
+  实现的 `time_decay`；② share 求和断言因浮点累加得 0.9999999999999999，
+  改为 1e-12 容差（属测试精度，非生产缺陷）。
+- 单测新增 4 例：均分+直接桶（ad_click credit 1.5、email_open 0.5、direct
+  1.0，share 和为 1）、同键重复去重、窗口排除、契约与 planner 列契约
+  （linear 四列、单触仍三列）。真实 ClickHouse 新增
+  `TestClickHouseLinearAttribution` 验证四列与加权值，直接 go test 0.622s
+  与整包 `make query-test` 67.775s `-race` 两轮零残留。
+- 控制台模型选择器加「线性均分」，结果表渲染 `credit`（最多 4 位小数并去
+  尾零），概览/摘要显示线性均分；模型套件 93 例全过。
+
 ## 诚实边界
 
 - 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整运行时
   （browser-test 门禁），默认 `make check` 不含该门禁。
-- 已支持 last_touch 与 first_touch 两种单触点全权重模型；线性均分、时间
-  衰减等多触点权重模型待后续作为显式模型版本扩展，不回改已发布结果。
+- 已支持 last_touch、first_touch 两种单触点全权重模型与 linear 等权多触
+  点模型；时间衰减（需半衰期参数）等带自由参数的权重模型待后续作为显式
+  模型版本扩展，不回改已发布结果。
 - 归因基于原始 event_key 触点，不做渠道分组归并或多触点权重分摊；高基数
   触点数量受 500 行结果上限与 7 天窗口约束，超大租户容量未专项压测。
 - 热力图、会话回放仍未实现，且需独立采集协议、脱敏与专用存储，不能从
