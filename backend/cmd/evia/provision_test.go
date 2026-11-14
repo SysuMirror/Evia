@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -183,5 +184,54 @@ func TestAccountResetPasswordCLISafeOutput(t *testing.T) {
 				t.Fatalf("expected safe %s error, got %v", tc.code, err)
 			}
 		})
+	}
+}
+
+// TestAccountAdministrationCommandsRouteThroughDatabaseOnly pins the execute()
+// dispatch for the operator account commands. The wrapper-level tests call the
+// handlers directly, so this test is the only guard that each command is in the
+// allowlist, requires EVIA_DATABASE_URL before any DB access, and refuses
+// positional credentials on the command line.
+func TestAccountAdministrationCommandsRouteThroughDatabaseOnly(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	commands := []string{"account-disable", "account-enable", "account-reset-password"}
+
+	for _, command := range commands {
+		t.Run(command+" requires database configuration", func(t *testing.T) {
+			err := execute(context.Background(), []string{command}, func(string) string { return "" }, logger)
+			if err == nil || err.Error() != "EVIA_DATABASE_URL is required" {
+				t.Fatalf("%s must require EVIA_DATABASE_URL before DB access: %v", command, err)
+			}
+		})
+
+		t.Run(command+" is recognized and fails at connection, not the allowlist", func(t *testing.T) {
+			get := func(key string) string {
+				if key == "EVIA_DATABASE_URL" {
+					return "postgres://synthetic-sensitive-url@127.0.0.1:1/synthetic"
+				}
+				return ""
+			}
+			err := execute(context.Background(), []string{command}, get, logger)
+			if err == nil || !strings.Contains(err.Error(), "database connection") {
+				t.Fatalf("%s must reach the database stage: %v", command, err)
+			}
+			if strings.Contains(err.Error(), "unknown command") || strings.Contains(err.Error(), "synthetic-sensitive-url") {
+				t.Fatalf("%s routing leaked or was unrecognized: %v", command, err)
+			}
+		})
+
+		t.Run(command+" rejects positional arguments", func(t *testing.T) {
+			err := execute(context.Background(), []string{command, "synthetic-sensitive-arg"}, func(string) string { return "" }, logger)
+			if err == nil || !strings.HasPrefix(err.Error(), "usage:") || strings.Contains(err.Error(), "synthetic-sensitive-arg") {
+				t.Fatalf("%s must reject positional credentials with a usage error: %v", command, err)
+			}
+		})
+	}
+
+	// A typo must still be an unknown command rather than accidentally matching
+	// an administrative path.
+	if err := execute(context.Background(), []string{"account-disabel"}, func(string) string { return "" }, logger); err == nil ||
+		err.Error() != "unknown command" {
+		t.Fatalf("misspelled command must be unknown, got: %v", err)
 	}
 }
