@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"strconv"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -13,6 +14,8 @@ import (
 // json.Number values keep their lexical form instead of being re-parsed, so
 // integers and high-precision decimals survive the format conversion byte for
 // byte. Structured cells (arrays/objects) become compact JSON strings.
+// Native Go numeric widths and concrete slice types emitted by the in-process
+// evaluators render directly; json.Number still wins for lexical fidelity.
 func renderCSV(result analysis.Result) ([]byte, error) {
 	if len(result.Columns) == 0 {
 		return nil, fault.New(fault.Invalid, "EXPORT_CSV_UNSUPPORTED", "结果没有可导出的表格列")
@@ -60,7 +63,31 @@ func csvCell(value any) (string, error) {
 			return "true", nil
 		}
 		return "false", nil
-	case []any, map[string]any:
+	case int:
+		return strconv.Itoa(v), nil
+	case int8:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int16:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int32:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
+	case uint:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint64:
+		return strconv.FormatUint(v, 10), nil
+	case float32:
+		return strconv.FormatFloat(float64(v), 'g', -1, 32), nil
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64), nil
+	case []any, map[string]any, []string, []int, []int64, []float64, []bool:
 		encoded, err := json.Marshal(v)
 		if err != nil {
 			return "", err

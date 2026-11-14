@@ -135,3 +135,105 @@ func TestFileArtifactStoreWritesFormatSpecificFiles(t *testing.T) {
 		t.Fatalf("json artifact must use .json extension: %s", jsonArtifact.Path)
 	}
 }
+
+// nativeEvaluatorResult mirrors the in-process evaluators (funnel, retention,
+// segment, path, attribution), which emit native int/float64 and concrete
+// slice types rather than json.Number/[]any.
+func nativeEvaluatorResult() analysis.Result {
+	return analysis.Result{
+		Columns: []analysis.Column{
+			{Key: "subjects", Type: "integer"},
+			{Key: "share", Type: "number"},
+			{Key: "rate", Type: "number"},
+			{Key: "path", Type: "array"},
+			{Key: "retained", Type: "array"},
+		},
+		Rows: []map[string]any{
+			{
+				"subjects": 2,            // native int
+				"share":    0.6666666667, // native float64
+				"rate":     1.0,          // native float64 whole number
+				"path":     []string{"open", "view"},
+				"retained": []int{1, 0, 1},
+			},
+		},
+	}
+}
+
+func TestRenderCSVNativeEvaluatorTypes(t *testing.T) {
+	t.Parallel()
+	payload, err := renderCSV(nativeEvaluatorResult())
+	if err != nil {
+		t.Fatalf("CSV export must support native evaluator types: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(payload), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want header + 1 row, got %d: %q", len(lines), payload)
+	}
+	wantRow := `2,0.6666666667,1,"[""open"",""view""]","[1,0,1]"`
+	if lines[1] != wantRow {
+		t.Fatalf("native row mismatch:\n got %q\nwant %q", lines[1], wantRow)
+	}
+}
+
+func TestRenderCSVNativeScalarAndSliceFamily(t *testing.T) {
+	t.Parallel()
+	result := analysis.Result{
+		Columns: []analysis.Column{
+			{Key: "i64", Type: "integer"},
+			{Key: "u64", Type: "integer"},
+			{Key: "f32", Type: "number"},
+			{Key: "ints64", Type: "array"},
+			{Key: "floats", Type: "array"},
+			{Key: "flags", Type: "array"},
+		},
+		Rows: []map[string]any{
+			{
+				"i64":    int64(-7),
+				"u64":    uint64(42),
+				"f32":    float32(1.5),
+				"ints64": []int64{1, 2},
+				"floats": []float64{0.25, 0.5},
+				"flags":  []bool{true, false},
+			},
+		},
+	}
+	payload, err := renderCSV(result)
+	if err != nil {
+		t.Fatalf("native scalar/slice family must render: %v", err)
+	}
+	wantRow := `-7,42,1.5,"[1,2]","[0.25,0.5]","[true,false]"`
+	if got := strings.Split(strings.TrimRight(string(payload), "\n"), "\n")[1]; got != wantRow {
+		t.Fatalf("family row mismatch:\n got %q\nwant %q", got, wantRow)
+	}
+}
+
+// TestFileArtifactStoreWritesNativeEvaluatorCSV drives the same artifact path
+// the export worker uses (Artifacts.Write -> renderCSV) with native evaluator
+// output, which previously failed with EXPORT_CSV_UNSUPPORTED.
+func TestFileArtifactStoreWritesNativeEvaluatorCSV(t *testing.T) {
+	t.Parallel()
+	store, err := NewFileArtifactStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobID := "55555555-5555-5555-5555-555555555555"
+	artifact, err := store.Write(context.Background(), jobID, FormatCSV, nativeEvaluatorResult())
+	if err != nil {
+		t.Fatalf("native evaluator result must export as CSV through the artifact store: %v", err)
+	}
+	if filepath.Ext(artifact.Path) != ".csv" {
+		t.Fatalf("native csv artifact must use .csv extension: %s", artifact.Path)
+	}
+	payload, err := os.ReadFile(artifact.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSuffix := "\n2,0.6666666667,1,\"[\"\"open\"\",\"\"view\"\"]\",\"[1,0,1]\"\n"
+	if !strings.HasSuffix(string(payload), wantSuffix) {
+		t.Fatalf("native csv payload mismatch:\n got %q\nwant suffix %q", payload, wantSuffix)
+	}
+	if artifact.Rows != 1 || artifact.SHA256 == "" || artifact.Bytes != int64(len(payload)) {
+		t.Fatalf("native artifact metadata wrong: %+v", artifact)
+	}
+}
