@@ -798,3 +798,115 @@ test('public emit still cannot forge reserved system events', async () => {
   );
   client.destroy();
 });
+
+// Automatic sys.identity_link collection (opt-in autoIdentityLink).
+const identityLinkConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.identity_link',
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+      },
+    ],
+  };
+};
+
+test('identity link stays disabled unless autoIdentityLink is opted in', async () => {
+  const { client, bodies } = setup((body) => receipt(body));
+  client.identify('known-user');
+  await pump();
+  await client.flush();
+  assert.equal(bodies.length, 0);
+  client.destroy();
+});
+
+test('identify enqueues sys.identity_link carrying both uid and anonymous id', async () => {
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { autoIdentityLink: true },
+    identityLinkConfig(),
+  );
+  client.identify('known-user');
+  await pump();
+  await client.flush();
+
+  assert.equal(bodies.length, 1);
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.equal(sent.events.length, 1);
+  const event = sent.events[0]!;
+  assert.equal(event.event_key, 'sys.identity_link');
+  assert.deepEqual(event.properties, {}, 'identity link must collect no credentials or properties');
+  assert.equal(event.schema_version, 1);
+  assert.equal(event.identity.uid, 'known-user');
+  assert.equal(typeof event.identity.anonymous_id, 'string');
+  assert.equal(event.identity.anonymous_id!.length, 36);
+  assert.notEqual(event.identity.anonymous_id, 'known-user');
+  client.destroy();
+});
+
+test('unpublished identity link fails closed while identify still sets the uid', async () => {
+  // Configuration deliberately omits sys.identity_link.
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { autoIdentityLink: true },
+    config(),
+  );
+  client.identify('known-user');
+  await pump();
+  await client.flush();
+  assert.equal(client.pending, 0, 'the rejected automatic event must leave the queue cleanly');
+  assert.equal(bodies.length, 0, 'unpublished system events must never be transmitted');
+
+  // The primary effect of identify must survive the failed automatic event.
+  const follow = client.emit('page_opened', { value: 1 });
+  await pump();
+  await client.flush();
+  assert.equal((await follow.result).status, 'accepted');
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.equal(sent.events[0]!.identity.uid, 'known-user');
+  client.destroy();
+});
+
+test('a full queue drops the identity link without undoing identify or throwing', async () => {
+  const { client } = setupAuto(
+    (body) => receipt(body),
+    { autoIdentityLink: true, maxQueueEvents: 1 },
+    identityLinkConfig(),
+  );
+  // Fill the single slot with a custom event before identify.
+  client.emit('page_opened', { value: 1 });
+  assert.equal(client.pending, 1);
+  client.identify('known-user');
+  assert.equal(client.pending, 1, 'the back-pressured identity link must be dropped, not queued');
+  client.destroy();
+});
+
+test('reset does not emit an identity link even when autoIdentityLink is enabled', async () => {
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { autoIdentityLink: true },
+    identityLinkConfig(),
+  );
+  client.reset();
+  await pump();
+  await client.flush();
+  assert.equal(bodies.length, 0, 'reset rotates identity but must not record an identity link');
+  client.destroy();
+});
+
+test('public emit still cannot forge sys.identity_link', async () => {
+  const { client } = setupAuto(
+    (body) => receipt(body),
+    { autoIdentityLink: true },
+    identityLinkConfig(),
+  );
+  assert.throws(
+    () => client.emit('sys.identity_link'),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
+  );
+  client.destroy();
+});
