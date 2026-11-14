@@ -101,7 +101,7 @@ u4 无转化被排除；outsider 跨项目两事件被作用域过滤（转化�
 - `analysis-model.ts` 新增 `attribution` 模式与表单字段（转化事件+版本、
   1–8 个触点事件+版本、回溯窗口秒），`readAttribution` 校验转化与触点固定
   版本、触点 1–8 且（事件,版本）去重、不得与转化同事件、窗口为 1–604800
-  整数，模型固定输出 `last_touch`（后端枚举为准），错误归因独立
+  整数，模型按表单选择 `last_touch`/`first_touch`（后端枚举为准，默认末次），错误归因独立
   `attribution` 编辑分区；`buildRequest` 透传 uid/anonymous 主体，禁顶层
   event_keys/event_versions/group_by/metrics/interval。
 - `analysis.tsx` 新增「归因分析」页签与配置模态：复用已发布事件/版本联动
@@ -116,12 +116,36 @@ u4 无转化被排除；outsider 跨项目两事件被作用域过滤（转化�
   `__direct__` 单元格断言，随凭证化 browser-test 门禁执行。
 - pnpm typecheck、format:check、build 均通过。
 
+## 首次触点模型扩展（opt-in 模型版本）
+
+模型枚举本就为扩展设计，本次在不改请求形状、不影响已发布 last_touch
+结果的前提下加入 `first_touch`：
+
+- 契约 `attribution.model` 枚举扩展为 `last_touch`/`first_touch`，重跑
+  codegen 三处制品；Go 校验放开为显式闭集，未知模型仍 fail-closed
+  （`INVALID_ATTRIBUTION_MODEL`）。
+- 评估器按模型选择扫描方向：first_touch 在回溯窗内**前向**取最早触点，
+  last_touch 维持**后向**取最晚触点；窗口外触点在两个模型下都不计入，
+  无窗内触点时两者都归固定 `__direct__` 桶。转化定位点（每主体最早转化、
+  最多一条归因）、share 分母与排序口径完全不变。
+- 单测新增 3 例：同批 ad_click→email_open→buy 证据下两模型归因分歧、
+  窗口边界（紧窗跳过窗外首触、宽窗取最早）、契约与 Go 双层模型闭集；
+  同时把原先以 `first_touch` 充当「未知模型」负例的两处断言改为真正未
+  实现的 `linear`/`time_decay`，避免合法值被误判。
+- 真实 ClickHouse 新增 `TestClickHouseFirstTouchAttribution`，与
+  last_touch 同批证据对照：u1 的两个触点在首触下改记到最早 ad_click，
+  email_open 桶消失，结果为 ad_click=2（share 2/3）、__direct__=1；
+  直接 go test 0.448s 与整包 `make query-test` 67.123s `-race` 两轮零残留。
+- 控制台归因模态新增「归因模型」选择器（默认末次触点），表单
+  `attributionModel` 经 `readAttribution` 透传，概览与结果摘要按模型显示；
+  模型套件 92 例全过。
+
 ## 诚实边界
 
 - 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整运行时
   （browser-test 门禁），默认 `make check` 不含该门禁。
-- v1 仅 last_touch 单模型；首次触点、线性均分、时间衰减等模型待后续作为
-  显式模型版本扩展，不回改已发布结果。
+- 已支持 last_touch 与 first_touch 两种单触点全权重模型；线性均分、时间
+  衰减等多触点权重模型待后续作为显式模型版本扩展，不回改已发布结果。
 - 归因基于原始 event_key 触点，不做渠道分组归并或多触点权重分摊；高基数
   触点数量受 500 行结果上限与 7 天窗口约束，超大租户容量未专项压测。
 - 热力图、会话回放仍未实现，且需独立采集协议、脱敏与专用存储，不能从
