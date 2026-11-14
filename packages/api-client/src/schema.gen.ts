@@ -3120,6 +3120,8 @@ export interface components {
             path?: {
                 start_event?: components["schemas"]["retention_step"];
                 depth: number;
+                /** @description When true, fold consecutive identical event keys into one node before start-pin and depth extraction. Defaults to false so existing path results stay byte-stable. */
+                collapse_repeats?: boolean;
             };
             attribution?: {
                 conversion: components["schemas"]["retention_step"];

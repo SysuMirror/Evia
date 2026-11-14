@@ -422,6 +422,10 @@
           "type": "integer",
           "minimum": 2,
           "maximum": 8
+        },
+        "collapse_repeats": {
+          "type": "boolean",
+          "description": "When true, fold consecutive identical event keys into one node before start-pin and depth extraction. Defaults to false so existing path results stay byte-stable."
         }
       },
       "required": [

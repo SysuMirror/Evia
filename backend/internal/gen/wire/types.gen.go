@@ -1110,8 +1110,9 @@ type QueryRequest struct {
 		Field json.RawMessage `json:"field"`
 	} `json:"segment,omitempty"`
 	Path *struct {
-		StartEvent json.RawMessage `json:"start_event,omitempty"`
-		Depth      int64           `json:"depth"`
+		StartEvent      json.RawMessage `json:"start_event,omitempty"`
+		Depth           int64           `json:"depth"`
+		CollapseRepeats *bool           `json:"collapse_repeats,omitempty"`
 	} `json:"path,omitempty"`
 	Attribution *struct {
 		Conversion    json.RawMessage   `json:"conversion"`
