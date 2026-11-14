@@ -50,7 +50,7 @@ func Parse(raw []byte, validator Validator) (Request, error) {
 	return out, nil
 }
 func Validate(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.Environment != "development" && r.Environment != "staging" && r.Environment != "production" {
@@ -68,6 +68,16 @@ func Validate(r *Request) error {
 	window := 31 * 24 * time.Hour
 	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" {
 		window = 7 * 24 * time.Hour
+	}
+	if r.Kind == "retention" {
+		// Structural policy must be settled before the window is derived from
+		// granularity and periods, otherwise malformed values mask the real
+		// configuration error. ValidateConfiguration is idempotent, so the
+		// shared call at the end of Validate simply re-confirms it.
+		if e := ValidateConfiguration(r); e != nil {
+			return e
+		}
+		window = retentionWindow(r.Retention)
 	}
 	if r.TimeRange.To.Sub(r.TimeRange.From) > window {
 		return Invalid("QUERY_COST_EXCEEDED", "查询时间范围超过预算", "/time_range")
@@ -88,7 +98,7 @@ func Validate(r *Request) error {
 // system field types. It does not validate environment, time range or timezone;
 // execution callers must use Validate with the actual execution context.
 func ValidateConfiguration(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
@@ -214,7 +224,57 @@ func ValidateConfiguration(r *Request) error {
 	} else if r.Funnel != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有漏斗查询接受 funnel 参数", "/funnel")
 	}
+	if r.Kind == "retention" {
+		if e := validateRetention(r); e != nil {
+			return e
+		}
+	} else if r.Retention != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有留存查询接受 retention 参数", "/retention")
+	}
 	return nil
+}
+
+// validateRetention enforces the closed v1 retention surface: uid subjects
+// only, calendar day/week periods, at most twelve offsets, and pinned event
+// versions on both boundary steps. Every malformed value fails closed.
+func validateRetention(r *Request) error {
+	if r.Subject != "uid" {
+		return Invalid("SUBJECT_REQUIRED", "留存查询 v1 仅支持 uid 统计主体", "/subject")
+	}
+	rt := r.Retention
+	if rt == nil {
+		return Invalid("INVALID_RETENTION", "留存配置缺失", "/retention")
+	}
+	if rt.Granularity != "day" && rt.Granularity != "week" {
+		return Invalid("INVALID_RETENTION_GRANULARITY", "留存粒度必须是 day 或 week", "/retention/granularity")
+	}
+	if rt.Periods < 1 || rt.Periods > 12 {
+		return Invalid("INVALID_RETENTION_PERIODS", "留存期数必须在 1 到 12 之间", "/retention/periods")
+	}
+	if len(r.EventKeys) > 0 {
+		return Invalid("INVALID_EVENT_SELECTION", "留存查询通过起止事件固定事件版本", "/event_keys")
+	}
+	nodes := 0
+	for _, step := range []Step{rt.StartEvent, rt.ReturnEvent} {
+		if !eventKey.MatchString(step.EventKey) || step.SchemaVersion < 1 || step.SchemaVersion > MaxSafeInteger {
+			return Invalid("INVALID_RETENTION_STEP", "留存起止事件或版本无效", "/retention")
+		}
+		if e := validateFilter(step.Filter, 0, &nodes); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// retentionWindow bounds the scan span to the requested matrix size. A
+// twelve-period week matrix is the largest v1 window at 84 days; the bounded
+// raw pull and ClickHouse read guards still cap the actual work.
+func retentionWindow(rt *Retention) time.Duration {
+	period := 24 * time.Hour
+	if rt.Granularity == "week" {
+		period = 7 * 24 * time.Hour
+	}
+	return time.Duration(rt.Periods) * period
 }
 func validateField(f *Field) error {
 	if f == nil {
@@ -341,8 +401,8 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel") {
-		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗查询", "/event_versions")
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention") {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗或留存查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {
 		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {

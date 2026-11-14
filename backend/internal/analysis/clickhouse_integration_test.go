@@ -391,3 +391,93 @@ func TestClickHouseCanceledHTTPQueryStopsExecution(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+func retentionFact(id, key, uid string, when time.Time) map[string]any {
+	row := fact(id, key, uid, "", "source-one", 0, map[string]any{})
+	stamp := when.UTC().Format("2006-01-02 15:04:05.000")
+	row["occurred_at"] = stamp
+	row["event_time"] = stamp
+	row["received_at"] = when.Add(time.Second).UTC().Format("2006-01-02 15:04:05.000000000")
+	return row
+}
+
+// TestClickHouseRetentionMatrix proves the full chain against the real
+// migrated view: bounded bilingual pull through event_facts, UInt8 flag
+// decoding, timezone cohort assignment and the Go retention evaluator.
+func TestClickHouseRetentionMatrix(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := func(dayOfMonth, hour int) time.Time {
+		return time.Date(2026, 11, dayOfMonth, hour, 0, 0, 0, time.UTC)
+	}
+	rows := []map[string]any{
+		// Cohort 0 (Nov 7): u1 returns on day 2, u2 returns on day 3.
+		retentionFact("u1-start", "sign_up", "u1", day(7, 10)),
+		retentionFact("u1-same-day", "login", "u1", day(7, 11)),
+		retentionFact("u1-day2", "login", "u1", day(9, 10)),
+		retentionFact("u2-start", "sign_up", "u2", day(7, 12)),
+		retentionFact("u2-day3", "login", "u2", day(10, 9)),
+		// A login before u2's entry must not count as negative-offset retention.
+		retentionFact("u2-before", "login", "u2", day(7, 8)),
+		// Cohort 1 (Nov 8): u3 returns one period later.
+		retentionFact("u3-start", "sign_up", "u3", day(8, 9)),
+		retentionFact("u3-return", "login", "u3", day(9, 15)),
+		// Cohort 2 (Nov 9): u4 enters with no later return.
+		retentionFact("u4-start", "sign_up", "u4", day(9, 16)),
+		// Subject with return events only never joins a cohort.
+		retentionFact("u5-orphan", "login", "u5", day(7, 9)),
+		// Unrelated project/environment facts must be invisible to the scope.
+		retentionFact("outsider-start", "sign_up", "outsider", day(7, 10)),
+	}
+	rows[len(rows)-1]["project_id"] = "project-two"
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "retention", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day(7, 0), To: day(11, 0)},
+		Timezone:  "UTC",
+		Retention: &Retention{
+			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
+			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
+			Granularity: "day", Periods: 4,
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 5 || result.Metadata.Accuracy != "exact" || result.Metadata.DataWatermark == nil {
+		t.Fatalf("retention result contract wrong: %+v metadata=%+v", result.Columns, result.Metadata)
+	}
+	if len(result.Rows) != 3 {
+		t.Fatalf("want three cohorts, got %d: %v", len(result.Rows), result.Rows)
+	}
+	want := []struct {
+		index, size int
+		start       string
+		retained    []int
+	}{
+		{0, 2, "2026-11-07T00:00:00Z", []int{2, 0, 1, 1}},
+		{1, 1, "2026-11-08T00:00:00Z", []int{1, 1, 0, 0}},
+		{2, 1, "2026-11-09T00:00:00Z", []int{1, 0, 0, 0}},
+	}
+	for i, expected := range want {
+		row := result.Rows[i]
+		if row["cohort_index"] != expected.index || row["cohort_start"] != expected.start || row["cohort_size"] != expected.size {
+			t.Fatalf("cohort %d header mismatch: %v", i, row)
+		}
+		retained, ok := row["retained"].([]int)
+		if !ok || len(retained) != 4 {
+			t.Fatalf("cohort %d retained shape wrong: %#v", i, row["retained"])
+		}
+		for offset, expectedCount := range expected.retained {
+			if retained[offset] != expectedCount {
+				t.Fatalf("cohort %d offset %d retained=%d want %d", i, offset, retained[offset], expectedCount)
+			}
+		}
+		rates, ok := row["retention_rate"].([]any)
+		if !ok || len(rates) != 4 {
+			t.Fatalf("cohort %d rate shape wrong: %#v", i, row["retention_rate"])
+		}
+		first, ok := rates[0].(float64)
+		if !ok || first != 1 {
+			t.Fatalf("entry-period retention must be 1.0: %v", rates[0])
+		}
+	}
+}

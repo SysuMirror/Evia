@@ -49,6 +49,17 @@ type Funnel struct {
 	SameEntity    []EntityField `json:"same_entity,omitempty"`
 }
 
+// Retention defines a calendar-cohort retention matrix. Subjects enter a
+// cohort in the period of their first start event; return events are counted
+// per offset period relative to that cohort. Granularity is a timezone-aligned
+// calendar day or Monday-starting week.
+type Retention struct {
+	StartEvent  Step   `json:"start_event"`
+	ReturnEvent Step   `json:"return_event"`
+	Granularity string `json:"granularity"`
+	Periods     int    `json:"periods"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -69,6 +80,7 @@ type Request struct {
 	Metrics          []Metric        `json:"metrics,omitempty"`
 	Interval         string          `json:"interval,omitempty"`
 	Funnel           *Funnel         `json:"funnel,omitempty"`
+	Retention        *Retention      `json:"retention,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the

@@ -51,6 +51,13 @@ func WalkFields(r *Request, visit func(*Field) error) error {
 			}
 		}
 	}
+	if r.Retention != nil {
+		for _, s := range []Step{r.Retention.StartEvent, r.Retention.ReturnEvent} {
+			if e := filter(s.Filter); e != nil {
+				return e
+			}
+		}
+	}
 	return nil
 }
 func CheckResolved(r Request) error {
@@ -161,6 +168,13 @@ func CheckResolved(r Request) error {
 				return Invalid("INVALID_SAME_ENTITY", "实体字段必须同类型")
 			}
 			kind = normalized
+		}
+	}
+	if r.Retention != nil {
+		for _, s := range []Step{r.Retention.StartEvent, r.Retention.ReturnEvent} {
+			if e := filter(s.Filter); e != nil {
+				return e
+			}
 		}
 	}
 	return nil
