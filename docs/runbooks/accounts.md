@@ -41,5 +41,33 @@ database/operator access records separately when individual operator attribution
 is required.
 
 The command refuses an empty installation and an installation with no enabled
-accounts. It is not an account recovery path. Password reset, disabling accounts
-and recovery remain separate work.
+accounts. It is not an account recovery path. Password reset remains separate work.
+
+
+## Disabling and re-enabling accounts
+
+`evia account-disable` and `evia account-enable` toggle the existing
+`accounts.disabled` flag for one username. Like `account-create`, they need only
+`EVIA_DATABASE_URL` and `EVIA_ACCOUNT_USERNAME` (same normalization and length
+policy), perform no session or membership writes, and never accept positional
+credentials. The change runs under the same installation advisory lock as
+provisioning.
+
+```sh
+python3 tooling/verification/browser_runtime.py run /private/account-disable.env -- /path/to/evia account-disable
+```
+
+Disabling is safety-guarded: the last enabled account cannot be disabled
+(`LAST_ENABLED_ACCOUNT`), because doing so would lock every operator out and
+leave no account able to provision or bootstrap. An unknown username fails with
+`ACCOUNT_NOT_FOUND`. Re-disabling an already disabled account and re-enabling an
+enabled account are idempotent. Once disabled, the account is immediately rejected
+on every authenticated path because all session and membership reads filter
+`NOT disabled`; no separate session deletion is required for correctness.
+`account-enable` restores access the same way.
+
+These commands change account state but do not currently write a typed event to
+`account_provision_events`, whose schema records creation only. Operator
+attribution for disable/enable stays in the operator's own access records and
+process logs until a follow-up migration adds an event type column. Password
+reset and invitation/registration self-service are still separate work.
