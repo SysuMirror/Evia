@@ -11,15 +11,28 @@ import (
 )
 
 type provisionCapture struct {
-	user  User
-	calls int
-	err   error
+	user          User
+	calls         int
+	err           error
+	disabledName  string
+	disabledFlag  bool
+	disabledCalls int
 }
 
 func (s *provisionCapture) ProvisionAccount(_ context.Context, user User) error {
 	s.user = user
 	s.calls++
 	return s.err
+}
+
+func (s *provisionCapture) SetAccountDisabled(_ context.Context, username string, disabled bool) (User, error) {
+	s.disabledName = username
+	s.disabledFlag = disabled
+	s.disabledCalls++
+	if s.err != nil {
+		return User{}, s.err
+	}
+	return User{ID: "00000000-0000-4000-8000-000000000009", Username: username, Disabled: disabled, PasswordHash: "secret-hash"}, nil
 }
 
 func TestAccountProvisionPolicyAndHashBoundary(t *testing.T) {
@@ -63,5 +76,42 @@ func TestAccountProvisionRejectsInvalidInputBeforePersistence(t *testing.T) {
 				t.Fatal("invalid input reached persistence or wrong error", err)
 			}
 		})
+	}
+}
+
+func TestSetAccountDisabledValidatesAndStripsHash(t *testing.T) {
+	store := &provisionCapture{}
+	user, err := SetAccountDisabled(context.Background(), store, "  Operator@Example ", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.disabledCalls != 1 || store.disabledName != "operator@example" || !store.disabledFlag {
+		t.Fatalf("persistence did not receive normalized toggle: %+v", store)
+	}
+	if !user.Disabled || user.PasswordHash != "" {
+		t.Fatal("returned user must reflect state and never expose the password hash")
+	}
+
+	enabled, err := SetAccountDisabled(context.Background(), store, "operator@example", false)
+	if err != nil || enabled.Disabled {
+		t.Fatalf("enable toggle failed: %+v %v", enabled, err)
+	}
+}
+
+func TestSetAccountDisabledRejectsInvalidUsernameBeforePersistence(t *testing.T) {
+	for _, username := range []string{" ", "bad:name", strings.Repeat("a", 101), "名字"} {
+		store := &provisionCapture{}
+		if _, err := SetAccountDisabled(context.Background(), store, username, true); err == nil ||
+			fault.Public(err).Code != "INVALID_USERNAME" || store.disabledCalls != 0 {
+			t.Fatalf("username %q must fail validation before persistence: %v", username, err)
+		}
+	}
+}
+
+func TestSetAccountDisabledPropagatesPersistenceFault(t *testing.T) {
+	store := &provisionCapture{err: fault.New(fault.Conflict, "LAST_ENABLED_ACCOUNT", "cannot disable the last enabled account")}
+	_, err := SetAccountDisabled(context.Background(), store, "operator", true)
+	if err == nil || fault.Public(err).Code != "LAST_ENABLED_ACCOUNT" {
+		t.Fatalf("persistence fault must surface unchanged: %v", err)
 	}
 }

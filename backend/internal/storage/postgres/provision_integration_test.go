@@ -120,3 +120,42 @@ func TestAccountProvisionConcurrentDuplicateAndAuditRollback(t *testing.T) {
 		t.Fatal("audit failure changed event history", events, err)
 	}
 }
+
+func TestSetAccountDisabledGuardAndRecovery(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := access.SetAccountDisabled(ctx, s, "ghost", true); err == nil || fault.Public(err).Code != "ACCOUNT_NOT_FOUND" {
+		t.Fatalf("unknown account must be not-found: %v", err)
+	}
+
+	// The bootstrapped account is the only enabled account and cannot be disabled.
+	if _, err := access.SetAccountDisabled(ctx, s, "initial", true); err == nil || fault.Public(err).Code != "LAST_ENABLED_ACCOUNT" {
+		t.Fatalf("disabling the last enabled account must be rejected: %v", err)
+	}
+
+	second, err := access.ProvisionAccount(ctx, s, "second", "Second", "synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := access.SetAccountDisabled(ctx, s, "second", true)
+	if err != nil || !disabled.Disabled || disabled.PasswordHash != "" {
+		t.Fatalf("disable with a second enabled account must succeed: %+v %v", disabled, err)
+	}
+	stored, err := s.FindUser(ctx, "second")
+	if err != nil || !stored.Disabled || stored.ID != second.ID {
+		t.Fatal("disabled state was not persisted", err)
+	}
+
+	enabled, err := access.SetAccountDisabled(ctx, s, "SECOND", false)
+	if err != nil || enabled.Disabled {
+		t.Fatalf("recovery must re-enable the account: %+v %v", enabled, err)
+	}
+	recovered, err := s.FindUser(ctx, "second")
+	if err != nil || recovered.Disabled {
+		t.Fatal("account was not recovered", err)
+	}
+}
