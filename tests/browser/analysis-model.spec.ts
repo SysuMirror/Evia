@@ -467,6 +467,39 @@ test('attribution passes the linear equal-weight model through', () => {
   expect(() => validateAnalysisSection(input, 'attribution')).not.toThrow();
 });
 
+test('attribution passes time_decay with a bounded half-life and rejects invalid ones', () => {
+  const input = form();
+  input.mode = 'attribution';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.attributionConversion = { event: 'purchase', version: '1' };
+  input.attributionTouchpoints = [{ event: 'ad_click', version: '1' }];
+  input.attributionWindow = '86400';
+  input.attributionModel = 'time_decay';
+  input.attributionHalfLife = '600';
+
+  const request = buildRequest(input, 'development');
+  expect(request.attribution).toEqual({
+    conversion: { event_key: 'purchase', schema_version: 1 },
+    touchpoints: [{ event_key: 'ad_click', schema_version: 1 }],
+    window_seconds: 86400,
+    model: 'time_decay',
+    decay_half_life_seconds: 600,
+  });
+  expect(() => validateAnalysisSection(input, 'attribution')).not.toThrow();
+
+  // Out-of-range and non-integer half-lives fail on the attribution section.
+  for (const halfLife of ['0', '604801', '1.5', '']) {
+    const bad = { ...input, attributionHalfLife: halfLife };
+    expect(() => buildRequest(bad, 'development')).toThrow(AnalysisValidationError);
+  }
+
+  // Single-touch models omit the half-life entirely even when the form holds one.
+  const singleTouch = { ...input, attributionModel: 'last_touch' as const };
+  const singleRequest = buildRequest(singleTouch, 'development');
+  expect(singleRequest.attribution?.decay_half_life_seconds).toBeUndefined();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {

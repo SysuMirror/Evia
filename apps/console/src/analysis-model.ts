@@ -49,7 +49,8 @@ export type AnalysisForm = {
   attributionConversion: { event: string; version: string };
   attributionTouchpoints: { event: string; version: string }[];
   attributionWindow: string;
-  attributionModel: 'last_touch' | 'first_touch' | 'linear';
+  attributionModel: 'last_touch' | 'first_touch' | 'linear' | 'time_decay';
+  attributionHalfLife: string;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -166,6 +167,7 @@ export function initialForm(timezone: string): AnalysisForm {
     attributionTouchpoints: [{ event: '', version: '' }],
     attributionWindow: '86400',
     attributionModel: 'last_touch',
+    attributionHalfLife: '600',
   };
 }
 export type AnalysisValidationTarget =
@@ -426,7 +428,7 @@ function readAttribution(form: AnalysisForm): NonNullable<QueryRequest['attribut
   const window = Number(form.attributionWindow);
   if (!Number.isInteger(window) || window < 1 || window > 604800)
     throw new AnalysisValidationError('attribution', '归因窗口须为 1 至 604800 秒的整数。');
-  return {
+  const attribution: NonNullable<QueryRequest['attribution']> = {
     conversion: {
       event_key: form.attributionConversion.event,
       schema_version: Number(form.attributionConversion.version),
@@ -439,6 +441,16 @@ function readAttribution(form: AnalysisForm): NonNullable<QueryRequest['attribut
     // The backend enum is the authority; the form keeps the explicit closed set.
     model: form.attributionModel,
   };
+  if (form.attributionModel === 'time_decay') {
+    const halfLife = Number(form.attributionHalfLife);
+    if (!Number.isInteger(halfLife) || halfLife < 1 || halfLife > 604800)
+      throw new AnalysisValidationError(
+        'attribution',
+        '时间衰减模型须提供 1 至 604800 秒的半衰期整数。',
+      );
+    attribution.decay_half_life_seconds = halfLife;
+  }
+  return attribution;
 }
 export type AnalysisEditorSection =
   'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment' | 'path' | 'attribution';

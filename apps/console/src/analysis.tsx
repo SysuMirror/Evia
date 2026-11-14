@@ -761,9 +761,12 @@ export function AnalysisPage({
                 ；触点 {form.attributionTouchpoints.length} 个；窗口 {form.attributionWindow}{' '}
                 秒；模型{' '}
                 {
-                  { last_touch: '末次触点', first_touch: '首次触点', linear: '线性均分' }[
-                    form.attributionModel
-                  ]
+                  {
+                    last_touch: '末次触点',
+                    first_touch: '首次触点',
+                    linear: '线性均分',
+                    time_decay: '时间衰减',
+                  }[form.attributionModel]
                 }
               </span>
             </div>
@@ -916,7 +919,7 @@ export function AnalysisPage({
                             : snapshot.request.kind === 'path'
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
                               : snapshot.request.kind === 'attribution'
-                                ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
+                                ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分', time_decay: '时间衰减' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
                                 : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
@@ -2187,9 +2190,22 @@ export function AnalysisPage({
                 { value: 'last_touch', label: '末次触点（窗口内最晚触点）' },
                 { value: 'first_touch', label: '首次触点（窗口内最早触点）' },
                 { value: 'linear', label: '线性均分（窗内触点等权分摊）' },
+                { value: 'time_decay', label: '时间衰减（越接近转化权重越高）' },
               ]}
             />
           </Field>
+          {form.attributionModel === 'time_decay' && (
+            <Field label="衰减半衰期（秒，1 至 604800）">
+              <Input
+                type="number"
+                required
+                min="1"
+                max="604800"
+                value={form.attributionHalfLife}
+                onChange={(event) => patch('attributionHalfLife', event.target.value)}
+              />
+            </Field>
+          )}
           <p className="field-help">
             触点 1–8
             个且不能与转化事件相同、彼此不能重复；每个转化主体只归因一次，窗口内无触点的转化归入直接来源（__direct__）。统计主体在查询栏选择原始
