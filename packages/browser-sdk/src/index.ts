@@ -16,6 +16,7 @@ export type {
   PageOptions,
   Properties,
   PublicConfig,
+  ScrollHost,
   SessionEndReason,
   Scalar,
   StoragePort,

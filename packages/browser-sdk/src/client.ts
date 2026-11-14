@@ -12,6 +12,7 @@ import type {
   PageOptions,
   Properties,
   PublicConfig,
+  ScrollHost,
   SessionEndReason,
   StoragePort,
 } from './types.js';
@@ -41,6 +42,35 @@ const operationErrorCategories = new Set(['validation', 'network', 'timeout', 'h
 // sessionEndEventKey records the observable end of a session with a closed reason.
 const sessionEndEventKey = 'sys.session_end';
 const sessionEndReasons = new Set(['logout', 'account_switch', 'idle']);
+// pageScrollEventKey coalesces one scroll segment after scrolling stops.
+const pageScrollEventKey = 'sys.page_scroll';
+const maxScrollEventsPerMinute = 12;
+const scrollWindowMs = 60_000;
+const defaultScrollIdleMs = 1000;
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+// defaultScrollHost adapts the browser window/document; absent globals (SSR)
+// yield null so collection simply does not start.
+function defaultScrollHost(): ScrollHost | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return null;
+  return {
+    subscribe: (listener) => {
+      window.addEventListener('scroll', listener, { passive: true });
+      return () => window.removeEventListener('scroll', listener);
+    },
+    ratio: () => {
+      const doc = document.documentElement;
+      const span = doc.scrollHeight - window.innerHeight;
+      return span <= 0 ? 0 : clamp01(window.scrollY / span);
+    },
+  };
+}
 interface Entry {
   eventId: string;
   draft: Omit<Envelope, 'schema_version' | 'release_revision'>;
@@ -126,6 +156,19 @@ class Client implements BrowserClient {
   private sequence = 0;
   private page: Page;
   private readonly cleanup: (() => void)[] = [];
+  private readonly autoPageScrolls: boolean;
+  private readonly scrollHost: ScrollHost | null;
+  private readonly scrollIdleMs: number;
+  private scrollTimer?: ReturnType<typeof setTimeout>;
+  private scrollActive = false;
+  private scrollFrom = 0;
+  private scrollLast = 0;
+  private scrollTo = 0;
+  private scrollMax = 0;
+  private scrollSawUp = false;
+  private scrollSawDown = false;
+  private scrollStartedAt = 0;
+  private scrollEmittedAt: number[] = [];
 
   constructor(options: ClientOptions) {
     this.endpoint = validateOptions(options);
@@ -163,6 +206,14 @@ class Client implements BrowserClient {
     this.autoPageViews = options.autoPageViews === true;
     this.autoIdentityLink = options.autoIdentityLink === true;
     this.autoSessionEnd = options.autoSessionEnd === true;
+    this.autoPageScrolls = options.autoPageScrolls === true;
+    this.scrollIdleMs = boundedInteger(
+      options.scrollIdleMs ?? defaultScrollIdleMs,
+      5000,
+      100,
+      10000,
+    );
+    this.scrollHost = options.scrollHost ?? defaultScrollHost();
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     let stored: string | null = null;
@@ -196,6 +247,7 @@ class Client implements BrowserClient {
       );
     }
     if (this.autoPageViews) this.emitAutoPageView();
+    this.startScrollCollection();
   }
 
   get pending(): number {
@@ -402,6 +454,7 @@ class Client implements BrowserClient {
 
   reset(): void {
     this.assertEnabled();
+    this.discardScrollSegment();
     // Explicit identity clear is an observable logout of the ending session;
     // emit before rotating so the event keeps the prior session/identity context.
     this.emitSessionEnd('logout');
@@ -505,8 +558,74 @@ class Client implements BrowserClient {
     this.emitSystemEvent(sessionEndEventKey, this.autoSessionEnd, { reason });
   }
 
+  private startScrollCollection(): void {
+    if (!this.autoPageScrolls || !this.scrollHost) return;
+    const host = this.scrollHost;
+    const unsubscribe = host.subscribe(() => this.handleScroll(host));
+    this.cleanup.push(unsubscribe);
+  }
+
+  private handleScroll(host: ScrollHost): void {
+    if (this.destroyed || !this.enabled) return;
+    const now = this.clock.now();
+    const ratio = clamp01(host.ratio());
+    if (!this.scrollActive) {
+      this.scrollActive = true;
+      this.scrollFrom = ratio;
+      this.scrollLast = ratio;
+      this.scrollTo = ratio;
+      this.scrollMax = ratio;
+      this.scrollSawUp = false;
+      this.scrollSawDown = false;
+      this.scrollStartedAt = now;
+    } else {
+      if (ratio > this.scrollLast) this.scrollSawDown = true;
+      else if (ratio < this.scrollLast) this.scrollSawUp = true;
+      this.scrollLast = ratio;
+      this.scrollTo = ratio;
+      if (ratio > this.scrollMax) this.scrollMax = ratio;
+    }
+    if (this.scrollTimer !== undefined) this.clock.clearTimeout(this.scrollTimer);
+    this.scrollTimer = this.clock.setTimeout(() => this.finalizeScroll(), this.scrollIdleMs);
+  }
+
+  private finalizeScroll(): void {
+    this.scrollTimer = undefined;
+    if (!this.scrollActive) return;
+    this.scrollActive = false;
+    if (this.destroyed || !this.enabled) return;
+    // No directional movement means there is no meaningful segment to report.
+    if (!this.scrollSawUp && !this.scrollSawDown) return;
+    const now = this.clock.now();
+    const cutoff = now - scrollWindowMs;
+    this.scrollEmittedAt = this.scrollEmittedAt.filter((at) => at > cutoff);
+    // Production is bounded at 12 coalesced segments per minute; excess is dropped.
+    if (this.scrollEmittedAt.length >= maxScrollEventsPerMinute) return;
+    this.scrollEmittedAt.push(now);
+    const direction =
+      this.scrollSawUp && this.scrollSawDown ? 'mixed' : this.scrollSawUp ? 'up' : 'down';
+    this.emitSystemEvent(pageScrollEventKey, this.autoPageScrolls, {
+      from_ratio: round4(this.scrollFrom),
+      to_ratio: round4(this.scrollTo),
+      max_ratio: round4(this.scrollMax),
+      direction,
+      duration_ms: Math.max(0, now - this.scrollStartedAt),
+    });
+  }
+
+  // discardScrollSegment drops an in-flight segment when the page changes, so an
+  // unfinished scroll is never attributed to the next page_view.
+  private discardScrollSegment(): void {
+    if (this.scrollTimer !== undefined) {
+      this.clock.clearTimeout(this.scrollTimer);
+      this.scrollTimer = undefined;
+    }
+    this.scrollActive = false;
+  }
+
   navigate(options: PageOptions = {}): Readonly<Page> {
     this.assertEnabled();
+    this.discardScrollSegment();
     this.touchSession();
     if (options.link) this.checkLink(options.link);
     this.page = this.newPage(options, this.page.page_view_id);
@@ -739,6 +858,9 @@ class Client implements BrowserClient {
     if (this.timer !== undefined) this.clock.clearTimeout(this.timer);
     this.timer = undefined;
     this.timerAt = Infinity;
+    if (this.scrollTimer !== undefined) this.clock.clearTimeout(this.scrollTimer);
+    this.scrollTimer = undefined;
+    this.scrollActive = false;
     this.nextAttempt = 0;
     this.batch = undefined;
     for (const entry of [...this.queue])

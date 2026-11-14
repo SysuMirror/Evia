@@ -19,6 +19,14 @@ export interface StoragePort {
   setItem(key: string, value: string): void;
 }
 
+/** Injectable browser scroll surface, also used for deterministic tests. */
+export interface ScrollHost {
+  /** Subscribe to scroll activity; returns an unsubscribe function. */
+  subscribe(listener: () => void): () => void;
+  /** Current vertical scroll position as a ratio in [0, 1]. */
+  ratio(): number;
+}
+
 export interface Clock {
   now(): number;
   setTimeout(callback: () => void, delay: number): ReturnType<typeof setTimeout>;
@@ -57,6 +65,15 @@ export interface ClientOptions {
    * rotates the session. Defaults to false so existing behavior is unchanged.
    */
   autoSessionEnd?: boolean;
+  /**
+   * Opt-in automatic sys.page_scroll collection. Scroll activity is coalesced into one
+   * event when scrolling stops, capped at 12 events per minute. Defaults to false.
+   */
+  autoPageScrolls?: boolean;
+  /** Injectable scroll surface; a window/document adapter is used by default in a browser. */
+  scrollHost?: ScrollHost;
+  /** Debounce window used to decide that scrolling has stopped, in milliseconds. */
+  scrollIdleMs?: number;
   configTtlMs?: number;
   requestTimeoutMs?: number;
   flushIntervalMs?: number;
