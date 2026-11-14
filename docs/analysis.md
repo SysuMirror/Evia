@@ -67,7 +67,7 @@ Unit tests cover strict DSL rejection, pinned selection bounds and exact pair pa
 
 `data_watermark` is the latest received timestamp actually observed by that query, or null for no observations. It is not a completeness watermark. Coverage remains provisional, identity resolution is not applied, sample rate is one, and cache-hit metadata is false. No cache, settlement process, identity graph, or production capacity has been demonstrated by these tests.
 
-Resolved-person queries and identity revisions reject explicitly until a real versioned identity graph exists. Request and result cursors also reject explicitly: this release provides bounded snapshots rather than timeline pagination. Retention v1 covers uid calendar-cohort matrices as ad-hoc jobs; saved-analysis templates, anonymous-subject retention, cohort segmentation, attribution, heatmaps, session replay, exports, and broader lifecycle operations remain outside this implementation.
+Resolved-person queries and identity revisions reject explicitly until a real versioned identity graph exists. Request and result cursors also reject explicitly: this release provides bounded snapshots rather than timeline pagination. Retention v1 covers uid calendar-cohort matrices as ad-hoc jobs with a console workspace; saved-analysis templates, anonymous-subject retention, cohort segmentation, attribution, heatmaps, session replay, exports, and broader lifecycle operations remain outside this implementation.
 
 Run dependency tests with the repository-compatible Go toolchain and explicit test configuration; missing dependencies fail rather than silently substituting mocks:
 

@@ -102,11 +102,31 @@ EVIA_TEST_CLICKHOUSE_PASSWORD=<runtime> \
    `[]int`、rate 是 `[]any` 的 float64，初版误按 json.Number 断言，
    按真实类型修正。
 
+## 控制台工作区（同日前端切片）
+
+后端能力通过即席分析工作区对人类会话开放：
+
+- `analysis-model.ts` 新增 `retention` 模式与表单字段（起止事件+固定
+  版本、day/week 粒度、1–12 期），`buildRequest` 产出 uid 单主体请求，
+  前端预校验时间窗 ≤ 期数×粒度（与后端闭集一致，84 天硬顶），错误
+  归因到独立的 `retention` 编辑分区。
+- `analysis.tsx` 新增「留存分析」页签、留存配置模态（复用已发布事件
+  选择器与版本联动）、结果表队列列头与数组列（各期留存数/留存率）
+  中文渲染，结果摘要显示期数与粒度；留存模式隐藏跨版本事件选择器与
+  主体选择器（主体固定 uid）。
+- `tests/browser/analysis-model.spec.ts` 新增两个纯模型测试（请求
+  形状、闭集校验、窗口随粒度/期数变化、84 天硬顶），6 个用例全过；
+  `core-console.spec.ts` 全栈流程新增留存页签→配置→运行→队列矩阵
+  断言（100.00% 0 期留存可见），随凭证化 browser-test 门禁执行。
+- pnpm typecheck、format:check、build 均通过。
+
 ## 诚实边界
 
 - v1 仅 uid 主体、仅即席任务：保存分析模板显式拒绝 retention
   （`UNSUPPORTED_QUERY_KIND`），匿名主体、分群、归因不在本切片。
-- 控制台无留存工作区，api-client 仅同步了生成类型，没有业务封装。
+- 控制台全栈规格需凭证化完整运行时（browser-test 门禁），默认
+  `make check` 不含该门禁；前端逻辑由模型单测、后端由真实 ClickHouse
+  集成测试分别覆盖。
 - 有界拉取沿用 funnel 的 10 万行/4MiB 响应护栏与 ClickHouse 读护栏，
   84 天窗口下的超大租户容量未做专项压测，需生产规模实测。
 - 日历周期按请求时区计算，周一口径固定；未提供周日起算或自然月粒度。
