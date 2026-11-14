@@ -158,7 +158,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}
 	for _, raw := range []string{
 		// A model outside the explicit enum is rejected by the schema.
-		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"time_decay"}}`,
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"position_based"}}`,
 		// Window must be within 1..604800.
 		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":0,"model":"last_touch"}}`,
 		// At least one touchpoint is required.
@@ -179,7 +179,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}{
 		{"nil attribution", func(r *Request) { r.Attribution = nil }, "INVALID_ATTRIBUTION"},
 		{"missing subject", func(r *Request) { r.Subject = "" }, "SUBJECT_REQUIRED"},
-		{"unknown model", func(r *Request) { r.Attribution.Model = "time_decay" }, "INVALID_ATTRIBUTION_MODEL"},
+		{"unknown model", func(r *Request) { r.Attribution.Model = "position_based" }, "INVALID_ATTRIBUTION_MODEL"},
 		{"zero window", func(r *Request) { r.Attribution.WindowSeconds = 0 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"oversized window", func(r *Request) { r.Attribution.WindowSeconds = 604801 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"conversion overlap", func(r *Request) {
@@ -313,7 +313,7 @@ func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
 		t.Fatalf("first_touch request must pass Go validation: %v", e)
 	}
 	bad := firstTouchRequest(86400)
-	bad.Attribution.Model = "time_decay"
+	bad.Attribution.Model = "position_based"
 	var problem *fault.Error
 	if e := Validate(&bad); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_MODEL" {
 		t.Fatalf("unknown model must fail closed: %v", e)
@@ -466,6 +466,140 @@ func TestLinearValidationAndPlannerContract(t *testing.T) {
 		if column.Key == "credit" {
 			t.Fatalf("single-touch plans must not emit credit: %+v", singlePlan.Columns)
 		}
+	}
+}
+
+func decayRequest(window, halfLife int64) Request {
+	r := attributionRequest(window)
+	r.Attribution.Model = "time_decay"
+	r.Attribution.DecayHalfLifeSeconds = halfLife
+	return r
+}
+
+func approxEqual(got, want, tol float64) bool {
+	diff := got - want
+	return diff <= tol && diff >= -tol
+}
+
+func TestEvaluateTimeDecayFavorsCloserTouchpointAndNormalizes(t *testing.T) {
+	// ad_click at 10s, email_open at 20s, conversion at 30s. With a 10s
+	// half-life the raw weights are 0.25 and 0.5, normalizing to 1/3 and 2/3.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 20, "email_open", false, true),
+		markedRow("u1", 30, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(decayRequest(86400, 10), rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	credits := map[string]float64{}
+	shareSum := 0.0
+	for _, row := range result {
+		key, _ := row["touchpoint"].(string)
+		credit, _ := row["credit"].(float64)
+		share, _ := row["share"].(float64)
+		credits[key] = credit
+		shareSum += share
+	}
+	if !approxEqual(credits["ad_click"], 1.0/3.0, 1e-12) || !approxEqual(credits["email_open"], 2.0/3.0, 1e-12) {
+		t.Fatalf("decay weights must normalize to 1/3 and 2/3: %v", credits)
+	}
+	if !approxEqual(shareSum, 1.0, 1e-12) {
+		t.Fatalf("decay shares must sum to 1: %v", shareSum)
+	}
+	// The closer touchpoint must always outrank the older one.
+	if credits["email_open"] <= credits["ad_click"] {
+		t.Fatalf("closer touchpoint must receive more weight: %v", credits)
+	}
+}
+
+func TestEvaluateTimeDecayDedupesToNearestInstance(t *testing.T) {
+	// Two ad_click occurrences; the nearest (15s, delta 5s) wins and a single
+	// touchpoint normalizes to full weight.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 15, "ad_click", false, true),
+		markedRow("u1", 20, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(decayRequest(86400, 10), rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("deduped decay path wants one row: %v %v", result, e)
+	}
+	credit, _ := result[0]["credit"].(float64)
+	if !approxEqual(credit, 1.0, 1e-12) {
+		t.Fatalf("single distinct touchpoint must normalize to 1: %v", credit)
+	}
+}
+
+func TestEvaluateTimeDecayWindowAndDirectBucket(t *testing.T) {
+	// ad_click at 10s is outside a 30s window ending at the 100s conversion.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 95, "email_open", false, true),
+		markedRow("u1", 100, "buy", true, false),
+	}
+	windowed, e := EvaluateAttribution(decayRequest(30, 10), rows)
+	if e != nil || len(windowed) != 1 || windowed[0]["touchpoint"] != "email_open" {
+		t.Fatalf("out-of-window touchpoint must be excluded: %v %v", windowed, e)
+	}
+
+	direct, e := EvaluateAttribution(decayRequest(1, 10), rows)
+	if e != nil || len(direct) != 1 || direct[0]["touchpoint"] != directAttributionBucket {
+		t.Fatalf("decay without in-window touchpoint must be direct: %v %v", direct, e)
+	}
+	credit, _ := direct[0]["credit"].(float64)
+	if !approxEqual(credit, 1.0, 1e-12) {
+		t.Fatalf("direct bucket must carry full weight: %v", credit)
+	}
+}
+
+func TestTimeDecayRequiresBoundedHalfLife(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	valid := `{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"time_decay","decay_half_life_seconds":600}}`
+	parsed, e := Parse([]byte(valid), validator)
+	if e != nil {
+		t.Fatalf("time_decay with half-life must be accepted: %v", e)
+	}
+	if parsed.Attribution.DecayHalfLifeSeconds != 600 {
+		t.Fatalf("half-life must deserialize, got %d", parsed.Attribution.DecayHalfLifeSeconds)
+	}
+
+	// Go defense-in-depth: missing or out-of-range half-life fails closed.
+	missing := decayRequest(86400, 10)
+	missing.Attribution.DecayHalfLifeSeconds = 0
+	var problem *fault.Error
+	if e := Validate(&missing); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_HALF_LIFE" {
+		t.Fatalf("missing half-life must fail closed: %v", e)
+	}
+	oversized := decayRequest(86400, 10)
+	oversized.Attribution.DecayHalfLifeSeconds = 604801
+	if e := Validate(&oversized); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_HALF_LIFE" {
+		t.Fatalf("oversized half-life must fail closed: %v", e)
+	}
+
+	// A non-decay model does not require the half-life and still validates.
+	single := attributionRequest(86400)
+	if e := Validate(&single); e != nil {
+		t.Fatalf("last-touch must not require a half-life: %v", e)
+	}
+}
+
+func TestTimeDecayPlannerEmitsCreditColumn(t *testing.T) {
+	r := decayRequest(86400, 600)
+	plan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	keys := map[string]bool{}
+	for _, column := range plan.Columns {
+		keys[column.Key] = true
+	}
+	if !keys["credit"] {
+		t.Fatalf("time_decay plan must expose credit: %+v", plan.Columns)
 	}
 }
 

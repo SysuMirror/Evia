@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"math"
 	"sort"
 )
 
@@ -54,8 +55,11 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 	if e != nil {
 		return nil, e
 	}
-	if request.Attribution.Model == "linear" {
+	switch request.Attribution.Model {
+	case "linear":
 		return evaluateLinearAttribution(ctx, request, bySubject)
+	case "time_decay":
+		return evaluateTimeDecayAttribution(ctx, request, bySubject)
 	}
 
 	type creditCount struct {
@@ -243,6 +247,109 @@ func evaluateLinearAttribution(
 			}
 			entry.subjects++
 			entry.credit += weight
+		}
+	}
+
+	aggregated := make([]*linearCredit, 0, len(credits))
+	for _, value := range credits {
+		aggregated = append(aggregated, value)
+	}
+	sort.Slice(aggregated, func(i, j int) bool {
+		if aggregated[i].credit != aggregated[j].credit {
+			return aggregated[i].credit > aggregated[j].credit
+		}
+		return aggregated[i].touchpoint < aggregated[j].touchpoint
+	})
+
+	out := make([]map[string]any, 0, len(aggregated))
+	for _, value := range aggregated {
+		share := 0.0
+		if converters > 0 {
+			share = value.credit / float64(converters)
+		}
+		out = append(out, map[string]any{
+			"touchpoint": value.touchpoint,
+			"subjects":   value.subjects,
+			"credit":     value.credit,
+			"share":      share,
+		})
+	}
+	return out, nil
+}
+
+// evaluateTimeDecayAttribution assigns each converting subject's unit weight
+// with an exponential half-life: a touchpoint delta seconds before conversion
+// has raw weight 0.5^(delta/half_life), so closer events outweigh older ones.
+// Repeated occurrences of the same touchpoint key keep the nearest (highest
+// weight) instance. Raw weights are normalized within each subject so they sum
+// to one, and a subject without an in-window touchpoint keeps full weight in
+// the fixed direct bucket.
+func evaluateTimeDecayAttribution(
+	ctx context.Context,
+	request Request,
+	bySubject map[string][]attributionEvent,
+) ([]map[string]any, error) {
+	window := request.Attribution.WindowSeconds
+	halfLife := request.Attribution.DecayHalfLifeSeconds
+	credits := map[string]*linearCredit{}
+	converters := 0
+	for _, events := range bySubject {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
+		sort.SliceStable(events, func(i, j int) bool {
+			return earlierAttributionEvent(events[i], events[j])
+		})
+		conversionIndex := -1
+		for i, event := range events {
+			if event.isConversion {
+				conversionIndex = i
+				break
+			}
+		}
+		if conversionIndex < 0 {
+			continue
+		}
+		converters++
+		conversionTime := events[conversionIndex].time
+		cutoff := conversionTime - window*1_000_000_000
+
+		// Keep the nearest occurrence (smallest delta) per distinct key.
+		rawByKey := map[string]float64{}
+		order := make([]string, 0, len(events))
+		for i := 0; i < conversionIndex; i++ {
+			event := events[i]
+			if event.time < cutoff || !event.isTouchpoint {
+				continue
+			}
+			deltaSeconds := float64(conversionTime-event.time) / 1_000_000_000.0
+			weight := math.Pow(0.5, deltaSeconds/float64(halfLife))
+			if existing, ok := rawByKey[event.eventKey]; !ok || weight > existing {
+				if !ok {
+					order = append(order, event.eventKey)
+				}
+				rawByKey[event.eventKey] = weight
+			}
+		}
+
+		if len(rawByKey) == 0 {
+			rawByKey[directAttributionBucket] = 1.0
+			order = []string{directAttributionBucket}
+		}
+
+		// Normalize within the subject so every converter contributes total 1.
+		total := 0.0
+		for _, key := range order {
+			total += rawByKey[key]
+		}
+		for _, key := range order {
+			entry, ok := credits[key]
+			if !ok {
+				entry = &linearCredit{touchpoint: key}
+				credits[key] = entry
+			}
+			entry.subjects++
+			entry.credit += rawByKey[key] / total
 		}
 	}
 

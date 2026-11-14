@@ -297,11 +297,14 @@ func validateAttribution(r *Request) error {
 	if a == nil {
 		return Invalid("INVALID_ATTRIBUTION", "归因配置缺失", "/attribution")
 	}
-	if a.Model != "last_touch" && a.Model != "first_touch" && a.Model != "linear" {
+	if a.Model != "last_touch" && a.Model != "first_touch" && a.Model != "linear" && a.Model != "time_decay" {
 		return Invalid("INVALID_ATTRIBUTION_MODEL", "归因模型尚未实现", "/attribution/model")
 	}
 	if a.WindowSeconds < 1 || a.WindowSeconds > 604800 {
 		return Invalid("INVALID_ATTRIBUTION_WINDOW", "归因窗口必须在 1 到 604800 秒之间", "/attribution/window_seconds")
+	}
+	if a.Model == "time_decay" && (a.DecayHalfLifeSeconds < 1 || a.DecayHalfLifeSeconds > 604800) {
+		return Invalid("INVALID_ATTRIBUTION_HALF_LIFE", "时间衰减模型必须提供 1 到 604800 秒之间的半衰期", "/attribution/decay_half_life_seconds")
 	}
 	validateStep := func(step Step, code, message, pointer string) error {
 		if !eventKey.MatchString(step.EventKey) || step.SchemaVersion < 1 || step.SchemaVersion > MaxSafeInteger {

@@ -84,10 +84,11 @@ type Path struct {
 // explicit closed set; v1 supports last-touch only, so later models can be
 // versioned without changing published results.
 type Attribution struct {
-	Conversion    Step   `json:"conversion"`
-	Touchpoints   []Step `json:"touchpoints"`
-	WindowSeconds int64  `json:"window_seconds"`
-	Model         string `json:"model"`
+	Conversion           Step   `json:"conversion"`
+	Touchpoints          []Step `json:"touchpoints"`
+	WindowSeconds        int64  `json:"window_seconds"`
+	Model                string `json:"model"`
+	DecayHalfLifeSeconds int64  `json:"decay_half_life_seconds,omitempty"`
 }
 
 // EventVersion selects facts from one immutable event schema version.

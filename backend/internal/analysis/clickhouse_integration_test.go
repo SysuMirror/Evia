@@ -913,6 +913,78 @@ func TestClickHouseLinearAttribution(t *testing.T) {
 	}
 }
 
+// TestClickHouseTimeDecayAttribution proves exponential half-life weighting
+// against the real migrated view: closer touchpoints outrank older ones, the
+// per-subject weights normalize to one, and a subject without an in-window
+// touchpoint stays in the direct bucket.
+func TestClickHouseTimeDecayAttribution(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1: two touchpoints; with a 10s half-life the nearer email_open wins.
+		fact("td-u1-ad", "ad_click", "u1", "", "source-one", 10, map[string]any{}),
+		fact("td-u1-email", "email_open", "u1", "", "source-one", 20, map[string]any{}),
+		fact("td-u1-buy", "buy", "u1", "", "source-one", 30, map[string]any{}),
+		// u2 converts without a touchpoint and keeps full direct weight.
+		fact("td-u2-buy", "buy", "u2", "", "source-one", 40, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"td-u1-ad": 10, "td-u1-email": 20, "td-u1-buy": 30, "td-u2-buy": 40,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "attribution", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Attribution: &Attribution{
+			Conversion:           Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:          []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+			WindowSeconds:        86400,
+			Model:                "time_decay",
+			DecayHalfLifeSeconds: 10,
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 4 {
+		t.Fatalf("time_decay result must expose four columns: %+v", result.Columns)
+	}
+	got := map[string]float64{}
+	shareSum := 0.0
+	for _, row := range result.Rows {
+		key, _ := row["touchpoint"].(string)
+		credit, _ := row["credit"].(float64)
+		share, _ := row["share"].(float64)
+		got[key] = credit
+		shareSum += share
+	}
+	// u1 raw weights 0.25 (ad) and 0.5 (email) normalize to 1/3 and 2/3;
+	// u2 adds a full direct weight.
+	wantAd, wantEmail, wantDirect := 1.0/3.0, 2.0/3.0, 1.0
+	if diff := got["ad_click"] - wantAd; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("ad_click credit=%v want %v", got["ad_click"], wantAd)
+	}
+	if diff := got["email_open"] - wantEmail; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("email_open credit=%v want %v", got["email_open"], wantEmail)
+	}
+	if diff := got[directAttributionBucket] - wantDirect; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("direct credit=%v want %v", got[directAttributionBucket], wantDirect)
+	}
+	if got["email_open"] <= got["ad_click"] {
+		t.Fatalf("closer touchpoint must outrank older one: %v", got)
+	}
+	if diff := shareSum - 1.0; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("time_decay shares must sum to 1, got %v", shareSum)
+	}
+}
+
 // TestClickHousePathCollapseRepeats proves the opt-in loop compression
 // against the real migrated view: adjacent identical events fold into one
 // node before depth extraction, while the default request stays byte-stable.
