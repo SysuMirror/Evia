@@ -452,12 +452,19 @@
           "minimum": 1,
           "maximum": 604800
         },
+        "decay_half_life_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800,
+          "description": "Half-life in seconds used only by the time_decay model; required when model is time_decay, ignored otherwise."
+        },
         "model": {
           "type": "string",
           "enum": [
             "last_touch",
             "first_touch",
-            "linear"
+            "linear",
+            "time_decay"
           ]
         }
       },

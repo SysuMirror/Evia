@@ -1115,10 +1115,11 @@ type QueryRequest struct {
 		CollapseRepeats *bool           `json:"collapse_repeats,omitempty"`
 	} `json:"path,omitempty"`
 	Attribution *struct {
-		Conversion    json.RawMessage   `json:"conversion"`
-		Touchpoints   []json.RawMessage `json:"touchpoints"`
-		WindowSeconds int64             `json:"window_seconds"`
-		Model         string            `json:"model"`
+		Conversion           json.RawMessage   `json:"conversion"`
+		Touchpoints          []json.RawMessage `json:"touchpoints"`
+		WindowSeconds        int64             `json:"window_seconds"`
+		DecayHalfLifeSeconds *int64            `json:"decay_half_life_seconds,omitempty"`
+		Model                string            `json:"model"`
 	} `json:"attribution,omitempty"`
 	Limit         *int64  `json:"limit,omitempty"`
 	Cursor        *string `json:"cursor,omitempty"`

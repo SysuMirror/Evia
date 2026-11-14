@@ -3127,8 +3127,10 @@ export interface components {
                 conversion: components["schemas"]["retention_step"];
                 touchpoints: components["schemas"]["retention_step"][];
                 window_seconds: number;
+                /** @description Half-life in seconds used only by the time_decay model; required when model is time_decay, ignored otherwise. */
+                decay_half_life_seconds?: number;
                 /** @enum {string} */
-                model: "last_touch" | "first_touch" | "linear";
+                model: "last_touch" | "first_touch" | "linear" | "time_decay";
             };
             limit?: number;
             cursor?: string;
