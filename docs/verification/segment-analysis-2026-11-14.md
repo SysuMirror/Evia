@@ -79,9 +79,29 @@ TestClickHouseSegmentation` 与标准 `make query-test` 整包）均 ok：
 4. **生成制品依赖**：改契约后重跑 codegen 与 TS 生成，否则旧 bundle
    拒绝合法请求。
 
+## 控制台工作区（同日切片）
+
+分群后端能力通过即席分析工作区对人类会话开放：
+
+- `analysis-model.ts` 新增 `segment` 模式与表单字段（分群事件+版本、
+  标量属性字段），`readSegment` 校验事件固定版本、字段必须属于该事件
+  版本且为 string/boolean/number/integer 标量，错误归因独立 `segment`
+  编辑分区；`buildRequest` 透传 uid/anonymous 主体，禁顶层
+  event_keys/group_by/metrics/interval。
+- `analysis.tsx` 新增「主体分群」页签与配置模态：复用已发布事件/版本
+  联动选择器与属性版本查询，字段下拉只列标量属性（过滤数组/日期时间），
+  结果表渲染分群标签、主体数与百分比占比，摘要显示分群字段。
+- 模型测试新增 `segmentation builds unique-subject group requests`
+  覆盖请求形状、双主体、缺事件/缺字段/非标量拒绝、分区校验；7 个模型
+  用例全过。`core-console.spec.ts` 全栈流程插入分群页签→选事件与
+  `page` 标量字段→运行→单群体 100.00% 占比断言，随凭证化 browser-test
+  门禁执行。
+- pnpm typecheck、format:check、build 均通过。
+
 ## 诚实边界
 
-- 仅即席任务，无控制台工作区（下一切片）、无保存分析、无跨身份合并。
+- 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整
+  运行时（browser-test 门禁），默认 `make check` 不含该门禁。
 - 标签取最早事件值，不提供最近/众数等其他归属策略；高基数字段的群体
   数量受 500 行结果上限与 7 天窗口约束，超大租户容量未专项压测。
 - 不支持数组/日期时间分组；分群是静态属性快照，不做群体的时间演化追踪。
