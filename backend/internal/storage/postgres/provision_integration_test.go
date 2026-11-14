@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -157,5 +158,48 @@ func TestSetAccountDisabledGuardAndRecovery(t *testing.T) {
 	recovered, err := s.FindUser(ctx, "second")
 	if err != nil || recovered.Disabled {
 		t.Fatal("account was not recovered", err)
+	}
+}
+
+func TestSetAccountDisabledImmediatelyRevokesAndRestoresSession(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	target, err := access.ProvisionAccount(ctx, s, "session-user", "Session User", "synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := ids.Secret()
+	session := access.Session{
+		UserID:     target.ID,
+		SecretHash: access.Digest(secret),
+		CSRF:       ids.Secret(),
+		ExpiresAt:  time.Now().Add(time.Hour),
+	}
+	if err = s.InsertSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FindSession(ctx, session.SecretHash); err != nil {
+		t.Fatalf("active account session must resolve: %v", err)
+	}
+
+	// Through the real operator path, disabling must reject the existing session.
+	if _, err = access.SetAccountDisabled(ctx, s, "session-user", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FindSession(ctx, session.SecretHash); !errors.Is(err, access.ErrMissing) {
+		t.Fatalf("disabled account retained session access: %v", err)
+	}
+
+	// Re-enabling restores the same still-unexpired session.
+	if _, err = access.SetAccountDisabled(ctx, s, "SESSION-USER", false); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := s.FindSession(ctx, session.SecretHash)
+	if err != nil || resolved.UserID != target.ID {
+		t.Fatalf("re-enabled account session must resolve again: %v %v", resolved, err)
 	}
 }
