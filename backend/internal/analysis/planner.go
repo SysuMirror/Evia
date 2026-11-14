@@ -450,6 +450,44 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
+	case "attribution":
+		subject := "uid"
+		if r.Subject == "anonymous" {
+			subject = "anonymous_id"
+		}
+		selectSQL := []string{
+			subject + " AS subject_id",
+			"event_id",
+			"source_id",
+			"session_id",
+			"tab_id",
+			"event_key",
+			"toUnixTimestamp64Nano(event_time) AS event_time_ns",
+			"toUnixTimestamp64Nano(received_at) AS received_at_ns",
+			"ifNull(sequence,0) AS sequence",
+		}
+		conversionFilter, e := p.filter(r.Attribution.Conversion.Filter)
+		if e != nil {
+			return Plan{}, e
+		}
+		conversionMatch := "(event_key=" + p.bind("String", r.Attribution.Conversion.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(r.Attribution.Conversion.SchemaVersion, 10)) + " AND " + conversionFilter + ")"
+		selectSQL = append(selectSQL, conversionMatch+" AS is_conversion")
+		touchpointMatches := []string{}
+		for _, step := range r.Attribution.Touchpoints {
+			stepFilter, e := p.filter(step.Filter)
+			if e != nil {
+				return Plan{}, e
+			}
+			match := "(event_key=" + p.bind("String", step.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(step.SchemaVersion, 10)) + " AND " + stepFilter + ")"
+			touchpointMatches = append(touchpointMatches, match)
+		}
+		selectSQL = append(selectSQL, "("+strings.Join(touchpointMatches, " OR ")+") AS is_touchpoint")
+		// Pull every in-window event; the markers are evaluated in Go so the
+		// full causal sequence around the conversion stays available.
+		base += " AND isNotNull(" + subject + ") AND " + subject + "!=''"
+		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
+		plan.Accuracy = "exact"
+		plan.Columns = []Column{{Key: "touchpoint", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

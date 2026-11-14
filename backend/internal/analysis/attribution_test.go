@@ -1,0 +1,249 @@
+package analysis
+
+import (
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+)
+
+func attributionRequest(window int64) Request {
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	return Request{
+		Kind:        "attribution",
+		Environment: "development",
+		Subject:     "uid",
+		TimeRange:   TimeRange{From: from, To: from.AddDate(0, 0, 7)},
+		Timezone:    "UTC",
+		Attribution: &Attribution{
+			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+			WindowSeconds: window,
+			Model:         "last_touch",
+		},
+	}
+}
+
+func attributionRow(subject string, second int, event string) map[string]any {
+	return map[string]any{
+		"subject_id":    subject,
+		"event_id":      subject + "-" + event + "-" + time.Unix(int64(second), 0).Format("150405"),
+		"event_key":     event,
+		"event_time_ns": time.Date(2026, 11, 1, 0, 0, second, 0, time.UTC).UnixNano(),
+		"sequence":      int64(second),
+		"session_id":    "s",
+		"tab_id":        "t",
+		"source_id":     "src",
+	}
+}
+
+func markedRow(subject string, second int, event string, conversion, touchpoint bool) map[string]any {
+	row := attributionRow(subject, second, event)
+	if conversion {
+		row["is_conversion"] = true
+	}
+	if touchpoint {
+		row["is_touchpoint"] = true
+	}
+	return row
+}
+
+func TestEvaluateAttributionLastTouchAndDirectBucket(t *testing.T) {
+	rows := []map[string]any{
+		// u1: last touchpoint before buy is email_open.
+		markedRow("u1", 20, "email_open", false, true),
+		markedRow("u1", 30, "buy", true, false),
+		// u2: two touchpoints, the later email_open wins.
+		markedRow("u2", 15, "ad_click", false, true),
+		markedRow("u2", 22, "email_open", false, true),
+		markedRow("u2", 35, "buy", true, false),
+		// u3: only ad_click before the conversion.
+		markedRow("u3", 10, "ad_click", false, true),
+		markedRow("u3", 40, "buy", true, false),
+		// u5 converts without any touchpoint: fixed direct bucket.
+		markedRow("u5", 50, "buy", true, false),
+		// u4 never converts and must be excluded.
+		markedRow("u4", 60, "ad_click", false, true),
+		// Blank subjects are skipped.
+		markedRow("", 70, "buy", true, false),
+	}
+
+	result, e := EvaluateAttribution(attributionRequest(86400), rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := []struct {
+		touchpoint string
+		subjects   int
+		share      float64
+	}{
+		{"email_open", 2, 0.5},
+		{"__direct__", 1, 0.25},
+		{"ad_click", 1, 0.25},
+	}
+	if len(result) != len(want) {
+		t.Fatalf("want %d credit rows, got %v", len(want), result)
+	}
+	for i, expected := range want {
+		row := result[i]
+		if row["touchpoint"] != expected.touchpoint {
+			t.Fatalf("row %d touchpoint=%v want %s", i, row["touchpoint"], expected.touchpoint)
+		}
+		if row["subjects"] != expected.subjects {
+			t.Fatalf("row %d subjects=%v want %d", i, row["subjects"], expected.subjects)
+		}
+		share, _ := row["share"].(float64)
+		if share != expected.share {
+			t.Fatalf("row %d share=%v want %v", i, share, expected.share)
+		}
+	}
+}
+
+func TestEvaluateAttributionRespectsLookbackWindow(t *testing.T) {
+	// Touchpoint at second 10, conversion at second 100.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 100, "buy", true, false),
+	}
+
+	// A 60-second window excludes the touchpoint, so the credit is direct.
+	direct, e := EvaluateAttribution(attributionRequest(60), rows)
+	if e != nil || len(direct) != 1 || direct[0]["touchpoint"] != directAttributionBucket {
+		t.Fatalf("outside-window touchpoint must fall back to direct: %v %v", direct, e)
+	}
+
+	// A 120-second window keeps the touchpoint eligible.
+	credited, e := EvaluateAttribution(attributionRequest(120), rows)
+	if e != nil || len(credited) != 1 || credited[0]["touchpoint"] != "ad_click" {
+		t.Fatalf("in-window touchpoint must receive the credit: %v %v", credited, e)
+	}
+}
+
+func TestEvaluateAttributionCausalOrdering(t *testing.T) {
+	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC).UnixNano()
+	rows := []map[string]any{
+		{
+			"subject_id": "u9", "event_key": "ad_click", "event_time_ns": base,
+			"sequence": int64(1), "session_id": "s", "tab_id": "t", "source_id": "src",
+			"event_id": "a", "is_touchpoint": true,
+		},
+		{
+			"subject_id": "u9", "event_key": "buy", "event_time_ns": base,
+			"sequence": int64(2), "session_id": "s", "tab_id": "t", "source_id": "src",
+			"event_id": "b", "is_conversion": true,
+		},
+	}
+	result, e := EvaluateAttribution(attributionRequest(3600), rows)
+	if e != nil || len(result) != 1 || result[0]["touchpoint"] != "ad_click" {
+		t.Fatalf("equal-time causal touchpoint must be credited before conversion: %v %v", result, e)
+	}
+
+	empty, e := EvaluateAttribution(attributionRequest(3600), nil)
+	if e != nil || len(empty) != 0 {
+		t.Fatalf("empty evidence must produce no credits: %v %v", empty, e)
+	}
+}
+
+func TestAttributionValidationClosedSet(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	valid := `{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"last_touch"}}`
+	if _, e := Parse([]byte(valid), validator); e != nil {
+		t.Fatalf("valid attribution request rejected: %v", e)
+	}
+	for _, raw := range []string{
+		// Unknown model is rejected by the schema enum.
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"first_touch"}}`,
+		// Window must be within 1..604800.
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":0,"model":"last_touch"}}`,
+		// At least one touchpoint is required.
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[],"window_seconds":86400,"model":"last_touch"}}`,
+		// Subject is mandatory.
+		`{"kind":"attribution","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"last_touch"}}`,
+	} {
+		if _, e := Parse([]byte(raw), validator); e == nil {
+			t.Fatalf("malformed attribution request accepted: %s", raw)
+		}
+	}
+
+	// Defense-in-depth for internally constructed requests.
+	for _, tc := range []struct {
+		name string
+		edit func(*Request)
+		code string
+	}{
+		{"nil attribution", func(r *Request) { r.Attribution = nil }, "INVALID_ATTRIBUTION"},
+		{"missing subject", func(r *Request) { r.Subject = "" }, "SUBJECT_REQUIRED"},
+		{"unknown model", func(r *Request) { r.Attribution.Model = "first_touch" }, "INVALID_ATTRIBUTION_MODEL"},
+		{"zero window", func(r *Request) { r.Attribution.WindowSeconds = 0 }, "INVALID_ATTRIBUTION_WINDOW"},
+		{"oversized window", func(r *Request) { r.Attribution.WindowSeconds = 604801 }, "INVALID_ATTRIBUTION_WINDOW"},
+		{"conversion overlap", func(r *Request) {
+			r.Attribution.Touchpoints[0] = Step{EventKey: "buy", SchemaVersion: 1}
+		}, "INVALID_ATTRIBUTION_TOUCHPOINT"},
+		{"duplicate touchpoint", func(r *Request) {
+			r.Attribution.Touchpoints = []Step{
+				{EventKey: "ad_click", SchemaVersion: 1},
+				{EventKey: "ad_click", SchemaVersion: 1},
+			}
+		}, "INVALID_ATTRIBUTION_TOUCHPOINT"},
+		{"too many touchpoints", func(r *Request) {
+			steps := make([]Step, 9)
+			for i := range steps {
+				steps[i] = Step{EventKey: "event_" + string(rune('a'+i)), SchemaVersion: 1}
+			}
+			r.Attribution.Touchpoints = steps
+		}, "INVALID_ATTRIBUTION_TOUCHPOINTS"},
+		{"top level event keys", func(r *Request) { r.EventKeys = []string{"buy"} }, "INVALID_EVENT_SELECTION"},
+		{"top level event versions", func(r *Request) { r.EventVersions = []EventVersion{{EventKey: "buy", SchemaVersion: 1}} }, "INVALID_EVENT_SELECTION"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := attributionRequest(86400)
+			tc.edit(&r)
+			e := Validate(&r)
+			var problem *fault.Error
+			if e == nil || !errors.As(e, &problem) || problem.Code != tc.code {
+				t.Fatalf("want %s, got %v", tc.code, e)
+			}
+		})
+	}
+}
+
+func TestAttributionPlannerEmitsMarkersAndSubjectPull(t *testing.T) {
+	r := attributionRequest(86400)
+	plan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, fragment := range []string{"is_conversion", "is_touchpoint", "LIMIT 100001", "isNotNull(uid)", "uid AS subject_id"} {
+		if !strings.Contains(plan.SQL, fragment) {
+			t.Fatalf("attribution SQL missing %s: %s", fragment, plan.SQL)
+		}
+	}
+	if len(plan.Columns) != 3 || plan.Columns[0].Key != "touchpoint" {
+		t.Fatalf("attribution result contract wrong: %+v", plan.Columns)
+	}
+
+	anonymous := attributionRequest(86400)
+	anonymous.Subject = "anonymous"
+	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !strings.Contains(anonymousPlan.SQL, "anonymous_id AS subject_id") || strings.Contains(anonymousPlan.SQL, "uid AS subject_id") {
+		t.Fatalf("anonymous attribution must select anonymous_id exclusively: %s", anonymousPlan.SQL)
+	}
+}
+
+func TestAttributionRejectedFromSavedTemplates(t *testing.T) {
+	template := Template{Kind: "attribution", Subject: "uid"}
+	var problem *fault.Error
+	e := ValidateTemplate(&template)
+	if e == nil || !errors.As(e, &problem) || problem.Code != "UNSUPPORTED_QUERY_KIND" {
+		t.Fatalf("saved analyses must reject attribution: %v", e)
+	}
+}

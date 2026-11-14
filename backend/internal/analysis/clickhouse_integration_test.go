@@ -670,3 +670,100 @@ func TestClickHousePathAggregation(t *testing.T) {
 		t.Fatalf("pinned paths must begin at the view event: %v", pinnedResult.Rows)
 	}
 }
+
+// TestClickHouseAttribution proves last-touch credit against the real
+// migrated view: the nearest in-window touchpoint wins, conversions without a
+// touchpoint fall into the direct bucket, non-converters are excluded and
+// project scoping is enforced.
+func TestClickHouseAttribution(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1: email_open is the last touchpoint before buy.
+		fact("u1-ad", "ad_click", "u1", "", "source-one", 10, map[string]any{}),
+		fact("u1-email", "email_open", "u1", "", "source-one", 20, map[string]any{}),
+		fact("u1-buy", "buy", "u1", "", "source-one", 30, map[string]any{}),
+		// u2: only ad_click precedes the conversion.
+		fact("u2-ad", "ad_click", "u2", "", "source-one", 15, map[string]any{}),
+		fact("u2-buy", "buy", "u2", "", "source-one", 25, map[string]any{}),
+		// u3 converts without any touchpoint.
+		fact("u3-buy", "buy", "u3", "", "source-one", 40, map[string]any{}),
+		// u4 never converts and must be excluded.
+		fact("u4-ad", "ad_click", "u4", "", "source-one", 50, map[string]any{}),
+		// Unrelated project must stay invisible.
+		fact("outsider-ad", "ad_click", "outsider", "", "source-one", 12, map[string]any{}),
+		fact("outsider-buy", "buy", "outsider", "", "source-one", 22, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"u1-ad": 10, "u1-email": 20, "u1-buy": 30,
+		"u2-ad": 15, "u2-buy": 25,
+		"u3-buy": 40, "u4-ad": 50,
+		"outsider-ad": 12, "outsider-buy": 22,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	for _, id := range []string{"outsider-ad", "outsider-buy"} {
+		for _, row := range rows {
+			if row["event_id"] == id {
+				row["project_id"] = "project-two"
+			}
+		}
+	}
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "attribution", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Attribution: &Attribution{
+			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+			WindowSeconds: 86400,
+			Model:         "last_touch",
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 3 || result.Metadata.Accuracy != "exact" {
+		t.Fatalf("attribution result contract wrong: %+v", result.Columns)
+	}
+	want := []struct {
+		touchpoint string
+		subjects   int
+	}{
+		{"__direct__", 1},
+		{"ad_click", 1},
+		{"email_open", 1},
+	}
+	if len(result.Rows) != len(want) {
+		t.Fatalf("want %d credit rows, got %v", len(want), result.Rows)
+	}
+	for i, expected := range want {
+		row := result.Rows[i]
+		if row["touchpoint"] != expected.touchpoint || row["subjects"] != expected.subjects {
+			t.Fatalf("credit %d mismatch: %v", i, row)
+		}
+		share, _ := row["share"].(float64)
+		if share != 1.0/3.0 {
+			t.Fatalf("credit %d share=%v want 1/3", i, share)
+		}
+	}
+
+	// A five-second lookback removes every touchpoint (all gaps are 10s), so
+	// all three converters collapse into the direct bucket.
+	tight := r
+	tight.Attribution = &Attribution{
+		Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+		Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+		WindowSeconds: 5,
+		Model:         "last_touch",
+	}
+	tightResult := execute(t, client, tight)
+	if len(tightResult.Rows) != 1 || tightResult.Rows[0]["touchpoint"] != directAttributionBucket || tightResult.Rows[0]["subjects"] != 3 {
+		t.Fatalf("tight window must credit every converter as direct: %v", tightResult.Rows)
+	}
+}

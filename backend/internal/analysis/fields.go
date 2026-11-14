@@ -71,6 +71,16 @@ func WalkFields(r *Request, visit func(*Field) error) error {
 			return e
 		}
 	}
+	if r.Attribution != nil {
+		if e := filter(r.Attribution.Conversion.Filter); e != nil {
+			return e
+		}
+		for _, step := range r.Attribution.Touchpoints {
+			if e := filter(step.Filter); e != nil {
+				return e
+			}
+		}
+	}
 	return nil
 }
 func CheckResolved(r Request) error {

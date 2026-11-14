@@ -78,6 +78,17 @@ type Path struct {
 	Depth      int   `json:"depth"`
 }
 
+// Attribution credits converting subjects to the last matching touchpoint
+// before their earliest conversion inside a bounded window. Model is an
+// explicit closed set; v1 supports last-touch only, so later models can be
+// versioned without changing published results.
+type Attribution struct {
+	Conversion    Step   `json:"conversion"`
+	Touchpoints   []Step `json:"touchpoints"`
+	WindowSeconds int64  `json:"window_seconds"`
+	Model         string `json:"model"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -101,6 +112,7 @@ type Request struct {
 	Retention        *Retention      `json:"retention,omitempty"`
 	Segment          *Segment        `json:"segment,omitempty"`
 	Path             *Path           `json:"path,omitempty"`
+	Attribution      *Attribution    `json:"attribution,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the

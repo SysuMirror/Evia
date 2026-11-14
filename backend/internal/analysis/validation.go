@@ -50,7 +50,7 @@ func Parse(raw []byte, validator Validator) (Request, error) {
 	return out, nil
 }
 func Validate(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.Environment != "development" && r.Environment != "staging" && r.Environment != "production" {
@@ -66,7 +66,7 @@ func Validate(r *Request) error {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
 	window := 31 * 24 * time.Hour
-	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" || r.Kind == "path" {
+	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" || r.Kind == "path" || r.Kind == "attribution" {
 		window = 7 * 24 * time.Hour
 	}
 	if r.Kind == "retention" {
@@ -98,7 +98,7 @@ func Validate(r *Request) error {
 // system field types. It does not validate environment, time range or timezone;
 // execution callers must use Validate with the actual execution context.
 func ValidateConfiguration(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
@@ -245,6 +245,13 @@ func ValidateConfiguration(r *Request) error {
 	} else if r.Path != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有路径查询接受 path 参数", "/path")
 	}
+	if r.Kind == "attribution" {
+		if e := validateAttribution(r); e != nil {
+			return e
+		}
+	} else if r.Attribution != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有归因查询接受 attribution 参数", "/attribution")
+	}
 	return nil
 }
 
@@ -273,6 +280,58 @@ func validatePath(r *Request) error {
 		if e := validateFilter(p.StartEvent.Filter, 0, &nodes); e != nil {
 			return e
 		}
+	}
+	return nil
+}
+
+// validateAttribution enforces last-touch attribution: an explicit subject,
+// one pinned conversion, 1..8 distinct pinned touchpoints that never reuse
+// the conversion pair, and a 1..604800 second lookback window. Every
+// malformed value fails closed.
+func validateAttribution(r *Request) error {
+	if r.Subject != "uid" && r.Subject != "anonymous" {
+		return Invalid("SUBJECT_REQUIRED", "归因查询必须指定 uid 或 anonymous 统计主体", "/subject")
+	}
+	a := r.Attribution
+	if a == nil {
+		return Invalid("INVALID_ATTRIBUTION", "归因配置缺失", "/attribution")
+	}
+	if a.Model != "last_touch" {
+		return Invalid("INVALID_ATTRIBUTION_MODEL", "归因模型尚未实现", "/attribution/model")
+	}
+	if a.WindowSeconds < 1 || a.WindowSeconds > 604800 {
+		return Invalid("INVALID_ATTRIBUTION_WINDOW", "归因窗口必须在 1 到 604800 秒之间", "/attribution/window_seconds")
+	}
+	validateStep := func(step Step, code, message, pointer string) error {
+		if !eventKey.MatchString(step.EventKey) || step.SchemaVersion < 1 || step.SchemaVersion > MaxSafeInteger {
+			return Invalid(code, message, pointer)
+		}
+		nodes := 0
+		return validateFilter(step.Filter, 0, &nodes)
+	}
+	if e := validateStep(a.Conversion, "INVALID_ATTRIBUTION_CONVERSION", "归因转化事件或版本无效", "/attribution/conversion"); e != nil {
+		return e
+	}
+	if len(a.Touchpoints) < 1 || len(a.Touchpoints) > 8 {
+		return Invalid("INVALID_ATTRIBUTION_TOUCHPOINTS", "归因触点必须在 1 到 8 个之间", "/attribution/touchpoints")
+	}
+	conversionPair := EventVersion{EventKey: a.Conversion.EventKey, SchemaVersion: a.Conversion.SchemaVersion}
+	seen := map[EventVersion]bool{}
+	for _, step := range a.Touchpoints {
+		if e := validateStep(step, "INVALID_ATTRIBUTION_TOUCHPOINT", "归因触点事件或版本无效", "/attribution/touchpoints"); e != nil {
+			return e
+		}
+		pair := EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}
+		if pair == conversionPair {
+			return Invalid("INVALID_ATTRIBUTION_TOUCHPOINT", "归因触点不能与转化事件相同", "/attribution/touchpoints")
+		}
+		if seen[pair] {
+			return Invalid("INVALID_ATTRIBUTION_TOUCHPOINT", "归因触点事件不能重复", "/attribution/touchpoints")
+		}
+		seen[pair] = true
+	}
+	if len(r.EventKeys) > 0 {
+		return Invalid("INVALID_EVENT_SELECTION", "归因查询通过转化与触点固定事件版本", "/event_keys")
 	}
 	return nil
 }
@@ -473,8 +532,8 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment" || r.Kind == "path") {
-		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群或路径查询", "/event_versions")
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment" || r.Kind == "path" || r.Kind == "attribution") {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群、路径或归因查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {
 		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {
