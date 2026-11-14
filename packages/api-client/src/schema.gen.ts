@@ -3029,7 +3029,7 @@ export interface components {
         };
         "query-request.schema": {
             /** @enum {unknown} */
-            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path";
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             time_range: {
@@ -3117,6 +3117,10 @@ export interface components {
                 event: components["schemas"]["retention_step"];
                 field: components["schemas"]["segment_field"];
             };
+            path?: {
+                start_event?: components["schemas"]["retention_step"];
+                depth: number;
+            };
             limit?: number;
             cursor?: string;
             event_versions?: {
@@ -3178,7 +3182,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;

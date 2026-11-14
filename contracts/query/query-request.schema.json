@@ -11,7 +11,8 @@
         "funnel",
         "journey",
         "retention",
-        "segment"
+        "segment",
+        "path"
       ]
     },
     "environment": {
@@ -407,6 +408,23 @@
       "required": [
         "event",
         "field"
+      ]
+    },
+    "path": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8
+        }
+      },
+      "required": [
+        "depth"
       ]
     },
     "limit": {
@@ -829,6 +847,50 @@
       "then": {
         "required": [
           "segment",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "event_keys"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "path"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "path",
           "subject"
         ],
         "not": {

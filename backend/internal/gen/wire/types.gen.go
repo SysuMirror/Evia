@@ -1109,6 +1109,10 @@ type QueryRequest struct {
 		Event json.RawMessage `json:"event"`
 		Field json.RawMessage `json:"field"`
 	} `json:"segment,omitempty"`
+	Path *struct {
+		StartEvent json.RawMessage `json:"start_event,omitempty"`
+		Depth      int64           `json:"depth"`
+	} `json:"path,omitempty"`
 	Limit         *int64  `json:"limit,omitempty"`
 	Cursor        *string `json:"cursor,omitempty"`
 	EventVersions []struct {
