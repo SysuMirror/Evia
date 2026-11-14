@@ -46,7 +46,7 @@ An event absent from the source's current public configuration settles as `rejec
 
 ## Identity and explicit navigation
 
-`identify(uid)` sets only the raw UID on future events. It emits no identity-link event and does not attach previous anonymous events to an account. UIDs must contain 1–128 Unicode characters and no NUL. `reset()` removes the UID, rotates the anonymous ID and starts a fresh session/page context. Already queued events retain their earlier identities and contexts, including events whose acknowledgement is uncertain.
+`identify(uid)` sets only the raw UID on future events. By default it emits no event; with `autoIdentityLink: true` it additionally records one reserved `sys.identity_link` (see [Automatic identity links](#automatic-identity-links)). It never attaches previous anonymous events to an account. UIDs must contain 1–128 Unicode characters and no NUL. `reset()` removes the UID, rotates the anonymous ID and starts a fresh session/page context. Already queued events retain their earlier identities and contexts, including events whose acknowledgement is uncertain.
 
 By default the anonymous UUID is kept in local storage under the project, environment and public write-key namespace. Source-key rotation starts a different namespace. Storage failures fall back to memory; `storage: null` makes the client memory-only. No cookies are read or written. Each client instance has a fresh tab/order UUID and monotonically increasing sequence. Reloading or creating another client starts a fresh tab/order scope, session and page context; only the anonymous UUID is persisted. Sessions are local to that instance and renew after 30 minutes of inactivity. These are raw browser identifiers, not resolved people. A navigation token joins pages within one live client, such as an SPA; hard navigation/reload does not retain that token or reconstruct a cross-document session/link.
 
@@ -79,7 +79,11 @@ Set `autoPageViews: true` at client construction to enable reserved automatic pa
 
 The reserved key is not reachable through the public `emit()` API, which still rejects `sys.*` with `INVALID_CUSTOM_EVENT_KEY`; automatic collection is the only internal producer. The event is subject to the same publication gate as custom events, so a source that has not published `sys.page_view` settles each automatic event as `rejected` with `EVENT_NOT_PUBLISHED` and never transmits it. Backpressure never breaks navigation: when the queue is full the automatic page event is dropped instead of throwing, while explicit `emit()` calls still surface `QUEUE_FULL`.
 
-Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement, identity-link and session-end system events remain contract samples only and are not auto-collected. Cross-document session continuity is not reconstructed.
+Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement, session-end and operation-failure system events remain contract samples only and are not auto-collected. Cross-document session continuity is not reconstructed.
+
+## Automatic identity links
+
+Set `autoIdentityLink: true` to record a reserved `sys.identity_link` after every successful `identify(uid)`. It is opt-in and defaults to `false`, so existing integrations are unchanged. The UID is assigned before the event is enqueued, so its `identity` object carries both the new `uid` and the current `anonymous_id`; properties stay empty and no credentials, tokens or request bodies are collected. The event reuses the bounded queue, retry and receipt pipeline and the same publication gate: an unpublished `sys.identity_link` settles as `rejected` with `EVENT_NOT_PUBLISHED`, while the UID assignment performed by `identify()` still takes effect. A full queue drops the automatic event without throwing or reverting the UID. `reset()` rotates identity but never emits an identity link. As with page views, the reserved key cannot be forged through the public `emit()` API.
 
 ## Bounded delivery and receipts
 
