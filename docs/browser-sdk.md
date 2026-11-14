@@ -79,11 +79,17 @@ Set `autoPageViews: true` at client construction to enable reserved automatic pa
 
 The reserved key is not reachable through the public `emit()` API, which still rejects `sys.*` with `INVALID_CUSTOM_EVENT_KEY`; automatic collection is the only internal producer. The event is subject to the same publication gate as custom events, so a source that has not published `sys.page_view` settles each automatic event as `rejected` with `EVENT_NOT_PUBLISHED` and never transmits it. Backpressure never breaks navigation: when the queue is full the automatic page event is dropped instead of throwing, while explicit `emit()` calls still surface `QUEUE_FULL`.
 
-Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement, session-end and operation-failure system events remain contract samples only and are not auto-collected. Cross-document session continuity is not reconstructed.
+Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement and session-end system events remain contract samples only and are not auto-collected. Operation failures are reported explicitly rather than auto-collected (see [Operation failure reporting](#operation-failure-reporting)). Cross-document session continuity is not reconstructed.
 
 ## Automatic identity links
 
 Set `autoIdentityLink: true` to record a reserved `sys.identity_link` after every successful `identify(uid)`. It is opt-in and defaults to `false`, so existing integrations are unchanged. The UID is assigned before the event is enqueued, so its `identity` object carries both the new `uid` and the current `anonymous_id`; properties stay empty and no credentials, tokens or request bodies are collected. The event reuses the bounded queue, retry and receipt pipeline and the same publication gate: an unpublished `sys.identity_link` settles as `rejected` with `EVENT_NOT_PUBLISHED`, while the UID assignment performed by `identify()` still takes effect. A full queue drops the automatic event without throwing or reverting the UID. `reset()` rotates identity but never emits an identity link. As with page views, the reserved key cannot be forged through the public `emit()` API.
+
+## Operation failure reporting
+
+Call `reportOperationFailure(failure)` to record one reserved `sys.operation_failed` event for a terminal logical-operation failure. Unlike automatic collection this is an explicit application call and needs no opt-in flag, but it still passes through the publication gate: an unpublished `sys.operation_failed` settles as `rejected` with `EVENT_NOT_PUBLISHED`.
+
+The input is a bounded structured object, not an exception: `operation` (1–128 characters), `errorCategory` restricted to `validation`, `network`, `timeout`, `http` or `business`, `retryable` boolean, and optional `errorCode` (1–128 characters). Unknown categories fail with `INVALID_ERROR_CATEGORY`, non-boolean `retryable` with `INVALID_RETRYABLE`. The event properties are rebuilt from these validated fields and mapped to snake_case; caller objects are never spread, so raw exceptions, request bodies, credentials and any unknown fields cannot leak into the event (the schema sets `additionalProperties=false`). The reserved key cannot be forged through the public `emit()` API, which still rejects `sys.*`.
 
 ## Bounded delivery and receipts
 
