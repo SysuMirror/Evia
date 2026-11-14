@@ -204,11 +204,14 @@ func TestRetentionValidationClosedSet(t *testing.T) {
 	if _, e := Parse([]byte(valid), validator); e != nil {
 		t.Fatalf("valid retention request rejected: %v", e)
 	}
+	anonymous := `{"kind":"retention","environment":"development","subject":"anonymous","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","retention":{"start_event":{"event_key":"sign_up","schema_version":1},"return_event":{"event_key":"login","schema_version":1},"granularity":"day","periods":4}}`
+	if _, e := Parse([]byte(anonymous), validator); e != nil {
+		t.Fatalf("anonymous retention request must be accepted: %v", e)
+	}
 	// Constraints also expressed in the JSON schema are rejected at parse
 	// time; semantic constraints the schema cannot express reach Go validation.
 	for _, tc := range []struct{ name, raw, code string }{
 		{"subject missing", `{"kind":"retention","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","retention":{"start_event":{"event_key":"sign_up","schema_version":1},"return_event":{"event_key":"login","schema_version":1},"granularity":"day","periods":4}}`, "INVALID_QUERY"},
-		{"anonymous subject", `{"kind":"retention","environment":"development","subject":"anonymous","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","retention":{"start_event":{"event_key":"sign_up","schema_version":1},"return_event":{"event_key":"login","schema_version":1},"granularity":"day","periods":4}}`, "SUBJECT_REQUIRED"},
 		{"retention block missing", `{"kind":"retention","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC"}`, "INVALID_QUERY"},
 		{"retention on trend kind", `{"kind":"trend","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-02T00:00:00Z"},"timezone":"UTC","retention":{"start_event":{"event_key":"sign_up","schema_version":1},"return_event":{"event_key":"login","schema_version":1},"granularity":"day","periods":4}}`, "INVALID_QUERY_OPTIONS"},
 		{"top level event keys", `{"kind":"retention","environment":"development","subject":"uid","event_keys":["login"],"time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","retention":{"start_event":{"event_key":"sign_up","schema_version":1},"return_event":{"event_key":"login","schema_version":1},"granularity":"day","periods":4}}`, "INVALID_QUERY"},
@@ -270,15 +273,33 @@ func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, fragment := range []string{"is_start", "is_return", "LIMIT 100001", "isNotNull(uid)"} {
+	for _, fragment := range []string{"is_start", "is_return", "LIMIT 100001", "isNotNull(uid)", "uid AS subject_id"} {
 		if !strings.Contains(plan.SQL, fragment) {
 			t.Fatalf("retention SQL missing %s: %s", fragment, plan.SQL)
 		}
+	}
+	if strings.Contains(plan.SQL, "anonymous_id") {
+		t.Fatalf("uid retention must not read the anonymous column: %s", plan.SQL)
 	}
 	if strings.Contains(plan.SQL, "'sign_up'") || strings.Contains(plan.SQL, "'login'") {
 		t.Fatal("event identities must be bound parameters, not inline literals")
 	}
 	if len(plan.Columns) != 5 || plan.Columns[0].Key != "cohort_index" || plan.Accuracy != "exact" {
 		t.Fatalf("retention result contract wrong: %+v", plan.Columns)
+	}
+
+	anonymous := retentionRequest("day", 4)
+	anonymous.Subject = "anonymous"
+	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, fragment := range []string{"anonymous_id AS subject_id", "isNotNull(anonymous_id)", "anonymous_id!=''"} {
+		if !strings.Contains(anonymousPlan.SQL, fragment) {
+			t.Fatalf("anonymous retention SQL missing %s: %s", fragment, anonymousPlan.SQL)
+		}
+	}
+	if strings.Contains(anonymousPlan.SQL, "uid AS subject_id") {
+		t.Fatalf("anonymous retention must not read the uid column: %s", anonymousPlan.SQL)
 	}
 }

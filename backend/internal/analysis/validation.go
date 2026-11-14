@@ -234,12 +234,13 @@ func ValidateConfiguration(r *Request) error {
 	return nil
 }
 
-// validateRetention enforces the closed v1 retention surface: uid subjects
-// only, calendar day/week periods, at most twelve offsets, and pinned event
-// versions on both boundary steps. Every malformed value fails closed.
+// validateRetention enforces the closed retention surface: an explicit uid or
+// anonymous subject, calendar day/week periods, at most twelve offsets, and
+// pinned event versions on both boundary steps. Every malformed value fails
+// closed.
 func validateRetention(r *Request) error {
-	if r.Subject != "uid" {
-		return Invalid("SUBJECT_REQUIRED", "留存查询 v1 仅支持 uid 统计主体", "/subject")
+	if r.Subject != "uid" && r.Subject != "anonymous" {
+		return Invalid("SUBJECT_REQUIRED", "留存查询必须指定 uid 或 anonymous 统计主体", "/subject")
 	}
 	rt := r.Retention
 	if rt == nil {

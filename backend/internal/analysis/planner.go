@@ -369,8 +369,11 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "step_index", Type: "integer"}, {Key: "event_key", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "conversion_rate", Type: "number"}}
 	case "retention":
-		// v1 admits uid subjects only; validation rejects every other subject.
-		selectSQL := []string{"uid AS subject_id", "event_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns"}
+		subject := "uid"
+		if r.Subject == "anonymous" {
+			subject = "anonymous_id"
+		}
+		selectSQL := []string{subject + " AS subject_id", "event_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns"}
 		matches := []string{}
 		for _, label := range []struct {
 			alias string
@@ -387,7 +390,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 			selectSQL = append(selectSQL, match+" AS "+label.alias)
 			matches = append(matches, match)
 		}
-		base += " AND isNotNull(uid) AND uid!='' AND (" + strings.Join(matches, " OR ") + ")"
+		base += " AND isNotNull(" + subject + ") AND " + subject + "!='' AND (" + strings.Join(matches, " OR ") + ")"
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}

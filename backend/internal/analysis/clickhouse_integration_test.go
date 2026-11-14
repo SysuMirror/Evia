@@ -480,4 +480,37 @@ func TestClickHouseRetentionMatrix(t *testing.T) {
 			t.Fatalf("entry-period retention must be 1.0: %v", rates[0])
 		}
 	}
+
+	// Anonymous subjects use the anonymous_id column and must never read uid.
+	anonymousRows := []map[string]any{
+		fact("d1-start", "sign_up", "", "device-one", "source-one", 0, map[string]any{}),
+		fact("d1-return", "login", "", "device-one", "source-one", 0, map[string]any{}),
+		fact("d2-start", "sign_up", "", "device-two", "source-one", 0, map[string]any{}),
+		fact("d2-return", "login", "", "device-two", "source-one", 0, map[string]any{}),
+	}
+	dayStamp := func(offset int) string { return day(7+offset, 9).Format("2006-01-02 15:04:05.000") }
+	anonymousRows[0]["event_time"] = dayStamp(0)
+	anonymousRows[0]["occurred_at"] = dayStamp(0)
+	anonymousRows[1]["event_time"] = dayStamp(1)
+	anonymousRows[1]["occurred_at"] = dayStamp(1)
+	anonymousRows[2]["event_time"] = dayStamp(0)
+	anonymousRows[2]["occurred_at"] = dayStamp(0)
+	anonymousRows[3]["event_time"] = dayStamp(2)
+	anonymousRows[3]["occurred_at"] = dayStamp(2)
+	seedRows(t, client, anonymousRows)
+
+	anonymousRequest := r
+	anonymousRequest.Subject = "anonymous"
+	anonymousResult := execute(t, client, anonymousRequest)
+	if len(anonymousResult.Rows) != 1 {
+		t.Fatalf("anonymous subjects form one shared day-0 cohort: %v", anonymousResult.Rows)
+	}
+	anonymousRow := anonymousResult.Rows[0]
+	if anonymousRow["cohort_size"] != 2 {
+		t.Fatalf("both devices must enter the anonymous cohort: %v", anonymousRow)
+	}
+	anonymousRetained, ok := anonymousRow["retained"].([]int)
+	if !ok || len(anonymousRetained) != 4 || anonymousRetained[0] != 2 || anonymousRetained[1] != 1 || anonymousRetained[2] != 1 {
+		t.Fatalf("anonymous retained matrix wrong: %#v", anonymousRow["retained"])
+	}
 }
