@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createEviaClient, EviaSDKError } from '../src/index.js';
-import type { ClientOptions, Clock, PublicConfig } from '../src/index.js';
+import type { ClientOptions, Clock, PublicConfig, ScrollHost } from '../src/index.js';
 
 const projectId = '00000000-0000-4000-8000-000000000001';
 const receiptId = '00000000-0000-4000-8000-000000000002';
@@ -1255,6 +1255,209 @@ test('public emit still cannot forge sys.session_end', () => {
   const { client } = setupSession((body) => receipt(body), { autoSessionEnd: true });
   assert.throws(
     () => client.emit('sys.session_end'),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
+  );
+  client.destroy();
+});
+
+// Reserved sys.page_scroll collection (opt-in autoPageScrolls) with an injectable host.
+class FakeScrollHost implements ScrollHost {
+  private listener: (() => void) | null = null;
+  private current = 0;
+  subscribe(listener: () => void): () => void {
+    this.listener = listener;
+    return () => {
+      this.listener = null;
+    };
+  }
+  ratio(): number {
+    return this.current;
+  }
+  setRatio(value: number): void {
+    this.current = value;
+    this.listener?.();
+  }
+}
+
+const pageScrollConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.page_scroll',
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false },
+      },
+    ],
+  };
+};
+
+function setupScroll(
+  handler: (body: Body, init: RequestInit) => Response | Promise<Response>,
+  extra: Partial<ClientOptions> = {},
+  cfg: PublicConfig = pageScrollConfig(),
+) {
+  const clock = new TestClock();
+  let id = 100;
+  const bodies: string[] = [];
+  const scroll = new FakeScrollHost();
+  const fetcher: typeof fetch = async (input, init = {}) => {
+    if (String(input).includes('/v1/config')) return json(cfg, 200, { ETag: etag });
+    bodies.push(String(init.body));
+    return handler(JSON.parse(String(init.body)) as Body, init);
+  };
+  const client = createEviaClient({
+    endpoint: 'https://events.example',
+    writeKey: 'public-example',
+    projectId,
+    environment: 'development',
+    fetch: fetcher,
+    clock,
+    randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+    storage: null,
+    lifecycle: false,
+    requestTimeoutMs: 100,
+    flushIntervalMs: 10,
+    retryBaseMs: 10,
+    scrollHost: scroll,
+    scrollIdleMs: 1000,
+    ...extra,
+  });
+  return { client, clock, bodies, scroll };
+}
+
+const scrollEvents = (bodies: string[]) =>
+  bodies
+    .flatMap((raw) => (JSON.parse(raw) as Body).events)
+    .filter((e) => e.event_key === 'sys.page_scroll');
+
+test('page scroll collection stays disabled unless autoPageScrolls is opted in', async () => {
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body));
+  scroll.setRatio(0.5);
+  await clock.advance(1100);
+  await client.flush();
+  assert.equal(scrollEvents(bodies).length, 0);
+  client.destroy();
+});
+
+test('scrolling stops coalesces one bounded down segment', async () => {
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+  });
+  scroll.setRatio(0);
+  scroll.setRatio(0.3);
+  scroll.setRatio(0.6);
+  await clock.advance(1100);
+  await client.flush();
+
+  const events = scrollEvents(bodies);
+  assert.equal(events.length, 1);
+  assert.deepEqual(
+    { ...events[0]!.properties, duration_ms: undefined },
+    { from_ratio: 0, to_ratio: 0.6, max_ratio: 0.6, direction: 'down', duration_ms: undefined },
+  );
+  const duration = events[0]!.properties.duration_ms as number;
+  assert.ok(Number.isSafeInteger(duration) && duration >= 1000, `unexpected duration ${duration}`);
+  client.destroy();
+});
+
+test('reverse movement yields mixed and up directions with correct bounds', async () => {
+  const {
+    client: mixedClient,
+    clock: mixedClock,
+    scroll: mixedHost,
+    bodies: mixedBodies,
+  } = setupScroll((body) => receipt(body), { autoPageScrolls: true });
+  mixedHost.setRatio(0);
+  mixedHost.setRatio(0.5);
+  mixedHost.setRatio(0.3);
+  await mixedClock.advance(1100);
+  await mixedClient.flush();
+  const mixed = scrollEvents(mixedBodies)[0]!.properties;
+  assert.equal(mixed.direction, 'mixed');
+  assert.equal(mixed.from_ratio, 0);
+  assert.equal(mixed.to_ratio, 0.3);
+  assert.equal(mixed.max_ratio, 0.5);
+  mixedClient.destroy();
+
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+  });
+  scroll.setRatio(0.6);
+  scroll.setRatio(0.3);
+  await clock.advance(1100);
+  await client.flush();
+  assert.equal(scrollEvents(bodies)[0]!.properties.direction, 'up');
+  client.destroy();
+});
+
+test('ratios outside [0,1] are clamped', async () => {
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+  });
+  scroll.setRatio(0);
+  scroll.setRatio(2);
+  await clock.advance(1100);
+  await client.flush();
+  const props = scrollEvents(bodies)[0]!.properties;
+  assert.equal(props.to_ratio, 1);
+  assert.equal(props.max_ratio, 1);
+  client.destroy();
+});
+
+test('scroll production is capped at twelve segments per minute', async () => {
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+    maxQueueEvents: 200,
+  });
+  for (let i = 0; i < 13; i++) {
+    scroll.setRatio(0);
+    scroll.setRatio(0.5);
+    await clock.advance(1100); // finalize this segment (~1.1s apart, still inside one minute)
+  }
+  await client.flush();
+  assert.equal(
+    scrollEvents(bodies).length,
+    12,
+    'only twelve scroll segments may be produced per minute',
+  );
+  client.destroy();
+});
+
+test('navigation discards an in-flight segment that has not stopped', async () => {
+  const { client, clock, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+  });
+  scroll.setRatio(0);
+  scroll.setRatio(0.4);
+  client.navigate({ navigationType: 'push' });
+  await clock.advance(1100);
+  await client.flush();
+  assert.equal(scrollEvents(bodies).length, 0);
+  client.destroy();
+});
+
+test('unpublished page scroll fails closed without throwing', async () => {
+  const { client, clock, scroll, bodies } = setupScroll(
+    (body) => receipt(body),
+    { autoPageScrolls: true },
+    config(),
+  );
+  scroll.setRatio(0);
+  scroll.setRatio(0.5);
+  await clock.advance(1100);
+  await client.flush();
+  assert.equal(bodies.length, 0, 'unpublished reserved events must never be transmitted');
+  assert.equal(client.pending, 0);
+  client.destroy();
+});
+
+test('public emit still cannot forge sys.page_scroll', () => {
+  const { client } = setupScroll((body) => receipt(body), { autoPageScrolls: true });
+  assert.throws(
+    () => client.emit('sys.page_scroll'),
     (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
   );
   client.destroy();
