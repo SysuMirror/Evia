@@ -97,11 +97,31 @@ u4 仅两个事件无法填满 depth-3 被排除；跨项目 outsider 三个事�
   browser-test 门禁执行。
 - pnpm typecheck、format:check、build 均通过。
 
+## 连续重复事件折叠（opt-in 演进）
+
+路径 v1 只输出原始 event_key 序列；本次以默认关闭的 opt-in 补齐
+custom-dashboards 规划中的「循环压缩」一环，规则确定且无新增采集/存储：
+
+- 契约 `path` 块新增可选布尔 `collapse_repeats`（默认省略即 false，严格
+  解码器拒绝非布尔值）；省略时既有路径请求与结果逐字节不变。
+- 评估器 `collapseRepeatedPathEvents` 在因果排序之后、起始定位与取 depth
+  之前，把相邻相同 event_key 折叠为一个节点；被折叠节点保留起始标记（run
+  内任一事件命中 is_start 即保留），因此钉选起始在压缩序列上仍可定位。
+- 非相邻的同名事件不折叠；折叠后节点数不足 depth 的主体仍被排除，每主体
+  最多贡献一条路径的口径不变。
+- 单测 4 例覆盖默认保留重复、折叠后取 depth、折叠后短主体排除、非相邻不
+  合并、钉选起始在折叠 run 上保持、契约布尔类型；真实 ClickHouse 两轮
+  （直接 0.437s、整包 `make query-test` 67.326s `-race`）零残留，断言
+  同一批 open,open,view,buy 事件默认得 `open,open,view`、折叠后得
+  `open,view,buy`。
+- 控制台 path 模态新增「折叠连续重复事件」复选框，模型仅在勾选时输出
+  `collapse_repeats: true`，默认请求形状不变。
+
 ## 诚实边界
 
 - 仅即席任务，无保存分析、无跨身份合并；控制台全栈规格需凭证化完整
   运行时（browser-test 门禁），默认 `make check` 不含该门禁。
-- 路径由原始 event_key 序列构成，不做连续重复事件折叠或会话切分；
-  高基数下路径数量受 500 行结果上限与 7 天窗口约束，超大租户容量未
-  专项压测。
+- 默认输出原始 event_key 序列；连续重复事件折叠仅在显式 opt-in
+  （`collapse_repeats`）时生效，会话切分/跳出与 Sankey 仍未实现；高基数
+  下路径数量受 500 行结果上限与 7 天窗口约束，超大租户容量未专项压测。
 - 不提供归因权重模型；归因、热力图、会话回放仍未实现。
