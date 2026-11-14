@@ -84,7 +84,25 @@ RFC 4180 引号、nil 空单元格）与 `TestRenderCSVRejectsEmptyColumnsAndUnk
 - 未支持的具体类型仍走 `default` 失败关闭；若未来评估器引入新的单元格类型，
   必须在此显式补分支并补测试，不允许隐式放宽。
 
+## worker 链路端到端补证（2026-11-15 追加）
+渲染函数与产物存储用例之外，再补两条经导出 worker 真实调用链
+（`Worker.RunOnce` → `Artifacts.Write` → `renderCSV` / `json.Marshal`）的用例，
+落在既有 `worker_test.go`，引擎 stub 返回与进程内评估器同构的原生类型
+（`int`、`float64`、`[]string`、`[]int`）：
+
+- `TestWorkerExportsNativeEvaluatorResultAsCSV`：CSV 作业必须成功落 `.csv` 产物、
+  `Rows=1` 且作业不进入失败码，并断言文件包含原生行
+  `2,0.5,"[""open"",""view""]","[1,0,1]"`；
+- `TestWorkerExportsNativeEvaluatorResultAsJSON`：同一原生结果的 JSON 作业同样成功，
+  守护共享链路不回退。
+
+红/绿取证：将 `csv.go` 临时换回修复前版本（无原生分支）后，CSV worker 用例如期
+失败并记录 `EXPORT_CSV_UNSUPPORTED`（精确复现生产失败码）；还原修复版本（sha256
+与备份逐字节一致）后两条用例转绿。这证明该用例确实在 worker 层守住缺陷，而非仅
+覆盖渲染函数。
+
 ## 涉及文件
 
 - `backend/internal/exporting/csv.go`：`csvCell()` 原生数值与具体切片分支。
 - `backend/internal/exporting/csv_test.go`：先红后绿三条用例。
+- `backend/internal/exporting/worker_test.go`：worker 链路 CSV/JSON 原生类型两条用例。
