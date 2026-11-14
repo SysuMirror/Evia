@@ -515,6 +515,7 @@ export function AnalysisPage({
     form.mode === 'funnel' ||
     form.mode === 'retention' ||
     form.mode === 'segment' ||
+    form.mode === 'path' ||
     (isMetric && form.metric === 'uv');
   const filterSummary = `${form.filterJoin === 'and' ? '全部满足' : '任一满足'}：${form.filters
     .map((filter) => {
@@ -551,6 +552,7 @@ export function AnalysisPage({
               retention_rate: '各期留存率',
               segment_value: '分群标签',
               share: '群体占比',
+              path: '事件路径',
             }[column.key] ??
             column.label ??
             column.key),
@@ -569,7 +571,9 @@ export function AnalysisPage({
                     .join('，')
                 : column.key === 'retained' && Array.isArray(row[column.key])
                   ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
-                  : cell(row[column.key], column.type, snapshot!.request.timezone),
+                  : column.key === 'path' && Array.isArray(row[column.key])
+                    ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
+                    : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
   const queryEditor = (
     <form
@@ -587,22 +591,25 @@ export function AnalysisPage({
         <ErrorPanel message={catalog.error.message} retry={() => void catalog.refetch()} />
       ) : (
         <div className="analysis-query-bar">
-          {form.mode !== 'funnel' && form.mode !== 'retention' && form.mode !== 'segment' && (
-            <Field
-              label="事件（跨已发布版本）"
-              error={validationTarget === 'event' ? validationError : undefined}
-            >
-              <Select
-                data-query-control="event"
-                value={form.event}
-                required={
-                  (form.mode === 'metrics' || form.mode === 'trend') && form.metric === 'pv'
-                }
-                onChange={(event) => patch('event', event.target.value)}
-                options={eventOptions}
-              />
-            </Field>
-          )}
+          {form.mode !== 'funnel' &&
+            form.mode !== 'retention' &&
+            form.mode !== 'segment' &&
+            form.mode !== 'path' && (
+              <Field
+                label="事件（跨已发布版本）"
+                error={validationTarget === 'event' ? validationError : undefined}
+              >
+                <Select
+                  data-query-control="event"
+                  value={form.event}
+                  required={
+                    (form.mode === 'metrics' || form.mode === 'trend') && form.metric === 'pv'
+                  }
+                  onChange={(event) => patch('event', event.target.value)}
+                  options={eventOptions}
+                />
+              </Field>
+            )}
           {(form.mode === 'metrics' || form.mode === 'trend') && (
             <Field label="指标">
               <Select
@@ -720,6 +727,20 @@ export function AnalysisPage({
               </span>
             </div>
           )}
+          {form.mode === 'path' && (
+            <div className="analysis-funnel-overview">
+              <h3>聚合路径</h3>
+              <Button onClick={() => setEditor('path')} aria-haspopup="dialog">
+                配置路径
+              </Button>
+              <span className="field-help">
+                深度：{form.pathDepth} 个事件；起始：
+                {form.pathStart.event
+                  ? `${form.pathStart.event} v${form.pathStart.version}`
+                  : '窗口内最早事件'}
+              </span>
+            </div>
+          )}
         </div>
       )}
       {isMetric && form.metric === 'pv' && (
@@ -741,6 +762,12 @@ export function AnalysisPage({
       {form.mode === 'segment' && (
         <p className="field-help">
           每个主体按其最早一条分群事件的标量字段值归入唯一群体，后续事件不会使其换组；缺失或空值归入固定缺失组。字段限字符串、布尔或数值，时间范围最多
+          7 天。
+        </p>
+      )}
+      {form.mode === 'path' && (
+        <p className="field-help">
+          统计主体实际遍历的有序事件序列，每个主体最多贡献一条固定长度路径；事件数不足深度的主体被排除，结果按主体数降序排列，时间范围最多
           7 天。
         </p>
       )}
@@ -853,7 +880,9 @@ export function AnalysisPage({
                           ? `${snapshot.request.retention?.periods ?? 0} 期${snapshot.request.retention?.granularity === 'week' ? '按周' : '按天'}留存`
                           : snapshot.request.kind === 'segment'
                             ? `按 ${snapshot.request.segment?.field.key ?? ''} 分群`
-                            : '全部事件')}
+                            : snapshot.request.kind === 'path'
+                              ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
+                              : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
@@ -1858,6 +1887,88 @@ export function AnalysisPage({
           )}
           <p className="field-help">
             每个主体按最早一条分群事件的该字段值归入唯一群体；缺失或空值归入固定缺失组。不支持数组与日期时间字段。
+          </p>
+        </form>
+      </Modal>
+      <Modal
+        open={editor === 'path'}
+        title="配置聚合路径"
+        onRequestClose={() => setEditor(null)}
+        footer={
+          <Button variant="primary" type="submit" form={`${queryFormID}-path`}>
+            完成
+          </Button>
+        }
+      >
+        {validationError && validationTarget === 'path' && editor === 'path' && (
+          <p id={`${queryFormID}-path-error`} role="alert">
+            {validationError}
+          </p>
+        )}
+        <form
+          id={`${queryFormID}-path`}
+          aria-describedby={
+            validationTarget === 'path' && validationError ? `${queryFormID}-path-error` : undefined
+          }
+          className="section-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            finishEditor('path');
+          }}
+        >
+          <div className="analysis-funnel-step" data-path-config>
+            <Field label="起始事件（可选，已发布事件）">
+              <Select
+                value={form.pathStart.event}
+                onChange={(event) => {
+                  const eventKey = event.target.value;
+                  patch('pathStart', {
+                    event: eventKey,
+                    version: String(
+                      events
+                        .find((definition) => definition.event_key === eventKey)
+                        ?.published_versions.at(-1) ?? '',
+                    ),
+                  });
+                }}
+                options={[
+                  { value: '', label: '不指定（从窗口内最早事件开始）' },
+                  ...eventOptions.slice(1),
+                ]}
+              />
+            </Field>
+            {form.pathStart.event && (
+              <Field label="起始事件版本">
+                <Select
+                  required
+                  value={form.pathStart.version}
+                  onChange={(event) =>
+                    patch('pathStart', { ...form.pathStart, version: event.target.value })
+                  }
+                  options={[
+                    { value: '', label: '选择版本' },
+                    ...(
+                      events.find((event) => event.event_key === form.pathStart.event)
+                        ?.published_versions ?? []
+                    ).map((version) => ({ value: String(version), label: `v${version}` })),
+                  ]}
+                />
+              </Field>
+            )}
+          </div>
+          <Field label="路径深度（2 至 8 个事件）">
+            <Input
+              type="number"
+              required
+              min="2"
+              max="8"
+              value={form.pathDepth}
+              onChange={(event) => patch('pathDepth', event.target.value)}
+            />
+          </Field>
+          <p className="field-help">
+            指定起始事件时，从每个主体最早匹配事件起取后续深度个事件；不指定时从窗口内最早事件起取。事件数不足深度的主体不计入，每个主体最多贡献一条路径。统计主体在查询栏选择原始
+            UID 或原始匿名标识。
           </p>
         </form>
       </Modal>

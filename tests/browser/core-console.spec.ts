@@ -332,6 +332,15 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await expect(page.getByText('按 page 分群')).toBeVisible();
   await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
   await expect(page.getByRole('cell', { name: '100.00%' })).toBeVisible();
+  await page.getByRole('tab', { name: '聚合路径', exact: true }).click();
+  await page.getByRole('button', { name: '配置路径', exact: true }).click();
+  const pathModal = page.getByRole('dialog', { name: '配置聚合路径', exact: true });
+  await pathModal.getByLabel('路径深度（2 至 8 个事件）', { exact: true }).fill('2');
+  await pathModal.getByRole('button', { name: '完成', exact: true }).click();
+  await query();
+  await expect(page.getByText('深度 2 事件路径')).toBeVisible();
+  await expect(page.locator('section[aria-label="查询结果表"] tbody tr')).not.toHaveCount(0);
+  await expect(page.getByRole('cell', { name: /→/ })).toBeVisible();
   await page.getByRole('tab', { name: '用户旅程', exact: true }).click();
   await page.getByLabel('原始 UID', { exact: true }).fill('synthetic-absent');
   await query();

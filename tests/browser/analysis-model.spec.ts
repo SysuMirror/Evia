@@ -259,6 +259,60 @@ test('segmentation builds unique-subject group requests and closes the validatio
   expect(() => validateAnalysisSection(input, 'segment')).not.toThrow();
 });
 
+test('path analysis builds bounded ordered-sequence requests and closes the validation surface', () => {
+  const input = form();
+  input.mode = 'path';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.pathDepth = '3';
+  // Without a start event the path begins at each subject's earliest event.
+  const request = buildRequest(input, 'development');
+  expect(request.kind).toBe('path');
+  expect(request.subject).toBe('uid');
+  expect(request.event_keys).toBeUndefined();
+  expect(request.event_versions).toBeUndefined();
+  expect(request.group_by).toBeUndefined();
+  expect(request.metrics).toBeUndefined();
+  expect(request.interval).toBeUndefined();
+  expect(request.path).toEqual({ depth: 3 });
+
+  // The optional pinned start event carries an immutable version.
+  input.pathStart = { event: 'page_view', version: '2' };
+  const pinned = buildRequest(input, 'development');
+  expect(pinned.path).toEqual({
+    depth: 3,
+    start_event: { event_key: 'page_view', schema_version: 2 },
+  });
+
+  // Anonymous subject passes through and keeps the same path scope.
+  input.subject = 'anonymous';
+  const anonymousRequest = buildRequest(input, 'production');
+  expect(anonymousRequest.subject).toBe('anonymous');
+  expect(anonymousRequest.environment).toBe('production');
+  expect(anonymousRequest.path).toEqual(pinned.path);
+  input.subject = 'uid';
+
+  // Depth is a 2..8 integer closed set.
+  for (const depth of ['1', '9', '1.5', '0', '', '-1']) {
+    const bad = { ...input, pathDepth: depth };
+    expect(() => buildRequest(bad, 'development')).toThrow(AnalysisValidationError);
+  }
+
+  // A selected start event without a valid version fails closed on the path section.
+  const badVersion = { ...input, pathStart: { event: 'page_view', version: '' } };
+  expect(() => buildRequest(badVersion, 'development')).toThrow('版本');
+  try {
+    buildRequest(badVersion, 'development');
+  } catch (error) {
+    expect(error).toMatchObject({ target: 'path' });
+  }
+
+  // Section validation isolates path errors; an empty start is a valid choice.
+  expect(() => validateAnalysisSection(input, 'path')).not.toThrow();
+  const noStart = { ...input, pathStart: { event: '', version: '' } };
+  expect(() => validateAnalysisSection(noStart, 'path')).not.toThrow();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {

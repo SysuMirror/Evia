@@ -1,7 +1,7 @@
 import type { Environment, QueryRequest } from '@evia/api-client';
 
 export type AnalysisMode =
-  'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention' | 'segment';
+  'metrics' | 'trend' | 'events' | 'journey' | 'funnel' | 'retention' | 'segment' | 'path';
 export type QueryField = NonNullable<QueryRequest['group_by']>[number];
 export type QueryFilter = NonNullable<QueryRequest['filter']>;
 export type PublishedField = { id: string; label: string; type: string; reference: QueryField };
@@ -35,6 +35,8 @@ export type AnalysisForm = {
   segmentEvent: { event: string; version: string };
   segmentField: string;
   segmentProperty?: PublishedField;
+  pathStart: { event: string; version: string };
+  pathDepth: string;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -44,6 +46,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'funnel', label: '有序漏斗' },
   { id: 'retention', label: '留存分析' },
   { id: 'segment', label: '主体分群' },
+  { id: 'path', label: '聚合路径' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },
@@ -142,6 +145,8 @@ export function initialForm(timezone: string): AnalysisForm {
     retentionPeriods: '7',
     segmentEvent: { event: '', version: '' },
     segmentField: '',
+    pathStart: { event: '', version: '' },
+    pathDepth: '3',
   };
 }
 export type AnalysisValidationTarget =
@@ -153,7 +158,8 @@ export type AnalysisValidationTarget =
   | 'identity'
   | 'funnel'
   | 'retention'
-  | 'segment';
+  | 'segment'
+  | 'path';
 export class AnalysisValidationError extends Error {
   constructor(
     public readonly target: AnalysisValidationTarget,
@@ -355,15 +361,31 @@ function readSegment(form: AnalysisForm): NonNullable<QueryRequest['segment']> {
     },
   };
 }
+function readPath(form: AnalysisForm): NonNullable<QueryRequest['path']> {
+  const depth = Number(form.pathDepth);
+  if (!Number.isInteger(depth) || depth < 2 || depth > 8)
+    throw new AnalysisValidationError('path', '路径深度须为 2 至 8 的整数。');
+  const path: NonNullable<QueryRequest['path']> = { depth };
+  if (form.pathStart.event) {
+    if (!Number.isSafeInteger(Number(form.pathStart.version)) || Number(form.pathStart.version) < 1)
+      throw new AnalysisValidationError('path', '请为起始事件选择已发布版本。');
+    path.start_event = {
+      event_key: form.pathStart.event,
+      schema_version: Number(form.pathStart.version),
+    };
+  }
+  return path;
+}
 export type AnalysisEditorSection =
-  'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment';
+  'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment' | 'path';
 export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEditorSection): void {
   if (section === 'range') readTimeRange(form);
   else if (section === 'settings') readLimit(form);
   else if (section === 'filters') readFilters(form);
   else if (section === 'funnel') readFunnel(form);
   else if (section === 'retention') readRetention(form);
-  else readSegment(form);
+  else if (section === 'segment') readSegment(form);
+  else readPath(form);
 }
 
 export function buildRequest(form: AnalysisForm, environment: Environment): QueryRequest {
@@ -376,7 +398,13 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     timezone: form.timezone,
     limit,
   };
-  if (form.mode !== 'funnel' && form.mode !== 'retention' && form.mode !== 'segment' && form.event)
+  if (
+    form.mode !== 'funnel' &&
+    form.mode !== 'retention' &&
+    form.mode !== 'segment' &&
+    form.mode !== 'path' &&
+    form.event
+  )
     request.event_keys = [form.event];
   if (form.mode === 'metrics' || form.mode === 'trend') {
     if (form.metric === 'pv' && !form.event)
@@ -424,6 +452,10 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
   if (form.mode === 'segment') {
     request.subject = form.subject;
     request.segment = readSegment(form);
+  }
+  if (form.mode === 'path') {
+    request.subject = form.subject;
+    request.path = readPath(form);
   }
   return request;
 }
