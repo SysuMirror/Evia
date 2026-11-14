@@ -834,6 +834,85 @@ func TestClickHouseFirstTouchAttribution(t *testing.T) {
 	}
 }
 
+// TestClickHouseLinearAttribution proves equal-weight multi-touch credit
+// against the real migrated view: each converting subject splits unit weight
+// across its distinct in-window touchpoints, and the direct bucket keeps full
+// weight for a subject with no touchpoint.
+func TestClickHouseLinearAttribution(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1 touches two distinct events -> each gets weight 1/2.
+		fact("ln-u1-ad", "ad_click", "u1", "", "source-one", 10, map[string]any{}),
+		fact("ln-u1-email", "email_open", "u1", "", "source-one", 20, map[string]any{}),
+		fact("ln-u1-buy", "buy", "u1", "", "source-one", 30, map[string]any{}),
+		// u2 touches only ad_click -> it carries full weight.
+		fact("ln-u2-ad", "ad_click", "u2", "", "source-one", 15, map[string]any{}),
+		fact("ln-u2-buy", "buy", "u2", "", "source-one", 25, map[string]any{}),
+		// u3 converts without a touchpoint -> direct bucket full weight.
+		fact("ln-u3-buy", "buy", "u3", "", "source-one", 40, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"ln-u1-ad": 10, "ln-u1-email": 20, "ln-u1-buy": 30,
+		"ln-u2-ad": 15, "ln-u2-buy": 25, "ln-u3-buy": 40,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "attribution", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Attribution: &Attribution{
+			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+			WindowSeconds: 86400,
+			Model:         "linear",
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 4 {
+		t.Fatalf("linear result must expose four columns including credit: %+v", result.Columns)
+	}
+	want := map[string]struct {
+		subjects int
+		credit   float64
+	}{
+		"ad_click":              {2, 1.5},
+		directAttributionBucket: {1, 1.0},
+		"email_open":            {1, 0.5},
+	}
+	if len(result.Rows) != len(want) {
+		t.Fatalf("linear wants %d rows, got %v", len(want), result.Rows)
+	}
+	shareSum := 0.0
+	for _, row := range result.Rows {
+		key, _ := row["touchpoint"].(string)
+		expected, ok := want[key]
+		if !ok {
+			t.Fatalf("unexpected touchpoint %q: %v", key, row)
+		}
+		if row["subjects"] != expected.subjects {
+			t.Fatalf("%s subjects=%v want %d", key, row["subjects"], expected.subjects)
+		}
+		credit, _ := row["credit"].(float64)
+		if credit != expected.credit {
+			t.Fatalf("%s credit=%v want %v", key, credit, expected.credit)
+		}
+		share, _ := row["share"].(float64)
+		shareSum += share
+	}
+	if diff := shareSum - 1.0; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("linear shares must sum to 1, got %v", shareSum)
+	}
+}
+
 // TestClickHousePathCollapseRepeats proves the opt-in loop compression
 // against the real migrated view: adjacent identical events fold into one
 // node before depth extraction, while the default request stays byte-stable.

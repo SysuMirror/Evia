@@ -50,31 +50,12 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 		return nil, Invalid("INVALID_ATTRIBUTION", "归因配置缺失")
 	}
 	window := request.Attribution.WindowSeconds
-	bySubject := map[string][]attributionEvent{}
-	for _, row := range rows {
-		if e := ctx.Err(); e != nil {
-			return nil, e
-		}
-		subject := stringValue(row["subject_id"])
-		if subject == "" {
-			continue
-		}
-		eventTime, ok := integer(row["event_time_ns"])
-		if !ok {
-			return nil, Invalid("INVALID_ATTRIBUTION_EVENT", "归因事件时间无效")
-		}
-		sequence, _ := integer(row["sequence"])
-		bySubject[subject] = append(bySubject[subject], attributionEvent{
-			time:         eventTime,
-			sequence:     sequence,
-			session:      stringValue(row["session_id"]),
-			tab:          stringValue(row["tab_id"]),
-			source:       stringValue(row["source_id"]),
-			id:           stringValue(row["event_id"]),
-			eventKey:     stringValue(row["event_key"]),
-			isConversion: flagOn(row["is_conversion"]),
-			isTouchpoint: flagOn(row["is_touchpoint"]),
-		})
+	bySubject, e := loadAttributionSubjects(ctx, rows)
+	if e != nil {
+		return nil, e
+	}
+	if request.Attribution.Model == "linear" {
+		return evaluateLinearAttribution(ctx, request, bySubject)
 	}
 
 	type creditCount struct {
@@ -159,6 +140,133 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 		out = append(out, map[string]any{
 			"touchpoint": value.touchpoint,
 			"subjects":   value.count,
+			"share":      share,
+		})
+	}
+	return out, nil
+}
+
+// loadAttributionSubjects groups raw rows by subject so each attribution model
+// shares the same causal ordering inputs.
+func loadAttributionSubjects(ctx context.Context, rows []map[string]any) (map[string][]attributionEvent, error) {
+	bySubject := map[string][]attributionEvent{}
+	for _, row := range rows {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
+		subject := stringValue(row["subject_id"])
+		if subject == "" {
+			continue
+		}
+		eventTime, ok := integer(row["event_time_ns"])
+		if !ok {
+			return nil, Invalid("INVALID_ATTRIBUTION_EVENT", "归因事件时间无效")
+		}
+		sequence, _ := integer(row["sequence"])
+		bySubject[subject] = append(bySubject[subject], attributionEvent{
+			time:         eventTime,
+			sequence:     sequence,
+			session:      stringValue(row["session_id"]),
+			tab:          stringValue(row["tab_id"]),
+			source:       stringValue(row["source_id"]),
+			id:           stringValue(row["event_id"]),
+			eventKey:     stringValue(row["event_key"]),
+			isConversion: flagOn(row["is_conversion"]),
+			isTouchpoint: flagOn(row["is_touchpoint"]),
+		})
+	}
+	return bySubject, nil
+}
+
+// linearCredit accumulates equal-weight attribution for one touchpoint:
+// subjects counts distinct converting subjects reaching it, credit sums the
+// fractional weights so the shares across all rows total exactly one.
+type linearCredit struct {
+	touchpoint string
+	subjects   int
+	credit     float64
+}
+
+// evaluateLinearAttribution splits each converting subject's unit weight
+// equally across its distinct in-window touchpoints. Subjects without an
+// in-window touchpoint keep their full weight in the fixed direct bucket, so
+// the converting population is never dropped.
+func evaluateLinearAttribution(
+	ctx context.Context,
+	request Request,
+	bySubject map[string][]attributionEvent,
+) ([]map[string]any, error) {
+	window := request.Attribution.WindowSeconds
+	credits := map[string]*linearCredit{}
+	converters := 0
+	for _, events := range bySubject {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
+		sort.SliceStable(events, func(i, j int) bool {
+			return earlierAttributionEvent(events[i], events[j])
+		})
+		conversionIndex := -1
+		for i, event := range events {
+			if event.isConversion {
+				conversionIndex = i
+				break
+			}
+		}
+		if conversionIndex < 0 {
+			continue
+		}
+		converters++
+		cutoff := events[conversionIndex].time - window*1_000_000_000
+
+		// Distinct in-window touchpoint keys, preserving first-occurrence order.
+		seen := map[string]bool{}
+		keys := make([]string, 0, len(events))
+		for i := 0; i < conversionIndex; i++ {
+			event := events[i]
+			if event.time < cutoff || !event.isTouchpoint || seen[event.eventKey] {
+				continue
+			}
+			seen[event.eventKey] = true
+			keys = append(keys, event.eventKey)
+		}
+
+		if len(keys) == 0 {
+			keys = []string{directAttributionBucket}
+		}
+		weight := 1.0 / float64(len(keys))
+		for _, key := range keys {
+			entry, ok := credits[key]
+			if !ok {
+				entry = &linearCredit{touchpoint: key}
+				credits[key] = entry
+			}
+			entry.subjects++
+			entry.credit += weight
+		}
+	}
+
+	aggregated := make([]*linearCredit, 0, len(credits))
+	for _, value := range credits {
+		aggregated = append(aggregated, value)
+	}
+	sort.Slice(aggregated, func(i, j int) bool {
+		if aggregated[i].credit != aggregated[j].credit {
+			return aggregated[i].credit > aggregated[j].credit
+		}
+		return aggregated[i].touchpoint < aggregated[j].touchpoint
+	})
+
+	out := make([]map[string]any, 0, len(aggregated))
+	for _, value := range aggregated {
+		share := 0.0
+		if converters > 0 {
+			share = value.credit / float64(converters)
+		}
+		out = append(out, map[string]any{
+			"touchpoint": value.touchpoint,
+			"subjects":   value.subjects,
+			"credit":     value.credit,
 			"share":      share,
 		})
 	}

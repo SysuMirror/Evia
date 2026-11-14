@@ -488,6 +488,11 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "touchpoint", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
+		if r.Attribution.Model == "linear" {
+			// Equal-weight models report a fractional credit column that the
+			// single-touch models do not need, keeping their output byte-stable.
+			plan.Columns = append(plan.Columns, Column{Key: "credit", Type: "number"})
+		}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

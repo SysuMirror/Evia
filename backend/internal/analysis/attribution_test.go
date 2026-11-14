@@ -158,7 +158,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}
 	for _, raw := range []string{
 		// A model outside the explicit enum is rejected by the schema.
-		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"linear"}}`,
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"time_decay"}}`,
 		// Window must be within 1..604800.
 		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":0,"model":"last_touch"}}`,
 		// At least one touchpoint is required.
@@ -179,7 +179,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}{
 		{"nil attribution", func(r *Request) { r.Attribution = nil }, "INVALID_ATTRIBUTION"},
 		{"missing subject", func(r *Request) { r.Subject = "" }, "SUBJECT_REQUIRED"},
-		{"unknown model", func(r *Request) { r.Attribution.Model = "linear" }, "INVALID_ATTRIBUTION_MODEL"},
+		{"unknown model", func(r *Request) { r.Attribution.Model = "time_decay" }, "INVALID_ATTRIBUTION_MODEL"},
 		{"zero window", func(r *Request) { r.Attribution.WindowSeconds = 0 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"oversized window", func(r *Request) { r.Attribution.WindowSeconds = 604801 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"conversion overlap", func(r *Request) {
@@ -317,6 +317,155 @@ func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
 	var problem *fault.Error
 	if e := Validate(&bad); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_MODEL" {
 		t.Fatalf("unknown model must fail closed: %v", e)
+	}
+}
+
+func linearRequest(window int64) Request {
+	r := attributionRequest(window)
+	r.Attribution.Model = "linear"
+	return r
+}
+
+func TestEvaluateLinearEqualWeightAndDirectBucket(t *testing.T) {
+	rows := []map[string]any{
+		// u1 touches two distinct events, so each receives weight 1/2.
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 20, "email_open", false, true),
+		markedRow("u1", 30, "buy", true, false),
+		// u2 touches only ad_click, giving it full weight.
+		markedRow("u2", 15, "ad_click", false, true),
+		markedRow("u2", 25, "buy", true, false),
+		// u3 converts without any touchpoint: direct keeps full weight.
+		markedRow("u3", 40, "buy", true, false),
+	}
+
+	result, e := EvaluateAttribution(linearRequest(86400), rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := map[string]struct {
+		subjects int
+		credit   float64
+	}{
+		"ad_click":              {2, 1.5},
+		directAttributionBucket: {1, 1.0},
+		"email_open":            {1, 0.5},
+	}
+	if len(result) != len(want) {
+		t.Fatalf("linear wants %d rows, got %v", len(want), result)
+	}
+	shareSum := 0.0
+	for _, row := range result {
+		key, _ := row["touchpoint"].(string)
+		expected, ok := want[key]
+		if !ok {
+			t.Fatalf("unexpected touchpoint %q: %v", key, row)
+		}
+		if row["subjects"] != expected.subjects {
+			t.Fatalf("%s subjects=%v want %d", key, row["subjects"], expected.subjects)
+		}
+		credit, _ := row["credit"].(float64)
+		if credit != expected.credit {
+			t.Fatalf("%s credit=%v want %v", key, credit, expected.credit)
+		}
+		share, _ := row["share"].(float64)
+		shareSum += share
+	}
+	// Credits total the three converters, so shares must sum to one within
+	// floating-point accumulation tolerance.
+	if diff := shareSum - 1.0; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("linear shares must sum to 1, got %v", shareSum)
+	}
+}
+
+func TestEvaluateLinearDedupesRepeatedTouchpoint(t *testing.T) {
+	// The same touchpoint key repeats; linear counts distinct keys once, so
+	// it is one node receiving full weight rather than two 1/2 nodes.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 15, "ad_click", false, true),
+		markedRow("u1", 20, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(linearRequest(86400), rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("deduped linear path wants one row: %v %v", result, e)
+	}
+	row := result[0]
+	if row["touchpoint"] != "ad_click" || row["subjects"] != 1 {
+		t.Fatalf("linear dedupe mismatch: %v", row)
+	}
+	credit, _ := row["credit"].(float64)
+	if credit != 1.0 {
+		t.Fatalf("deduped single touchpoint credit must be 1, got %v", credit)
+	}
+}
+
+func TestEvaluateLinearRespectsLookbackWindow(t *testing.T) {
+	// ad_click at 10s is outside a 30s window ending at the 100s conversion.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 95, "email_open", false, true),
+		markedRow("u1", 100, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(linearRequest(30), rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("windowed linear wants one row: %v %v", result, e)
+	}
+	if result[0]["touchpoint"] != "email_open" {
+		t.Fatalf("out-of-window touchpoint must be excluded: %v", result[0])
+	}
+	credit, _ := result[0]["credit"].(float64)
+	if credit != 1.0 {
+		t.Fatalf("only eligible touchpoint must carry full weight: %v", credit)
+	}
+
+	// A one-second window removes every touchpoint, collapsing to direct.
+	direct, e := EvaluateAttribution(linearRequest(1), rows)
+	if e != nil || len(direct) != 1 || direct[0]["touchpoint"] != directAttributionBucket {
+		t.Fatalf("linear without in-window touchpoint must be direct: %v %v", direct, e)
+	}
+}
+
+func TestLinearValidationAndPlannerContract(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	valid := `{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"linear"}}`
+	parsed, e := Parse([]byte(valid), validator)
+	if e != nil {
+		t.Fatalf("linear must be accepted: %v", e)
+	}
+	if parsed.Attribution.Model != "linear" {
+		t.Fatalf("model must deserialize to linear, got %q", parsed.Attribution.Model)
+	}
+
+	r := linearRequest(86400)
+	if e := Validate(&r); e != nil {
+		t.Fatalf("linear request must pass Go validation: %v", e)
+	}
+	plan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	keys := map[string]bool{}
+	for _, column := range plan.Columns {
+		keys[column.Key] = true
+	}
+	if !keys["credit"] {
+		t.Fatalf("linear plan must expose the credit column: %+v", plan.Columns)
+	}
+
+	// Single-touch plans keep their original three columns byte-stable.
+	single := attributionRequest(86400)
+	singlePlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, single)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, column := range singlePlan.Columns {
+		if column.Key == "credit" {
+			t.Fatalf("single-touch plans must not emit credit: %+v", singlePlan.Columns)
+		}
 	}
 }
 
