@@ -1094,3 +1094,168 @@ test('public emit still cannot forge sys.operation_failed', () => {
   );
   client.destroy();
 });
+
+// Reserved sys.session_end collection (opt-in autoSessionEnd).
+const sessionEndConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.session_end',
+        schema_version: 1,
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { reason: { type: 'string' } },
+        },
+      },
+    ],
+  };
+};
+
+function setupSession(
+  handler: (body: Body, init: RequestInit) => Response | Promise<Response>,
+  extra: Partial<ClientOptions> = {},
+  cfg: PublicConfig = sessionEndConfig(),
+) {
+  const clock = new TestClock();
+  let id = 100;
+  const bodies: string[] = [];
+  const fetcher: typeof fetch = async (input, init = {}) => {
+    if (String(input).includes('/v1/config')) return json(cfg, 200, { ETag: etag });
+    bodies.push(String(init.body));
+    return handler(JSON.parse(String(init.body)) as Body, init);
+  };
+  const client = createEviaClient({
+    endpoint: 'https://events.example',
+    writeKey: 'public-example',
+    projectId,
+    environment: 'development',
+    fetch: fetcher,
+    clock,
+    randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+    storage: null,
+    lifecycle: false,
+    requestTimeoutMs: 100,
+    flushIntervalMs: 10,
+    retryBaseMs: 10,
+    sessionTimeoutMs: 60000,
+    ...extra,
+  });
+  return { client, clock, bodies };
+}
+
+test('session end stays disabled unless autoSessionEnd is opted in', async () => {
+  const { client, clock, bodies } = setup((body) => receipt(body));
+  client.identify('user-a');
+  client.identify('user-b');
+  client.reset();
+  client.emit('page_opened', { value: 1 });
+  await clock.advance(60001);
+  client.emit('page_opened', { value: 2 });
+  await pump();
+  await client.flush();
+  const all = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events.map((e) => e.event_key));
+  assert.ok(!all.includes('sys.session_end'), `no session end expected, got ${all.join(',')}`);
+  client.destroy();
+});
+
+test('reset emits a logout session end carrying the ending identity', async () => {
+  const { client, bodies } = setupSession((body) => receipt(body), { autoSessionEnd: true });
+  client.identify('user-a');
+  client.reset();
+  await pump();
+  await client.flush();
+  const sent = JSON.parse(bodies[0]!) as Body;
+  const ends = sent.events.filter((e) => e.event_key === 'sys.session_end');
+  assert.equal(ends.length, 1);
+  assert.deepEqual(ends[0]!.properties, { reason: 'logout' });
+  assert.equal(ends[0]!.identity.uid, 'user-a', 'logout event must keep the cleared uid context');
+  client.destroy();
+});
+
+test('changing the uid emits one account_switch session end for the old account', async () => {
+  const { client, bodies } = setupSession((body) => receipt(body), { autoSessionEnd: true });
+  client.identify('user-a');
+  client.identify('user-a'); // same uid is not a switch
+  client.identify('user-b'); // first real switch
+  await pump();
+  await client.flush();
+  const events = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events);
+  const ends = events.filter((e) => e.event_key === 'sys.session_end');
+  assert.equal(ends.length, 1);
+  assert.deepEqual(ends[0]!.properties, { reason: 'account_switch' });
+  assert.equal(ends[0]!.identity.uid, 'user-a', 'switch event must keep the prior uid context');
+  client.destroy();
+});
+
+test('inactivity rotates the session and emits an idle end bound to the old session', async () => {
+  const { client, clock, bodies } = setupSession((body) => receipt(body), { autoSessionEnd: true });
+  const first = client.emit('page_opened', { value: 1 });
+  await pump();
+  await client.flush();
+  assert.equal((await first.result).status, 'accepted');
+  const firstSession = (JSON.parse(bodies[0]!) as Body).events[0]!.context.session_id;
+
+  await clock.advance(60001);
+  const second = client.emit('page_opened', { value: 2 });
+  await pump();
+  await client.flush();
+  assert.equal((await second.result).status, 'accepted');
+
+  const events = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events);
+  const idle = events.find((e) => e.event_key === 'sys.session_end');
+  assert.ok(idle, 'an idle session end must be emitted on timeout rotation');
+  assert.deepEqual(idle!.properties, { reason: 'idle' });
+  assert.equal(
+    idle!.context.session_id,
+    firstSession,
+    'idle event must describe the ending session',
+  );
+  const nextCustom = events.filter((e) => e.event_key === 'page_opened').at(-1)!;
+  assert.notEqual(
+    nextCustom.context.session_id,
+    firstSession,
+    'the new event must use a fresh session',
+  );
+  client.destroy();
+});
+
+test('unpublished session end fails closed without breaking the underlying action', async () => {
+  // Configuration deliberately omits sys.session_end.
+  const { client, bodies } = setupSession(
+    (body) => receipt(body),
+    { autoSessionEnd: true },
+    config(),
+  );
+  client.reset();
+  await pump();
+  await client.flush();
+  assert.equal(client.pending, 0, 'the rejected automatic event must leave the queue cleanly');
+  assert.equal(bodies.length, 0, 'unpublished reserved events must never be transmitted');
+  client.destroy();
+});
+
+test('a full queue drops the session end without breaking reset or identify', async () => {
+  const { client } = setupSession((body) => receipt(body), {
+    autoSessionEnd: true,
+    maxQueueEvents: 1,
+  });
+  client.emit('page_opened', { value: 1 });
+  assert.equal(client.pending, 1);
+  client.reset();
+  client.identify('user-b');
+  assert.equal(client.pending, 1, 'back-pressured session ends must be dropped, not queued');
+  client.destroy();
+});
+
+test('public emit still cannot forge sys.session_end', () => {
+  const { client } = setupSession((body) => receipt(body), { autoSessionEnd: true });
+  assert.throws(
+    () => client.emit('sys.session_end'),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
+  );
+  client.destroy();
+});
