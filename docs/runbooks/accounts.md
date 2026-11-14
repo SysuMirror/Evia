@@ -63,7 +63,9 @@ leave no account able to provision or bootstrap. An unknown username fails with
 `ACCOUNT_NOT_FOUND`. Re-disabling an already disabled account and re-enabling an
 enabled account are idempotent. Once disabled, the account is immediately rejected
 on every authenticated path because all session and membership reads filter
-`NOT disabled`; no separate session deletion is required for correctness.
+`NOT disabled`; no separate session deletion is required for correctness. The real-PostgreSQL
+integration test `TestSetAccountDisabledImmediatelyRevokesAndRestoresSession` proves an existing
+session is rejected immediately after `account-disable` and resolves again after `account-enable`.
 `account-enable` restores access the same way.
 
 These commands change account state but do not currently write a typed event to
