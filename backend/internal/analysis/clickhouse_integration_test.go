@@ -582,3 +582,91 @@ func TestClickHouseSegmentation(t *testing.T) {
 		}
 	}
 }
+
+// TestClickHousePathAggregation proves ordered event-path counting against the
+// real migrated view: distinct sequences, subject counts, pinned-start
+// behavior and project scoping.
+func TestClickHousePathAggregation(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1 and u2 share open -> view -> buy.
+		fact("u1-open", "open", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u1-view", "view", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u1-buy", "buy", "u1", "", "source-one", 0, map[string]any{}),
+		fact("u2-open", "open", "u2", "", "source-one", 0, map[string]any{}),
+		fact("u2-view", "view", "u2", "", "source-one", 0, map[string]any{}),
+		fact("u2-buy", "buy", "u2", "", "source-one", 0, map[string]any{}),
+		// u3 follows open -> view -> share.
+		fact("u3-open", "open", "u3", "", "source-one", 0, map[string]any{}),
+		fact("u3-view", "view", "u3", "", "source-one", 0, map[string]any{}),
+		fact("u3-share", "share", "u3", "", "source-one", 0, map[string]any{}),
+		// u4 has only two events and cannot fill a depth-3 path.
+		fact("u4-open", "open", "u4", "", "source-one", 0, map[string]any{}),
+		fact("u4-view", "view", "u4", "", "source-one", 0, map[string]any{}),
+		// Unrelated project must be invisible.
+		fact("outsider-open", "open", "outsider", "", "source-one", 0, map[string]any{}),
+		fact("outsider-view", "view", "outsider", "", "source-one", 0, map[string]any{}),
+		fact("outsider-buy", "buy", "outsider", "", "source-one", 0, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"u1-open": 10, "u1-view": 20, "u1-buy": 30,
+		"u2-open": 11, "u2-view": 21, "u2-buy": 31,
+		"u3-open": 12, "u3-view": 22, "u3-share": 32,
+		"u4-open": 13, "u4-view": 23,
+		"outsider-open": 14, "outsider-view": 24, "outsider-buy": 34,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	rows[len(rows)-1]["project_id"] = "project-two"
+	rows[len(rows)-2]["project_id"] = "project-two"
+	rows[len(rows)-3]["project_id"] = "project-two"
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "path", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Path:      &Path{Depth: 3},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 2 || result.Metadata.Accuracy != "exact" {
+		t.Fatalf("path result contract wrong: %+v", result.Columns)
+	}
+	if len(result.Rows) != 2 {
+		t.Fatalf("want two distinct depth-3 paths, got %v", result.Rows)
+	}
+	want := []struct {
+		path     []string
+		subjects int
+	}{
+		{[]string{"open", "view", "buy"}, 2},
+		{[]string{"open", "view", "share"}, 1},
+	}
+	for i, expected := range want {
+		steps, ok := result.Rows[i]["path"].([]string)
+		if !ok || strings.Join(steps, ",") != strings.Join(expected.path, ",") {
+			t.Fatalf("path %d mismatch: %v", i, result.Rows[i])
+		}
+		if result.Rows[i]["subjects"] != expected.subjects {
+			t.Fatalf("path %d subjects=%v want %d", i, result.Rows[i]["subjects"], expected.subjects)
+		}
+	}
+
+	// A pinned start at view drops the leading open and returns depth-2 tails.
+	pinned := r
+	pinned.Path = &Path{Depth: 2, StartEvent: &Step{EventKey: "view", SchemaVersion: 1}}
+	pinnedResult := execute(t, client, pinned)
+	if len(pinnedResult.Rows) != 2 {
+		t.Fatalf("pinned paths want two groups, got %v", pinnedResult.Rows)
+	}
+	firstSteps, _ := pinnedResult.Rows[0]["path"].([]string)
+	if firstSteps[0] != "view" {
+		t.Fatalf("pinned paths must begin at the view event: %v", pinnedResult.Rows)
+	}
+}

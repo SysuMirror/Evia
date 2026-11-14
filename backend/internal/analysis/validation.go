@@ -50,7 +50,7 @@ func Parse(raw []byte, validator Validator) (Request, error) {
 	return out, nil
 }
 func Validate(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.Environment != "development" && r.Environment != "staging" && r.Environment != "production" {
@@ -66,7 +66,7 @@ func Validate(r *Request) error {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
 	window := 31 * 24 * time.Hour
-	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" {
+	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" || r.Kind == "path" {
 		window = 7 * 24 * time.Hour
 	}
 	if r.Kind == "retention" {
@@ -98,7 +98,7 @@ func Validate(r *Request) error {
 // system field types. It does not validate environment, time range or timezone;
 // execution callers must use Validate with the actual execution context.
 func ValidateConfiguration(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" {
+	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
@@ -237,6 +237,42 @@ func ValidateConfiguration(r *Request) error {
 		}
 	} else if r.Segment != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有分群查询接受 segment 参数", "/segment")
+	}
+	if r.Kind == "path" {
+		if e := validatePath(r); e != nil {
+			return e
+		}
+	} else if r.Path != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有路径查询接受 path 参数", "/path")
+	}
+	return nil
+}
+
+// validatePath enforces subject-level path aggregation: an explicit uid or
+// anonymous subject, a fixed depth of 2..8 events, and an optional pinned
+// start event. Every malformed value fails closed.
+func validatePath(r *Request) error {
+	if r.Subject != "uid" && r.Subject != "anonymous" {
+		return Invalid("SUBJECT_REQUIRED", "路径查询必须指定 uid 或 anonymous 统计主体", "/subject")
+	}
+	p := r.Path
+	if p == nil {
+		return Invalid("INVALID_PATH", "路径配置缺失", "/path")
+	}
+	if p.Depth < 2 || p.Depth > 8 {
+		return Invalid("INVALID_PATH_DEPTH", "路径深度必须在 2 到 8 之间", "/path/depth")
+	}
+	if len(r.EventKeys) > 0 {
+		return Invalid("INVALID_EVENT_SELECTION", "路径查询通过可选起始事件固定事件版本", "/event_keys")
+	}
+	if p.StartEvent != nil {
+		if !eventKey.MatchString(p.StartEvent.EventKey) || p.StartEvent.SchemaVersion < 1 || p.StartEvent.SchemaVersion > MaxSafeInteger {
+			return Invalid("INVALID_PATH_START_EVENT", "路径起始事件或版本无效", "/path/start_event")
+		}
+		nodes := 0
+		if e := validateFilter(p.StartEvent.Filter, 0, &nodes); e != nil {
+			return e
+		}
 	}
 	return nil
 }
@@ -437,8 +473,8 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment") {
-		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存或分群查询", "/event_versions")
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment" || r.Kind == "path") {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群或路径查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {
 		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {

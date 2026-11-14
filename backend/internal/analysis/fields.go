@@ -66,6 +66,11 @@ func WalkFields(r *Request, visit func(*Field) error) error {
 			return e
 		}
 	}
+	if r.Path != nil && r.Path.StartEvent != nil {
+		if e := filter(r.Path.StartEvent.Filter); e != nil {
+			return e
+		}
+	}
 	return nil
 }
 func CheckResolved(r Request) error {

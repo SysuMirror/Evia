@@ -69,6 +69,15 @@ type Segment struct {
 	Field Field `json:"field"`
 }
 
+// Path aggregates the ordered event sequences subjects actually traverse.
+// StartEvent optionally pins where each subject's path begins; when absent the
+// subject's earliest in-window event is the entry. Depth is the fixed number
+// of events that make up one path (2..8).
+type Path struct {
+	StartEvent *Step `json:"start_event,omitempty"`
+	Depth      int   `json:"depth"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -91,6 +100,7 @@ type Request struct {
 	Funnel           *Funnel         `json:"funnel,omitempty"`
 	Retention        *Retention      `json:"retention,omitempty"`
 	Segment          *Segment        `json:"segment,omitempty"`
+	Path             *Path           `json:"path,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the

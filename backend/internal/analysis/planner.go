@@ -420,6 +420,36 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
 		plan.Accuracy = "exact"
 		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
+	case "path":
+		subject := "uid"
+		if r.Subject == "anonymous" {
+			subject = "anonymous_id"
+		}
+		selectSQL := []string{
+			subject + " AS subject_id",
+			"event_id",
+			"source_id",
+			"session_id",
+			"tab_id",
+			"event_key",
+			"toUnixTimestamp64Nano(event_time) AS event_time_ns",
+			"toUnixTimestamp64Nano(received_at) AS received_at_ns",
+			"ifNull(sequence,0) AS sequence",
+		}
+		// Pull every in-window event; the start marker is applied in Go so the
+		// events following a matched start remain available for the path tail.
+		if r.Path.StartEvent != nil {
+			filter, e := p.filter(r.Path.StartEvent.Filter)
+			if e != nil {
+				return Plan{}, e
+			}
+			match := "(event_key=" + p.bind("String", r.Path.StartEvent.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(r.Path.StartEvent.SchemaVersion, 10)) + " AND " + filter + ")"
+			selectSQL = append(selectSQL, match+" AS is_start")
+		}
+		base += " AND isNotNull(" + subject + ") AND " + subject + "!=''"
+		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
+		plan.Accuracy = "exact"
+		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}
