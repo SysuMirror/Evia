@@ -34,3 +34,65 @@ func TestRequiresRawAccess(t *testing.T) {
 		})
 	}
 }
+
+// TestRequiresRawAccessInProcessEvaluators pins the authorization classification
+// for the aggregate in-process evaluators. They consume a subject internally but
+// only emit aggregate counts/shares (never individual uid/anonymous_id values),
+// so a subject-only request must stay non-raw exactly like UV and funnel. Any
+// walkable identity system field still upgrades the request to raw access.
+func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
+	identity := func(key string) *Field { return &Field{Kind: "system", Key: key} }
+	aggregateSubjects := []struct {
+		name    string
+		request Request
+	}{
+		{"retention uid", Request{Kind: "retention", Subject: "uid"}},
+		{"retention anonymous", Request{Kind: "retention", Subject: "anonymous"}},
+		{"segment uid", Request{Kind: "segment", Subject: "uid"}},
+		{"path uid", Request{Kind: "path", Subject: "uid"}},
+		{"attribution uid", Request{Kind: "attribution", Subject: "uid"}},
+	}
+	for _, c := range aggregateSubjects {
+		t.Run(c.name+" aggregate is non-raw", func(t *testing.T) {
+			if RequiresRawAccess(c.request) {
+				t.Fatalf("%s subject-only aggregate must not require raw access", c.name)
+			}
+		})
+	}
+
+	identityExposing := []struct {
+		name    string
+		request Request
+	}{
+		{
+			"retention identity step filter",
+			Request{
+				Kind:    "retention",
+				Subject: "uid",
+				Retention: &Retention{
+					StartEvent:  Step{Filter: &Filter{Field: identity("uid")}},
+					ReturnEvent: Step{},
+				},
+			},
+		},
+		{
+			"segment identity field",
+			Request{Kind: "segment", Subject: "uid", Segment: &Segment{Field: *identity("anonymous_id")}},
+		},
+		{
+			"path identity top-level filter",
+			Request{Kind: "path", Subject: "uid", Filter: &Filter{Field: identity("session_id")}},
+		},
+		{
+			"attribution identity top-level filter",
+			Request{Kind: "attribution", Subject: "uid", Filter: &Filter{Field: identity("uid")}},
+		},
+	}
+	for _, c := range identityExposing {
+		t.Run(c.name+" is raw", func(t *testing.T) {
+			if !RequiresRawAccess(c.request) {
+				t.Fatalf("%s touches an identity field and must require raw access", c.name)
+			}
+		})
+	}
+}
