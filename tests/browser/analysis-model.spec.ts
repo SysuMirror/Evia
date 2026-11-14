@@ -441,6 +441,32 @@ test('attribution model defaults to last-touch and passes first-touch through', 
   expect(() => validateAnalysisSection(firstTouch, 'attribution')).not.toThrow();
 });
 
+test('attribution passes the linear equal-weight model through', () => {
+  const input = form();
+  input.mode = 'attribution';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.attributionConversion = { event: 'purchase', version: '1' };
+  input.attributionTouchpoints = [
+    { event: 'ad_click', version: '1' },
+    { event: 'email_open', version: '1' },
+  ];
+  input.attributionWindow = '86400';
+  input.attributionModel = 'linear';
+
+  const request = buildRequest(input, 'development');
+  expect(request.attribution).toEqual({
+    conversion: { event_key: 'purchase', schema_version: 1 },
+    touchpoints: [
+      { event_key: 'ad_click', schema_version: 1 },
+      { event_key: 'email_open', schema_version: 1 },
+    ],
+    window_seconds: 86400,
+    model: 'linear',
+  });
+  expect(() => validateAnalysisSection(input, 'attribution')).not.toThrow();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {

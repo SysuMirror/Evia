@@ -49,7 +49,7 @@ export type AnalysisForm = {
   attributionConversion: { event: string; version: string };
   attributionTouchpoints: { event: string; version: string }[];
   attributionWindow: string;
-  attributionModel: 'last_touch' | 'first_touch';
+  attributionModel: 'last_touch' | 'first_touch' | 'linear';
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },

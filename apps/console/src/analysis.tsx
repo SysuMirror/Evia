@@ -555,6 +555,7 @@ export function AnalysisPage({
               share: snapshot!.request.kind === 'attribution' ? '归因占比' : '群体占比',
               path: '事件路径',
               touchpoint: '归因触点',
+              credit: '加权权重',
             }[column.key] ??
             column.label ??
             column.key),
@@ -563,19 +564,21 @@ export function AnalysisPage({
           ? `${((row[column.key] as number) * 100).toFixed(2)}%`
           : column.key === 'step_index' && typeof row[column.key] === 'number'
             ? String((row[column.key] as number) + 1)
-            : column.key === 'share' && typeof row[column.key] === 'number'
-              ? `${((row[column.key] as number) * 100).toFixed(2)}%`
-              : column.key === 'retention_rate' && Array.isArray(row[column.key])
-                ? (row[column.key] as unknown[])
-                    .map((value) =>
-                      typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
-                    )
-                    .join('，')
-                : column.key === 'retained' && Array.isArray(row[column.key])
-                  ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
-                  : column.key === 'path' && Array.isArray(row[column.key])
-                    ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
-                    : cell(row[column.key], column.type, snapshot!.request.timezone),
+            : column.key === 'credit' && typeof row[column.key] === 'number'
+              ? (row[column.key] as number).toFixed(4).replace(/\.?0+$/, '')
+              : column.key === 'share' && typeof row[column.key] === 'number'
+                ? `${((row[column.key] as number) * 100).toFixed(2)}%`
+                : column.key === 'retention_rate' && Array.isArray(row[column.key])
+                  ? (row[column.key] as unknown[])
+                      .map((value) =>
+                        typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
+                      )
+                      .join('，')
+                  : column.key === 'retained' && Array.isArray(row[column.key])
+                    ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
+                    : column.key === 'path' && Array.isArray(row[column.key])
+                      ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
+                      : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
   const queryEditor = (
     <form
@@ -756,7 +759,12 @@ export function AnalysisPage({
                   ? `${form.attributionConversion.event} v${form.attributionConversion.version}`
                   : '未选择事件'}
                 ；触点 {form.attributionTouchpoints.length} 个；窗口 {form.attributionWindow}{' '}
-                秒；模型 {form.attributionModel === 'first_touch' ? '首次触点' : '末次触点'}
+                秒；模型{' '}
+                {
+                  { last_touch: '末次触点', first_touch: '首次触点', linear: '线性均分' }[
+                    form.attributionModel
+                  ]
+                }
               </span>
             </div>
           )}
@@ -908,7 +916,7 @@ export function AnalysisPage({
                             : snapshot.request.kind === 'path'
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
                               : snapshot.request.kind === 'attribution'
-                                ? `${snapshot.request.attribution?.model === 'first_touch' ? '首次' : '末次'}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
+                                ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
                                 : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
@@ -2178,6 +2186,7 @@ export function AnalysisPage({
               options={[
                 { value: 'last_touch', label: '末次触点（窗口内最晚触点）' },
                 { value: 'first_touch', label: '首次触点（窗口内最早触点）' },
+                { value: 'linear', label: '线性均分（窗内触点等权分摊）' },
               ]}
             />
           </Field>
