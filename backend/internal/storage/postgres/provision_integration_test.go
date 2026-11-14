@@ -203,3 +203,55 @@ func TestSetAccountDisabledImmediatelyRevokesAndRestoresSession(t *testing.T) {
 		t.Fatalf("re-enabled account session must resolve again: %v %v", resolved, err)
 	}
 }
+
+func TestResetAccountPasswordReplacesHashAndRevokesSessions(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	target, err := access.ProvisionAccount(ctx, s, "recovery-user", "Recovery User", "synthetic-old-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := ids.Secret()
+	if err = s.InsertSession(ctx, access.Session{
+		UserID: target.ID, SecretHash: access.Digest(secret), CSRF: ids.Secret(),
+		ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FindSession(ctx, access.Digest(secret)); err != nil {
+		t.Fatalf("session must resolve before reset: %v", err)
+	}
+
+	if _, err = access.ResetAccountPassword(ctx, s, "RECOVERY-USER", "synthetic-new-password-42"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The old credential no longer verifies; the new one does, at bcrypt cost 12.
+	stored, err := s.FindUser(ctx, "recovery-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("synthetic-old-password-42")) == nil {
+		t.Fatal("old password still verifies after reset")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("synthetic-new-password-42")) != nil {
+		t.Fatal("new password does not verify after reset")
+	}
+	if cost, err := bcrypt.Cost([]byte(stored.PasswordHash)); err != nil || cost != 12 {
+		t.Fatalf("bcrypt cost changed: %d %v", cost, err)
+	}
+
+	// Existing sessions are revoked in the same transaction.
+	if _, err = s.FindSession(ctx, access.Digest(secret)); !errors.Is(err, access.ErrMissing) {
+		t.Fatalf("reset must revoke existing sessions: %v", err)
+	}
+
+	if _, err = access.ResetAccountPassword(ctx, s, "ghost", "synthetic-new-password-42"); err == nil ||
+		fault.Public(err).Code != "ACCOUNT_NOT_FOUND" {
+		t.Fatalf("unknown account must be not-found: %v", err)
+	}
+}

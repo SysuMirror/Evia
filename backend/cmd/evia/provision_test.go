@@ -29,6 +29,13 @@ func (s *accountProvisionStore) SetAccountDisabled(_ context.Context, username s
 	return access.User{ID: "00000000-0000-4000-8000-000000000009", Username: username, Disabled: disabled}, nil
 }
 
+func (s *accountProvisionStore) ResetAccountPassword(_ context.Context, username, _ string) (access.User, error) {
+	if s.err != nil {
+		return access.User{}, s.err
+	}
+	return access.User{ID: "00000000-0000-4000-8000-000000000009", Username: username}, nil
+}
+
 func TestAccountProvisionCLIOutputAndErrorsAreSafe(t *testing.T) {
 	values := map[string]string{"EVIA_ACCOUNT_USERNAME": "synthetic-sensitive-username", "EVIA_ACCOUNT_DISPLAY_NAME": "synthetic-sensitive-display", "EVIA_ACCOUNT_PASSWORD": "synthetic-sensitive-password"}
 	get := func(name string) string { return values[name] }
@@ -132,6 +139,46 @@ func TestAccountDisableEnableCLISafeOutput(t *testing.T) {
 			var output bytes.Buffer
 			logger := slog.New(slog.NewJSONHandler(&output, nil))
 			err := accountDisable(context.Background(), store, get, logger)
+			if err == nil || !strings.Contains(err.Error(), tc.code) || output.Len() != 0 {
+				t.Fatalf("expected safe %s error, got %v", tc.code, err)
+			}
+		})
+	}
+}
+
+func TestAccountResetPasswordCLISafeOutput(t *testing.T) {
+	values := map[string]string{
+		"EVIA_ACCOUNT_USERNAME": "synthetic-sensitive-username",
+		"EVIA_ACCOUNT_PASSWORD": "synthetic-sensitive-new-password",
+	}
+	get := func(name string) string { return values[name] }
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	store := &accountProvisionStore{}
+	if err := accountResetPassword(context.Background(), store, get, logger); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "account_id") || !strings.Contains(output.String(), "00000000-0000-4000-8000-000000000009") {
+		t.Fatal("success output must reference the account id")
+	}
+	for _, secret := range []string{values["EVIA_ACCOUNT_USERNAME"], values["EVIA_ACCOUNT_PASSWORD"]} {
+		if strings.Contains(output.String(), secret) {
+			t.Fatal("operator output must not echo the username or new password")
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"not found", fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist"), "ACCOUNT_NOT_FOUND"},
+		{"invalid password", fault.New(fault.Invalid, "INVALID_PASSWORD", "bad password"), "INVALID_PASSWORD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store.err = tc.err
+			output.Reset()
+			err := accountResetPassword(context.Background(), store, get, logger)
 			if err == nil || !strings.Contains(err.Error(), tc.code) || output.Len() != 0 {
 				t.Fatalf("expected safe %s error, got %v", tc.code, err)
 			}

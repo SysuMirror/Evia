@@ -35,6 +35,14 @@ func (s *provisionCapture) SetAccountDisabled(_ context.Context, username string
 	return User{ID: "00000000-0000-4000-8000-000000000009", Username: username, Disabled: disabled, PasswordHash: "secret-hash"}, nil
 }
 
+func (s *provisionCapture) ResetAccountPassword(_ context.Context, username, passwordHash string) (User, error) {
+	s.disabledName = username
+	if s.err != nil {
+		return User{}, s.err
+	}
+	return User{ID: "00000000-0000-4000-8000-000000000009", Username: username, PasswordHash: passwordHash}, nil
+}
+
 func TestAccountProvisionPolicyAndHashBoundary(t *testing.T) {
 	store := &provisionCapture{}
 	user, err := ProvisionAccount(context.Background(), store, "  Mixed.User@Example  ", "Synthetic account", "synthetic-password-42")
@@ -113,5 +121,37 @@ func TestSetAccountDisabledPropagatesPersistenceFault(t *testing.T) {
 	_, err := SetAccountDisabled(context.Background(), store, "operator", true)
 	if err == nil || fault.Public(err).Code != "LAST_ENABLED_ACCOUNT" {
 		t.Fatalf("persistence fault must surface unchanged: %v", err)
+	}
+}
+
+func TestResetAccountPasswordValidatesAndStripsHash(t *testing.T) {
+	store := &provisionCapture{}
+	user, err := ResetAccountPassword(context.Background(), store, "  Recovery@Example ", "synthetic-new-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.disabledName != "recovery@example" {
+		t.Fatalf("persistence did not receive normalized username: %q", store.disabledName)
+	}
+	if user.PasswordHash != "" {
+		t.Fatal("returned user must never expose the password hash")
+	}
+	store.err = errors.New("synthetic driver failure")
+	if _, err := ResetAccountPassword(context.Background(), store, "recovery@example", "synthetic-new-password-42"); err == nil {
+		t.Fatal("persistence failure must surface")
+	}
+}
+
+func TestResetAccountPasswordRejectsBadInputBeforePersistence(t *testing.T) {
+	store := &provisionCapture{}
+	if _, err := ResetAccountPassword(context.Background(), store, "bad:name", "synthetic-new-password-42"); err == nil ||
+		fault.Public(err).Code != "INVALID_USERNAME" || store.disabledCalls != 0 {
+		t.Fatal("invalid username must fail before persistence")
+	}
+	for _, password := range []string{"short", strings.Repeat("x", 73)} {
+		if _, err := ResetAccountPassword(context.Background(), store, "recovery", password); err == nil ||
+			fault.Public(err).Code != "INVALID_PASSWORD" {
+			t.Fatalf("password %q must be rejected: %v", password, err)
+		}
 	}
 }
