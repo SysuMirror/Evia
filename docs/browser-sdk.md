@@ -42,7 +42,7 @@ evia.destroy();
 
 `emit` returns `{eventId, result}` immediately. It captures the event ID, UTC occurrence time, properties, UID/anonymous identity and page/session/tab context at that call. Property objects and arrays are copied, so later application mutations cannot change pending events. Configuration initialization and refresh are asynchronous and single-flight; emitting before initialization is supported within the same queue bounds. The returned outcome promise resolves for accepted, rejected, dropped and uncertain events. Synchronous input or backpressure errors throw `EviaSDKError` with a stable `code`, such as `QUEUE_FULL` or `EVENT_TOO_LARGE`.
 
-An event absent from the source's current public configuration settles as `rejected` with `EVENT_NOT_PUBLISHED` and is not sent. The SDK accepts custom event keys only; it does not create definitions or emit `sys.*` events. `init()` is recommended at application startup to check publication and source availability explicitly. Generic envelope/property bounds are checked locally; the server remains authoritative for the complete published JSON Schema, current source authorization and release eligibility. Property schema failures are returned through the per-event receipt.
+An event absent from the source's current public configuration settles as `rejected` with `EVENT_NOT_PUBLISHED` and is not sent. The public `emit()` API accepts custom event keys only and cannot forge `sys.*` events, and the SDK never creates event definitions. The opt-in `autoPageViews` option is the sole producer of the reserved `sys.page_view` system event (see [Automatic page views](#automatic-page-views)). `init()` is recommended at application startup to check publication and source availability explicitly. Generic envelope/property bounds are checked locally; the server remains authoritative for the complete published JSON Schema, current source authorization and release eligibility. Property schema failures are returned through the per-event receipt.
 
 ## Identity and explicit navigation
 
@@ -50,7 +50,7 @@ An event absent from the source's current public configuration settles as `rejec
 
 By default the anonymous UUID is kept in local storage under the project, environment and public write-key namespace. Source-key rotation starts a different namespace. Storage failures fall back to memory; `storage: null` makes the client memory-only. No cookies are read or written. Each client instance has a fresh tab/order UUID and monotonically increasing sequence. Reloading or creating another client starts a fresh tab/order scope, session and page context; only the anonymous UUID is persisted. Sessions are local to that instance and renew after 30 minutes of inactivity. These are raw browser identifiers, not resolved people. A navigation token joins pages within one live client, such as an SPA; hard navigation/reload does not retain that token or reconstruct a cross-document session/link.
 
-The SDK never derives route names from the DOM or current URL. Call `navigate()` from application routing code with an explicit route template. It changes context and returns the new context without emitting a page event. The application must explicitly emit its registered page event. To link an activity on one page to the next page:
+The SDK never derives route names from the DOM or current URL. Call `navigate()` from application routing code with an explicit route template. It changes context and returns the new context. By default it emits no page event and the application must explicitly emit its registered page event; with `autoPageViews: true` it additionally records one reserved `sys.page_view` for the new page (see [Automatic page views](#automatic-page-views)). To link an activity on one page to the next page:
 
 ```ts
 const link = evia.beginNavigation();
@@ -72,6 +72,14 @@ const destination = evia.emit('item_page_opened', { item_id: 'example' });
 ```
 
 Both envelopes share the navigation UUID. The destination gets a new page UUID and the source/previous page UUIDs. A token from an earlier page, reset or expired session is rejected. Engagement, visibility and reading events also require explicit registered custom definitions and application calls; the SDK does not inspect content or invent business semantics.
+
+## Automatic page views
+
+Set `autoPageViews: true` at client construction to enable reserved automatic page collection. It is opt-in and defaults to `false`, so existing integrations keep identical behavior. When enabled the client enqueues exactly one `sys.page_view` event (empty properties) each time a fresh `page_view_id` is generated: the initial load, every successful `navigate()`, and `reset()`. The event reuses the normal bounded queue, retry and receipt pipeline and carries the new page/session context.
+
+The reserved key is not reachable through the public `emit()` API, which still rejects `sys.*` with `INVALID_CUSTOM_EVENT_KEY`; automatic collection is the only internal producer. The event is subject to the same publication gate as custom events, so a source that has not published `sys.page_view` settles each automatic event as `rejected` with `EVENT_NOT_PUBLISHED` and never transmits it. Backpressure never breaks navigation: when the queue is full the automatic page event is dropped instead of throwing, while explicit `emit()` calls still surface `QUEUE_FULL`.
+
+Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll, engagement, identity-link and session-end system events remain contract samples only and are not auto-collected. Cross-document session continuity is not reconstructed.
 
 ## Bounded delivery and receipts
 
