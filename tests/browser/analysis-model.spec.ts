@@ -415,6 +415,32 @@ test('attribution builds last-touch credit requests and closes the validation su
   expect(() => validateAnalysisSection(input, 'attribution')).not.toThrow();
 });
 
+test('attribution model defaults to last-touch and passes first-touch through', () => {
+  const input = form();
+  input.mode = 'attribution';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-05T00:00';
+  input.attributionConversion = { event: 'purchase', version: '1' };
+  input.attributionTouchpoints = [{ event: 'ad_click', version: '1' }];
+  input.attributionWindow = '86400';
+
+  // initialForm selects last-touch, and the default request carries it.
+  expect(input.attributionModel).toBe('last_touch');
+  const defaults = buildRequest(input, 'development');
+  expect(defaults.attribution?.model).toBe('last_touch');
+
+  // Switching the form model flows through to the request without other changes.
+  const firstTouch = { ...input, attributionModel: 'first_touch' as const };
+  const request = buildRequest(firstTouch, 'development');
+  expect(request.attribution).toEqual({
+    conversion: { event_key: 'purchase', schema_version: 1 },
+    touchpoints: [{ event_key: 'ad_click', schema_version: 1 }],
+    window_seconds: 86400,
+    model: 'first_touch',
+  });
+  expect(() => validateAnalysisSection(firstTouch, 'attribution')).not.toThrow();
+});
+
 test('analysis preserves immutable property versions, funnel order, timezone and bounded half-open ranges', () => {
   const fields = publishedFields(
     {

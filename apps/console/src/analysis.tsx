@@ -755,7 +755,8 @@ export function AnalysisPage({
                 {form.attributionConversion.event
                   ? `${form.attributionConversion.event} v${form.attributionConversion.version}`
                   : '未选择事件'}
-                ；触点 {form.attributionTouchpoints.length} 个；窗口 {form.attributionWindow} 秒
+                ；触点 {form.attributionTouchpoints.length} 个；窗口 {form.attributionWindow}{' '}
+                秒；模型 {form.attributionModel === 'first_touch' ? '首次触点' : '末次触点'}
               </span>
             </div>
           )}
@@ -907,7 +908,7 @@ export function AnalysisPage({
                             : snapshot.request.kind === 'path'
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
                               : snapshot.request.kind === 'attribution'
-                                ? `末次触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
+                                ? `${snapshot.request.attribution?.model === 'first_touch' ? '首次' : '末次'}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
                                 : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
@@ -2167,9 +2168,23 @@ export function AnalysisPage({
               />
             </Field>
           </Toolbar>
+          <Field label="归因模型">
+            <Select
+              data-query-control="attribution-model"
+              value={form.attributionModel}
+              onChange={(event) =>
+                patch('attributionModel', event.target.value as AnalysisForm['attributionModel'])
+              }
+              options={[
+                { value: 'last_touch', label: '末次触点（窗口内最晚触点）' },
+                { value: 'first_touch', label: '首次触点（窗口内最早触点）' },
+              ]}
+            />
+          </Field>
           <p className="field-help">
-            触点 1–8 个且不能与转化事件相同、彼此不能重复；v1
-            仅支持末次触点（last_touch）模型。统计主体在查询栏选择原始 UID 或原始匿名标识。
+            触点 1–8
+            个且不能与转化事件相同、彼此不能重复；每个转化主体只归因一次，窗口内无触点的转化归入直接来源（__direct__）。统计主体在查询栏选择原始
+            UID 或原始匿名标识。
           </p>
         </form>
       </Modal>

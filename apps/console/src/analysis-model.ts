@@ -49,6 +49,7 @@ export type AnalysisForm = {
   attributionConversion: { event: string; version: string };
   attributionTouchpoints: { event: string; version: string }[];
   attributionWindow: string;
+  attributionModel: 'last_touch' | 'first_touch';
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -164,6 +165,7 @@ export function initialForm(timezone: string): AnalysisForm {
     attributionConversion: { event: '', version: '' },
     attributionTouchpoints: [{ event: '', version: '' }],
     attributionWindow: '86400',
+    attributionModel: 'last_touch',
   };
 }
 export type AnalysisValidationTarget =
@@ -434,8 +436,8 @@ function readAttribution(form: AnalysisForm): NonNullable<QueryRequest['attribut
       schema_version: Number(step.version),
     })),
     window_seconds: window,
-    // v1 exposes only the last-touch model; the backend enum is the authority.
-    model: 'last_touch',
+    // The backend enum is the authority; the form keeps the explicit closed set.
+    model: form.attributionModel,
   };
 }
 export type AnalysisEditorSection =
