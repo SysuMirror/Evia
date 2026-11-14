@@ -79,7 +79,7 @@ Set `autoPageViews: true` at client construction to enable reserved automatic pa
 
 The reserved key is not reachable through the public `emit()` API, which still rejects `sys.*` with `INVALID_CUSTOM_EVENT_KEY`; automatic collection is the only internal producer. The event is subject to the same publication gate as custom events, so a source that has not published `sys.page_view` settles each automatic event as `rejected` with `EVENT_NOT_PUBLISHED` and never transmits it. Backpressure never breaks navigation: when the queue is full the automatic page event is dropped instead of throwing, while explicit `emit()` calls still surface `QUEUE_FULL`.
 
-Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll and engagement system events remain contract samples only and are not auto-collected. Session ends are emitted opt-in (see [Automatic session ends](#automatic-session-ends)). Operation failures are reported explicitly rather than auto-collected (see [Operation failure reporting](#operation-failure-reporting)). Cross-document session continuity is not reconstructed.
+Automatic page views do not inspect the DOM or URL and do not infer routes; the application still drives every `navigate()` with an explicit route template. Scroll segments are emitted opt-in (see [Automatic scroll collection](#automatic-scroll-collection)). Session ends are emitted opt-in (see [Automatic session ends](#automatic-session-ends)). Operation failures are reported explicitly rather than auto-collected (see [Operation failure reporting](#operation-failure-reporting)). Cross-document session continuity is not reconstructed.
 
 ## Automatic identity links
 
@@ -100,6 +100,12 @@ Set `autoSessionEnd: true` to record a reserved `sys.session_end` event with a c
 - `idle`: when inactivity reaches `sessionTimeoutMs`, the next activity rotates the session inside `touchSession`; activity is refreshed before the event is enqueued to prevent re-entrancy, and the event still carries the ending session id while the triggering event uses the new session.
 
 Each event carries only the `reason` property and reuses the bounded queue, retry and receipt pipeline plus the publication gate: an unpublished `sys.session_end` settles as `rejected` with `EVENT_NOT_PUBLISHED`, and a full queue drops the automatic event without breaking `reset()`, `identify()` or the in-flight event. The reserved key cannot be forged through the public `emit()` API. The SDK does not reconstruct cross-document session continuity.
+
+## Automatic scroll collection
+
+Set `autoPageScrolls: true` to collect reserved `sys.page_scroll` segments. It is opt-in and defaults to `false`, so existing integrations are unchanged. The SDK subscribes through an injectable `ScrollHost`; by default it adapts `window`/`document` (and does nothing under SSR without those globals). Consecutive scroll activity is coalesced into one segment when scrolling has been idle for `scrollIdleMs` (default 1000, bounded 100–10000 ms), rather than emitting one event per scroll tick.
+
+Each segment reports `from_ratio`, `to_ratio` and `max_ratio` clamped to `[0,1]`, a `direction` of `up`, `down` or `mixed`, and an integer non-negative `duration_ms`. Movement with no directional change produces no event. Production is bounded at twelve coalesced segments per rolling minute; segments beyond the cap are dropped rather than queued. When `navigate()` or `reset()` changes the page, an in-flight segment that has not yet stopped is discarded so it is never attributed to the next page view. Events reuse the bounded queue and publication gate (an unpublished `sys.page_scroll` settles as `EVENT_NOT_PUBLISHED`), and the reserved key cannot be forged through the public `emit()` API.
 
 ## Bounded delivery and receipts
 
