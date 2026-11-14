@@ -113,6 +113,29 @@ func TestValidationRejectsInvalidInputBeforePersistenceAndHashesScope(t *testing
 		t.Fatal("unauthorized discovery succeeded")
 	}
 }
+func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
+	s := discoveryForTest(t, &discoveryStoreFake{})
+	capabilities, e := s.Capabilities(context.Background(), "actor", "project")
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, kind := range capabilities.QueryKinds {
+		if kind == "retention" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("retention must be advertised in query kinds: %v", capabilities.QueryKinds)
+	}
+	if len(capabilities.RetentionGranularities) != 2 || capabilities.RetentionGranularities[0] != "day" || capabilities.RetentionGranularities[1] != "week" {
+		t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
+	}
+	if capabilities.Budgets.RetentionMaxPeriods != 12 || capabilities.Budgets.RetentionMaxWindowSeconds != 84*86400 {
+		t.Fatalf("retention budgets wrong: %+v", capabilities.Budgets)
+	}
+}
+
 func TestCatalogProjectsOnlyQueryableTopLevelTypedFields(t *testing.T) {
 	definition := PublishedDefinition{Event: CatalogEvent{EventKey: "page_opened", SchemaVersion: 2}, Definition: map[string]any{"schema": map[string]any{"properties": map[string]any{
 		"count": map[string]any{"type": "integer"}, "enabled": map[string]any{"type": "boolean"}, "tags": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "nullable": map[string]any{"type": []any{"string", "null"}}, "object": map[string]any{"type": "object"}, "any_array": map[string]any{"type": "array"}, "nested.path": map[string]any{"type": "string"}, "date": map[string]any{"type": "string", "format": "date-time"}}, "required": []any{"count"}}, "field_metadata": map[string]any{"count": map[string]any{"description": "Synthetic count"}}}}

@@ -23,20 +23,22 @@ type FieldCapability struct {
 	MetricOperations []string `json:"metric_operations"`
 }
 type DiscoveryBudgets struct {
-	TrendWindowSeconds    int `json:"trend_window_seconds"`
-	OtherWindowSeconds    int `json:"other_window_seconds"`
-	EventSelections       int `json:"event_selections"`
-	GroupFields           int `json:"group_fields"`
-	Metrics               int `json:"metrics"`
-	ResultRows            int `json:"result_rows"`
-	FilterDepth           int `json:"filter_depth"`
-	FilterNodes           int `json:"filter_nodes"`
-	FilterArguments       int `json:"filter_arguments"`
-	FilterValues          int `json:"filter_values"`
-	FunnelSteps           int `json:"funnel_steps"`
-	FunnelWindowSeconds   int `json:"funnel_window_seconds"`
-	ProjectRunningQueries int `json:"project_running_queries"`
-	ProjectQueuedQueries  int `json:"project_queued_queries"`
+	TrendWindowSeconds        int `json:"trend_window_seconds"`
+	OtherWindowSeconds        int `json:"other_window_seconds"`
+	EventSelections           int `json:"event_selections"`
+	GroupFields               int `json:"group_fields"`
+	Metrics                   int `json:"metrics"`
+	ResultRows                int `json:"result_rows"`
+	FilterDepth               int `json:"filter_depth"`
+	FilterNodes               int `json:"filter_nodes"`
+	FilterArguments           int `json:"filter_arguments"`
+	FilterValues              int `json:"filter_values"`
+	FunnelSteps               int `json:"funnel_steps"`
+	FunnelWindowSeconds       int `json:"funnel_window_seconds"`
+	ProjectRunningQueries     int `json:"project_running_queries"`
+	ProjectQueuedQueries      int `json:"project_queued_queries"`
+	RetentionMaxPeriods       int `json:"retention_max_periods"`
+	RetentionMaxWindowSeconds int `json:"retention_max_window_seconds"`
 }
 type Capabilities struct {
 	ExecutionAvailable      bool              `json:"execution_available"`
@@ -46,6 +48,7 @@ type Capabilities struct {
 	Subjects                []string          `json:"subjects"`
 	Intervals               []string          `json:"intervals"`
 	FunnelModes             []string          `json:"funnel_modes"`
+	RetentionGranularities  []string          `json:"retention_granularities"`
 	FieldTypes              []FieldCapability `json:"field_types"`
 	Budgets                 DiscoveryBudgets  `json:"budgets"`
 }
@@ -165,7 +168,7 @@ func (s *Discovery) Capabilities(ctx context.Context, actor, project string) (Ca
 	if e := s.store.AuthorizeAnalysisDiscovery(ctx, actor, project); e != nil {
 		return Capabilities{}, e
 	}
-	out := Capabilities{ExecutionAvailable: s.executionAvailable, QueryKinds: []string{"events", "trend", "funnel", "journey"}, Aggregations: []string{"count", "unique", "sum", "avg", "min", "max", "p95"}, ApproximateAggregations: []string{"unique", "p95"}, Subjects: []string{"uid", "anonymous"}, Intervals: []string{"minute", "hour", "day"}, FunnelModes: []string{"ordered_with_interleaving"}, FieldTypes: []FieldCapability{}, Budgets: DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32}}
+	out := Capabilities{ExecutionAvailable: s.executionAvailable, QueryKinds: []string{"events", "trend", "funnel", "journey", "retention"}, Aggregations: []string{"count", "unique", "sum", "avg", "min", "max", "p95"}, ApproximateAggregations: []string{"unique", "p95"}, Subjects: []string{"uid", "anonymous"}, Intervals: []string{"minute", "hour", "day"}, FunnelModes: []string{"ordered_with_interleaving"}, RetentionGranularities: []string{"day", "week"}, FieldTypes: []FieldCapability{}, Budgets: DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 84 * 86400}}
 	for _, kind := range []string{"string", "boolean", "number", "integer", "datetime", "array:string", "array:boolean", "array:number", "array:integer"} {
 		c, _ := FieldCapabilities(kind)
 		out.FieldTypes = append(out.FieldTypes, c)
