@@ -36,10 +36,11 @@ func earlierAttributionEvent(previous, next attributionEvent) bool {
 		previous.sequence > 0
 }
 
-// EvaluateAttribution credits every converting subject to the last touchpoint
-// before its earliest conversion within the bounded lookback window. Each
-// subject contributes at most one credit; subjects without an in-window
-// touchpoint are reported in the fixed direct bucket.
+// EvaluateAttribution credits every converting subject once, at its earliest
+// conversion, to either the earliest (first-touch) or latest (last-touch)
+// in-window touchpoint according to the explicit model. Each subject
+// contributes at most one credit; subjects without an in-window touchpoint are
+// reported in the fixed direct bucket.
 func EvaluateAttribution(request Request, rows []map[string]any) ([]map[string]any, error) {
 	return evaluateAttribution(context.Background(), request, rows)
 }
@@ -104,15 +105,31 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 		converters++
 		cutoff := events[conversionIndex].time - window*1_000_000_000
 		credited := directAttributionBucket
-		// Walk backwards to the nearest touchpoint still inside the window.
-		for i := conversionIndex - 1; i >= 0; i-- {
-			event := events[i]
-			if event.time < cutoff {
-				break
+		if request.Attribution.Model == "first_touch" {
+			// First-touch: the earliest in-window touchpoint receives full
+			// credit, so scan forward and stop at the first match.
+			for i := 0; i < conversionIndex; i++ {
+				event := events[i]
+				if event.time < cutoff {
+					continue
+				}
+				if event.isTouchpoint {
+					credited = event.eventKey
+					break
+				}
 			}
-			if event.isTouchpoint {
-				credited = event.eventKey
-				break
+		} else {
+			// Last-touch (default): walk backwards to the nearest in-window
+			// touchpoint.
+			for i := conversionIndex - 1; i >= 0; i-- {
+				event := events[i]
+				if event.time < cutoff {
+					break
+				}
+				if event.isTouchpoint {
+					credited = event.eventKey
+					break
+				}
 			}
 		}
 		if existing, ok := counts[credited]; ok {

@@ -284,10 +284,10 @@ func validatePath(r *Request) error {
 	return nil
 }
 
-// validateAttribution enforces last-touch attribution: an explicit subject,
-// one pinned conversion, 1..8 distinct pinned touchpoints that never reuse
-// the conversion pair, and a 1..604800 second lookback window. Every
-// malformed value fails closed.
+// validateAttribution enforces an explicit attribution model (last-touch or
+// first-touch), an explicit subject, one pinned conversion, 1..8 distinct
+// pinned touchpoints that never reuse the conversion pair, and a 1..604800
+// second lookback window. Every malformed value fails closed.
 func validateAttribution(r *Request) error {
 	if r.Subject != "uid" && r.Subject != "anonymous" {
 		return Invalid("SUBJECT_REQUIRED", "归因查询必须指定 uid 或 anonymous 统计主体", "/subject")
@@ -296,7 +296,7 @@ func validateAttribution(r *Request) error {
 	if a == nil {
 		return Invalid("INVALID_ATTRIBUTION", "归因配置缺失", "/attribution")
 	}
-	if a.Model != "last_touch" {
+	if a.Model != "last_touch" && a.Model != "first_touch" {
 		return Invalid("INVALID_ATTRIBUTION_MODEL", "归因模型尚未实现", "/attribution/model")
 	}
 	if a.WindowSeconds < 1 || a.WindowSeconds > 604800 {

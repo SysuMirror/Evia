@@ -157,8 +157,8 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 		t.Fatalf("valid attribution request rejected: %v", e)
 	}
 	for _, raw := range []string{
-		// Unknown model is rejected by the schema enum.
-		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"first_touch"}}`,
+		// A model outside the explicit enum is rejected by the schema.
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"linear"}}`,
 		// Window must be within 1..604800.
 		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":0,"model":"last_touch"}}`,
 		// At least one touchpoint is required.
@@ -179,7 +179,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}{
 		{"nil attribution", func(r *Request) { r.Attribution = nil }, "INVALID_ATTRIBUTION"},
 		{"missing subject", func(r *Request) { r.Subject = "" }, "SUBJECT_REQUIRED"},
-		{"unknown model", func(r *Request) { r.Attribution.Model = "first_touch" }, "INVALID_ATTRIBUTION_MODEL"},
+		{"unknown model", func(r *Request) { r.Attribution.Model = "linear" }, "INVALID_ATTRIBUTION_MODEL"},
 		{"zero window", func(r *Request) { r.Attribution.WindowSeconds = 0 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"oversized window", func(r *Request) { r.Attribution.WindowSeconds = 604801 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"conversion overlap", func(r *Request) {
@@ -236,6 +236,87 @@ func TestAttributionPlannerEmitsMarkersAndSubjectPull(t *testing.T) {
 	}
 	if !strings.Contains(anonymousPlan.SQL, "anonymous_id AS subject_id") || strings.Contains(anonymousPlan.SQL, "uid AS subject_id") {
 		t.Fatalf("anonymous attribution must select anonymous_id exclusively: %s", anonymousPlan.SQL)
+	}
+}
+
+func firstTouchRequest(window int64) Request {
+	r := attributionRequest(window)
+	r.Attribution.Model = "first_touch"
+	return r
+}
+
+func TestEvaluateFirstTouchVsLastTouchDiverge(t *testing.T) {
+	// ad_click then email_open before the conversion: first and last touch
+	// must credit different touchpoints for the same evidence.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 20, "email_open", false, true),
+		markedRow("u1", 30, "buy", true, false),
+	}
+
+	last, e := EvaluateAttribution(attributionRequest(86400), rows)
+	if e != nil || len(last) != 1 || last[0]["touchpoint"] != "email_open" {
+		t.Fatalf("last-touch must credit email_open: %v %v", last, e)
+	}
+
+	first, e := EvaluateAttribution(firstTouchRequest(86400), rows)
+	if e != nil || len(first) != 1 || first[0]["touchpoint"] != "ad_click" {
+		t.Fatalf("first-touch must credit ad_click: %v %v", first, e)
+	}
+}
+
+func TestEvaluateFirstTouchRespectsLookbackWindow(t *testing.T) {
+	// Two touchpoints; only the later one is inside the tight window.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 95, "email_open", false, true),
+		markedRow("u1", 100, "buy", true, false),
+	}
+
+	// A 30-second window excludes ad_click, so the earliest eligible
+	// touchpoint is email_open.
+	first, e := EvaluateAttribution(firstTouchRequest(30), rows)
+	if e != nil || len(first) != 1 || first[0]["touchpoint"] != "email_open" {
+		t.Fatalf("windowed first-touch must skip out-of-window ad_click: %v %v", first, e)
+	}
+
+	// A 120-second window makes ad_click the earliest eligible touchpoint.
+	wide, e := EvaluateAttribution(firstTouchRequest(120), rows)
+	if e != nil || len(wide) != 1 || wide[0]["touchpoint"] != "ad_click" {
+		t.Fatalf("wide-window first-touch must credit ad_click: %v %v", wide, e)
+	}
+
+	// With no in-window touchpoint both models fall back to the direct bucket.
+	direct, e := EvaluateAttribution(firstTouchRequest(1), rows)
+	if e != nil || len(direct) != 1 || direct[0]["touchpoint"] != directAttributionBucket {
+		t.Fatalf("first-touch without an in-window touchpoint must be direct: %v %v", direct, e)
+	}
+}
+
+func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	valid := `{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"first_touch"}}`
+	parsed, e := Parse([]byte(valid), validator)
+	if e != nil {
+		t.Fatalf("first_touch must be accepted: %v", e)
+	}
+	if parsed.Attribution.Model != "first_touch" {
+		t.Fatalf("model must deserialize to first_touch, got %q", parsed.Attribution.Model)
+	}
+
+	// Internally constructed requests also accept first_touch and reject unknown models.
+	good := firstTouchRequest(86400)
+	if e := Validate(&good); e != nil {
+		t.Fatalf("first_touch request must pass Go validation: %v", e)
+	}
+	bad := firstTouchRequest(86400)
+	bad.Attribution.Model = "time_decay"
+	var problem *fault.Error
+	if e := Validate(&bad); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_MODEL" {
+		t.Fatalf("unknown model must fail closed: %v", e)
 	}
 }
 

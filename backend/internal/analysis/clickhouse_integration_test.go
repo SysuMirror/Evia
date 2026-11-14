@@ -768,6 +768,72 @@ func TestClickHouseAttribution(t *testing.T) {
 	}
 }
 
+// TestClickHouseFirstTouchAttribution proves the model enum switches the
+// credit direction against the real migrated view: with the same evidence as
+// the last-touch test, the earliest in-window touchpoint wins and the later
+// email_open bucket disappears.
+func TestClickHouseFirstTouchAttribution(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1 sees two touchpoints; first-touch credits the earlier ad_click.
+		fact("ft-u1-ad", "ad_click", "u1", "", "source-one", 10, map[string]any{}),
+		fact("ft-u1-email", "email_open", "u1", "", "source-one", 20, map[string]any{}),
+		fact("ft-u1-buy", "buy", "u1", "", "source-one", 30, map[string]any{}),
+		// u2 has one touchpoint, identical under both models.
+		fact("ft-u2-ad", "ad_click", "u2", "", "source-one", 15, map[string]any{}),
+		fact("ft-u2-buy", "buy", "u2", "", "source-one", 25, map[string]any{}),
+		// u3 converts without any touchpoint and stays in the direct bucket.
+		fact("ft-u3-buy", "buy", "u3", "", "source-one", 40, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"ft-u1-ad": 10, "ft-u1-email": 20, "ft-u1-buy": 30,
+		"ft-u2-ad": 15, "ft-u2-buy": 25, "ft-u3-buy": 40,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "attribution", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Attribution: &Attribution{
+			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
+			WindowSeconds: 86400,
+			Model:         "first_touch",
+		},
+	}
+	result := execute(t, client, r)
+	want := []struct {
+		touchpoint string
+		subjects   int
+		share      float64
+	}{
+		{"ad_click", 2, 2.0 / 3.0},
+		{"__direct__", 1, 1.0 / 3.0},
+	}
+	if len(result.Rows) != len(want) {
+		t.Fatalf("first-touch wants %d rows (no email_open bucket), got %v", len(want), result.Rows)
+	}
+	for i, expected := range want {
+		row := result.Rows[i]
+		if row["touchpoint"] != expected.touchpoint || row["subjects"] != expected.subjects {
+			t.Fatalf("first-touch credit %d mismatch: %v", i, row)
+		}
+		share, _ := row["share"].(float64)
+		if share != expected.share {
+			t.Fatalf("first-touch credit %d share=%v want %v", i, share, expected.share)
+		}
+	}
+}
+
 // TestClickHousePathCollapseRepeats proves the opt-in loop compression
 // against the real migrated view: adjacent identical events fold into one
 // node before depth extraction, while the default request stays byte-stable.
