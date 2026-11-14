@@ -20164,6 +20164,7 @@
           "subjects",
           "intervals",
           "funnel_modes",
+          "retention_granularities",
           "field_types",
           "budgets"
         ],
@@ -20208,6 +20209,12 @@
               "type": "string"
             }
           },
+          "retention_granularities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "field_types": {
             "type": "array",
             "items": {
@@ -20231,7 +20238,9 @@
               "funnel_steps",
               "funnel_window_seconds",
               "project_running_queries",
-              "project_queued_queries"
+              "project_queued_queries",
+              "retention_max_periods",
+              "retention_max_window_seconds"
             ],
             "properties": {
               "trend_window_seconds": {
@@ -20300,6 +20309,16 @@
                 "maximum": 9007199254740991
               },
               "project_queued_queries": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "retention_max_periods": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "retention_max_window_seconds": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991

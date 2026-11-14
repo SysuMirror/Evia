@@ -22,22 +22,25 @@ type AnalysisCapabilities struct {
 	Subjects                []string                  `json:"subjects"`
 	Intervals               []string                  `json:"intervals"`
 	FunnelModes             []string                  `json:"funnel_modes"`
+	RetentionGranularities  []string                  `json:"retention_granularities"`
 	FieldTypes              []AnalysisFieldCapability `json:"field_types"`
 	Budgets                 struct {
-		TrendWindowSeconds    int64 `json:"trend_window_seconds"`
-		OtherWindowSeconds    int64 `json:"other_window_seconds"`
-		EventSelections       int64 `json:"event_selections"`
-		GroupFields           int64 `json:"group_fields"`
-		Metrics               int64 `json:"metrics"`
-		ResultRows            int64 `json:"result_rows"`
-		FilterDepth           int64 `json:"filter_depth"`
-		FilterNodes           int64 `json:"filter_nodes"`
-		FilterArguments       int64 `json:"filter_arguments"`
-		FilterValues          int64 `json:"filter_values"`
-		FunnelSteps           int64 `json:"funnel_steps"`
-		FunnelWindowSeconds   int64 `json:"funnel_window_seconds"`
-		ProjectRunningQueries int64 `json:"project_running_queries"`
-		ProjectQueuedQueries  int64 `json:"project_queued_queries"`
+		TrendWindowSeconds        int64 `json:"trend_window_seconds"`
+		OtherWindowSeconds        int64 `json:"other_window_seconds"`
+		EventSelections           int64 `json:"event_selections"`
+		GroupFields               int64 `json:"group_fields"`
+		Metrics                   int64 `json:"metrics"`
+		ResultRows                int64 `json:"result_rows"`
+		FilterDepth               int64 `json:"filter_depth"`
+		FilterNodes               int64 `json:"filter_nodes"`
+		FilterArguments           int64 `json:"filter_arguments"`
+		FilterValues              int64 `json:"filter_values"`
+		FunnelSteps               int64 `json:"funnel_steps"`
+		FunnelWindowSeconds       int64 `json:"funnel_window_seconds"`
+		ProjectRunningQueries     int64 `json:"project_running_queries"`
+		ProjectQueuedQueries      int64 `json:"project_queued_queries"`
+		RetentionMaxPeriods       int64 `json:"retention_max_periods"`
+		RetentionMaxWindowSeconds int64 `json:"retention_max_window_seconds"`
 	} `json:"budgets"`
 }
 
@@ -1096,6 +1099,12 @@ type QueryRequest struct {
 			Field     json.RawMessage `json:"field"`
 		} `json:"same_entity,omitzero"`
 	} `json:"funnel,omitempty"`
+	Retention *struct {
+		StartEvent  json.RawMessage `json:"start_event"`
+		ReturnEvent json.RawMessage `json:"return_event"`
+		Granularity string          `json:"granularity"`
+		Periods     int64           `json:"periods"`
+	} `json:"retention,omitempty"`
 	Limit         *int64  `json:"limit,omitempty"`
 	Cursor        *string `json:"cursor,omitempty"`
 	EventVersions []struct {

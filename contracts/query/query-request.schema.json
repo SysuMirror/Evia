@@ -9,7 +9,8 @@
         "events",
         "trend",
         "funnel",
-        "journey"
+        "journey",
+        "retention"
       ]
     },
     "environment": {
@@ -362,6 +363,35 @@
         "mode"
       ]
     },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "return_event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "granularity": {
+          "enum": [
+            "day",
+            "week"
+          ]
+        },
+        "periods": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "start_event",
+        "return_event",
+        "granularity",
+        "periods"
+      ]
+    },
     "limit": {
       "type": "integer",
       "minimum": 1,
@@ -405,6 +435,29 @@
     "timezone"
   ],
   "$defs": {
+    "retention_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_key": {
+          "type": "string",
+          "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+          "maxLength": 68
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "filter": {
+          "$ref": "#/$defs/filter"
+        }
+      },
+      "required": [
+        "event_key",
+        "schema_version"
+      ]
+    },
     "filter": {
       "oneOf": [
         {
@@ -659,6 +712,35 @@
         "not": {
           "required": [
             "event_versions"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "retention"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "retention",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "event_keys"
+              ]
+            }
           ]
         }
       }

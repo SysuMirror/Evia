@@ -2047,6 +2047,7 @@ export interface components {
             subjects: string[];
             intervals: string[];
             funnel_modes: string[];
+            retention_granularities: string[];
             field_types: components["schemas"]["AnalysisFieldCapability"][];
             budgets: {
                 trend_window_seconds: number;
@@ -2063,6 +2064,8 @@ export interface components {
                 funnel_window_seconds: number;
                 project_running_queries: number;
                 project_queued_queries: number;
+                retention_max_periods: number;
+                retention_max_window_seconds: number;
             };
         };
         /** @description Property operators use the existing engine: is_present tests key existence, including explicit null; is_missing tests absent keys within the referenced event/version. Typed comparisons exclude null and absent values. Nullable schema unions and unsupported nested/object fields are omitted. */
@@ -3007,9 +3010,14 @@ export interface components {
                 key: string;
             };
         };
+        retention_step: {
+            event_key: string;
+            schema_version: number;
+            filter?: components["schemas"]["filter"];
+        };
         "query-request.schema": {
             /** @enum {unknown} */
-            kind: "events" | "trend" | "funnel" | "journey";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention";
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             time_range: {
@@ -3086,6 +3094,13 @@ export interface components {
                     };
                 }[];
             };
+            retention?: {
+                start_event: components["schemas"]["retention_step"];
+                return_event: components["schemas"]["retention_step"];
+                /** @enum {unknown} */
+                granularity: "day" | "week";
+                periods: number;
+            };
             limit?: number;
             cursor?: string;
             event_versions?: {
@@ -3093,6 +3108,11 @@ export interface components {
                 schema_version: number;
             }[];
             $defs: {
+                retention_step: {
+                    event_key: string;
+                    schema_version: number;
+                    filter?: components["schemas"]["filter"];
+                };
                 filter: {
                     /** @enum {unknown} */
                     op: "and" | "or";
@@ -3130,7 +3150,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;
