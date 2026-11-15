@@ -2,6 +2,12 @@
   display: grid;
   gap: 20px;
 }
+.metric-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .metric-form {
   display: grid;
   gap: 16px;
