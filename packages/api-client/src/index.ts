@@ -156,7 +156,12 @@ export type CatalogPage = {
   limit?: number;
   view?: 'active' | 'archived';
 };
-export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
+export type SavedAnalysisPage = {
+  environment: Environment;
+  cursor?: string;
+  limit?: number;
+  view?: 'active' | 'archived';
+};
 export type DashboardPage = SavedAnalysisPage & { view?: 'active' | 'archived' };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
@@ -802,6 +807,28 @@ export const api = {
     }),
   getSavedAnalysis: (projectID: string, analysisID: string, signal?: AbortSignal) =>
     request<SavedAnalysis>(savedAnalysisPath(projectID, analysisID), { signal }),
+  archiveSavedAnalysis: (
+    projectID: string,
+    analysisID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysis>(`${savedAnalysisPath(projectID, analysisID)}/archive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
+  unarchiveSavedAnalysis: (
+    projectID: string,
+    analysisID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<SavedAnalysis>(`${savedAnalysisPath(projectID, analysisID)}/unarchive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
   getSavedAnalysisDraft: (projectID: string, analysisID: string, signal?: AbortSignal) =>
     request<SavedAnalysisDraft>(`${savedAnalysisPath(projectID, analysisID)}/draft`, { signal }),
   updateSavedAnalysisDraft: (

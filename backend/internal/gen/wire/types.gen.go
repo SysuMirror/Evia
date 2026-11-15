@@ -1289,15 +1289,17 @@ type RetentionSweepList struct {
 }
 
 type SavedAnalysis struct {
-	AnalysisID       string `json:"analysis_id"`
-	ProjectID        string `json:"project_id"`
-	Environment      string `json:"environment"`
-	Title            string `json:"title"`
-	Kind             string `json:"kind"`
-	DraftRevision    int64  `json:"draft_revision"`
-	PublishedVersion int64  `json:"published_version"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	AnalysisID       string  `json:"analysis_id"`
+	ProjectID        string  `json:"project_id"`
+	Environment      string  `json:"environment"`
+	Title            string  `json:"title"`
+	Kind             string  `json:"kind"`
+	DraftRevision    int64   `json:"draft_revision"`
+	PublishedVersion int64   `json:"published_version"`
+	ArchivedAt       *string `json:"archived_at,omitempty"`
+	ArchivedBy       *string `json:"archived_by,omitempty"`
+	CreatedAt        string  `json:"created_at"`
+	UpdatedAt        string  `json:"updated_at"`
 }
 
 type SavedAnalysisChange struct {
