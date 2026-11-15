@@ -348,6 +348,12 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
+	if template.Kind == "retention" {
+		mode = "retention_steps"
+		for _, step := range []analysis.Step{template.Retention.StartEvent, template.Retention.ReturnEvent} {
+			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		}
+	}
 	if in.ProjectID != draft.ProjectID || in.Environment != draft.Environment || in.SelectionMode != mode || len(in.UnfixedEventKeys) > 0 || len(in.EventVersions) != len(selected) {
 		return invalid()
 	}
@@ -387,6 +393,7 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 	add("group_by", "/query/group_by", before.Query.GroupBy, after.Query.GroupBy)
 	add("interval", "/query/interval", before.Query.Interval, after.Query.Interval)
 	add("funnel", "/query/funnel", before.Query.Funnel, after.Query.Funnel)
+	add("retention", "/query/retention", before.Query.Retention, after.Query.Retention)
 	add("limit", "/query/limit", before.Query.Limit, after.Query.Limit)
 	add("metric_ref", "/metric_ref", before.MetricRef, after.MetricRef)
 	add("visualization", "/visualization", before.Visualization, after.Visualization)

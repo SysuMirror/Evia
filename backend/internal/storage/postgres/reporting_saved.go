@@ -360,6 +360,12 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
+	if request.Retention != nil {
+		manifest.SelectionMode = "retention_steps"
+		for _, step := range []analysis.Step{request.Retention.StartEvent, request.Retention.ReturnEvent} {
+			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		}
+	}
 	for v := range versions {
 		var hash string
 		e = tx.QueryRow(ctx, `SELECT v.definition_hash FROM catalog_versions v WHERE v.project_id=$1 AND v.event_key=$2 AND v.schema_version=$3 AND EXISTS(SELECT 1 FROM catalog_release_events re WHERE re.project_id=v.project_id AND re.environment=$4 AND re.event_key=v.event_key AND re.schema_version=v.schema_version)`, project, v.EventKey, v.SchemaVersion, out.Draft.Environment).Scan(&hash)

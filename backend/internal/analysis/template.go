@@ -16,6 +16,7 @@ type Template struct {
 	Metrics       []Metric       `json:"metrics,omitempty"`
 	Interval      string         `json:"interval,omitempty"`
 	Funnel        *Funnel        `json:"funnel,omitempty"`
+	Retention     *Retention     `json:"retention,omitempty"`
 	Limit         int            `json:"limit,omitempty"`
 }
 
@@ -34,7 +35,7 @@ func ValidateTemplate(template *Template) error {
 	if e = WalkFields(&r, func(field *Field) error { field.ResolvedType = ""; return nil }); e != nil {
 		return e
 	}
-	*template = Template{Kind: r.Kind, EventVersions: r.EventVersions, Filter: r.Filter, Subject: r.Subject, GroupBy: r.GroupBy, Metrics: r.Metrics, Interval: r.Interval, Funnel: r.Funnel, Limit: r.Limit}
+	*template = Template{Kind: r.Kind, EventVersions: r.EventVersions, Filter: r.Filter, Subject: r.Subject, GroupBy: r.GroupBy, Metrics: r.Metrics, Interval: r.Interval, Funnel: r.Funnel, Retention: r.Retention, Limit: r.Limit}
 	return nil
 }
 
@@ -70,14 +71,21 @@ func (template Template) request() (Request, error) {
 }
 
 func (template Template) validatedRequest() (Request, error) {
-	if template.Kind != "trend" && template.Kind != "funnel" {
-		return Request{}, Invalid("UNSUPPORTED_QUERY_KIND", "保存分析仅支持趋势或漏斗", "/kind")
-	}
-	if template.Kind == "trend" && len(template.EventVersions) == 0 {
-		return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存趋势分析必须固定事件版本", "/event_versions")
-	}
-	if template.Kind == "funnel" && template.EventVersions != nil {
-		return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存漏斗分析通过步骤固定事件版本", "/event_versions")
+	switch template.Kind {
+	case "trend":
+		if len(template.EventVersions) == 0 {
+			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存趋势分析必须固定事件版本", "/event_versions")
+		}
+	case "funnel":
+		if template.EventVersions != nil {
+			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存漏斗分析通过步骤固定事件版本", "/event_versions")
+		}
+	case "retention":
+		if template.EventVersions != nil {
+			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存留存分析通过起止事件固定事件版本", "/event_versions")
+		}
+	default:
+		return Request{}, Invalid("UNSUPPORTED_QUERY_KIND", "保存分析仅支持趋势、漏斗或留存", "/kind")
 	}
 	r, e := template.request()
 	if e != nil {
