@@ -58,8 +58,12 @@ export function useSectionEditor({
     const nextCandidate = cloneSavedDefinition(value);
     const nextNumbers = {
       limit: String(value.query.limit ?? 200),
-      window: String(value.query.funnel?.window_seconds ?? 3600),
+      window: String(
+        value.query.funnel?.window_seconds ?? value.query.attribution?.window_seconds ?? 3600,
+      ),
       periods: String(value.query.retention?.periods ?? 4),
+      depth: String(value.query.path?.depth ?? 3),
+      halfLife: String(value.query.attribution?.decay_half_life_seconds ?? 604800),
     };
     const nextFilters = flatSavedFilters(value.query.filter)?.rows.map(savedFilterText) ?? [];
     const json = JSON.stringify(value, null, 2);

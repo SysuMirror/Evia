@@ -164,6 +164,38 @@ export function replaceSavedKind(
       },
     };
     visualization = 'table';
+  } else if (kind === 'segment') {
+    query = {
+      kind,
+      subject: 'uid',
+      limit,
+      segment: {
+        event: { event_key: '', schema_version: 0 },
+        field: { kind: 'system', key: 'event_key' },
+      },
+    };
+    visualization = 'table';
+  } else if (kind === 'path') {
+    query = {
+      kind,
+      subject: 'uid',
+      limit,
+      path: { depth: 3 },
+    };
+    visualization = 'table';
+  } else if (kind === 'attribution') {
+    query = {
+      kind,
+      subject: 'uid',
+      limit,
+      attribution: {
+        conversion: { event_key: '', schema_version: 0 },
+        touchpoints: [{ event_key: '', schema_version: 0 }],
+        window_seconds: 86400,
+        model: 'last_touch',
+      },
+    };
+    visualization = 'table';
   } else {
     query = {
       kind,
@@ -183,12 +215,14 @@ export function replaceSavedKind(
   return { ...value, query, visualization: { kind: visualization } };
 }
 export function savedPins(query: SavedAnalysisTemplate): SavedPin[] {
-  const pins: SavedPin[] =
-    query.kind === 'funnel'
-      ? (query.funnel?.steps ?? [])
-      : query.kind === 'retention' && query.retention
-        ? [query.retention.start_event, query.retention.return_event]
-        : (query.event_versions ?? []);
+  let pins: SavedPin[] = query.event_versions ?? [];
+  if (query.kind === 'funnel') pins = query.funnel?.steps ?? [];
+  else if (query.kind === 'retention' && query.retention)
+    pins = [query.retention.start_event, query.retention.return_event];
+  else if (query.kind === 'segment' && query.segment) pins = [query.segment.event];
+  else if (query.kind === 'path' && query.path?.start_event) pins = [query.path.start_event];
+  else if (query.kind === 'attribution' && query.attribution)
+    pins = [query.attribution.conversion, ...query.attribution.touchpoints];
   return pins
     .filter(
       (pin, index) =>
@@ -292,6 +326,11 @@ export function savedDefinitionSummary(value: SavedAnalysisDefinition): string {
     return `${q.funnel?.steps.length ?? 0} 个有序步骤，${q.funnel?.window_seconds ?? 0} 秒窗口`;
   if (q.kind === 'retention' && q.retention)
     return `留存 ${q.retention.periods} 期（${q.retention.granularity === 'week' ? '按周' : '按天'}），起止事件各 1 个固定版本`;
+  if (q.kind === 'segment' && q.segment) return '分群：按主体最早分群事件的标量字段唯一归组';
+  if (q.kind === 'path' && q.path)
+    return `路径深度 ${q.path.depth}${q.path.start_event ? '，钉选起始事件' : '，读取窗口内全部事件'}`;
+  if (q.kind === 'attribution' && q.attribution)
+    return `归因：${q.attribution.touchpoints.length} 个触点，窗口 ${q.attribution.window_seconds} 秒`;
   return `${q.event_versions?.length ?? 0} 个固定版本，${q.metrics?.length || 1} 个指标，${q.group_by?.length ?? 0} 个分组`;
 }
 /** JSON.parse alone would silently replace duplicate keys and overflow numbers. */
@@ -412,14 +451,17 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
         'interval',
         'funnel',
         'retention',
+        'segment',
+        'path',
+        'attribution',
         'limit',
       ],
       '/query',
     )
   )
     return issues;
-  if (q.kind !== 'trend' && q.kind !== 'funnel' && q.kind !== 'retention')
-    add('/query/kind', '仅支持趋势、漏斗或留存。');
+  if (!['trend', 'funnel', 'retention', 'segment', 'path', 'attribution'].includes(q.kind))
+    add('/query/kind', '仅支持趋势、漏斗、留存、分群、路径或归因。');
   if (q.subject !== undefined && q.subject !== 'uid' && q.subject !== 'anonymous')
     add('/query/subject', '请选择原始 UID 或匿名标识。');
   if (q.limit !== undefined) safe(q.limit, 1, 500, '/query/limit');
@@ -519,6 +561,166 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
           '/query/retention/return_event/schema_version',
         );
         pins.push(rt.return_event as SavedPin);
+      }
+    }
+  } else if (q.kind === 'segment') {
+    if (q.event_versions !== undefined) add('/query/event_versions', '分群通过分群事件固定版本。');
+    if (q.interval !== undefined || q.metrics?.length || q.group_by?.length)
+      add('/query', '分群不接受趋势指标、分组或时间粒度。');
+    if (
+      q.funnel !== undefined ||
+      q.retention !== undefined ||
+      q.path !== undefined ||
+      q.attribution !== undefined
+    )
+      add('/query', '分群仅接受 segment 配置块。');
+    if (!q.subject) add('/query/subject', '请选择分群主体。');
+    const sg = q.segment;
+    if (sg && object(sg, ['event', 'field'], '/query/segment')) {
+      if (object(sg.event, ['event_key', 'schema_version', 'filter'], '/query/segment/event')) {
+        eventKey(sg.event.event_key, '/query/segment/event/event_key');
+        safe(
+          sg.event.schema_version,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          '/query/segment/event/schema_version',
+        );
+        pins.push(sg.event as SavedPin);
+      }
+      const sf = sg.field;
+      if (object(sf, ['kind', 'key', 'event_key', 'schema_version'], '/query/segment/field')) {
+        if (sf.kind === 'system') {
+          if (
+            ![
+              'event_key',
+              'uid',
+              'anonymous_id',
+              'session_id',
+              'page_view_id',
+              'operation_id',
+            ].includes(String(sf.key))
+          )
+            add('/query/segment/field/key', '系统字段无效。');
+        } else if (sf.kind === 'property') {
+          eventKey(sf.event_key, '/query/segment/field/event_key');
+          safe(
+            sf.schema_version,
+            1,
+            Number.MAX_SAFE_INTEGER,
+            '/query/segment/field/schema_version',
+          );
+          if (typeof sf.key !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(sf.key))
+            add('/query/segment/field/key', '属性名无效。');
+        } else {
+          add('/query/segment/field/kind', '字段类型无效。');
+        }
+      }
+    }
+  } else if (q.kind === 'path') {
+    if (q.event_versions !== undefined)
+      add('/query/event_versions', '路径通过可选起始事件固定版本。');
+    if (q.interval !== undefined || q.metrics?.length || q.group_by?.length)
+      add('/query', '路径不接受趋势指标、分组或时间粒度。');
+    if (
+      q.funnel !== undefined ||
+      q.retention !== undefined ||
+      q.segment !== undefined ||
+      q.attribution !== undefined
+    )
+      add('/query', '路径仅接受 path 配置块。');
+    if (!q.subject) add('/query/subject', '请选择路径主体。');
+    const pa = q.path;
+    if (pa && object(pa, ['start_event', 'depth', 'collapse_repeats'], '/query/path')) {
+      safe(pa.depth, 2, 8, '/query/path/depth');
+      if (pa.collapse_repeats !== undefined && typeof pa.collapse_repeats !== 'boolean')
+        add('/query/path/collapse_repeats', '折叠开关必须为布尔值。');
+      if (
+        pa.start_event &&
+        object(pa.start_event, ['event_key', 'schema_version', 'filter'], '/query/path/start_event')
+      ) {
+        eventKey(pa.start_event.event_key, '/query/path/start_event/event_key');
+        safe(
+          pa.start_event.schema_version,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          '/query/path/start_event/schema_version',
+        );
+        pins.push(pa.start_event as SavedPin);
+      }
+    }
+  } else if (q.kind === 'attribution') {
+    if (q.event_versions !== undefined)
+      add('/query/event_versions', '归因通过转化与触点固定版本。');
+    if (q.interval !== undefined || q.metrics?.length || q.group_by?.length)
+      add('/query', '归因不接受趋势指标、分组或时间粒度。');
+    if (
+      q.funnel !== undefined ||
+      q.retention !== undefined ||
+      q.segment !== undefined ||
+      q.path !== undefined
+    )
+      add('/query', '归因仅接受 attribution 配置块。');
+    if (!q.subject) add('/query/subject', '请选择归因主体。');
+    const at = q.attribution;
+    if (
+      at &&
+      object(
+        at,
+        ['conversion', 'touchpoints', 'window_seconds', 'model', 'decay_half_life_seconds'],
+        '/query/attribution',
+      )
+    ) {
+      if (!['last_touch', 'first_touch', 'linear', 'time_decay'].includes(at.model))
+        add('/query/attribution/model', '归因模型无效。');
+      safe(at.window_seconds, 1, 604800, '/query/attribution/window_seconds');
+      if (at.model === 'time_decay')
+        safe(
+          at.decay_half_life_seconds ?? 0,
+          1,
+          604800,
+          '/query/attribution/decay_half_life_seconds',
+        );
+      if (
+        object(
+          at.conversion,
+          ['event_key', 'schema_version', 'filter'],
+          '/query/attribution/conversion',
+        )
+      ) {
+        eventKey(at.conversion.event_key, '/query/attribution/conversion/event_key');
+        safe(
+          at.conversion.schema_version,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          '/query/attribution/conversion/schema_version',
+        );
+        pins.push(at.conversion as SavedPin);
+      }
+      if (
+        !Array.isArray(at.touchpoints) ||
+        at.touchpoints.length < 1 ||
+        at.touchpoints.length > 8
+      ) {
+        add('/query/attribution/touchpoints', '归因触点须为 1 至 8 个。');
+      } else {
+        at.touchpoints.forEach((tp, index) => {
+          if (
+            !object(
+              tp,
+              ['event_key', 'schema_version', 'filter'],
+              `/query/attribution/touchpoints/${index}`,
+            )
+          )
+            return;
+          eventKey(tp.event_key, `/query/attribution/touchpoints/${index}/event_key`);
+          safe(
+            tp.schema_version,
+            1,
+            Number.MAX_SAFE_INTEGER,
+            `/query/attribution/touchpoints/${index}/schema_version`,
+          );
+          pins.push(tp as SavedPin);
+        });
       }
     }
   }

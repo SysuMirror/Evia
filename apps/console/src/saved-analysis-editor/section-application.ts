@@ -37,6 +37,18 @@ export function applyEditorSection({
     next.query.funnel.window_seconds = integer(numbers.window ?? '', 1, 604800, '转化窗口');
   if (section === 'retention' && next.query.retention)
     next.query.retention.periods = integer(numbers.periods ?? '', 1, 12, '留存期数');
+  if (section === 'path' && next.query.path)
+    next.query.path.depth = integer(numbers.depth ?? '', 2, 8, '路径深度');
+  if (section === 'attribution' && next.query.attribution) {
+    next.query.attribution.window_seconds = integer(numbers.window ?? '', 1, 604800, '归因窗口');
+    if (next.query.attribution.model === 'time_decay')
+      next.query.attribution.decay_half_life_seconds = integer(
+        numbers.halfLife ?? '',
+        1,
+        604800,
+        '衰减半衰期',
+      );
+  }
   const leafRows = flatSavedFilters(candidate.query.filter);
   if (section === 'filters' && leafRows) {
     const rows = leafRows.rows.map((filter, index): SavedLeafFilter => {
@@ -62,6 +74,9 @@ export function applyEditorSection({
     filters: ['/query/filter'],
     funnel: ['/query/funnel', '/query/subject', '/query/filter'],
     retention: ['/query/retention', '/query/subject', '/query/filter'],
+    segment: ['/query/segment', '/query/subject', '/query/filter'],
+    path: ['/query/path', '/query/subject', '/query/filter'],
+    attribution: ['/query/attribution', '/query/subject', '/query/filter'],
   };
   const invalid = savedAnalysisIssues(next).find(
     (issue) =>

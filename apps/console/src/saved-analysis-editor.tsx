@@ -18,6 +18,9 @@ import { GroupingSection } from './saved-analysis-editor/grouping';
 import { MetricReferenceSection } from './saved-analysis-editor/metric-reference';
 import { MetricsSection } from './saved-analysis-editor/metrics';
 import { RetentionSection } from './saved-analysis-editor/retention';
+import { SegmentSection } from './saved-analysis-editor/segment';
+import { PathSection } from './saved-analysis-editor/path';
+import { AttributionSection } from './saved-analysis-editor/attribution';
 import { CatalogNotice, useEditorCatalog } from './saved-analysis-editor/use-editor-catalog';
 import { useSectionEditor } from './saved-analysis-editor/use-section-editor';
 import { useSectionFocus } from './saved-analysis-editor/use-section-focus';
@@ -239,6 +242,49 @@ export function SavedAnalysisEditor({
             onRetentionChange={(retention) => edit.changeQuery({ retention })}
             onSubjectChange={(subject) => edit.changeQuery({ subject })}
             onPeriodsChange={(next) => edit.changeNumber('periods', next)}
+          />
+        )}
+        {edit.section === 'segment' && (
+          <SegmentSection
+            id={id}
+            readOnly={readOnly}
+            disabled={disabled}
+            segment={query.segment}
+            subject={query.subject}
+            events={catalog.events}
+            fields={catalog.fields}
+            onSegmentChange={(segment) => edit.changeQuery({ segment })}
+            onSubjectChange={(subject) => edit.changeQuery({ subject })}
+          />
+        )}
+        {edit.section === 'path' && (
+          <PathSection
+            id={id}
+            readOnly={readOnly}
+            disabled={disabled}
+            path={query.path}
+            subject={query.subject}
+            depth={edit.numbers.depth ?? ''}
+            events={catalog.events}
+            onPathChange={(path) => edit.changeQuery({ path })}
+            onSubjectChange={(subject) => edit.changeQuery({ subject })}
+            onDepthChange={(next) => edit.changeNumber('depth', next)}
+          />
+        )}
+        {edit.section === 'attribution' && (
+          <AttributionSection
+            id={id}
+            readOnly={readOnly}
+            disabled={disabled}
+            attribution={query.attribution}
+            subject={query.subject}
+            window={edit.numbers.window ?? ''}
+            halfLife={edit.numbers.halfLife ?? ''}
+            events={catalog.events}
+            onAttributionChange={(attribution) => edit.changeQuery({ attribution })}
+            onSubjectChange={(subject) => edit.changeQuery({ subject })}
+            onWindowChange={(next) => edit.changeNumber('window', next)}
+            onHalfLifeChange={(next) => edit.changeNumber('halfLife', next)}
           />
         )}
         {edit.section === 'json' && (

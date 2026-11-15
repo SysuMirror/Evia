@@ -68,6 +68,9 @@ export function MetadataFields({
               { value: 'trend', label: '趋势分析' },
               { value: 'funnel', label: '有序漏斗' },
               { value: 'retention', label: '留存分析' },
+              { value: 'segment', label: '分群分析' },
+              { value: 'path', label: '聚合路径' },
+              { value: 'attribution', label: '归因分析' },
             ]}
             onChange={(event) => onKindChange(event.target.value as SavedAnalysisTemplate['kind'])}
           />
@@ -119,6 +122,18 @@ export function ConfigurationSummary({
       ) : query.kind === 'retention' ? (
         <Button disabled={disabled} onClick={() => onOpen('retention')}>
           留存配置（{query.retention?.periods ?? 0} 期）
+        </Button>
+      ) : query.kind === 'segment' ? (
+        <Button disabled={disabled} onClick={() => onOpen('segment')}>
+          分群配置
+        </Button>
+      ) : query.kind === 'path' ? (
+        <Button disabled={disabled} onClick={() => onOpen('path')}>
+          路径配置（深度 {query.path?.depth ?? 0}）
+        </Button>
+      ) : query.kind === 'attribution' ? (
+        <Button disabled={disabled} onClick={() => onOpen('attribution')}>
+          归因配置（{query.attribution?.touchpoints.length ?? 0} 触点）
         </Button>
       ) : (
         <Button disabled={disabled} onClick={() => onOpen('funnel')}>
