@@ -120,7 +120,12 @@ export type MetricUpdate = components['schemas']['MetricUpdate'];
 export type MetricValidate = components['schemas']['MetricValidate'];
 export type MetricPublish = components['schemas']['MetricPublish'];
 export type MetricExecute = components['schemas']['MetricExecute'];
-export type MetricPage = { environment: Environment; cursor?: string; limit?: number };
+export type MetricPage = {
+  environment: Environment;
+  cursor?: string;
+  limit?: number;
+  view?: 'active' | 'archived';
+};
 export type MetricVersionPage = { cursor?: string; limit?: number };
 export type FormulaExpression = components['schemas']['FormulaExpression'];
 export type FormulaDefinition = components['schemas']['FormulaDefinition'];
@@ -471,6 +476,18 @@ export const api = {
     }),
   getMetric: (projectID: string, metricID: string, signal?: AbortSignal) =>
     request<MetricDraft>(metricPath(projectID, metricID), { signal }),
+  archiveMetric: (projectID: string, metricID: string, csrf: string, signal?: AbortSignal) =>
+    request<MetricRecord>(`${metricPath(projectID, metricID)}/archive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
+  unarchiveMetric: (projectID: string, metricID: string, csrf: string, signal?: AbortSignal) =>
+    request<MetricRecord>(`${metricPath(projectID, metricID)}/unarchive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
   getMetricDraft: (projectID: string, metricID: string, signal?: AbortSignal) =>
     request<MetricDraft>(`${metricPath(projectID, metricID)}/draft`, { signal }),
   updateMetricDraft: (
