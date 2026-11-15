@@ -130,7 +130,7 @@ docs/                            架构、标准、运行手册、验证和规�
 | 高级分析 | 当前只有上述已实现模型 | 留存、分群、聚合路径、归因、生命周期、热图、会话回放 |
 | 数据运营 | 有审计事实及有界任务结果 | 导出/授权下载、保留、归档、回补、删除与恢复屏障 |
 
-完整需求以 [功能覆盖清单](docs/feature-coverage.md) 为准。早期 30 个无运行时 API 占位已全部由正式接口交付（30/30 清零，最后交付的是[管理分析报告](docs/reports.md)五操作）；不应重新把未实现路径放回正式 OpenAPI。`sys.*` 目前只是契约样例，没有内置事件运行时注册。
+完整需求以 [功能覆盖清单](docs/feature-coverage.md) 为准。早期 30 个无运行时 API 占位已全部由正式接口交付（30/30 清零，最后交付的是[管理分析报告](docs/reports.md)五操作）；不应重新把未实现路径放回正式 OpenAPI。`sys.*` 系统事件目录底座已交付：契约固件经 codegen embed 进二进制，由 `internal/ingestion/systemcatalog.go` 加载（构造期 fail-closed）；采集器 `sys.` 前缀旁路尚未接线，当前上报仍走项目目录并被拒绝，切片 2/3 与决策记录见 docs/design-sys-event-catalog.md。
 
 ## 5. 最近交付模块的续开发入口
 
@@ -195,7 +195,7 @@ docs/                            架构、标准、运行手册、验证和规�
 - 单实例 SPA 导航可关联；刷新/跨文档会重新创建 tab/order/session/page 范围，当前只持久化匿名 UUID。
 - 默认队列最多 200 个事件、256 KiB；默认批次最多 20 条、60 KiB，单请求在途、有界刷新和重试。具体限制以当前实现为准。
 - `flush()` 返回有界本轮后的 pending 数，不保证所有事件已送达。要看每个 emission 的 result；`accepted` 只代表持久队列确认，不能当 ClickHouse 可查询证明。
-- 当前没有自动 DOM 采集、URL/参数抓取、内置系统事件注册或持久离线队列。
+- 当前没有自动 DOM 采集、URL/参数抓取或持久离线队列；五个 sys.* 事件 SDK 侧可产生，服务端仅交付 embed 目录底座，采集接线待切片 2。
 
 平台不为每个网站维护专用页面适配层。业务方的 coding agent 使用公开 `activity-event-plan`、`activity-publish-events`、`activity-integrate-verify`，在自己的仓库梳理触发点、注册/发布事件、安装 SDK 并验证实际入库。
 

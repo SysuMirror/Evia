@@ -64,6 +64,38 @@
 3. 系统事件在 ClickHouse 的落库是否与普通事实同表同列（现有 event_facts 已含页面/导航上下文字段）。
 4. 迁移在本沙箱受新文件读取稳定性限制，需在能可靠应用迁移的环境执行并补真实 PG/采集集成验证。
 
+## 决策收敛（2026-11-15，切片 1 落地口径）
+
+复核代码后四个决策点均可由现有架构证据收敛，不再阻塞工程推进；方案 A 的存储形态进一步细化为
+**A2：平台契约编译进二进制**，而非 A1 的独立 PG 表。
+
+1. **来源关系**：不新建凭据主体。五个系统事件全部 browser-only，本就随浏览器来源的 write_key
+   与 Origin 授权上报；采集器只在事件规则解析层对 `sys.` 前缀改走系统目录，`authenticate`、
+   预算与拒绝统计路径零改动。
+2. **版本模型**：全局单版本、无环境发布状态机。环境维度继续由来源记录带入落库 `environment`；
+   平台契约升级与 SDK 协同、随二进制发版，不需要项目级 release/activation/lease 机制。
+3. **ClickHouse**：同表同列零 DDL。`event_facts.event_key` 是无正则约束的
+   `LowCardinality(String)`，信封契约 event_key pattern 已允许 `sys.` 前缀（maxLength 68），
+   页面/导航上下文字段已齐备。
+4. **存储形态（A2 取代 A1）**：系统事件是平台内置不可变契约，无 CRUD、无项目归属、无发布状态机，
+   PG 表的事务与激活机制对其全部冗余，还会引入迁移播种与 fixture 双份真相。因此以
+   `contracts/fixtures/system-events.json` 为单一真相，经 codegen 确定性生成到
+   `backend/internal/gen/wire/system-events.gen.json` 并 `go:embed` 编译进二进制，漂移由
+   generated-check 与 Go 语义对比测试双重守护。未来确需运行时可配置时，解析接口不变即可替换为
+   PG 实现。原 A1（独立系统目录表）保留为备选，不再作为推荐。
+
+## 落地切片拆分
+
+- **切片 1（已交付，2026-11-15）**：系统目录持久化底座——codegen 生成 embed 固件、
+  `internal/ingestion/systemcatalog.go` 加载器（`IsSystemKey`/`LoadSystemCatalog`/`Rule`，
+  构造期 fail-closed）、闭集与 schema 编译测试。**不接线采集器**，默认行为逐字节不变，
+  此阶段 SDK 上报 `sys.*` 仍按现状被项目目录拒绝。
+- **切片 2（待做）**：采集器 `sys.` 前缀旁路——绕过 release plan 查系统目录规则，保留来源
+  kind 校验与属性 schema 校验，明确信封 `release_revision` 在系统事件上的处理口径，单元与
+  HTTP 集成测试。
+- **切片 3（待做）**：端到端 SDK 上报 → 采集 → Kafka → ClickHouse 落库 → 可查询的真实依赖
+  验证与文档核销。
+
 ## 测试与验收
 
 - 采集器对 `sys.` 前缀走系统目录、对自定义键保持原路径的单元与真实 PG/HTTP 集成测试。
