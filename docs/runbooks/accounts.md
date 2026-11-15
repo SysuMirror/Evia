@@ -103,3 +103,27 @@ revoked. Every reset also inserts an `account_provision_events` row with
 `event_type='password_reset'` in that same transaction, so a failed audit write
 rolls the hash replacement and session revocation back together; resets always
 replace the credential and therefore always leave a row.
+
+## Reading account audit history
+
+`evia account-audit` is the read-only path over the typed
+`account_provision_events` trail. Like the mutating commands it needs only
+`EVIA_DATABASE_URL` and `EVIA_ACCOUNT_USERNAME` (same normalization and length
+policy), performs no writes, and never accepts positional credentials.
+
+```sh
+python3 tooling/verification/browser_runtime.py run /private/account-audit.env -- /path/to/evia account-audit
+```
+
+It resolves the username to its account first, so an unknown account fails with
+`ACCOUNT_NOT_FOUND` instead of returning an empty trail. On success it emits one
+structured summary log plus one log line per event, oldest first, each carrying a
+1-based `sequence`, the closed-set `event_type` and a UTC `occurred_at`. The
+output contains no username echo, password, hash, credential identifier or
+in-app actor; the fixed `actor_kind='operator'` row semantics still mean operator
+attribution lives in the operator's own database access records. An idempotent
+re-disable or re-enable that changes no state produces no event, so every line
+corresponds to an actual account-state or credential change. The real-PostgreSQL
+test `TestAccountAuditEventsReadsTypedHistory` pins the full ordered trail
+(`account_created`, `account_disabled`, `account_enabled`, `password_reset`),
+UTC normalization and the not-found failure.

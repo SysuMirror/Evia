@@ -122,7 +122,7 @@ docs/                            架构、标准、运行手册、验证和规�
 | 保存分析 | 草稿、校验/diff、不可变版本、事件依赖固定、幂等运行及控制台 | 当前直接固定事件版本，没有独立指标版本引用 |
 | 自定义看板 | 1–12 个固定分析版本组件、12 列布局、统一时间、逐图过滤、原子入队、状态/取消及控制台 | 文件夹、归档、通用参数、比较期、指标引用、查询复用和缓存 |
 | 独立原子指标 | 10 个 API、单位兼容、事件依赖、版本、整段/趋势查询、机器授权 | 公式、单位换算、分析/看板引用、专用 UI、手写客户端方法 |
-| 项目治理 | 7 个成员/设置/审计接口、运维 `account-create`/`account-disable`/`account-enable`/`account-reset-password` | 专用 UI、邀请/注册自助 |
+| 项目治理 | 7 个成员/设置/审计接口、运维 `account-create`/`account-disable`/`account-enable`/`account-reset-password`/只读 `account-audit` | 专用 UI、邀请/注册自助 |
 | 机器访问 | 独立主体、单项目/环境、24 项明确权限、一次性凭据、轮换/撤销、审计与控制台 | 权限集合创建后不可变，扩大用途需替代主体 |
 | 浏览器 SDK | 显式事件/导航、身份快照、有界队列、重试、逐项结果、真实跨域链 | npm 发行、跨文档连续会话、自动页面事件、离线持久队列 |
 | 对外接入资产 | 3 份公开 skill、事件清单、API 工具、9 文件白名单包；工具已支持指标路径 | 完整自动发布 CLI、实际业务仓库验收、SDK 包发行 |
@@ -173,7 +173,7 @@ docs/                            架构、标准、运行手册、验证和规�
 
 成员修订属于整个成员集合，独立于设置修订。必须保留最后一个启用 owner；删除再添加不复用旧修订。并发锁顺序、撤权后重试拒绝和查询授权复查已有真实数据库测试，不要绕过事务来简化 UI。
 
-`account-create` 只创建新账号与独立运维审计，不创建会话或成员关系，不覆盖现有密码，也不是账号恢复功能。它使用数据库运维权限和私有环境输入，不应包装成普通项目 owner 可调用的全局账号创建 API。`account-disable`/`account-enable` 同属运维命令，切换 `accounts.disabled` 并禁止停用最后一个启用账号，仅在真实状态转换时向 `account_provision_events` 写 `account_disabled`/`account_enabled`，幂等 no-op 不写。`account-reset-password` 替换密码哈希并在同事务删除该账号全部会话、写 `password_reset`，是账号恢复路径。迁移 028 起该表 `event_type` 为四值闭集且无默认值，所有审计行与状态/凭据变更同事务原子提交。
+`account-create` 只创建新账号与独立运维审计，不创建会话或成员关系，不覆盖现有密码，也不是账号恢复功能。它使用数据库运维权限和私有环境输入，不应包装成普通项目 owner 可调用的全局账号创建 API。`account-disable`/`account-enable` 同属运维命令，切换 `accounts.disabled` 并禁止停用最后一个启用账号，仅在真实状态转换时向 `account_provision_events` 写 `account_disabled`/`account_enabled`，幂等 no-op 不写。`account-reset-password` 替换密码哈希并在同事务删除该账号全部会话、写 `password_reset`，是账号恢复路径。`account-audit` 是只读命令，按用户名读回该账号的类型化审计事件（有序 event_type+UTC 时间，未知账号 ACCOUNT_NOT_FOUND，不回显凭据），让迁移 028 的类型化审计形成读写闭环。迁移 028 起该表 `event_type` 为四值闭集且无默认值，所有审计行与状态/凭据变更同事务原子提交。
 
 ### 5.3 保存分析与看板
 
