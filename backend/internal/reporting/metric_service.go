@@ -74,14 +74,14 @@ func (s *Metrics) CreateMetric(ctx context.Context, actor, project, key string, 
 	in.Definition = definition
 	return s.store.CreateMetric(ctx, actor, project, key, in)
 }
-func (s *Metrics) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int) ([]MetricRecord, error) {
+func (s *Metrics) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]MetricRecord, error) {
 	if !metricEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListMetrics(ctx, actor, project, environment, after, limit+1)
+	return s.store.ListMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly)
 }
 func (s *Metrics) GetMetric(ctx context.Context, actor, project, id string) (MetricRecord, error) {
 	return s.store.GetMetric(ctx, actor, project, id)
@@ -185,4 +185,10 @@ func (s *Metrics) EnqueueMetricVersion(ctx context.Context, actor, project, id s
 		return analysis.Job{}, fault.New(fault.Unavailable, "QUERY_STORAGE_UNAVAILABLE", "分析执行尚未配置")
 	}
 	return s.store.EnqueueMetricVersion(ctx, actor, project, id, version, key, in)
+}
+func (s *Metrics) ArchiveMetric(ctx context.Context, actor, project, id string) (MetricRecord, error) {
+	return s.store.ArchiveMetric(ctx, actor, project, id)
+}
+func (s *Metrics) UnarchiveMetric(ctx context.Context, actor, project, id string) (MetricRecord, error) {
+	return s.store.UnarchiveMetric(ctx, actor, project, id)
 }

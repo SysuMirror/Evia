@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
@@ -18,7 +19,7 @@ import (
 
 var _ reporting.MetricStore = (*Store)(nil)
 
-const metricColumns = `metric_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at`
+const metricColumns = `metric_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
 const metricVersionColumns = `metric_id::text,project_id::text,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_at,created_by::text`
 
 func metricMissing() error {
@@ -32,7 +33,7 @@ func metricConflict(code string) error {
 }
 func scanMetricRecord(row pgx.Row) (reporting.MetricRecord, error) {
 	var out reporting.MetricRecord
-	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt)
+	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = metricMissing()
 	}
@@ -40,6 +41,10 @@ func scanMetricRecord(row pgx.Row) (reporting.MetricRecord, error) {
 	// session location to UTC so JSON marshaling never emits a local offset.
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	return out, e
 }
 func decodeMetric(data []byte, out any) error {
@@ -50,7 +55,7 @@ func decodeMetric(data []byte, out any) error {
 func readMetricDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.MetricDraft, error) {
 	var out reporting.MetricDraft
 	var data []byte
-	e := tx.QueryRow(ctx, `SELECT `+metricColumns+`,definition FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &data)
+	e := tx.QueryRow(ctx, `SELECT `+metricColumns+`,definition FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return out, metricMissing()
 	}
@@ -59,6 +64,10 @@ func readMetricDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (repo
 	}
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	e = decodeMetric(data, &out.Definition)
 	return out, e
 }
@@ -182,7 +191,7 @@ func (s *Store) CreateMetric(ctx context.Context, actor, project, key string, in
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int) ([]reporting.MetricRecord, error) {
+func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.MetricRecord, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -197,7 +206,12 @@ func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, af
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "metrics.read"); e != nil {
 		return nil, e
 	}
-	rows, e := tx.Query(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND environment=$2 AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit)
+	// The predicate is selected from the validated bool, never from request text.
+	archivePredicate := "archived_at IS NULL"
+	if archivedOnly {
+		archivePredicate = "archived_at IS NOT NULL"
+	}
+	rows, e := tx.Query(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -216,6 +230,90 @@ func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, af
 	rows.Close()
 	return out, tx.Commit(ctx)
 }
+
+// assertMetricActiveTx blocks mutating operations on an archived metric.
+// Caller must already hold write authorization and the project lock.
+func assertMetricActiveTx(ctx context.Context, tx pgx.Tx, project, id string) error {
+	var archivedAt *time.Time
+	e := tx.QueryRow(ctx, `SELECT archived_at FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return metricMissing()
+	}
+	if e != nil {
+		return e
+	}
+	if archivedAt != nil {
+		return fault.New(fault.Conflict, "METRIC_ARCHIVED", "指标已归档，请先恢复后再修改")
+	}
+	return nil
+}
+
+func (s *Store) ArchiveMetric(ctx context.Context, actor, project, id string) (reporting.MetricRecord, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeMetricResource(ctx, tx, actor, project, id, "metrics", "metric_id", "metrics.write"); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.MetricRecord{}, metricMissing()
+	}
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	if archivedAt != nil {
+		return reporting.MetricRecord{}, fault.New(fault.Conflict, "METRIC_ALREADY_ARCHIVED", "指标已处于归档状态")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE metrics SET archived_at=clock_timestamp(), archived_by=$3::uuid, updated_at=clock_timestamp() WHERE project_id=$1 AND metric_id=$2`, project, id, actor); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'metric.archived',$3)`, project, actor, id); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	out, e := scanMetricRecord(tx.QueryRow(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id))
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
+func (s *Store) UnarchiveMetric(ctx context.Context, actor, project, id string) (reporting.MetricRecord, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeMetricResource(ctx, tx, actor, project, id, "metrics", "metric_id", "metrics.write"); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.MetricRecord{}, metricMissing()
+	}
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	if archivedAt == nil {
+		return reporting.MetricRecord{}, fault.New(fault.Conflict, "METRIC_NOT_ARCHIVED", "指标未归档，无需恢复")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE metrics SET archived_at=NULL, archived_by=NULL, updated_at=clock_timestamp() WHERE project_id=$1 AND metric_id=$2`, project, id); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'metric.unarchived',$3)`, project, actor, id); e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	out, e := scanMetricRecord(tx.QueryRow(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND metric_id=$2`, project, id))
+	if e != nil {
+		return reporting.MetricRecord{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
 func (s *Store) GetMetric(ctx context.Context, actor, project, id string) (reporting.MetricRecord, error) {
 	tx, e := s.catalogTx(ctx, actor, project, false)
 	if e != nil {
@@ -260,6 +358,9 @@ func (s *Store) SaveMetricDraft(ctx context.Context, actor, project, id string, 
 	if e != nil {
 		return out, e
 	}
+	if old.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "METRIC_ARCHIVED", "指标已归档，请先恢复后再修改")
+	}
 	if revision < 1 {
 		return out, fault.New(fault.Invalid, "REVISION_REQUIRED", "需要草稿修订号")
 	}
@@ -296,6 +397,9 @@ func metricSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in rep
 	out.Draft, e = readMetricDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
+	}
+	if out.Draft.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "METRIC_ARCHIVED", "指标已归档，请先恢复后再校验或发布")
 	}
 	if in.DraftRevision != out.Draft.DraftRevision {
 		return out, metricConflict("METRIC_REVISION_CONFLICT")

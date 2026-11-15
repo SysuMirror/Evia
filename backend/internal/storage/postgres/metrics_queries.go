@@ -33,6 +33,9 @@ func (s *Store) EnqueueMetricVersion(ctx context.Context, actor, project, id str
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return analysis.Job{}, e
 	}
+	if e = assertMetricActiveTx(ctx, tx, project, id); e != nil {
+		return analysis.Job{}, e
+	}
 	snapshot, e := readMetricVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return analysis.Job{}, e

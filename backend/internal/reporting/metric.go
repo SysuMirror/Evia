@@ -19,14 +19,16 @@ type MetricDefinition struct {
 	Unit          string                  `json:"unit"`
 }
 type MetricRecord struct {
-	ID               string    `json:"metric_id"`
-	ProjectID        string    `json:"project_id"`
-	Environment      string    `json:"environment"`
-	Title            string    `json:"title"`
-	DraftRevision    int64     `json:"draft_revision"`
-	PublishedVersion int64     `json:"published_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string     `json:"metric_id"`
+	ProjectID        string     `json:"project_id"`
+	Environment      string     `json:"environment"`
+	Title            string     `json:"title"`
+	DraftRevision    int64      `json:"draft_revision"`
+	PublishedVersion int64      `json:"published_version"`
+	ArchivedAt       *time.Time `json:"archived_at,omitempty"`
+	ArchivedBy       string     `json:"archived_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 type MetricDraft struct {
 	MetricRecord
@@ -99,7 +101,7 @@ type MetricSnapshot struct {
 // under the same transaction that writes immutable content, audit and idempotency.
 type MetricStore interface {
 	CreateMetric(context.Context, string, string, string, MetricCreate) (MetricDraft, error)
-	ListMetrics(context.Context, string, string, string, string, int) ([]MetricRecord, error)
+	ListMetrics(context.Context, string, string, string, string, int, bool) ([]MetricRecord, error)
 	GetMetric(context.Context, string, string, string) (MetricRecord, error)
 	GetMetricDraft(context.Context, string, string, string) (MetricDraft, error)
 	SaveMetricDraft(context.Context, string, string, string, int64, MetricDefinition) (MetricDraft, error)
@@ -108,10 +110,12 @@ type MetricStore interface {
 	ListMetricVersions(context.Context, string, string, string, int64, int) ([]MetricVersion, error)
 	GetMetricVersion(context.Context, string, string, string, int64) (MetricVersion, error)
 	EnqueueMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
+	ArchiveMetric(context.Context, string, string, string) (MetricRecord, error)
+	UnarchiveMetric(context.Context, string, string, string) (MetricRecord, error)
 }
 type MetricService interface {
 	CreateMetric(context.Context, string, string, string, MetricCreate) (MetricDraft, error)
-	ListMetrics(context.Context, string, string, string, string, int) ([]MetricRecord, error)
+	ListMetrics(context.Context, string, string, string, string, int, bool) ([]MetricRecord, error)
 	GetMetric(context.Context, string, string, string) (MetricRecord, error)
 	GetMetricDraft(context.Context, string, string, string) (MetricDraft, error)
 	SaveMetricDraft(context.Context, string, string, string, int64, MetricDefinition) (MetricDraft, error)
@@ -120,4 +124,6 @@ type MetricService interface {
 	ListMetricVersions(context.Context, string, string, string, int64, int) ([]MetricVersion, error)
 	GetMetricVersion(context.Context, string, string, string, int64) (MetricVersion, error)
 	EnqueueMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
+	ArchiveMetric(context.Context, string, string, string) (MetricRecord, error)
+	UnarchiveMetric(context.Context, string, string, string) (MetricRecord, error)
 }
