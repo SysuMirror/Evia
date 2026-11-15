@@ -352,13 +352,13 @@ func TestMachineReportingIndependentReadWritePublishAndEnvironmentGrants(t *test
 	if _, e = s.GetSavedAnalysisDraft(readCtx, reader.Principal.ID, f.project, saved.ID); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.ListDashboards(readCtx, reader.Principal.ID, f.project, "development", "", 10); e != nil {
+	if _, e = s.ListDashboards(readCtx, reader.Principal.ID, f.project, "development", "", 10, false); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.GetDashboardDraft(readCtx, reader.Principal.ID, f.project, dash.ID); e != nil {
 		t.Fatal(e)
 	}
-	_, e = s.ListDashboards(readCtx, reader.Principal.ID, f.project, "production", "", 10)
+	_, e = s.ListDashboards(readCtx, reader.Principal.ID, f.project, "production", "", 10, false)
 	machineForbidden(t, e)
 	if e = s.AuthorizeAnalysisDiscovery(readCtx, reader.Principal.ID, f.project); e != nil {
 		t.Fatal(e)

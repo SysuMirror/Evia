@@ -38,6 +38,7 @@ type dashboardHTTPService struct {
 	after, environment, key, id string
 	revision, version           int64
 	limit                       int
+	archivedOnly                bool
 	items                       []reporting.Dashboard
 	versions                    []reporting.DashboardVersion
 }
@@ -72,8 +73,8 @@ func (f *dashboardHTTPService) CreateDashboard(_ context.Context, actor, project
 	f.key, f.environment = key, in.Environment
 	return dashboardDraft(), f.call(actor, project)
 }
-func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int) ([]reporting.Dashboard, error) {
-	f.environment, f.after, f.limit = env, after, limit
+func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.Dashboard, error) {
+	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
 	return f.items, f.call(actor, project)
 }
 func (f *dashboardHTTPService) GetDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
@@ -221,7 +222,7 @@ func TestDashboardHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development", dashboardID, false},
+		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development:active", dashboardID, false},
 		{dashboardItem + "/versions?limit=1", "dashboard_versions:" + userID + ":" + projectID + ":" + dashboardID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -391,6 +392,69 @@ func (f *dashboardHTTPService) GetDashboardRun(_ context.Context, actor, project
 func (f *dashboardHTTPService) CancelDashboardRun(_ context.Context, actor, project, id string) (reporting.DashboardRun, error) {
 	f.id = id
 	return dashboardRunFixture(), f.call(actor, project)
+}
+func TestDashboardHTTPArchiveViewSelector(t *testing.T) {
+	f := &dashboardHTTPService{items: []reporting.Dashboard{dashboardResource(), dashboardResource()}}
+	h, codec := dashboardHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{dashboardBase + "?environment=development", false},
+		{dashboardBase + "?environment=development&view=active", false},
+		{dashboardBase + "?environment=development&view=archived", true},
+	} {
+		f.archivedOnly = !tc.want
+		catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
+		if f.archivedOnly != tc.want {
+			t.Fatalf("archivedOnly not forwarded for %s: got %v", tc.path, f.archivedOnly)
+		}
+	}
+	// Unknown views and duplicate selectors fail closed before reaching the service.
+	for _, path := range []string{
+		dashboardBase + "?environment=development&view=bogus",
+		dashboardBase + "?environment=development&view=archived&view=active",
+		dashboardItem + "?view=archived",
+	} {
+		before := f.calls
+		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
+		if f.calls != before {
+			t.Fatal("invalid view reached service")
+		}
+		if path == dashboardItem+"?view=archived" && out["code"] != "INVALID_QUERY" {
+			t.Fatal("item route must keep the strict allowlist", out)
+		}
+		if strings.Contains(path, "bogus") && out["code"] != "INVALID_ARCHIVE_VIEW" {
+			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
+		}
+	}
+	// Cursors are bound to the view stream: an archived cursor cannot page active rows.
+	activeScope := "dashboards:" + userID + ":" + projectID + ":development:active"
+	archivedScope := "dashboards:" + userID + ":" + projectID + ":development:archived"
+	archivedPage := catalogStatus(
+		t,
+		catalogRequest(h, "GET", dashboardBase+"?environment=development&view=archived&limit=1", "", nil),
+		200,
+	)
+	next, ok := archivedPage["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing archived continuation")
+	}
+	if decoded, e := codec.Decode(archivedScope, next); e != nil || decoded != dashboardID {
+		t.Fatal("archived cursor bound to wrong scope", decoded, e)
+	}
+	before := f.calls
+	bad := catalogStatus(
+		t,
+		catalogRequest(h, "GET", dashboardBase+"?environment=development&cursor="+url.QueryEscape(next), "", nil),
+		400,
+	)
+	if bad["code"] != "INVALID_CURSOR" || f.calls != before {
+		t.Fatal("cross-view cursor reached service", bad)
+	}
+	if _, e := codec.Decode(activeScope, next); e == nil {
+		t.Fatal("archived cursor decoded under the active scope")
+	}
 }
 func (f *dashboardHTTPService) ArchiveDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
 	f.id = id
