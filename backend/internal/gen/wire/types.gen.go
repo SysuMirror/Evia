@@ -191,14 +191,16 @@ type CredentialRotation struct {
 }
 
 type Dashboard struct {
-	ProjectID        string `json:"project_id"`
-	Environment      string `json:"environment"`
-	Title            string `json:"title"`
-	DraftRevision    int64  `json:"draft_revision"`
-	PublishedVersion int64  `json:"published_version"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
-	DashboardID      string `json:"dashboard_id"`
+	ProjectID        string  `json:"project_id"`
+	Environment      string  `json:"environment"`
+	Title            string  `json:"title"`
+	DraftRevision    int64   `json:"draft_revision"`
+	PublishedVersion int64   `json:"published_version"`
+	CreatedAt        string  `json:"created_at"`
+	UpdatedAt        string  `json:"updated_at"`
+	ArchivedAt       *string `json:"archived_at,omitempty"`
+	ArchivedBy       *string `json:"archived_by,omitempty"`
+	DashboardID      string  `json:"dashboard_id"`
 }
 
 type DashboardChange struct {

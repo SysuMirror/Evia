@@ -34,6 +34,8 @@ func (a *DashboardsAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+base+"/{dashboard_id}/versions/{version}/runs", a.API.projectAuth(true, a.execute))
 	mux.HandleFunc("GET /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.projectAuth(false, a.run))
 	mux.HandleFunc("DELETE /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.projectAuth(true, a.cancelRun))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/archive", a.API.projectAuth(true, a.archive))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/unarchive", a.API.projectAuth(true, a.unarchive))
 }
 
 func (a *DashboardsAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
@@ -311,4 +313,34 @@ func (a *DashboardsAPI) cancelRun(w http.ResponseWriter, r *http.Request, s auth
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "DashboardRun", out)
+}
+
+func (a *DashboardsAPI) archive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.ArchiveDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "Dashboard", out)
+}
+
+func (a *DashboardsAPI) unarchive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.UnarchiveDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "Dashboard", out)
 }

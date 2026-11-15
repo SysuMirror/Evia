@@ -899,6 +899,23 @@ export const api = {
     }),
   getDashboard: (projectID: string, dashboardID: string, signal?: AbortSignal) =>
     request<Dashboard>(dashboardPath(projectID, dashboardID), { signal }),
+  archiveDashboard: (projectID: string, dashboardID: string, csrf: string, signal?: AbortSignal) =>
+    request<Dashboard>(`${dashboardPath(projectID, dashboardID)}/archive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
+  unarchiveDashboard: (
+    projectID: string,
+    dashboardID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<Dashboard>(`${dashboardPath(projectID, dashboardID)}/unarchive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
   getDashboardDraft: (projectID: string, dashboardID: string, signal?: AbortSignal) =>
     request<DashboardDraft>(`${dashboardPath(projectID, dashboardID)}/draft`, { signal }),
   updateDashboardDraft: (
