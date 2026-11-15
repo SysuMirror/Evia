@@ -51,7 +51,11 @@ func TestMetricUpgradePreservesExistingImmutableFactsJobsAndGrants(t *testing.T)
 		t.Fatal(e)
 	}
 	for _, entry := range entries {
-		if entry.Name() >= "012_metrics.sql" {
+		// The baseline is the pre-metric (012) schema. Current saved-analysis
+		// read code selects the 030 archive marker columns, which depend only on
+		// saved_analyses/accounts already present here, so include that additive
+		// migration in the baseline rather than waiting for the upgrade pass.
+		if entry.Name() >= "012_metrics.sql" && entry.Name() != "030_saved_analysis_archive.sql" {
 			continue
 		}
 		data, e := migrations.ReadFile("migrations/" + entry.Name())
