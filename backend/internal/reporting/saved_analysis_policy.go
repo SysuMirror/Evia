@@ -354,6 +354,28 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
+	if template.Kind == "segment" {
+		mode = "segment_steps"
+		step := template.Segment.Event
+		selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+	}
+	if template.Kind == "path" {
+		if template.Path.StartEvent != nil {
+			mode = "path_steps"
+			step := *template.Path.StartEvent
+			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		} else {
+			// No pinned start: the path reads every in-window event, so there
+			// is no event-version dependency and the manifest stays all_events.
+			mode = "all_events"
+		}
+	}
+	if template.Kind == "attribution" {
+		mode = "attribution_steps"
+		for _, step := range append([]analysis.Step{template.Attribution.Conversion}, template.Attribution.Touchpoints...) {
+			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		}
+	}
 	if in.ProjectID != draft.ProjectID || in.Environment != draft.Environment || in.SelectionMode != mode || len(in.UnfixedEventKeys) > 0 || len(in.EventVersions) != len(selected) {
 		return invalid()
 	}
@@ -394,6 +416,9 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 	add("interval", "/query/interval", before.Query.Interval, after.Query.Interval)
 	add("funnel", "/query/funnel", before.Query.Funnel, after.Query.Funnel)
 	add("retention", "/query/retention", before.Query.Retention, after.Query.Retention)
+	add("segment", "/query/segment", before.Query.Segment, after.Query.Segment)
+	add("path", "/query/path", before.Query.Path, after.Query.Path)
+	add("attribution", "/query/attribution", before.Query.Attribution, after.Query.Attribution)
 	add("limit", "/query/limit", before.Query.Limit, after.Query.Limit)
 	add("metric_ref", "/metric_ref", before.MetricRef, after.MetricRef)
 	add("visualization", "/visualization", before.Visualization, after.Visualization)

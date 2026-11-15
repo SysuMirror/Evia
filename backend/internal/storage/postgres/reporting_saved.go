@@ -366,6 +366,26 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
+	if request.Segment != nil {
+		manifest.SelectionMode = "segment_steps"
+		step := request.Segment.Event
+		versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+	}
+	if request.Path != nil {
+		if request.Path.StartEvent != nil {
+			manifest.SelectionMode = "path_steps"
+			step := *request.Path.StartEvent
+			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		} else {
+			manifest.SelectionMode = "all_events"
+		}
+	}
+	if request.Attribution != nil {
+		manifest.SelectionMode = "attribution_steps"
+		for _, step := range append([]analysis.Step{request.Attribution.Conversion}, request.Attribution.Touchpoints...) {
+			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		}
+	}
 	for v := range versions {
 		var hash string
 		e = tx.QueryRow(ctx, `SELECT v.definition_hash FROM catalog_versions v WHERE v.project_id=$1 AND v.event_key=$2 AND v.schema_version=$3 AND EXISTS(SELECT 1 FROM catalog_release_events re WHERE re.project_id=v.project_id AND re.environment=$4 AND re.event_key=v.event_key AND re.schema_version=v.schema_version)`, project, v.EventKey, v.SchemaVersion, out.Draft.Environment).Scan(&hash)
