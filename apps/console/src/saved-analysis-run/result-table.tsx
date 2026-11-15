@@ -26,6 +26,7 @@ export function savedResultColumns(
   snapshot: ExecutionSnapshot,
   result: QueryResult,
 ): DataTableColumn<Record<string, unknown>>[] {
+  const kind = snapshot.version.definition.query.kind;
   const metricName = (key: string) =>
     metricInfo(snapshot.version.definition, Number(key.slice(7))).label;
   const groupName = (key: string) => {
@@ -42,9 +43,24 @@ export function savedResultColumns(
         : ({
             bucket: '时间',
             event_key: '事件',
+            event_time: '事件时间',
+            uid: '原始 UID',
+            anonymous_id: '匿名标识',
+            context: '上下文',
+            properties: '属性',
             step_index: '步骤',
-            subjects: '到达主体数',
+            subjects: kind === 'attribution' ? '转化主体数' : '到达主体数',
             conversion_rate: '相对首步转化率',
+            cohort_index: '队列序号',
+            cohort_start: '队列起始',
+            cohort_size: '队列规模',
+            retained: '各期留存主体数',
+            retention_rate: '各期留存率',
+            segment_value: '分群标签',
+            share: kind === 'attribution' ? '归因占比' : '群体占比',
+            path: '事件路径',
+            touchpoint: '归因触点',
+            credit: '加权权重',
           }[column.key] ??
           column.label ??
           column.key),
@@ -58,6 +74,27 @@ export function savedResultColumns(
         </span>
       ) : column.key === 'step_index' && typeof row[column.key] === 'number' ? (
         String((row[column.key] as number) + 1)
+      ) : column.key === 'share' && typeof row[column.key] === 'number' ? (
+        <span title={`原始比例 ${String(row[column.key])}`}>
+          {((row[column.key] as number) * 100).toLocaleString('zh-CN', {
+            maximumSignificantDigits: 21,
+          })}
+          %
+        </span>
+      ) : column.key === 'credit' && typeof row[column.key] === 'number' ? (
+        (row[column.key] as number).toFixed(4).replace(/\.?0+$/, '')
+      ) : column.key === 'retention_rate' && Array.isArray(row[column.key]) ? (
+        (row[column.key] as unknown[])
+          .map((value) =>
+            typeof value === 'number'
+              ? `${(value * 100).toLocaleString('zh-CN', { maximumSignificantDigits: 21 })}%`
+              : String(value),
+          )
+          .join('，')
+      ) : column.key === 'retained' && Array.isArray(row[column.key]) ? (
+        (row[column.key] as unknown[]).map((value) => String(value)).join('，')
+      ) : column.key === 'path' && Array.isArray(row[column.key]) ? (
+        (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
       ) : (
         displayCell(row[column.key], column.type, snapshot.body.timezone)
       ),
