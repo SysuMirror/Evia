@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -346,5 +347,185 @@ func TestKafkaClickHouseDurableReplayAndQuarantine(t *testing.T) {
 	}
 	if n := integrationCount(t, ctx, chConfig, "event_facts_raw"); n <= rawCount {
 		t.Fatal("full replay was not exercised", n, rawCount)
+	}
+}
+
+type integrationSystemSource struct {
+	source ingestion.AdmissionSource
+}
+
+func (r integrationSystemSource) ResolveSource(context.Context, string) (ingestion.AdmissionSource, error) {
+	return r.source, nil
+}
+
+type integrationNoPlanResolver struct {
+	t *testing.T
+}
+
+func (p integrationNoPlanResolver) ResolvePlan(context.Context, string, string, int64) (ingestion.Plan, error) {
+	p.t.Fatal("sys.* events must never resolve a project release plan")
+	return ingestion.Plan{}, nil
+}
+
+type integrationAllowBudget struct{}
+
+func (integrationAllowBudget) ReserveCollection(context.Context, string, string, int) error {
+	return nil
+}
+
+// TestSystemEventsFlowCollectorKafkaClickHouse drives two reserved sys.* events
+// through the real admission collector, Kafka and ClickHouse materialiser,
+// proving the embedded system catalog reaches queryable facts without any
+// project release plan or catalog_events row.
+func TestSystemEventsFlowCollectorKafkaClickHouse(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	kafkaConf, chConf := integrationConfig(t)
+	admin := preparePipelineDependencies(t, ctx, kafkaConf, chConf)
+	_ = admin
+
+	producer, e := NewKafkaProducer(kafkaConf)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer func() {
+		closeCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		if e := producer.Close(closeCtx); e != nil {
+			t.Error(e)
+		}
+	}()
+	if e = producer.Ping(ctx); e != nil {
+		t.Fatal(e)
+	}
+	sink, e := NewClickHouse(chConf)
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	catalog, e := ingestion.LoadSystemCatalog()
+	if e != nil {
+		t.Fatal(e)
+	}
+	resolver := integrationSystemSource{source: ingestion.AdmissionSource{
+		Source: ingestion.Source{
+			ID: testSource, ProjectID: testProject, Kind: "browser", Environment: "development",
+			Status: "active", AllowedOrigins: []string{"https://site.example"},
+		},
+		Credential: ingestion.Credential{ID: testSource},
+	}}
+	collector, e := ingestion.NewCollector(resolver, integrationNoPlanResolver{t: t}, producer, integrationAllowBudget{}, validator)
+	if e != nil {
+		t.Fatal(e)
+	}
+	collector.WithSystemCatalog(catalog)
+
+	now := time.Now().UTC()
+	envelope := func(key string, version int64, properties map[string]any) json.RawMessage {
+		raw, err := json.Marshal(map[string]any{
+			"event_id":         ids.New(),
+			"event_key":        key,
+			"schema_version":   version,
+			"release_revision": int64(7),
+			"occurred_at":      now.Format(time.RFC3339Nano),
+			"identity":         map[string]any{"anonymous_id": ids.New()},
+			"context":          map[string]any{"tab_id": ids.New(), "sequence": 1, "page_view_id": ids.New()},
+			"sdk":              map[string]any{"name": "evia-browser", "version": "0.1.0"},
+			"properties":       properties,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	batch := ingestion.Batch{
+		ID:       ids.New(),
+		WriteKey: "public-system-key",
+		SentAt:   now,
+		Events: []json.RawMessage{
+			envelope("sys.page_view", 1, map[string]any{}),
+			envelope("sys.page_scroll", 1, map[string]any{
+				"from_ratio": 0, "to_ratio": 0.6, "max_ratio": 0.6,
+				"direction": "down", "duration_ms": 3000,
+			}),
+		},
+	}
+	receipt, status, e := collector.Collect(ctx, batch, ingestion.Authentication{Origin: "https://site.example"})
+	if e != nil || status != 202 {
+		t.Fatalf("system event collection failed: status=%d err=%v", status, e)
+	}
+	for i, result := range receipt.Results {
+		if result.Status != "accepted" {
+			t.Fatalf("event %d not accepted: %+v", i, result)
+		}
+	}
+
+	reader, e := NewKafkaReader(kafkaConf)
+	if e != nil {
+		t.Fatal(e)
+	}
+	observer := &integrationIngestObserver{}
+	worker := &Worker{
+		Reader: reader, Sink: sink, Quarantine: producer, Observer: observer,
+		BatchSize: 2, RetryInitial: time.Millisecond, RetryMax: 10 * time.Millisecond,
+	}
+	runCtx, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(runCtx) }()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if integrationCount(t, ctx, chConf, "event_facts_raw") == 2 {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	stop()
+	if e = <-done; !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	if observer.quarantined != 0 || observer.ingested < 2 {
+		t.Fatalf("worker telemetry wrong: %+v", observer)
+	}
+	if n := integrationCount(t, ctx, chConf, "event_facts_raw"); n != 2 {
+		t.Fatalf("raw fact count = %d, want 2", n)
+	}
+	if n := integrationCount(t, ctx, chConf, "event_facts"); n != 2 {
+		t.Fatalf("view fact count = %d, want 2", n)
+	}
+	rows, e := clickhouseQuery(ctx, chConf, "SELECT event_key, schema_version, release_revision FROM event_facts ORDER BY event_key FORMAT JSONEachRow")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var facts []struct {
+		EventKey        string `json:"event_key"`
+		SchemaVersion   int64  `json:"schema_version"`
+		ReleaseRevision int64  `json:"release_revision"`
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(rows)), "\n") {
+		var fact struct {
+			EventKey        string `json:"event_key"`
+			SchemaVersion   int64  `json:"schema_version"`
+			ReleaseRevision int64  `json:"release_revision"`
+		}
+		if e = json.Unmarshal([]byte(line), &fact); e != nil {
+			t.Fatal(e, line)
+		}
+		facts = append(facts, fact)
+	}
+	if len(facts) != 2 || facts[0].EventKey != "sys.page_scroll" || facts[1].EventKey != "sys.page_view" {
+		t.Fatalf("system facts missing or misordered: %+v", facts)
+	}
+	for _, fact := range facts {
+		if fact.SchemaVersion != 1 || fact.ReleaseRevision != 7 {
+			t.Fatalf("provenance lost on %+v", fact)
+		}
+	}
+	scroll := "event_facts WHERE event_key = 'sys.page_scroll' AND JSONExtractString(properties_json, 'direction') = 'down' AND JSONExtractInt(properties_json, 'duration_ms') = 3000 AND source_kind = 'browser' AND project_id = '" + testProject + "'"
+	if n := integrationCount(t, ctx, chConf, scroll); n != 1 {
+		t.Fatal("scroll properties or scope did not reach queryable facts", n)
 	}
 }
