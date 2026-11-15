@@ -6738,6 +6738,8 @@ export interface operations {
         parameters: {
             query?: {
                 cursor?: string;
+                /** @description 结果分页大小；省略 limit 与 cursor 时返回完整有界快照。 */
+                limit?: number;
             };
             header?: never;
             path: {
