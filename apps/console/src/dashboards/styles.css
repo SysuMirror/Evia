@@ -66,6 +66,18 @@
   border-radius: 12px;
   padding: 16px;
 }
+.dashboard-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dashboard-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .dashboard-run-status {
   justify-content: flex-start;
   margin-top: 12px;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, type Dashboard, type DashboardDefinition } from '@evia/api-client';
+import { ApiError, api, type Dashboard, type DashboardDefinition } from '@evia/api-client';
+import { useToast } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
 import type { SavedRunWork } from './run';
 import { useUnsavedWork } from '../use-unsaved-work';
@@ -10,6 +11,7 @@ import { useDashboardPublication } from './use-publication';
 
 export function useDashboardsController(context: CatalogPageProps) {
   const { project, environment, session } = context;
+  const toast = useToast();
   const canRead = project.permissions.includes('project.read'),
     canWrite = project.permissions.includes('project.write');
   const identity = JSON.stringify([
@@ -125,6 +127,30 @@ export function useDashboardsController(context: CatalogPageProps) {
   function readLatest() {
     draft.readLatest(publication.resetReview);
   }
+  function archive(dashboard: Dashboard) {
+    if (request.isPending()) return;
+    void request.perform(
+      '归档看板',
+      (signal) =>
+        api.archiveDashboard(project.id, dashboard.dashboard_id, session.csrf_token, signal),
+      () => {
+        toast.success(`看板「${dashboard.title}」已归档，可在已归档视图中恢复。`);
+        history.invalidateList();
+      },
+    );
+  }
+  function unarchive(dashboard: Dashboard) {
+    if (request.isPending()) return;
+    void request.perform(
+      '恢复看板',
+      (signal) =>
+        api.unarchiveDashboard(project.id, dashboard.dashboard_id, session.csrf_token, signal),
+      () => {
+        toast.success(`看板「${dashboard.title}」已恢复到活跃列表。`);
+        history.invalidateList();
+      },
+    );
+  }
   function rebaseLocal() {
     draft.rebaseLocal();
     publication.resetReview();
@@ -156,6 +182,8 @@ export function useDashboardsController(context: CatalogPageProps) {
     changeDefinition,
     save,
     readLatest,
+    archive,
+    unarchive,
     rebaseLocal,
     adoptLatest,
     confirmation: guard.confirmation,

@@ -148,11 +148,16 @@ export function DashboardsPage(props: CatalogPageProps) {
           loading={history.list.isPending}
           fetching={history.list.isFetching}
           busy={!!request.busy}
+          busyLabel={request.busy}
           canWrite={controller.canWrite}
           timezone={project.timezone}
           page={history.listPage}
           hasNext={!!history.list.data?.next_cursor}
+          view={history.archiveView}
+          onViewChange={history.changeView}
           onOpen={controller.openDraft}
+          onArchive={controller.archive}
+          onUnarchive={controller.unarchive}
           onRetry={() => void history.list.refetch()}
           onPrevious={history.previousList}
           onNext={history.nextList}
