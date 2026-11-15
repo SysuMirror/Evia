@@ -2013,7 +2013,7 @@ export interface components {
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             release_revision: number;
-            /** @description 只包含当前来源类型可上报的事件；允许为空。 */
+            /** @description 只包含当前来源类型可上报的事件；允许为空。上限 205 = 200 个项目发布事件 + 5 个平台保留 sys.* 事件。 */
             events: {
                 event_key: string;
                 schema_version: number;
