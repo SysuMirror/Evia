@@ -154,6 +154,7 @@ export type CatalogPage = { environment?: Environment; cursor?: string; limit?: 
 export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
+export type QueryResultPage = { cursor?: string; limit?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -275,6 +276,12 @@ const formulaMetricPath = (projectID: string, metricID: string) =>
 function catalogQuery(page: CatalogPage): string {
   const query = new URLSearchParams();
   if (page.environment !== undefined) query.set('environment', page.environment);
+  if (page.cursor !== undefined) query.set('cursor', page.cursor);
+  if (page.limit !== undefined) query.set('limit', String(page.limit));
+  return query.size ? `?${query.toString()}` : '';
+}
+function queryResultQuery(page: QueryResultPage): string {
+  const query = new URLSearchParams();
   if (page.cursor !== undefined) query.set('cursor', page.cursor);
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   return query.size ? `?${query.toString()}` : '';
@@ -998,10 +1005,14 @@ export const api = {
       csrf,
       signal,
     }),
-  getQueryResult: (projectID: string, queryID: string, signal?: AbortSignal) =>
+  getQueryResult: (
+    projectID: string,
+    queryID: string,
+    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+  ) =>
     request<QueryResult>(
-      `${projectPath(projectID)}/queries/${encodeURIComponent(queryID)}/result`,
-      { signal },
+      `${projectPath(projectID)}/queries/${encodeURIComponent(queryID)}/result${queryResultQuery(options)}`,
+      { signal: options.signal },
     ),
   createErasureJob: (
     projectID: string,

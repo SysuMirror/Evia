@@ -30,7 +30,7 @@ test('scoped reads encode identifiers and preserve cancellation', async () => {
   await api.getProject('a/b', controller.signal);
   await api.getActivation('a/b', 'production', controller.signal);
   await api.getEventVersion('a/b', 'opened', 2, controller.signal);
-  await api.getQueryResult('a/b', 'c/d', controller.signal);
+  await api.getQueryResult('a/b', 'c/d', { signal: controller.signal });
   const calls = fetch.mock.calls;
   assert.equal(calls[0]?.arguments[0], '/api/v1/projects/a%2Fb');
   assert.equal(
@@ -48,6 +48,20 @@ test('scoped reads encode identifiers and preserve cancellation', async () => {
     assert.equal(init.credentials, 'same-origin');
     assert.equal(init.signal?.aborted, true);
   }
+});
+
+test('query result continuation encodes cursor and page size', async () => {
+  const fetch = respond(200, { query_id: 'q', columns: [], rows: [], metadata: {} });
+  await api.getQueryResult('a/b', 'q');
+  await api.getQueryResult('a/b', 'q', { limit: 100 });
+  await api.getQueryResult('a/b', 'q', { cursor: 'next-token', limit: 100 });
+  const calls = fetch.mock.calls;
+  assert.equal(calls[0]?.arguments[0], '/api/v1/projects/a%2Fb/queries/q/result');
+  assert.equal(calls[1]?.arguments[0], '/api/v1/projects/a%2Fb/queries/q/result?limit=100');
+  assert.equal(
+    calls[2]?.arguments[0],
+    '/api/v1/projects/a%2Fb/queries/q/result?cursor=next-token&limit=100',
+  );
 });
 
 test('source updates and release activation send revision, CSRF and idempotency', async () => {

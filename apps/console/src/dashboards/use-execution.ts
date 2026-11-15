@@ -255,11 +255,9 @@ export function useDashboardExecution({
               }
               if (results[widget.widget_id]) return;
               try {
-                results[widget.widget_id] = await api.getQueryResult(
-                  project.id,
-                  query.query_id,
-                  controller.signal,
-                );
+                results[widget.widget_id] = await api.getQueryResult(project.id, query.query_id, {
+                  signal: controller.signal,
+                });
                 delete resultErrors[widget.widget_id];
               } catch (caught) {
                 if (caught instanceof ApiError && [401, 403].includes(caught.status)) throw caught;

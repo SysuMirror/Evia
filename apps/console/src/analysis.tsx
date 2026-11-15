@@ -98,6 +98,8 @@ const jobLabels: Record<QueryJob['state'], string> = {
   expired: '已过期',
 };
 const activeJob = (job?: QueryJob) => job?.state === 'queued' || job?.state === 'running';
+// Raw event and behavior chain reads start from a bounded first page; aggregated kinds keep the full snapshot.
+const RESULT_PAGE_SIZE = 100;
 const zones = [...new Set(['UTC', 'Asia/Shanghai', ...Intl.supportedValuesOf('timeZone')])];
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '请求失败，请重试。';
@@ -151,6 +153,12 @@ export function AnalysisPage({
   const operation = useRef(false);
   const rowFocus = useRef<{ source: HTMLElement; selector: string } | null>(null);
   const queryFormID = useId();
+  const [resultPaging, setResultPaging] = useState<{
+    queryID: string;
+    rows: Record<string, unknown>[];
+    cursor?: string;
+  }>();
+  const [loadingMoreRows, setLoadingMoreRows] = useState(false);
   const [propertyEvent, setPropertyEvent] = useState('');
   const [propertyVersion, setPropertyVersion] = useState('');
   const [scopeEpoch, setScopeEpoch] = useState(0);
@@ -322,11 +330,15 @@ export function AnalysisPage({
       });
     void (async () => {
       let job = snapshot.job;
+      const pagedResult = snapshot.request.kind === 'events' || snapshot.request.kind === 'journey';
       const deadline = Date.now() + 12 * 60 * 1000;
       try {
         while (current()) {
           if (job.state === 'succeeded') {
-            const result = await api.getQueryResult(project.id, id, controller.signal);
+            const result = await api.getQueryResult(project.id, id, {
+              signal: controller.signal,
+              ...(pagedResult ? { limit: RESULT_PAGE_SIZE } : {}),
+            });
             if (current()) {
               setSnapshot((previous) =>
                 previous?.job.query_id === id ? { ...previous, job, result } : previous,
@@ -528,7 +540,14 @@ export function AnalysisPage({
     })
     .join('，')}`;
   const result = snapshot?.result;
-  const rows: Record<string, unknown>[] = result?.rows ?? [];
+  const pagingMatches = resultPaging?.queryID === result?.query_id;
+  const rows: Record<string, unknown>[] = [
+    ...(result?.rows ?? []),
+    ...(pagingMatches ? (resultPaging?.rows ?? []) : []),
+  ];
+  const nextResultCursor = pagingMatches
+    ? resultPaging?.cursor
+    : (result?.next_cursor ?? undefined);
   const columns: DataTableColumn<Record<string, unknown>>[] =
     result?.columns.map((column) => ({
       key: column.key,
@@ -580,6 +599,27 @@ export function AnalysisPage({
                       ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
                       : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
+  const loadMoreRows = async () => {
+    const current = snapshot?.result;
+    if (!current || !nextResultCursor || loadingMoreRows) return;
+    const queryID = snapshot.job.query_id;
+    setLoadingMoreRows(true);
+    try {
+      const page = await api.getQueryResult(project.id, queryID, { cursor: nextResultCursor });
+      setResultPaging((previous) => {
+        const prior = previous?.queryID === queryID ? previous.rows : [];
+        return {
+          queryID,
+          rows: [...prior, ...page.rows],
+          cursor: page.next_cursor ?? undefined,
+        };
+      });
+    } catch (failure) {
+      reportFailure(failure);
+    } finally {
+      setLoadingMoreRows(false);
+    }
+  };
   const queryEditor = (
     <form
       id={queryFormID}
@@ -1068,8 +1108,17 @@ export function AnalysisPage({
                     </DataSurface>
                     <p className="field-help">
                       返回 {rows.length} 行，上限 {snapshot.request.limit}{' '}
-                      行。超出预算会明确失败，此版本不支持结果翻页。
+                      行。超出预算会明确失败；原始事件与行为链可通过下一页继续读取。
                     </p>
+                    {nextResultCursor && (
+                      <Button
+                        size="small"
+                        loading={loadingMoreRows}
+                        onClick={() => void loadMoreRows()}
+                      >
+                        加载下一页
+                      </Button>
+                    )}
                     <details>
                       <summary>精度与覆盖详情</summary>
                       <dl className="detail-list">

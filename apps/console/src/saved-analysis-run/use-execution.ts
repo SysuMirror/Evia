@@ -207,7 +207,9 @@ export function useSavedExecution({
       try {
         while (current()) {
           if (job.state === 'succeeded') {
-            const result = await api.getQueryResult(project.id, queryID, controller.signal);
+            const result = await api.getQueryResult(project.id, queryID, {
+              signal: controller.signal,
+            });
             if (current()) {
               setSnapshot((previous) =>
                 previous?.job.query_id === queryID ? { ...previous, job, result } : previous,
