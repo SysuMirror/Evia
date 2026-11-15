@@ -123,8 +123,9 @@ export function validateConfig(
     !Number.isSafeInteger(value.release_revision) ||
     Number(value.release_revision) < 1 ||
     !Array.isArray(value.events) ||
-    value.events.length > 200
+    value.events.length > 205
   )
+    // 205 = 200 project release events + 5 platform-reserved sys.* events.
     throw new EviaSDKError('INVALID_CONFIG');
   const seen = new Set<string>();
   for (const event of value.events) {
