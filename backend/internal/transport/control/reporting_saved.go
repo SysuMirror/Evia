@@ -55,6 +55,15 @@ func savedVersion(value string) (int64, error) {
 	return version, nil
 }
 func savedQuery(r *http.Request, list, environment bool) (url.Values, error) {
+	return savedQueryWith(r, list, environment, false)
+}
+
+// savedArchiveQuery is the dashboard listing allowlist with the closed-set
+// view selector used to switch between active and archived dashboards.
+func savedArchiveQuery(r *http.Request) (url.Values, error) {
+	return savedQueryWith(r, true, true, true)
+}
+func savedQueryWith(r *http.Request, list, environment, archiveView bool) (url.Values, error) {
 	if len(r.URL.RawQuery) > 8192 {
 		return nil, analysis.Invalid("INVALID_QUERY", "查询参数过长")
 	}
@@ -63,12 +72,20 @@ func savedQuery(r *http.Request, list, environment bool) (url.Values, error) {
 		return nil, analysis.Invalid("INVALID_QUERY", "查询参数编码无效")
 	}
 	for k, v := range q {
-		if !list || len(v) != 1 || (k != "limit" && k != "cursor" && (!environment || k != "environment")) || k == "limit" && v[0] == "" {
+		allowed := k == "limit" || k == "cursor" || (environment && k == "environment") || (archiveView && k == "view")
+		if !list || len(v) != 1 || !allowed || k == "limit" && v[0] == "" {
 			return nil, analysis.Invalid("INVALID_QUERY", "查询参数不符合接口定义")
 		}
 	}
 	if environment && !catalog.ValidEnvironment(q.Get("environment")) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择有效环境", "/environment")
+	}
+	if archiveView {
+		switch q.Get("view") {
+		case "", "active", "archived":
+		default:
+			return nil, analysis.Invalid("INVALID_ARCHIVE_VIEW", "看板归档视图参数无效", "/view")
+		}
 	}
 	return q, nil
 }

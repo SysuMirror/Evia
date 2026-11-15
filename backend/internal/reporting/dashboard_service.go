@@ -55,14 +55,14 @@ func (s *Dashboards) CreateDashboard(ctx context.Context, actor, project, key st
 	in.Definition = definition
 	return s.store.CreateDashboard(ctx, actor, project, key, in)
 }
-func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int) ([]Dashboard, error) {
+func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]Dashboard, error) {
 	if !savedEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1)
+	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1, archivedOnly)
 }
 func (s *Dashboards) GetDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
 	return s.store.GetDashboard(ctx, actor, project, id)

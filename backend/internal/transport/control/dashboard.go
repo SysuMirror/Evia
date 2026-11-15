@@ -214,7 +214,7 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
-	q, e := savedQuery(r, true, true)
+	q, e := savedArchiveQuery(r)
 	if e != nil {
 		return e
 	}
@@ -222,12 +222,17 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment")}, ":")
+	view := q.Get("view")
+	if view == "" {
+		view = "active"
+	}
+	archivedOnly := view == "archived"
+	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment"), view}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit)
+	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly)
 	if e != nil {
 		return e
 	}

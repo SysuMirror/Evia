@@ -146,7 +146,7 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int) ([]reporting.Dashboard, error) {
+func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.Dashboard, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -161,7 +161,12 @@ func (s *Store) ListDashboards(ctx context.Context, actor, project, environment,
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "dashboards.read"); e != nil {
 		return nil, e
 	}
-	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND archived_at IS NULL AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
+	// The predicate is selected from the validated bool, never from request text.
+	archivePredicate := "archived_at IS NULL"
+	if archivedOnly {
+		archivePredicate = "archived_at IS NOT NULL"
+	}
+	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
 	}

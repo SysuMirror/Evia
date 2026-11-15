@@ -140,7 +140,7 @@ type DashboardRun struct {
 
 type DashboardStore interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
-	ListDashboards(context.Context, string, string, string, string, int) ([]Dashboard, error)
+	ListDashboards(context.Context, string, string, string, string, int, bool) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
 	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition) (DashboardDraft, error)
@@ -156,7 +156,7 @@ type DashboardStore interface {
 }
 type DashboardService interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
-	ListDashboards(context.Context, string, string, string, string, int) ([]Dashboard, error)
+	ListDashboards(context.Context, string, string, string, string, int, bool) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
 	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition) (DashboardDraft, error)
