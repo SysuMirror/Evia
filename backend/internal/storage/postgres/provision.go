@@ -12,6 +12,15 @@ import (
 
 var _ access.ProvisionStore = (*Store)(nil)
 
+// Closed set of account provision audit events; it mirrors the CHECK constraint
+// added by migration 028. Every operator-side account mutation must record one.
+const (
+	provisionEventCreated  = "account_created"
+	provisionEventDisabled = "account_disabled"
+	provisionEventEnabled  = "account_enabled"
+	provisionEventPassword = "password_reset"
+)
+
 func (s *Store) ProvisionAccount(ctx context.Context, user access.User) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -38,7 +47,7 @@ func (s *Store) ProvisionAccount(ctx context.Context, user access.User) error {
 		return err
 	}
 	// The database operator is deliberately not attributed to an in-app human.
-	if _, err = tx.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id) VALUES('operator',$1)`, user.ID); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id,event_type) VALUES('operator',$1,$2)`, user.ID, provisionEventCreated); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -81,6 +90,17 @@ func (s *Store) SetAccountDisabled(ctx context.Context, username string, disable
 	if _, err = tx.Exec(ctx, `UPDATE accounts SET disabled=$1 WHERE id=$2`, disabled, user.ID); err != nil {
 		return access.User{}, err
 	}
+	// Record only real state transitions so an idempotent re-disable or
+	// re-enable that changes nothing does not add misleading audit rows.
+	if user.Disabled != disabled {
+		eventType := provisionEventEnabled
+		if disabled {
+			eventType = provisionEventDisabled
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id,event_type) VALUES('operator',$1,$2)`, user.ID, eventType); err != nil {
+			return access.User{}, err
+		}
+	}
 	user.Disabled = disabled
 	return user, tx.Commit(ctx)
 }
@@ -111,6 +131,12 @@ func (s *Store) ResetAccountPassword(ctx context.Context, username, passwordHash
 		return access.User{}, err
 	}
 	if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, user.ID); err != nil {
+		return access.User{}, err
+	}
+	// Every reset replaces the credential, so it is always a real mutation and
+	// always leaves an audit row in the same transaction as the hash and session
+	// revocation.
+	if _, err = tx.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id,event_type) VALUES('operator',$1,$2)`, user.ID, provisionEventPassword); err != nil {
 		return access.User{}, err
 	}
 	user.PasswordHash = passwordHash
