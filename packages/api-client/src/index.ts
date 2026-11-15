@@ -143,7 +143,12 @@ export type FormulaMetricValidate = components['schemas']['FormulaMetricValidate
 export type FormulaMetricPublish = components['schemas']['FormulaMetricPublish'];
 export type FormulaMetricList = components['schemas']['FormulaMetricList'];
 export type FormulaMetricVersionList = components['schemas']['FormulaMetricVersionList'];
-export type FormulaMetricPage = { environment: Environment; cursor?: string; limit?: number };
+export type FormulaMetricPage = {
+  environment: Environment;
+  cursor?: string;
+  limit?: number;
+  view?: 'active' | 'archived';
+};
 export type FormulaMetricVersionPage = { cursor?: string; limit?: number };
 export type ProjectMemberPage = { cursor?: string; limit?: number };
 export type ProjectAuditPage = {
@@ -590,6 +595,23 @@ export const api = {
     }),
   getFormulaMetric: (projectID: string, metricID: string, signal?: AbortSignal) =>
     request<FormulaMetricRecord>(formulaMetricPath(projectID, metricID), { signal }),
+  archiveFormulaMetric: (projectID: string, metricID: string, csrf: string, signal?: AbortSignal) =>
+    request<FormulaMetricRecord>(`${formulaMetricPath(projectID, metricID)}/archive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
+  unarchiveFormulaMetric: (
+    projectID: string,
+    metricID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<FormulaMetricRecord>(`${formulaMetricPath(projectID, metricID)}/unarchive`, {
+      method: 'POST',
+      csrf,
+      signal,
+    }),
   getFormulaMetricDraft: (projectID: string, metricID: string, signal?: AbortSignal) =>
     request<FormulaMetricDraft>(`${formulaMetricPath(projectID, metricID)}/draft`, { signal }),
   updateFormulaMetricDraft: (
