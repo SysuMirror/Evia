@@ -38,6 +38,8 @@
 
 新增 `TestSavedAnalysisArchiveLifecycleAndMutationGuards`（先发布再造归档）：viewer 归档禁止；归档成功带标记、重复归档 409；默认列表只留活跃分析、archived 流恰返回归档项且带标记；按 ID/草稿/不可变版本仍可读；草稿保存、校验、发布、运行入队四类变更全部 `SAVED_ANALYSIS_ARCHIVED`；未知 ID `SAVED_ANALYSIS_NOT_FOUND`；对活跃分析恢复 `SAVED_ANALYSIS_NOT_ARCHIVED`，恢复后标记清空、重新进入活跃列表、归档流为空；审计按序出现 `analysis.archived`、`analysis.unarchived`。全部既有保存分析/查询机器集成测试仅追加布尔实参，语义不变。
 
+升级模拟测试 `TestMetricUpgradePreservesExistingImmutableFactsJobsAndGrants` 在仅含 001–011 的旧基线 schema 上用当前代码播种，而当前保存分析读路径选择 030 归档列，旧基线缺列会报 `column "archived_at" does not exist`。由于 030 仅依赖已存在的 `saved_analyses`/`accounts`、与 012 指标对象无关，将其作为命名例外纳入基线（迁移仍按文件名顺序应用，012 升级语义与「事实字节不变」断言保持原样）。完整 postgres 集成包（`-race -tags=integration -count=1`）除需要独立多主机 DSN 的环境门控 `TestFailoverBaselineWrite`（`EVIA_TEST_PG_FAILOVER_DSN` 未设置即 t.Fatal，干净基线同样失败、操作独立 `evia_ha_drill` 表）外全部通过。
+
 ### 变异红绿（三轮，sha256 逐字节还原）
 
 1. 反转列表 SQL 谓词 → 归档分析泄漏默认列表，集成测试变红（`archived analysis must leave the default listing`）；
