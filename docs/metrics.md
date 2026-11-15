@@ -132,7 +132,7 @@
 
 | 方法与路径 | 行为 | 机器权限 |
 | --- | --- | --- |
-| `GET F` | 按必填 `environment` 分页，`limit` 默认 20、最大 100 | `metrics.read` |
+| `GET F` | 按必填 `environment` 分页，`limit` 默认 20、最大 100；可选 `view`（`active`/`archived`，默认 `active`） | `metrics.read` |
 | `POST F` | 创建草稿，必需 `Idempotency-Key`，返回 201 | `metrics.write` |
 | `GET F/{metric_id}`、`GET F/{metric_id}/draft` | 读取资源或草稿（草稿带 `ETag` 修订） | `metrics.read` |
 | `PATCH F/{metric_id}/draft` | 替换完整 definition，必需 `If-Match: "revision"` | `metrics.write` |
@@ -140,8 +140,15 @@
 | `GET F/{metric_id}/versions`、`GET F/{metric_id}/versions/{version}` | 读取不可变版本，版本列表最大 50 | `metrics.read` |
 | `POST F/{metric_id}/versions` | 发布指定草稿，必需 `Idempotency-Key`，返回 201 | `metrics.publish` |
 | `POST F/{metric_id}/versions/{version}/queries` | 指定不可变版本异步入队，必需 `Idempotency-Key`，返回 202 `QueryJob` | `metrics.run`（并复查 `queries.run`） |
+| `POST F/{metric_id}/archive`、`POST F/{metric_id}/unarchive` | 软归档/恢复，无请求体，200 返回带归档标记的资源；409 表示状态冲突 | `metrics.write` |
 
 写请求继续受 CSRF、未知参数拒绝、严格 JSON（禁重复键/尾随值/未知字段）约束；契约层与服务层双重校验公式形态。运行请求复用 `MetricExecute` 契约（≤31 天、IANA 时区、`minute/hour/day` 粒度、最多 3 个分组、≤500 行），入队后按普通查询任务经 `P/queries/{id}` 轮询与取结果。
+
+### 软归档生命周期（迁移 `032`）
+
+`032_formula_metric_archive.sql` 给 `formula_metrics` 增加可空 `archived_at`/`archived_by` 列、活跃部分索引 `formula_metrics_active_scope` 与标记 soundness CHECK。既有 `formula_metric_preserve_scope` 触发器只保护 project/environment/metric_id/created_at，标记更新无需改触发器。`POST F/{metric_id}/archive` 设置两个标记并把复合指标移出默认 `GET F` 列表；`view=archived` 列出已归档项，`view=active`（或缺省）为默认流。归档可经 `POST F/{metric_id}/unarchive` 逆转并清空标记。两个动作都要求 `metrics.write`、无请求体，写审计 `formula_metric.archived`/`formula_metric.unarchived`。重复归档返回 409 `FORMULA_METRIC_ALREADY_ARCHIVED`，对活跃指标恢复返回 409 `FORMULA_METRIC_NOT_ARCHIVED`。
+
+归档复合指标按 ID、草稿与不可变版本仍可读；归档期间草稿保存、校验快照（覆盖发布路径）与新运行入队统一 409 `FORMULA_METRIC_ARCHIVED` fail-closed，已建查询作业仍可查询/取消。不可变版本是事实：复合指标对原子指标的依赖经 `formula_metric_dependencies` 外键哈希见证引用 `metric_versions` 不可变表、从不回读可变父行，因此归档复合父指标不破坏其已发布版本与历史运行，被其引用的原子指标归档同理不受影响。列表谓词仅由校验后布尔量在两个常量间选择，请求文本永不进 SQL；游标按 actor/project/environment 再绑定 `active`/`archived` 视图，跨视图复用一律 `INVALID_CURSOR`，未知 `view` 值返回 `INVALID_ARCHIVE_VIEW`。
 
 ### 执行内核与扇出（迁移 `014`，worker 已接通）
 
