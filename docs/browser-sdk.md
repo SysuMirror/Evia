@@ -1,6 +1,6 @@
 # Browser SDK for published custom events
 
-`packages/browser-sdk` provides the framework-neutral `@evia/browser-sdk` ES module. It sends existing registered custom events through the current public configuration and collection APIs. It has no runtime dependencies, framework integration, automatic DOM listeners for event discovery, or URL/query-string harvesting. System-event registration and identity graph processing remain separate work.
+`packages/browser-sdk` provides the framework-neutral `@evia/browser-sdk` ES module. It sends existing registered custom events through the current public configuration and collection APIs. It has no runtime dependencies, framework integration, automatic DOM listeners for event discovery, or URL/query-string harvesting. The five reserved `sys.*` events are served through public configuration and reach queryable storage via the server-side embedded system catalog; identity graph processing remains separate work.
 
 Create a browser source with the website's exact Origin, register the custom events and property schemas, publish and activate a ready release, then build the SDK locally:
 

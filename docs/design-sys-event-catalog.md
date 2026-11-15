@@ -95,8 +95,15 @@
   改查 embed 目录规则，仍依次过信封契约、来源 kind（五规则均 browser-only）、属性 JSON Schema、
   context 与批次预算，拒绝码与普通路径完全一致；`cmd/evia` 启动时加载系统目录，固件损坏即
   fail-closed 拒绝启动。
-- **切片 3（待做）**：公开配置（`/v1/config`）纳入系统事件使 SDK 真正发送，再做端到端
-  SDK 上报 → 采集 → Kafka → ClickHouse 落库 → 可查询的真实依赖验证与文档核销。
+- **切片 3（已交付，2026-11-15）**：`/v1/config` 公开配置纳入五个保留事件使 SDK 真正发送，
+  并完成端到端真实依赖验证。delivery 包新增 `ReservedEventProvider` 接口与可选
+  `WithReservedEvents` 装配（nil 时配置逐字节不变），系统事件与项目事件共用来源 kind 白名单与
+  `publicSchema` 私有注解剥离；预算显式分两层（项目发布 ≤200、公开配置总数 ≤205=200+5），
+  OpenAPI 与 SDK 校验同步放宽到 205，超限 fail-closed。`cmd/evia` 以适配器把 embed
+  `SystemCatalog` 接入 delivery，不引入包循环。真实 Kafka+ClickHouse 集成测试
+  `TestSystemEventsFlowCollectorKafkaClickHouse` 驱动 `sys.page_view`/`sys.page_scroll` 经
+  采集器 → Kafka → worker → ClickHouse raw 表与 `event_facts` 视图，验证键、版本、修订溯源、
+  属性 JSON 与项目/来源作用域全部可查询，测试库/主题零残留。
 
 ### `release_revision` 口径（切片 2 定稿）
 
