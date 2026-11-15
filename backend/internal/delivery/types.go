@@ -10,6 +10,18 @@ import (
 const Capability = "raw-facts-v1"
 const MaxRevision int64 = 9007199254740991
 
+// ProjectReleaseEventLimit bounds the events inside one project release
+// manifest; reserved sys.* events never enter project manifests.
+const ProjectReleaseEventLimit = 200
+
+// ReservedEventLimit is the fixed size of the embedded platform sys.* catalog
+// pinned by the system event fixture invariants.
+const ReservedEventLimit = 5
+
+// PublicConfigEventLimit bounds total events served in one public config:
+// 200 project release events plus the five platform-reserved sys.* events.
+const PublicConfigEventLimit = ProjectReleaseEventLimit + ReservedEventLimit
+
 type ActivationInput struct {
 	Environment            string `json:"environment"`
 	ReleaseID              string `json:"release_id"`
@@ -55,6 +67,23 @@ type ConfigEvent struct {
 	Key     string         `json:"event_key"`
 	Version int64          `json:"schema_version"`
 	Schema  map[string]any `json:"schema"`
+}
+
+// ReservedEvent is a platform-built sys.* event that exists outside every
+// project release. Kinds keeps the same source-kind allowlist semantics as
+// release manifest events, so public config can apply the identical filter.
+type ReservedEvent struct {
+	Key     string
+	Version int64
+	Kinds   []string
+	Schema  map[string]any
+}
+
+// ReservedEventProvider supplies the embedded system catalog to public config.
+// Implementations must return a stable, deterministic ordering because config
+// contents feed the response ETag.
+type ReservedEventProvider interface {
+	ReservedEvents() []ReservedEvent
 }
 type Config struct {
 	Format      string        `json:"format"`

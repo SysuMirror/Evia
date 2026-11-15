@@ -113,7 +113,7 @@ func (s *Service) loadManifest(ctx context.Context, candidate Candidate) (manife
 		return manifest{}, Unavailable("RELEASE_MANIFEST_HASH_MISMATCH")
 	}
 	var plan manifest
-	if e = json.Unmarshal(candidate.Manifest, &plan); e != nil || plan.Format != "activity.event-plan.v1" || plan.Status != "published" || plan.ProjectID != candidate.ProjectID || plan.Environment != candidate.Environment || plan.Revision != candidate.Revision || len(plan.Events) < 1 || len(plan.Events) > 200 {
+	if e = json.Unmarshal(candidate.Manifest, &plan); e != nil || plan.Format != "activity.event-plan.v1" || plan.Status != "published" || plan.ProjectID != candidate.ProjectID || plan.Environment != candidate.Environment || plan.Revision != candidate.Revision || len(plan.Events) < 1 || len(plan.Events) > ProjectReleaseEventLimit {
 		return manifest{}, Unavailable("RELEASE_MANIFEST_INVALID")
 	}
 	seen := map[string]bool{}

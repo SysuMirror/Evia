@@ -42,11 +42,20 @@ type Service struct {
 	probe                  Probe
 	validator              Validator
 	options                Options
+	reserved               ReservedEventProvider
 	mu                     sync.Mutex
 	cache                  map[string]manifestCache
 	cacheBytes, cacheRules int
 	flights                map[string]*manifestFlight
 	slots                  chan struct{}
+}
+
+// WithReservedEvents attaches the platform sys.* catalog provider. It is
+// optional: a nil provider keeps public config limited to project release
+// events, byte-identical to the historical behaviour.
+func (s *Service) WithReservedEvents(provider ReservedEventProvider) *Service {
+	s.reserved = provider
+	return s
 }
 
 func New(store Store, probe Probe, validator Validator, options Options) (*Service, error) {
@@ -220,6 +229,20 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 	for _, event := range chosen.Events {
 		if allows(event.Kinds, snapshot.Source.Kind) {
 			out.Config.Events = append(out.Config.Events, ConfigEvent{Key: event.Key, Version: event.Version, Schema: publicSchema(event.Schema)})
+		}
+	}
+	// Platform sys.* events follow the same source-kind allowlist. They cannot
+	// collide with release events: project catalog keys reject the dot character
+	// while every reserved key carries the sys. prefix.
+	if s.reserved != nil {
+		for _, event := range s.reserved.ReservedEvents() {
+			if !allows(event.Kinds, snapshot.Source.Kind) {
+				continue
+			}
+			out.Config.Events = append(out.Config.Events, ConfigEvent{Key: event.Key, Version: event.Version, Schema: publicSchema(event.Schema)})
+		}
+		if len(out.Config.Events) > PublicConfigEventLimit {
+			return ConfigResult{}, Unavailable("PUBLIC_CONFIG_LIMIT_EXCEEDED")
 		}
 	}
 	hash, e := canonical.Hash(out.Config)
