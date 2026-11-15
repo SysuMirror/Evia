@@ -63,6 +63,9 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return analysis.Job{}, e
 	}
+	if e = assertSavedAnalysisActiveTx(ctx, tx, project, id); e != nil {
+		return analysis.Job{}, e
+	}
 	snapshot, e := readSavedAnalysisVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return analysis.Job{}, e

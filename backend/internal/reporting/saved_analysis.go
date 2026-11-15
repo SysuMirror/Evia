@@ -59,15 +59,17 @@ func (d SavedAnalysisDefinition) MarshalJSON() ([]byte, error) {
 }
 
 type SavedAnalysis struct {
-	ID               string    `json:"analysis_id"`
-	ProjectID        string    `json:"project_id"`
-	Environment      string    `json:"environment"`
-	Title            string    `json:"title"`
-	Kind             string    `json:"kind"`
-	DraftRevision    int64     `json:"draft_revision"`
-	PublishedVersion int64     `json:"published_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string     `json:"analysis_id"`
+	ProjectID        string     `json:"project_id"`
+	Environment      string     `json:"environment"`
+	Title            string     `json:"title"`
+	Kind             string     `json:"kind"`
+	DraftRevision    int64      `json:"draft_revision"`
+	PublishedVersion int64      `json:"published_version"`
+	ArchivedAt       *time.Time `json:"archived_at,omitempty"`
+	ArchivedBy       string     `json:"archived_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 type SavedAnalysisDraft struct {
 	SavedAnalysis
@@ -136,7 +138,7 @@ type SavedAnalysisSnapshot struct {
 // under the same transaction that writes immutable content, audit and idempotency.
 type SavedAnalysisStore interface {
 	CreateSavedAnalysis(context.Context, string, string, string, SavedAnalysisCreate) (SavedAnalysisDraft, error)
-	ListSavedAnalyses(context.Context, string, string, string, string, int) ([]SavedAnalysis, error)
+	ListSavedAnalyses(context.Context, string, string, string, string, int, bool) ([]SavedAnalysis, error)
 	GetSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 	GetSavedAnalysisDraft(context.Context, string, string, string) (SavedAnalysisDraft, error)
 	SaveSavedAnalysisDraft(context.Context, string, string, string, int64, SavedAnalysisDefinition) (SavedAnalysisDraft, error)
@@ -145,10 +147,12 @@ type SavedAnalysisStore interface {
 	ListSavedAnalysisVersions(context.Context, string, string, string, int64, int) ([]SavedAnalysisVersion, error)
 	GetSavedAnalysisVersion(context.Context, string, string, string, int64) (SavedAnalysisVersion, error)
 	EnqueueSavedAnalysisVersion(context.Context, string, string, string, int64, string, SavedAnalysisExecute) (analysis.Job, error)
+	ArchiveSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
+	UnarchiveSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 }
 type SavedAnalysisService interface {
 	CreateSavedAnalysis(context.Context, string, string, string, SavedAnalysisCreate) (SavedAnalysisDraft, error)
-	ListSavedAnalyses(context.Context, string, string, string, string, int) ([]SavedAnalysis, error)
+	ListSavedAnalyses(context.Context, string, string, string, string, int, bool) ([]SavedAnalysis, error)
 	GetSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 	GetSavedAnalysisDraft(context.Context, string, string, string) (SavedAnalysisDraft, error)
 	SaveSavedAnalysisDraft(context.Context, string, string, string, int64, SavedAnalysisDefinition) (SavedAnalysisDraft, error)
@@ -157,4 +161,6 @@ type SavedAnalysisService interface {
 	ListSavedAnalysisVersions(context.Context, string, string, string, int64, int) ([]SavedAnalysisVersion, error)
 	GetSavedAnalysisVersion(context.Context, string, string, string, int64) (SavedAnalysisVersion, error)
 	EnqueueSavedAnalysisVersion(context.Context, string, string, string, int64, string, SavedAnalysisExecute) (analysis.Job, error)
+	ArchiveSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
+	UnarchiveSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 }

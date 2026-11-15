@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
@@ -17,7 +18,7 @@ import (
 
 var _ reporting.SavedAnalysisStore = (*Store)(nil)
 
-const savedAnalysisColumns = `analysis_id::text,project_id::text,environment,title,kind,draft_revision,COALESCE(published_version,0),created_at,updated_at`
+const savedAnalysisColumns = `analysis_id::text,project_id::text,environment,title,kind,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
 const savedVersionColumns = `analysis_id::text,project_id::text,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_at,created_by::text`
 
 func savedMissing() error {
@@ -31,12 +32,16 @@ func savedConflict(code string) error {
 }
 func scanSavedAnalysis(row pgx.Row) (reporting.SavedAnalysis, error) {
 	var out reporting.SavedAnalysis
-	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.Kind, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt)
+	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.Kind, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = savedMissing()
 	}
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	return out, e
 }
 func decodeSaved(data []byte, out any) error {
@@ -47,7 +52,7 @@ func decodeSaved(data []byte, out any) error {
 func readSavedAnalysisDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.SavedAnalysisDraft, error) {
 	var out reporting.SavedAnalysisDraft
 	var data []byte
-	e := tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+`,definition FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.Kind, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &data)
+	e := tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+`,definition FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.Kind, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return out, savedMissing()
 	}
@@ -56,6 +61,10 @@ func readSavedAnalysisDraftTx(ctx context.Context, tx pgx.Tx, project, id string
 	}
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	e = decodeSaved(data, &out.Definition)
 	return out, e
 }
@@ -196,7 +205,7 @@ func (s *Store) CreateSavedAnalysis(ctx context.Context, actor, project, key str
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int) ([]reporting.SavedAnalysis, error) {
+func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.SavedAnalysis, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -211,7 +220,12 @@ func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environme
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "analyses.read"); e != nil {
 		return nil, e
 	}
-	rows, e := tx.Query(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND environment=$2 AND ($3='' OR analysis_id>NULLIF($3,'')::uuid) ORDER BY analysis_id LIMIT $4`, project, environment, after, limit)
+	// The predicate is selected from the validated bool, never from request text.
+	archivePredicate := "archived_at IS NULL"
+	if archivedOnly {
+		archivePredicate = "archived_at IS NOT NULL"
+	}
+	rows, e := tx.Query(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR analysis_id>NULLIF($3,'')::uuid) ORDER BY analysis_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -230,6 +244,90 @@ func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environme
 	rows.Close()
 	return out, tx.Commit(ctx)
 }
+
+// assertSavedAnalysisActiveTx blocks mutating operations on an archived analysis.
+// Caller must already hold write authorization and the project lock.
+func assertSavedAnalysisActiveTx(ctx context.Context, tx pgx.Tx, project, id string) error {
+	var archivedAt *time.Time
+	e := tx.QueryRow(ctx, `SELECT archived_at FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return savedMissing()
+	}
+	if e != nil {
+		return e
+	}
+	if archivedAt != nil {
+		return fault.New(fault.Conflict, "SAVED_ANALYSIS_ARCHIVED", "保存分析已归档，请先恢复后再修改")
+	}
+	return nil
+}
+
+func (s *Store) ArchiveSavedAnalysis(ctx context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.write"); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.SavedAnalysis{}, savedMissing()
+	}
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	if archivedAt != nil {
+		return reporting.SavedAnalysis{}, fault.New(fault.Conflict, "SAVED_ANALYSIS_ALREADY_ARCHIVED", "保存分析已处于归档状态")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE saved_analyses SET archived_at=clock_timestamp(), archived_by=$3::uuid, updated_at=clock_timestamp() WHERE project_id=$1 AND analysis_id=$2`, project, id, actor); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'analysis.archived',$3)`, project, actor, id); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	out, e := scanSavedAnalysis(tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id))
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
+func (s *Store) UnarchiveSavedAnalysis(ctx context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "saved_analyses", "analysis_id", "analyses.write"); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.SavedAnalysis{}, savedMissing()
+	}
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	if archivedAt == nil {
+		return reporting.SavedAnalysis{}, fault.New(fault.Conflict, "SAVED_ANALYSIS_NOT_ARCHIVED", "保存分析未归档，无需恢复")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE saved_analyses SET archived_at=NULL, archived_by=NULL, updated_at=clock_timestamp() WHERE project_id=$1 AND analysis_id=$2`, project, id); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'analysis.unarchived',$3)`, project, actor, id); e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	out, e := scanSavedAnalysis(tx.QueryRow(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND analysis_id=$2`, project, id))
+	if e != nil {
+		return reporting.SavedAnalysis{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
 func (s *Store) GetSavedAnalysis(ctx context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
 	tx, e := s.catalogTx(ctx, actor, project, false)
 	if e != nil {
@@ -274,6 +372,9 @@ func (s *Store) SaveSavedAnalysisDraft(ctx context.Context, actor, project, id s
 	if e != nil {
 		return out, e
 	}
+	if old.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "SAVED_ANALYSIS_ARCHIVED", "保存分析已归档，请先恢复后再修改")
+	}
 	if revision < 1 {
 		return out, fault.New(fault.Invalid, "REVISION_REQUIRED", "需要草稿修订号")
 	}
@@ -314,6 +415,9 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 	out.Draft, e = readSavedAnalysisDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
+	}
+	if out.Draft.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "SAVED_ANALYSIS_ARCHIVED", "保存分析已归档，请先恢复后再校验或发布")
 	}
 	if in.DraftRevision != out.Draft.DraftRevision {
 		return out, savedConflict("SAVED_ANALYSIS_REVISION_CONFLICT")

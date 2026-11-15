@@ -74,14 +74,14 @@ func (s *SavedAnalyses) CreateSavedAnalysis(ctx context.Context, actor, project,
 	in.Definition = definition
 	return s.store.CreateSavedAnalysis(ctx, actor, project, key, in)
 }
-func (s *SavedAnalyses) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int) ([]SavedAnalysis, error) {
+func (s *SavedAnalyses) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]SavedAnalysis, error) {
 	if !savedEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListSavedAnalyses(ctx, actor, project, environment, after, limit+1)
+	return s.store.ListSavedAnalyses(ctx, actor, project, environment, after, limit+1, archivedOnly)
 }
 func (s *SavedAnalyses) GetSavedAnalysis(ctx context.Context, actor, project, id string) (SavedAnalysis, error) {
 	return s.store.GetSavedAnalysis(ctx, actor, project, id)
@@ -181,4 +181,10 @@ func (s *SavedAnalyses) EnqueueSavedAnalysisVersion(ctx context.Context, actor, 
 		return analysis.Job{}, fault.New(fault.Unavailable, "QUERY_STORAGE_UNAVAILABLE", "分析执行尚未配置")
 	}
 	return s.store.EnqueueSavedAnalysisVersion(ctx, actor, project, id, version, key, in)
+}
+func (s *SavedAnalyses) ArchiveSavedAnalysis(ctx context.Context, actor, project, id string) (SavedAnalysis, error) {
+	return s.store.ArchiveSavedAnalysis(ctx, actor, project, id)
+}
+func (s *SavedAnalyses) UnarchiveSavedAnalysis(ctx context.Context, actor, project, id string) (SavedAnalysis, error) {
+	return s.store.UnarchiveSavedAnalysis(ctx, actor, project, id)
 }

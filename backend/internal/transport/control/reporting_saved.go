@@ -34,6 +34,8 @@ func (a *SavedAnalysesAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+base+"/{analysis_id}/versions", a.API.projectAuth(true, a.publish))
 	mux.HandleFunc("GET "+base+"/{analysis_id}/versions/{version}", a.API.projectAuth(false, a.version))
 	mux.HandleFunc("POST "+base+"/{analysis_id}/versions/{version}/queries", a.API.projectAuth(true, a.execute))
+	mux.HandleFunc("POST "+base+"/{analysis_id}/archive", a.API.projectAuth(true, a.archive))
+	mux.HandleFunc("POST "+base+"/{analysis_id}/unarchive", a.API.projectAuth(true, a.unarchive))
 }
 
 func (a *SavedAnalysesAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
@@ -269,7 +271,7 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s author
 	if e != nil {
 		return e
 	}
-	q, e := savedQuery(r, true, true)
+	q, e := savedArchiveQuery(r)
 	if e != nil {
 		return e
 	}
@@ -277,12 +279,17 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s author
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"saved_analyses", s.ID, p, q.Get("environment")}, ":")
+	view := q.Get("view")
+	if view == "" {
+		view = "active"
+	}
+	archivedOnly := view == "archived"
+	scope := strings.Join([]string{"saved_analyses", s.ID, p, q.Get("environment"), view}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListSavedAnalyses(r.Context(), s.ID, p, q.Get("environment"), after, limit)
+	items, e := a.Service.ListSavedAnalyses(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly)
 	if e != nil {
 		return e
 	}
@@ -297,6 +304,36 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s author
 	}
 	out.Items = append(out.Items, items...)
 	return a.API.Boundary.JSON(w, 200, "SavedAnalysisList", out)
+}
+
+func (a *SavedAnalysesAPI) archive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.ArchiveSavedAnalysis(r.Context(), s.ID, p, r.PathValue("analysis_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "SavedAnalysis", out)
+}
+
+func (a *SavedAnalysesAPI) unarchive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.UnarchiveSavedAnalysis(r.Context(), s.ID, p, r.PathValue("analysis_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "SavedAnalysis", out)
 }
 func (a *SavedAnalysesAPI) versions(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
 	p, e := a.scope(r, s, false)
