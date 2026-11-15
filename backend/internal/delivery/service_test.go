@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -313,5 +314,112 @@ func TestGetActivationValidatesScopeAndPreservesPersistenceErrors(t *testing.T) 
 	_, e = s.GetActivation(context.Background(), "actor", testProject, "production")
 	if e != store.prepareErr {
 		t.Fatal(e)
+	}
+}
+
+type reservedProviderStub struct {
+	events []ReservedEvent
+}
+
+func (p reservedProviderStub) ReservedEvents() []ReservedEvent { return p.events }
+
+func reservedBrowserSnapshot(t *testing.T, kind string) ConfigSnapshot {
+	t.Helper()
+	return ConfigSnapshot{
+		Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: kind, Status: "active", AllowedOrigins: []string{"https://site.example"}},
+		Active: candidate(t, 1, kind, schema()),
+	}
+}
+
+func TestPublicConfigAppendsReservedEventsForBrowserSource(t *testing.T) {
+	reserved := []ReservedEvent{
+		{Key: "sys.page_view", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object", "description": "private annotation", "additionalProperties": false, "properties": map[string]any{}}},
+		{Key: "sys.session_end", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"reason": map[string]any{"type": "string", "title": "private label"}}}},
+	}
+	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+	s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: reserved})
+	auth := Authentication{Origin: "https://site.example"}
+
+	out, e := s.PublicConfig(context.Background(), "public-key", auth, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(out.Config.Events) != 3 {
+		t.Fatalf("want 1 release + 2 reserved events, got %d", len(out.Config.Events))
+	}
+	// Project release events keep precedence; reserved events follow in provider order.
+	if out.Config.Events[0].Key != "opened" || out.Config.Events[1].Key != "sys.page_view" || out.Config.Events[2].Key != "sys.session_end" {
+		t.Fatalf("event ordering changed: %+v", out.Config.Events)
+	}
+	for _, event := range out.Config.Events[1:] {
+		if event.Version != 1 {
+			t.Fatalf("reserved version lost: %+v", event)
+		}
+		raw, err := json.Marshal(event.Schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), "description") || strings.Contains(string(raw), "title") {
+			t.Fatalf("reserved schema kept private annotations: %s", raw)
+		}
+	}
+	// The ETag covers reserved events: two identical calls produce identical ETags,
+	// and a provider-less service produces a different one.
+	again, e := s.PublicConfig(context.Background(), "public-key", auth, 0)
+	if e != nil || again.ETag != out.ETag {
+		t.Fatalf("reserved config not deterministic: %v %v", e, again.ETag)
+	}
+	plain := newTestService(t, store, probeFunc(successfulProbe))
+	without, e := plain.PublicConfig(context.Background(), "public-key", auth, 0)
+	if e != nil || without.ETag == out.ETag || len(without.Config.Events) != 1 {
+		t.Fatalf("provider-less config must stay on the historical shape: %v %d", e, len(without.Config.Events))
+	}
+}
+
+func TestPublicConfigReservedEventsRespectSourceKind(t *testing.T) {
+	reserved := []ReservedEvent{
+		{Key: "sys.page_view", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object"}},
+		{Key: "sys.server_only", Version: 2, Kinds: []string{"server"}, Schema: map[string]any{"type": "object"}},
+	}
+	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+	s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: reserved})
+	out, e := s.PublicConfig(context.Background(), "public-key", Authentication{Origin: "https://site.example"}, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var keys []string
+	for _, event := range out.Config.Events {
+		keys = append(keys, event.Key)
+	}
+	if len(keys) != 2 || keys[0] != "opened" || keys[1] != "sys.page_view" {
+		t.Fatalf("server-kind reserved event leaked into browser config: %v", keys)
+	}
+}
+
+func TestPublicConfigReservedEventBudgetGuard(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		count   int
+		wantErr string
+	}{
+		{"at limit", PublicConfigEventLimit - 1, ""},
+		{"over limit", PublicConfigEventLimit, "PUBLIC_CONFIG_LIMIT_EXCEEDED"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			events := make([]ReservedEvent, tc.count)
+			for i := range events {
+				events[i] = ReservedEvent{Key: "sys.event_" + strconv.Itoa(i), Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object"}}
+			}
+			store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+			s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: events})
+			out, e := s.PublicConfig(context.Background(), "public-key", Authentication{Origin: "https://site.example"}, 0)
+			if tc.wantErr != "" {
+				code(t, e, tc.wantErr)
+				return
+			}
+			if e != nil || len(out.Config.Events) != PublicConfigEventLimit {
+				t.Fatalf("boundary config invalid: %v %d", e, len(out.Config.Events))
+			}
+		})
 	}
 }
