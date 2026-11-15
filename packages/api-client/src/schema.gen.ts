@@ -7048,6 +7048,8 @@ export interface operations {
         parameters: {
             query: {
                 environment: "development" | "staging" | "production";
+                /** @description active 仅返回活跃看板（默认），archived 仅返回已归档看板；游标与视图绑定不可跨视图使用。 */
+                view?: "active" | "archived";
                 limit?: number;
                 cursor?: string;
             };

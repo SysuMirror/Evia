@@ -4720,6 +4720,20 @@
             }
           },
           {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "description": "active 仅返回活跃看板（默认），archived 仅返回已归档看板；游标与视图绑定不可跨视图使用。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "default": "active"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,

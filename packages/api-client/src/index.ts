@@ -150,8 +150,14 @@ export type ProjectAuditPage = {
   limit?: number;
 };
 export type Environment = Release['environment'];
-export type CatalogPage = { environment?: Environment; cursor?: string; limit?: number };
+export type CatalogPage = {
+  environment?: Environment;
+  cursor?: string;
+  limit?: number;
+  view?: 'active' | 'archived';
+};
 export type SavedAnalysisPage = { environment: Environment; cursor?: string; limit?: number };
+export type DashboardPage = SavedAnalysisPage & { view?: 'active' | 'archived' };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
 export type QueryResultPage = { cursor?: string; limit?: number };
@@ -278,6 +284,7 @@ function catalogQuery(page: CatalogPage): string {
   if (page.environment !== undefined) query.set('environment', page.environment);
   if (page.cursor !== undefined) query.set('cursor', page.cursor);
   if (page.limit !== undefined) query.set('limit', String(page.limit));
+  if (page.view !== undefined) query.set('view', page.view);
   return query.size ? `?${query.toString()}` : '';
 }
 function queryResultQuery(page: QueryResultPage): string {
@@ -879,7 +886,7 @@ export const api = {
         headers: { 'Idempotency-Key': idempotencyKey },
       },
     ),
-  listDashboards: (projectID: string, page: SavedAnalysisPage, signal?: AbortSignal) =>
+  listDashboards: (projectID: string, page: DashboardPage, signal?: AbortSignal) =>
     request<DashboardList>(`${projectPath(projectID)}/dashboards${catalogQuery(page)}`, {
       signal,
     }),
