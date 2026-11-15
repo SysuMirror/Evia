@@ -625,6 +625,39 @@ test('dashboard transport pins versions, targets filters, and preserves recovery
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('dashboard archive view encoding and lifecycle calls carry CSRF without body or key', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', view: 'archived', limit: 20 },
+    controller.signal,
+  );
+  await api.listDashboards('p/q', { environment: 'production', view: 'active' }, controller.signal);
+  await api.archiveDashboard('p/q', 'd/r', 'csrf', controller.signal);
+  await api.unarchiveDashboard('p/q', 'd/r', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&limit=20&view=archived',
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&view=active',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/archive',
+      '/api/v1/projects/p%2Fq/dashboards/d%2Fr/unarchive',
+    ],
+  );
+  for (const index of [2, 3]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.method, 'POST');
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+    assert.equal((init.headers as Headers).has('Idempotency-Key'), false);
+    assert.equal(init.body, undefined);
+    assert.equal(init.credentials, 'same-origin');
+  }
+  controller.abort();
+  for (const call of fetch.mock.calls)
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
+
 test('machine administration reads encode scope and allow only cursor and limit', async () => {
   const fetch = respond();
   const controller = new AbortController();
