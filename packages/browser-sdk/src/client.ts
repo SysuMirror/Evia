@@ -561,7 +561,15 @@ class Client implements BrowserClient {
   private startScrollCollection(): void {
     if (!this.autoPageScrolls || !this.scrollHost) return;
     const host = this.scrollHost;
-    const unsubscribe = host.subscribe(() => this.handleScroll(host));
+    const unsubscribe = host.subscribe(() => {
+      // Automatic collection is best-effort: a misbehaving scroll host must
+      // never throw into the host page's event loop or break other listeners.
+      try {
+        this.handleScroll(host);
+      } catch {
+        /* host failure is swallowed; the SDK keeps functioning */
+      }
+    });
     this.cleanup.push(unsubscribe);
   }
 
