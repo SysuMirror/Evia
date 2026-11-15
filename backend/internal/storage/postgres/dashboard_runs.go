@@ -39,6 +39,9 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return out, e
 	}
+	if e = assertDashboardActiveTx(ctx, tx, project, id); e != nil {
+		return out, e
+	}
 	snapshot, e := readDashboardVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return out, e

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
@@ -15,7 +16,7 @@ import (
 
 var _ reporting.DashboardStore = (*Store)(nil)
 
-const dashboardColumns = `dashboard_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at`
+const dashboardColumns = `dashboard_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
 const dashboardVersionColumns = `dashboard_id::text,project_id::text,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_at,created_by::text`
 
 func dashboardMissing() error {
@@ -29,7 +30,7 @@ func dashboardConflict(code string) error {
 }
 func scanDashboard(row pgx.Row) (reporting.Dashboard, error) {
 	var out reporting.Dashboard
-	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt)
+	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = dashboardMissing()
 	}
@@ -38,7 +39,7 @@ func scanDashboard(row pgx.Row) (reporting.Dashboard, error) {
 func readDashboardDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.DashboardDraft, error) {
 	var out reporting.DashboardDraft
 	var data []byte
-	e := tx.QueryRow(ctx, `SELECT `+dashboardColumns+`,definition FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &data)
+	e := tx.QueryRow(ctx, `SELECT `+dashboardColumns+`,definition FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return out, dashboardMissing()
 	}
@@ -160,7 +161,7 @@ func (s *Store) ListDashboards(ctx context.Context, actor, project, environment,
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "dashboards.read"); e != nil {
 		return nil, e
 	}
-	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
+	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND archived_at IS NULL AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -223,6 +224,9 @@ func (s *Store) SaveDashboardDraft(ctx context.Context, actor, project, id strin
 	if e != nil {
 		return out, e
 	}
+	if old.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "DASHBOARD_ARCHIVED", "看板已归档，请先恢复后再修改")
+	}
 	if revision < 1 {
 		return out, fault.New(fault.Invalid, "REVISION_REQUIRED", "需要草稿修订号")
 	}
@@ -259,6 +263,9 @@ func dashboardSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in 
 	out.Draft, e = readDashboardDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
+	}
+	if out.Draft.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "DASHBOARD_ARCHIVED", "看板已归档，请先恢复后再校验")
 	}
 	if in.DraftRevision != out.Draft.DraftRevision {
 		return out, dashboardConflict("DASHBOARD_REVISION_CONFLICT")
@@ -324,6 +331,9 @@ func (s *Store) PublishDashboard(ctx context.Context, actor, project, id, key st
 	draft, e := readDashboardDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
+	}
+	if draft.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "DASHBOARD_ARCHIVED", "看板已归档，请先恢复后再发布")
 	}
 	operation := "publish:" + id
 	hash, e := canonical.Hash(struct {
@@ -436,5 +446,88 @@ func (s *Store) ListDashboardVersions(ctx context.Context, actor, project, id st
 		return nil, e
 	}
 	rows.Close()
+	return out, tx.Commit(ctx)
+}
+
+// assertDashboardActiveTx blocks mutating operations on an archived dashboard.
+// Caller must already hold write authorization and the project lock.
+func assertDashboardActiveTx(ctx context.Context, tx pgx.Tx, project, id string) error {
+	var archivedAt *time.Time
+	e := tx.QueryRow(ctx, `SELECT archived_at FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return dashboardMissing()
+	}
+	if e != nil {
+		return e
+	}
+	if archivedAt != nil {
+		return fault.New(fault.Conflict, "DASHBOARD_ARCHIVED", "看板已归档，请先恢复后再修改")
+	}
+	return nil
+}
+
+func (s *Store) ArchiveDashboard(ctx context.Context, actor, project, id string) (reporting.Dashboard, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.write"); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.Dashboard{}, dashboardMissing()
+	}
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
+	if archivedAt != nil {
+		return reporting.Dashboard{}, fault.New(fault.Conflict, "DASHBOARD_ALREADY_ARCHIVED", "看板已处于归档状态")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE dashboards SET archived_at=clock_timestamp(), archived_by=$3::uuid, updated_at=clock_timestamp() WHERE project_id=$1 AND dashboard_id=$2`, project, id, actor); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'dashboard.archived',$3)`, project, actor, id); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	out, e := scanDashboard(tx.QueryRow(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id))
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
+func (s *Store) UnarchiveDashboard(ctx context.Context, actor, project, id string) (reporting.Dashboard, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeReportingResource(ctx, tx, actor, project, id, "dashboards", "dashboard_id", "dashboards.write"); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.Dashboard{}, dashboardMissing()
+	}
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
+	if archivedAt == nil {
+		return reporting.Dashboard{}, fault.New(fault.Conflict, "DASHBOARD_NOT_ARCHIVED", "看板未归档，无需恢复")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE dashboards SET archived_at=NULL, archived_by=NULL, updated_at=clock_timestamp() WHERE project_id=$1 AND dashboard_id=$2`, project, id); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'dashboard.unarchived',$3)`, project, actor, id); e != nil {
+		return reporting.Dashboard{}, e
+	}
+	out, e := scanDashboard(tx.QueryRow(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id))
+	if e != nil {
+		return reporting.Dashboard{}, e
+	}
 	return out, tx.Commit(ctx)
 }

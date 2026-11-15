@@ -170,3 +170,9 @@ func (s *Dashboards) GetDashboardRun(ctx context.Context, actor, project, id str
 func (s *Dashboards) CancelDashboardRun(ctx context.Context, actor, project, id string) (DashboardRun, error) {
 	return s.store.CancelDashboardRun(ctx, actor, project, id)
 }
+func (s *Dashboards) ArchiveDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
+	return s.store.ArchiveDashboard(ctx, actor, project, id)
+}
+func (s *Dashboards) UnarchiveDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
+	return s.store.UnarchiveDashboard(ctx, actor, project, id)
+}

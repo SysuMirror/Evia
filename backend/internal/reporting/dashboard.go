@@ -29,14 +29,16 @@ type DashboardDefinition struct {
 	Widgets     []DashboardWidget `json:"widgets"`
 }
 type Dashboard struct {
-	ID               string    `json:"dashboard_id"`
-	ProjectID        string    `json:"project_id"`
-	Environment      string    `json:"environment"`
-	Title            string    `json:"title"`
-	DraftRevision    int64     `json:"draft_revision"`
-	PublishedVersion int64     `json:"published_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string     `json:"dashboard_id"`
+	ProjectID        string     `json:"project_id"`
+	Environment      string     `json:"environment"`
+	Title            string     `json:"title"`
+	DraftRevision    int64      `json:"draft_revision"`
+	PublishedVersion int64      `json:"published_version"`
+	ArchivedAt       *time.Time `json:"archived_at,omitempty"`
+	ArchivedBy       string     `json:"archived_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 type DashboardDraft struct {
 	Dashboard
@@ -149,6 +151,8 @@ type DashboardStore interface {
 	EnqueueDashboardRun(context.Context, string, string, string, int64, string, DashboardExecute) (DashboardRun, error)
 	GetDashboardRun(context.Context, string, string, string) (DashboardRun, error)
 	CancelDashboardRun(context.Context, string, string, string) (DashboardRun, error)
+	ArchiveDashboard(context.Context, string, string, string) (Dashboard, error)
+	UnarchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 }
 type DashboardService interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
@@ -163,4 +167,6 @@ type DashboardService interface {
 	EnqueueDashboardRun(context.Context, string, string, string, int64, string, DashboardExecute) (DashboardRun, error)
 	GetDashboardRun(context.Context, string, string, string) (DashboardRun, error)
 	CancelDashboardRun(context.Context, string, string, string) (DashboardRun, error)
+	ArchiveDashboard(context.Context, string, string, string) (Dashboard, error)
+	UnarchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 }
