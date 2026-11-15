@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   api,
   ApiError,
@@ -24,11 +24,13 @@ import {
   Field,
   Input,
   LoadingPanel,
+  Modal,
   PageHeading,
   PaginationBar,
   Panel,
   Select,
   Tabs,
+  useToast,
   type DataTableColumn,
 } from '@evia/design-system';
 import { useFormulaMetricsRequest } from './use-formula-metrics-request';
@@ -50,12 +52,15 @@ import {
 import './styles.css';
 
 type PageProps = { project: Project; session: Session; environment: Environment };
+type FormulaMetricListView = 'active' | 'archived';
 
 export function FormulaMetricsPage({ project, session, environment }: PageProps) {
   const canRead = project.permissions.includes('metrics.read');
   const canWrite = project.permissions.includes('metrics.write');
   const canPublish = project.permissions.includes('metrics.publish');
   const canRun = project.permissions.includes('metrics.run');
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const requests = useFormulaMetricsRequest(
     project,
     session,
@@ -67,6 +72,9 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
   const [tab, setTab] = useState('draft');
   const [runVersion, setRunVersion] = useState(0);
   const [cursors, setCursors] = useState<string[]>([]);
+  const [archiveView, setArchiveView] = useState<FormulaMetricListView>('active');
+  const [pendingArchive, setPendingArchive] = useState<FormulaMetricRecord | null>(null);
+  const [archiveSubmitted, setArchiveSubmitted] = useState(false);
 
   const list = useQuery({
     queryKey: [
@@ -75,16 +83,50 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
       session.user_id,
       environment,
       'list',
+      archiveView,
       cursors.at(-1) ?? '',
     ],
     queryFn: ({ signal }) =>
       api.listFormulaMetrics(
         project.id,
-        { environment, limit: 20, cursor: cursors.at(-1) },
+        { environment, view: archiveView, limit: 20, cursor: cursors.at(-1) },
         signal,
       ),
     enabled: canRead && !metricID && !creating,
   });
+
+  useEffect(() => {
+    if (archiveSubmitted && requests.busy !== '复合指标归档') {
+      setPendingArchive(null);
+      setArchiveSubmitted(false);
+    }
+  }, [requests.busy, archiveSubmitted]);
+
+  const invalidateList = () =>
+    void queryClient.invalidateQueries({ queryKey: ['formula-metrics', project.id] });
+
+  const archive = (metric: FormulaMetricRecord) => {
+    void requests.perform(
+      '复合指标归档',
+      (signal) =>
+        api.archiveFormulaMetric(project.id, metric.metric_id, session.csrf_token, signal),
+      () => {
+        toast.success(`复合指标「${metric.title}」已归档，可在已归档视图中恢复。`);
+        invalidateList();
+      },
+    );
+  };
+  const unarchive = (metric: FormulaMetricRecord) => {
+    void requests.perform(
+      '复合指标恢复',
+      (signal) =>
+        api.unarchiveFormulaMetric(project.id, metric.metric_id, session.csrf_token, signal),
+      () => {
+        toast.success(`复合指标「${metric.title}」已恢复到活跃列表。`);
+        invalidateList();
+      },
+    );
+  };
 
   const current = useQuery({
     queryKey: ['formula-metrics', project.id, session.user_id, environment, metricID, 'summary'],
@@ -202,15 +244,19 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
     );
   }
 
+  const archivedView = archiveView === 'archived';
   const columns: DataTableColumn<FormulaMetricRecord>[] = [
     {
       key: 'title',
       header: '复合指标',
-      render: (row) => (
-        <Button variant="link" onClick={() => openMetric(row.metric_id)}>
-          {row.title}
-        </Button>
-      ),
+      render: (row) =>
+        archivedView ? (
+          <span>{row.title}</span>
+        ) : (
+          <Button variant="link" onClick={() => openMetric(row.metric_id)}>
+            {row.title}
+          </Button>
+        ),
     },
     {
       key: 'published',
@@ -220,7 +266,37 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
       ),
     },
     { key: 'draft', header: '草稿修订', render: (row) => row.draft_revision },
-    { key: 'updated', header: '更新时间', render: (row) => formatFormulaInstant(row.updated_at) },
+    {
+      key: 'updated',
+      header: archivedView ? '归档时间' : '更新时间',
+      render: (row) => formatFormulaInstant(row.archived_at ?? row.updated_at),
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      render: (row) =>
+        canWrite ? (
+          archivedView ? (
+            <Button size="small" disabled={!!requests.busy} onClick={() => unarchive(row)}>
+              恢复指标
+            </Button>
+          ) : (
+            <Button
+              size="small"
+              variant="danger"
+              disabled={!!requests.busy}
+              onClick={() => {
+                setArchiveSubmitted(false);
+                setPendingArchive(row);
+              }}
+            >
+              归档
+            </Button>
+          )
+        ) : (
+          <span className="evia-field-hint">只读</span>
+        ),
+    },
   ];
 
   return (
@@ -236,6 +312,32 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
         }
       />
       <DataSurface label="复合指标列表">
+        <div className="formula-view-switch" role="group" aria-label="复合指标视图切换">
+          <Button
+            size="small"
+            variant={archivedView ? 'ghost' : 'secondary'}
+            aria-pressed={!archivedView}
+            disabled={!!requests.busy}
+            onClick={() => {
+              setArchiveView('active');
+              setCursors([]);
+            }}
+          >
+            活跃指标
+          </Button>
+          <Button
+            size="small"
+            variant={archivedView ? 'secondary' : 'ghost'}
+            aria-pressed={archivedView}
+            disabled={!!requests.busy}
+            onClick={() => {
+              setArchiveView('archived');
+              setCursors([]);
+            }}
+          >
+            已归档
+          </Button>
+        </div>
         {list.isPending ? (
           <LoadingPanel label="正在加载复合指标" />
         ) : list.isError ? (
@@ -246,14 +348,20 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
         ) : (
           <>
             <DataTable
-              caption="复合指标列表"
+              caption={archivedView ? '当前项目和环境的已归档复合指标' : '复合指标列表'}
               columns={columns}
               rows={list.data?.items ?? []}
               rowKey={(row) => row.metric_id}
               minWidth={620}
               loading={list.isFetching}
               empty={
-                <EmptyPanel description="还没有复合公式指标，新建一个来组合已发布的原子指标。" />
+                <EmptyPanel
+                  description={
+                    archivedView
+                      ? '暂无已归档复合指标；归档后的复合指标会移至此处，可随时恢复。'
+                      : '还没有复合公式指标，新建一个来组合已发布的原子指标。'
+                  }
+                />
               }
             />
             <PaginationBar
@@ -270,6 +378,39 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
           </>
         )}
       </DataSurface>
+      <Modal
+        open={!!pendingArchive}
+        title="确认归档复合指标"
+        busy={requests.busy === '复合指标归档'}
+        onRequestClose={() => {
+          if (!requests.busy) setPendingArchive(null);
+        }}
+        footer={
+          <>
+            <Button disabled={!!requests.busy} onClick={() => setPendingArchive(null)}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              loading={requests.busy === '复合指标归档'}
+              disabled={!pendingArchive || (!!requests.busy && requests.busy !== '复合指标归档')}
+              onClick={() => {
+                if (pendingArchive) {
+                  setArchiveSubmitted(true);
+                  archive(pendingArchive);
+                }
+              }}
+            >
+              确认归档
+            </Button>
+          </>
+        }
+      >
+        <p>
+          归档后，复合指标「<strong>{pendingArchive?.title}</strong>
+          」将从默认列表隐藏，且草稿保存、校验、发布与运行入口全部关闭；已发布的不可变版本、原子依赖见证与审计记录保留，历史运行与保存分析对其版本的引用继续有效，可在「已归档」视图中恢复。
+        </p>
+      </Modal>
     </div>
   );
 }
