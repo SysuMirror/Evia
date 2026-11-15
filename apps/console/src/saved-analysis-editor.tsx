@@ -17,6 +17,7 @@ import { FunnelSection } from './saved-analysis-editor/funnel';
 import { GroupingSection } from './saved-analysis-editor/grouping';
 import { MetricReferenceSection } from './saved-analysis-editor/metric-reference';
 import { MetricsSection } from './saved-analysis-editor/metrics';
+import { RetentionSection } from './saved-analysis-editor/retention';
 import { CatalogNotice, useEditorCatalog } from './saved-analysis-editor/use-editor-catalog';
 import { useSectionEditor } from './saved-analysis-editor/use-section-editor';
 import { useSectionFocus } from './saved-analysis-editor/use-section-focus';
@@ -224,6 +225,20 @@ export function SavedAnalysisEditor({
             onFunnelChange={(funnel) => edit.changeQuery({ funnel })}
             onSubjectChange={(subject) => edit.changeQuery({ subject })}
             onWindowChange={(next) => edit.changeNumber('window', next)}
+          />
+        )}
+        {edit.section === 'retention' && (
+          <RetentionSection
+            id={id}
+            readOnly={readOnly}
+            disabled={disabled}
+            retention={query.retention}
+            subject={query.subject}
+            periods={edit.numbers.periods ?? ''}
+            events={catalog.events}
+            onRetentionChange={(retention) => edit.changeQuery({ retention })}
+            onSubjectChange={(subject) => edit.changeQuery({ subject })}
+            onPeriodsChange={(next) => edit.changeNumber('periods', next)}
           />
         )}
         {edit.section === 'json' && (

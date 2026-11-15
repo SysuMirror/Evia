@@ -59,6 +59,7 @@ export function useSectionEditor({
     const nextNumbers = {
       limit: String(value.query.limit ?? 200),
       window: String(value.query.funnel?.window_seconds ?? 3600),
+      periods: String(value.query.retention?.periods ?? 4),
     };
     const nextFilters = flatSavedFilters(value.query.filter)?.rows.map(savedFilterText) ?? [];
     const json = JSON.stringify(value, null, 2);

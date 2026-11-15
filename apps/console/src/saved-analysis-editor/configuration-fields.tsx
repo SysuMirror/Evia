@@ -67,6 +67,7 @@ export function MetadataFields({
             options={[
               { value: 'trend', label: '趋势分析' },
               { value: 'funnel', label: '有序漏斗' },
+              { value: 'retention', label: '留存分析' },
             ]}
             onChange={(event) => onKindChange(event.target.value as SavedAnalysisTemplate['kind'])}
           />
@@ -115,6 +116,10 @@ export function ConfigurationSummary({
             分组与粒度
           </Button>
         </>
+      ) : query.kind === 'retention' ? (
+        <Button disabled={disabled} onClick={() => onOpen('retention')}>
+          留存配置（{query.retention?.periods ?? 0} 期）
+        </Button>
       ) : (
         <Button disabled={disabled} onClick={() => onOpen('funnel')}>
           漏斗步骤 ({query.funnel?.steps.length ?? 0})

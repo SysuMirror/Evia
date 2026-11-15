@@ -140,31 +140,55 @@ export function replaceSavedKind(
   kind: SavedAnalysisTemplate['kind'],
 ): SavedAnalysisDefinition {
   if (kind === value.query.kind) return cloneSavedDefinition(value);
-  const query: SavedAnalysisTemplate =
-    kind === 'trend'
-      ? {
-          kind,
-          event_versions: [],
-          metrics: [{ op: 'count', accuracy: 'exact' }],
-          limit: value.query.limit ?? 200,
-        }
-      : {
-          kind,
-          subject: 'uid',
-          limit: value.query.limit ?? 200,
-          funnel: {
-            steps: [
-              { event_key: '', schema_version: 1 },
-              { event_key: '', schema_version: 1 },
-            ],
-            window_seconds: 3600,
-            mode: 'ordered_with_interleaving',
-          },
-        };
-  return { ...value, query, visualization: { kind: kind === 'trend' ? 'metric' : 'funnel' } };
+  const limit = value.query.limit ?? 200;
+  let query: SavedAnalysisTemplate;
+  let visualization: SavedVisualization;
+  if (kind === 'trend') {
+    query = {
+      kind,
+      event_versions: [],
+      metrics: [{ op: 'count', accuracy: 'exact' }],
+      limit,
+    };
+    visualization = 'metric';
+  } else if (kind === 'retention') {
+    query = {
+      kind,
+      subject: 'uid',
+      limit,
+      retention: {
+        start_event: { event_key: '', schema_version: 0 },
+        return_event: { event_key: '', schema_version: 0 },
+        granularity: 'day',
+        periods: 4,
+      },
+    };
+    visualization = 'table';
+  } else {
+    query = {
+      kind,
+      subject: 'uid',
+      limit,
+      funnel: {
+        steps: [
+          { event_key: '', schema_version: 1 },
+          { event_key: '', schema_version: 1 },
+        ],
+        window_seconds: 3600,
+        mode: 'ordered_with_interleaving',
+      },
+    };
+    visualization = 'funnel';
+  }
+  return { ...value, query, visualization: { kind: visualization } };
 }
 export function savedPins(query: SavedAnalysisTemplate): SavedPin[] {
-  const pins = query.kind === 'funnel' ? (query.funnel?.steps ?? []) : (query.event_versions ?? []);
+  const pins: SavedPin[] =
+    query.kind === 'funnel'
+      ? (query.funnel?.steps ?? [])
+      : query.kind === 'retention' && query.retention
+        ? [query.retention.start_event, query.retention.return_event]
+        : (query.event_versions ?? []);
   return pins
     .filter(
       (pin, index) =>
@@ -264,9 +288,11 @@ export function savedDefinitionSummary(value: SavedAnalysisDefinition): string {
       : '指标引用：请选择已发布指标与版本';
   }
   const q = value.query;
-  return q.kind === 'funnel'
-    ? `${q.funnel?.steps.length ?? 0} 个有序步骤，${q.funnel?.window_seconds ?? 0} 秒窗口`
-    : `${q.event_versions?.length ?? 0} 个固定版本，${q.metrics?.length || 1} 个指标，${q.group_by?.length ?? 0} 个分组`;
+  if (q.kind === 'funnel')
+    return `${q.funnel?.steps.length ?? 0} 个有序步骤，${q.funnel?.window_seconds ?? 0} 秒窗口`;
+  if (q.kind === 'retention' && q.retention)
+    return `留存 ${q.retention.periods} 期（${q.retention.granularity === 'week' ? '按周' : '按天'}），起止事件各 1 个固定版本`;
+  return `${q.event_versions?.length ?? 0} 个固定版本，${q.metrics?.length || 1} 个指标，${q.group_by?.length ?? 0} 个分组`;
 }
 /** JSON.parse alone would silently replace duplicate keys and overflow numbers. */
 export function parseSavedJSON(text: string): unknown {
@@ -385,13 +411,15 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
         'metrics',
         'interval',
         'funnel',
+        'retention',
         'limit',
       ],
       '/query',
     )
   )
     return issues;
-  if (q.kind !== 'trend' && q.kind !== 'funnel') add('/query/kind', '仅支持趋势或漏斗。');
+  if (q.kind !== 'trend' && q.kind !== 'funnel' && q.kind !== 'retention')
+    add('/query/kind', '仅支持趋势、漏斗或留存。');
   if (q.subject !== undefined && q.subject !== 'uid' && q.subject !== 'anonymous')
     add('/query/subject', '请选择原始 UID 或匿名标识。');
   if (q.limit !== undefined) safe(q.limit, 1, 500, '/query/limit');
@@ -441,6 +469,57 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
         });
       safe(f.window_seconds, 1, 604800, '/query/funnel/window_seconds');
       if (f.mode !== 'ordered_with_interleaving') add('/query/funnel/mode', '漏斗模式无效。');
+    }
+  } else if (q.kind === 'retention') {
+    if (q.event_versions !== undefined) add('/query/event_versions', '留存通过起止事件固定版本。');
+    if (
+      q.interval !== undefined ||
+      q.metrics?.length ||
+      q.group_by?.length ||
+      q.funnel !== undefined
+    )
+      add('/query', '留存不接受趋势指标、分组、时间粒度或漏斗。');
+    if (!q.subject) add('/query/subject', '请选择留存主体。');
+    const rt = q.retention;
+    if (
+      rt &&
+      object(rt, ['start_event', 'return_event', 'granularity', 'periods'], '/query/retention')
+    ) {
+      if (rt.granularity !== 'day' && rt.granularity !== 'week')
+        add('/query/retention/granularity', '留存粒度必须是 day 或 week。');
+      safe(rt.periods, 1, 12, '/query/retention/periods');
+      if (
+        object(
+          rt.start_event,
+          ['event_key', 'schema_version', 'filter'],
+          '/query/retention/start_event',
+        )
+      ) {
+        eventKey(rt.start_event.event_key, '/query/retention/start_event/event_key');
+        safe(
+          rt.start_event.schema_version,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          '/query/retention/start_event/schema_version',
+        );
+        pins.push(rt.start_event as SavedPin);
+      }
+      if (
+        object(
+          rt.return_event,
+          ['event_key', 'schema_version', 'filter'],
+          '/query/retention/return_event',
+        )
+      ) {
+        eventKey(rt.return_event.event_key, '/query/retention/return_event/event_key');
+        safe(
+          rt.return_event.schema_version,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          '/query/retention/return_event/schema_version',
+        );
+        pins.push(rt.return_event as SavedPin);
+      }
     }
   }
   const field = (node: unknown, path: string) => {

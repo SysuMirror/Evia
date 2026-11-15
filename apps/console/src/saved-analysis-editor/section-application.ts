@@ -35,6 +35,8 @@ export function applyEditorSection({
   if (section === 'grouping') next.query.limit = integer(numbers.limit ?? '', 1, 500, '结果行数');
   if (section === 'funnel' && next.query.funnel)
     next.query.funnel.window_seconds = integer(numbers.window ?? '', 1, 604800, '转化窗口');
+  if (section === 'retention' && next.query.retention)
+    next.query.retention.periods = integer(numbers.periods ?? '', 1, 12, '留存期数');
   const leafRows = flatSavedFilters(candidate.query.filter);
   if (section === 'filters' && leafRows) {
     const rows = leafRows.rows.map((filter, index): SavedLeafFilter => {
@@ -59,6 +61,7 @@ export function applyEditorSection({
     grouping: ['/query/group_by', '/query/interval', '/query/limit'],
     filters: ['/query/filter'],
     funnel: ['/query/funnel', '/query/subject', '/query/filter'],
+    retention: ['/query/retention', '/query/subject', '/query/filter'],
   };
   const invalid = savedAnalysisIssues(next).find(
     (issue) =>
