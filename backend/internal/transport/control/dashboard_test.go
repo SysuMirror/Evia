@@ -143,6 +143,8 @@ func TestDashboardHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"POST", dashboardItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, map[string]string{"Idempotency-Key": "publish-key"}, 201, true},
 		{"GET", dashboardItem + "/versions/1", "", nil, 200, false},
 		{"POST", dashboardItem + "/versions/1/runs", dashboardExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
+		{"POST", dashboardItem + "/archive", "", nil, 200, true},
+		{"POST", dashboardItem + "/unarchive", "", nil, 200, true},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			before := f.calls
@@ -389,6 +391,20 @@ func (f *dashboardHTTPService) GetDashboardRun(_ context.Context, actor, project
 func (f *dashboardHTTPService) CancelDashboardRun(_ context.Context, actor, project, id string) (reporting.DashboardRun, error) {
 	f.id = id
 	return dashboardRunFixture(), f.call(actor, project)
+}
+func (f *dashboardHTTPService) ArchiveDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
+	f.id = id
+	if len(f.items) > 0 {
+		return f.items[0], f.call(actor, project)
+	}
+	return dashboardResource(), f.call(actor, project)
+}
+func (f *dashboardHTTPService) UnarchiveDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
+	f.id = id
+	if len(f.items) > 0 {
+		return f.items[0], f.call(actor, project)
+	}
+	return dashboardResource(), f.call(actor, project)
 }
 func TestDashboardHTTPRunReadAndCancel(t *testing.T) {
 	f := &dashboardHTTPService{}

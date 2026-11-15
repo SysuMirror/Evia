@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
@@ -700,5 +701,116 @@ func TestDashboardRunPreservesExactNanosecondExecutionContext(t *testing.T) {
 				t.Fatal("execution input was mutable")
 			}
 		})
+	}
+}
+
+func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
+	f, d, exec := dashboardFixture(t, 1)
+	ctx := context.Background()
+	// Publish first so run authorization can find a version; the archive guard
+	// then runs before the version is materialised.
+	dashboardPublish(t, f, d)
+	keep, e := f.s.CreateDashboard(ctx, f.owner, f.project, "keep-dashboard", reporting.DashboardCreate{Environment: "development", Definition: d.Definition})
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	// A read-only viewer cannot change lifecycle state.
+	if _, e = f.s.ArchiveDashboard(ctx, f.viewer, f.project, d.ID); e == nil || fault.Public(e).Code != "PROJECT_FORBIDDEN" {
+		t.Fatalf("viewer archive must be forbidden: %v", e)
+	}
+
+	archived, e := f.s.ArchiveDashboard(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if archived.ArchivedAt == nil || archived.ArchivedBy != f.owner {
+		t.Fatalf("archive marker missing: %+v", archived)
+	}
+	// Re-archiving is an explicit conflict, not a silent no-op.
+	if _, e = f.s.ArchiveDashboard(ctx, f.owner, f.project, d.ID); e == nil || fault.Public(e).Code != "DASHBOARD_ALREADY_ARCHIVED" {
+		t.Fatalf("re-archive must conflict: %v", e)
+	}
+
+	// The default listing hides archived dashboards but keeps active ones;
+	// direct reads still work and expose the archive marker.
+	listed, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, item := range listed {
+		if item.ID == d.ID {
+			t.Fatal("archived dashboard must leave the default listing")
+		}
+		if item.ArchivedAt != nil {
+			t.Fatal("active dashboard must not carry an archive marker")
+		}
+	}
+	if len(listed) != 1 || listed[0].ID != keep.ID {
+		t.Fatalf("listing must retain only the active dashboard: %+v", listed)
+	}
+	got, e := f.s.GetDashboard(ctx, f.owner, f.project, d.ID)
+	if e != nil || got.ArchivedAt == nil {
+		t.Fatalf("archived dashboard must remain readable by ID: %+v %v", got, e)
+	}
+	draft, e := f.s.GetDashboardDraft(ctx, f.owner, f.project, d.ID)
+	if e != nil || draft.ArchivedAt == nil {
+		t.Fatalf("archived draft must remain readable with marker: %+v %v", draft, e)
+	}
+
+	// Every mutating path fails closed while archived.
+	if _, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, d.Definition); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
+		t.Fatalf("draft save must reject archived dashboard: %v", e)
+	}
+	if _, e = f.s.DashboardValidationSnapshot(ctx, f.owner, f.project, d.ID, reporting.DashboardValidate{DraftRevision: d.DraftRevision}); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
+		t.Fatalf("validation must reject archived dashboard: %v", e)
+	}
+	if _, e = f.s.PublishDashboard(ctx, f.owner, f.project, d.ID, ids.New(), reporting.DashboardPublish{DraftRevision: d.DraftRevision, ValidationHash: strings.Repeat("d", 64)}); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
+		t.Fatalf("publish must reject archived dashboard: %v", e)
+	}
+	_, e = f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, ids.New(), exec)
+	if e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
+		t.Fatalf("run enqueue must reject archived dashboard: %v", e)
+	}
+
+	// Unknown id resolves to not-found, not an archive conflict.
+	if _, e = f.s.ArchiveDashboard(ctx, f.owner, f.project, ids.New()); e == nil || fault.Public(e).Code != "DASHBOARD_NOT_FOUND" {
+		t.Fatalf("unknown dashboard must be not-found: %v", e)
+	}
+
+	// Restoring an active dashboard conflicts; restoring the archived one clears
+	// the marker and returns it to the listing.
+	if _, e = f.s.UnarchiveDashboard(ctx, f.owner, f.project, keep.ID); e == nil || fault.Public(e).Code != "DASHBOARD_NOT_ARCHIVED" {
+		t.Fatalf("unarchiving an active dashboard must conflict: %v", e)
+	}
+	restored, e := f.s.UnarchiveDashboard(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
+		t.Fatalf("restore must clear archive markers: %+v", restored)
+	}
+	listedAgain, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100)
+	if e != nil || len(listedAgain) != 2 {
+		t.Fatalf("restored dashboard must rejoin the listing: %d %v", len(listedAgain), e)
+	}
+
+	// Both lifecycle transitions are audited, ordered after the create/publish
+	// entries already produced by the fixture.
+	var actions []string
+	rows, e := f.s.Pool.Query(ctx, `SELECT action FROM audit_entries WHERE resource_key=$1 AND action IN ('dashboard.archived','dashboard.unarchived') ORDER BY id`, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var action string
+		if e = rows.Scan(&action); e != nil {
+			t.Fatal(e)
+		}
+		actions = append(actions, action)
+	}
+	if len(actions) != 2 || actions[0] != "dashboard.archived" || actions[1] != "dashboard.unarchived" {
+		t.Fatalf("lifecycle audit trail wrong: %v", actions)
 	}
 }
