@@ -28,6 +28,8 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 | `POST P/dashboards/{dashboard_id}/versions/{version}/runs` | `{time_range,timezone,widget_filters?}`; `Idempotency-Key` | 202 dashboard run with child query jobs                     |
 | `GET P/dashboard-runs/{run_id}`                            | No query parameters                                        | Current run and per-widget states                           |
 | `DELETE P/dashboard-runs/{run_id}`                         | CSRF headers for session callers                           | Cancels active children and returns current run             |
+| `POST P/dashboards/{dashboard_id}/archive`                 | No body or query parameters; `dashboards.write`            | 200 resource with `archived_at`/`archived_by`; 409 if already archived |
+| `POST P/dashboards/{dashboard_id}/unarchive`               | No body or query parameters; `dashboards.write`            | 200 active resource; 409 if not archived                    |
 
 Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope; they are not cross-page snapshots. Unknown/repeated query parameters, unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
 
@@ -160,6 +162,12 @@ Create, publication and run requests require one `Idempotency-Key` header contai
 An identical create or publication retry returns its original response, even after subsequent draft/publication changes. Different content under the same key returns 409 `IDEMPOTENCY_CONFLICT`. Publication keys bind the expected counters and validation hash.
 
 Run keys bind the explicit dashboard version, normalized absolute time, timezone and targeted filters. An identical retry returns the original run's current child states and never fans out again. Changed filters, version or runtime context conflict. A failed or canceled run replay does not start new work. If any original child is expired or has been cleaned up, retry returns 409 `DASHBOARD_RUN_REQUEST_EXPIRED`; use a new key for a new run. Dashboard retry markers currently have no key-recycling window, and they never extend result retention. Use a fresh key for each intentional refresh.
+
+## Archive lifecycle
+
+Migration `029_dashboard_archive.sql` adds the nullable `archived_at`/`archived_by` columns, the active-scope partial index and a marker-soundness check. `POST .../archive` sets `archived_at`/`archived_by` and moves the dashboard out of the default `GET P/dashboards` listing (filtered with a partial index on `archived_at IS NULL`). Archiving is reversible through `POST .../unarchive`, which clears both markers. Both actions require `dashboards.write`, take no body and are audited as `dashboard.archived`/`dashboard.unarchived`. Re-archiving an archived dashboard returns 409 `DASHBOARD_ALREADY_ARCHIVED`; restoring an active one returns 409 `DASHBOARD_NOT_ARCHIVED`.
+
+Archived dashboards stay readable by ID, including drafts, immutable versions and run history. While archived, draft edits, validations, publications and new run enqueue all fail closed with 409 `DASHBOARD_ARCHIVED`; existing runs remain queryable and cancellable. The markers are optional nullable fields on the `Dashboard` response and are omitted for active dashboards.
 
 ## Explicit migration and startup
 
