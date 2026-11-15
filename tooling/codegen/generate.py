@@ -87,4 +87,12 @@ for name, schema in sorted(SCHEMAS.items()):
 (OUT / 'types.gen.go').write_text(code)
 bundle = {'$schema': 'https://json-schema.org/draft/2020-12/schema', '$id': 'https://schemas.evia.invalid/contracts/v1', '$defs': SCHEMAS}
 (OUT / 'contracts.gen.json').write_text(json.dumps(bundle, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n')
-print(f'Generated {len(SCHEMAS)} wire types and an offline validation bundle.')
+# The reserved sys.* catalog is a platform-built, immutable contract rather than
+# project-scoped runtime metadata, so it ships inside the binary through the same
+# generated wire directory. Re-serialising here keeps the embedded copy byte
+# deterministic while contracts/fixtures/system-events.json stays the single source.
+system_events = json.loads((ROOT / 'contracts/fixtures/system-events.json').read_text())
+(OUT / 'system-events.gen.json').write_text(
+    json.dumps(system_events, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n'
+)
+print(f'Generated {len(SCHEMAS)} wire types, an offline validation bundle and the system event catalog.')
