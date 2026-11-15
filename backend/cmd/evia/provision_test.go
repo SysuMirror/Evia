@@ -8,14 +8,18 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
 type accountProvisionStore struct {
-	user access.User
-	err  error
+	user       access.User
+	err        error
+	audit      []access.AuditEvent
+	auditName  string
+	auditCalls int
 }
 
 func (s *accountProvisionStore) ProvisionAccount(_ context.Context, user access.User) error {
@@ -35,6 +39,15 @@ func (s *accountProvisionStore) ResetAccountPassword(_ context.Context, username
 		return access.User{}, s.err
 	}
 	return access.User{ID: "00000000-0000-4000-8000-000000000009", Username: username}, nil
+}
+
+func (s *accountProvisionStore) AccountAuditEvents(_ context.Context, username string) ([]access.AuditEvent, error) {
+	s.auditName = username
+	s.auditCalls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.audit, nil
 }
 
 func TestAccountProvisionCLIOutputAndErrorsAreSafe(t *testing.T) {
@@ -194,7 +207,7 @@ func TestAccountResetPasswordCLISafeOutput(t *testing.T) {
 // positional credentials on the command line.
 func TestAccountAdministrationCommandsRouteThroughDatabaseOnly(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	commands := []string{"account-disable", "account-enable", "account-reset-password"}
+	commands := []string{"account-disable", "account-enable", "account-reset-password", "account-audit"}
 
 	for _, command := range commands {
 		t.Run(command+" requires database configuration", func(t *testing.T) {
@@ -233,5 +246,48 @@ func TestAccountAdministrationCommandsRouteThroughDatabaseOnly(t *testing.T) {
 	if err := execute(context.Background(), []string{"account-disabel"}, func(string) string { return "" }, logger); err == nil ||
 		err.Error() != "unknown command" {
 		t.Fatalf("misspelled command must be unknown, got: %v", err)
+	}
+}
+
+func TestAccountAuditCLIOutputsStructuredSafeHistory(t *testing.T) {
+	values := map[string]string{"EVIA_ACCOUNT_USERNAME": "synthetic-sensitive-username"}
+	get := func(name string) string { return values[name] }
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	store := &accountProvisionStore{audit: []access.AuditEvent{
+		{EventType: "account_created", OccurredAt: time.Date(2026, 11, 15, 8, 0, 0, 0, time.UTC)},
+		{EventType: "account_disabled", OccurredAt: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)},
+	}}
+	if err := accountAudit(context.Background(), store, get, logger); err != nil {
+		t.Fatal(err)
+	}
+	if store.auditName != "synthetic-sensitive-username" || store.auditCalls != 1 {
+		t.Fatalf("username not delegated: %q calls=%d", store.auditName, store.auditCalls)
+	}
+	text := output.String()
+	for _, want := range []string{"account_created", "account_disabled", "event_count", "occurred_at", "sequence"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, values["EVIA_ACCOUNT_USERNAME"]) {
+		t.Fatal("audit output must not echo the username")
+	}
+
+	// A not-found fault maps to safe CLI output and emits no success log.
+	store.err = fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist")
+	output.Reset()
+	err := accountAudit(context.Background(), store, get, logger)
+	if err == nil || fault.Public(err).Code != "ACCOUNT_NOT_FOUND" || output.Len() != 0 {
+		t.Fatalf("not-found must surface safely with no success output: %v", err)
+	}
+
+	// Invalid input is rejected before persistence.
+	store.err = nil
+	store.auditCalls = 0
+	badGet := func(string) string { return "bad name" }
+	if err = accountAudit(context.Background(), store, badGet, logger); err == nil ||
+		fault.Public(err).Code != "INVALID_USERNAME" || store.auditCalls != 0 {
+		t.Fatalf("invalid username must fail before persistence: %v calls=%d", err, store.auditCalls)
 	}
 }

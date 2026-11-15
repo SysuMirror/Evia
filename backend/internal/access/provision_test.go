@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"golang.org/x/crypto/bcrypt"
@@ -17,6 +18,9 @@ type provisionCapture struct {
 	disabledName  string
 	disabledFlag  bool
 	disabledCalls int
+	auditName     string
+	auditEvents   []AuditEvent
+	auditCalls    int
 }
 
 func (s *provisionCapture) ProvisionAccount(_ context.Context, user User) error {
@@ -41,6 +45,15 @@ func (s *provisionCapture) ResetAccountPassword(_ context.Context, username, pas
 		return User{}, s.err
 	}
 	return User{ID: "00000000-0000-4000-8000-000000000009", Username: username, PasswordHash: passwordHash}, nil
+}
+
+func (s *provisionCapture) AccountAuditEvents(_ context.Context, username string) ([]AuditEvent, error) {
+	s.auditName = username
+	s.auditCalls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.auditEvents, nil
 }
 
 func TestAccountProvisionPolicyAndHashBoundary(t *testing.T) {
@@ -153,5 +166,42 @@ func TestResetAccountPasswordRejectsBadInputBeforePersistence(t *testing.T) {
 			fault.Public(err).Code != "INVALID_PASSWORD" {
 			t.Fatalf("password %q must be rejected: %v", password, err)
 		}
+	}
+}
+
+func TestAccountAuditEventsNormalizesAndDelegates(t *testing.T) {
+	stamp := time.Date(2026, 11, 15, 8, 0, 0, 0, time.UTC)
+	store := &provisionCapture{auditEvents: []AuditEvent{
+		{EventType: "account_created", OccurredAt: stamp},
+		{EventType: "account_disabled", OccurredAt: stamp.Add(time.Minute)},
+	}}
+	events, err := AccountAuditEvents(context.Background(), store, "  Audit.User@Example ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.auditName != "audit.user@example" || store.auditCalls != 1 {
+		t.Fatalf("normalized username not delegated: %q calls=%d", store.auditName, store.auditCalls)
+	}
+	if len(events) != 2 || events[0].EventType != "account_created" || events[1].EventType != "account_disabled" {
+		t.Fatalf("audit trail altered: %+v", events)
+	}
+}
+
+func TestAccountAuditEventsRejectsInvalidUsernameBeforePersistence(t *testing.T) {
+	store := &provisionCapture{}
+	if _, err := AccountAuditEvents(context.Background(), store, "bad name"); err == nil ||
+		fault.Public(err).Code != "INVALID_USERNAME" {
+		t.Fatalf("invalid username must fail closed: %v", err)
+	}
+	if store.auditCalls != 0 {
+		t.Fatal("invalid username reached persistence")
+	}
+}
+
+func TestAccountAuditEventsPropagatesPersistenceFault(t *testing.T) {
+	store := &provisionCapture{err: fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist")}
+	_, err := AccountAuditEvents(context.Background(), store, "ghost")
+	if err == nil || fault.Public(err).Code != "ACCOUNT_NOT_FOUND" {
+		t.Fatalf("not-found fault must propagate: %v", err)
 	}
 }

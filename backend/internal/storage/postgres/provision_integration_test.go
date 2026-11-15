@@ -356,3 +356,59 @@ func TestAccountProvisionEventTypesAuditFullLifecycle(t *testing.T) {
 		t.Fatalf("audit failure changed disabled state: %+v %v", stored, err)
 	}
 }
+
+func TestAccountAuditEventsReadsTypedHistory(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	target, err := access.ProvisionAccount(ctx, s, "audit-read", "Audit Read", "synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-read", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = access.SetAccountDisabled(ctx, s, "AUDIT-READ", false); err != nil {
+		t.Fatal(err)
+	}
+	// An idempotent no-op must not add an event.
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-read", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = access.ResetAccountPassword(ctx, s, "audit-read", "synthetic-rotated-password-42"); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := access.AccountAuditEvents(ctx, s, " AUDIT-READ ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"account_created", "account_disabled", "account_enabled", "password_reset"}
+	if len(events) != len(want) {
+		t.Fatalf("audit event count = %d, want %d: %+v", len(events), len(want), events)
+	}
+	var previous time.Time
+	for i, event := range events {
+		if event.EventType != want[i] {
+			t.Fatalf("event %d type = %q, want %q", i, event.EventType, want[i])
+		}
+		if event.OccurredAt.Location() != time.UTC {
+			t.Fatalf("event %d timestamp not normalized to UTC: %v", i, event.OccurredAt.Location())
+		}
+		if event.OccurredAt.Before(previous) {
+			t.Fatalf("audit history not ordered oldest first at %d", i)
+		}
+		previous = event.OccurredAt
+	}
+	if target.ID == "" || events[0].EventType != "account_created" {
+		t.Fatal("creation event missing or trail order wrong")
+	}
+
+	// Unknown account fails closed instead of returning an empty trail.
+	if _, err = access.AccountAuditEvents(ctx, s, "ghost-account"); err == nil ||
+		fault.Public(err).Code != "ACCOUNT_NOT_FOUND" {
+		t.Fatalf("unknown account must be not-found: %v", err)
+	}
+}
