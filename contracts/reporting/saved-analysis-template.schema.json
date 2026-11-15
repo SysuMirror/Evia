@@ -8,7 +8,8 @@
       "type": "string",
       "enum": [
         "trend",
-        "funnel"
+        "funnel",
+        "retention"
       ]
     },
     "event_versions": {
@@ -34,6 +35,9 @@
     },
     "limit": {
       "$ref": "../query/query-request.schema.json#/properties/limit"
+    },
+    "retention": {
+      "$ref": "../query/query-request.schema.json#/properties/retention"
     }
   },
   "required": [
@@ -92,6 +96,50 @@
             {
               "required": [
                 "interval"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "retention"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "retention",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
               ]
             }
           ]

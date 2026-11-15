@@ -1365,6 +1365,7 @@ type SavedAnalysisTemplate struct {
 	Interval      json.RawMessage `json:"interval,omitempty"`
 	Funnel        json.RawMessage `json:"funnel,omitempty"`
 	Limit         json.RawMessage `json:"limit,omitempty"`
+	Retention     json.RawMessage `json:"retention,omitempty"`
 }
 
 type SavedAnalysisUpdate struct {

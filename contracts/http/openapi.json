@@ -20586,7 +20586,8 @@
               "event_versions",
               "funnel_steps",
               "event_keys",
-              "all_events"
+              "all_events",
+              "retention_steps"
             ]
           },
           "unfixed_event_keys": {

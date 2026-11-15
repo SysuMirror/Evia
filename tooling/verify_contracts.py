@@ -225,6 +225,25 @@ reject_saved("SavedAnalysisDefinition", "funnel event_versions", funnel_definiti
 reject_saved("SavedAnalysisDefinition", "unsafe funnel step", funnel_definition, ["query", "funnel", "steps", 0, "schema_version"], 9007199254740992)
 reject_saved("SavedAnalysisDefinition", "unbounded funnel", funnel_definition, ["query", "funnel", "steps"], funnel_definition["query"]["funnel"]["steps"] * 5)
 
+retention_definition = copy.deepcopy(saved_definition)
+retention_definition["query"] = {
+    "kind": "retention", "subject": "uid",
+    "retention": {
+        "start_event": {"event_key": "sign_up", "schema_version": 1},
+        "return_event": {"event_key": "login", "schema_version": 1},
+        "granularity": "day", "periods": 4,
+    },
+}
+retention_definition["visualization"]["kind"] = "table"
+validator("SavedAnalysisDefinition").validate(retention_definition)
+validator("SavedAnalysisTemplate").validate(retention_definition["query"])
+reject_saved("SavedAnalysisDefinition", "retention event_versions", retention_definition, ["query", "event_versions"], saved_definition["query"]["event_versions"])
+reject_saved("SavedAnalysisDefinition", "retention without subject", retention_definition, ["query", "subject"], None)
+reject_saved("SavedAnalysisDefinition", "retention funnel knob", retention_definition, ["query", "funnel"], funnel_definition["query"]["funnel"])
+reject_saved("SavedAnalysisDefinition", "retention bad granularity", retention_definition, ["query", "retention", "granularity"], "hour")
+reject_saved("SavedAnalysisDefinition", "retention unbounded periods", retention_definition, ["query", "retention", "periods"], 13)
+reject_saved("SavedAnalysisDefinition", "retention unpinned start", retention_definition, ["query", "retention", "start_event", "schema_version"], 0)
+
 print(
     f"OpenAPI and JSON Schemas verified; {len(fixtures)} shared fixtures, "
     f"{len(journey['items'])} journey events, {len(system['events'])} system "

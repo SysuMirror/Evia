@@ -2127,7 +2127,7 @@ export interface components {
             project_id: string;
             environment: string;
             /** @enum {string} */
-            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events";
+            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events" | "retention_steps";
             unfixed_event_keys: string[];
             event_versions: components["schemas"]["QueryDependency"][];
             metric?: components["schemas"]["MetricDependency"];
@@ -3390,10 +3390,17 @@ export interface components {
             }[];
         };
         limit: number;
+        retention: {
+            start_event: components["schemas"]["retention_step"];
+            return_event: components["schemas"]["retention_step"];
+            /** @enum {unknown} */
+            granularity: "day" | "week";
+            periods: number;
+        };
         /** @description Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference. */
         "saved-analysis-template.schema": {
             /** @enum {string} */
-            kind: "trend" | "funnel";
+            kind: "trend" | "funnel" | "retention";
             event_versions?: components["schemas"]["event_versions"];
             filter?: components["schemas"]["filter"];
             subject?: components["schemas"]["subject"];
@@ -3402,7 +3409,8 @@ export interface components {
             interval?: components["schemas"]["interval"];
             funnel?: components["schemas"]["funnel"];
             limit?: components["schemas"]["limit"];
-        } & (unknown & unknown);
+            retention?: components["schemas"]["retention"];
+        } & (unknown & unknown & unknown);
         time_range: {
             /** Format: date-time */
             from: string;
