@@ -255,3 +255,104 @@ func TestResetAccountPasswordReplacesHashAndRevokesSessions(t *testing.T) {
 		t.Fatalf("unknown account must be not-found: %v", err)
 	}
 }
+
+func TestAccountProvisionEventTypesAuditFullLifecycle(t *testing.T) {
+	s := database(t)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx, "initial", "Initial", "synthetic-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	target, err := access.ProvisionAccount(ctx, s, "audit-user", "Audit User", "synthetic-password-42")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readTrail := func() []string {
+		rows, queryErr := s.Pool.Query(ctx, `SELECT event_type FROM account_provision_events WHERE target_id=$1 ORDER BY occurred_at,id`, target.ID)
+		if queryErr != nil {
+			t.Fatal(queryErr)
+		}
+		defer rows.Close()
+		var trail []string
+		for rows.Next() {
+			var eventType string
+			if queryErr = rows.Scan(&eventType); queryErr != nil {
+				t.Fatal(queryErr)
+			}
+			trail = append(trail, eventType)
+		}
+		return trail
+	}
+	assertTrail := func(want []string) {
+		t.Helper()
+		got := readTrail()
+		if len(got) != len(want) {
+			t.Fatalf("audit trail = %v, want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("audit trail = %v, want %v", got, want)
+			}
+		}
+	}
+
+	assertTrail([]string{"account_created"})
+
+	// A real disable transition is recorded; an idempotent re-disable that
+	// changes no state must not add another row.
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-user", true); err != nil {
+		t.Fatal(err)
+	}
+	assertTrail([]string{"account_created", "account_disabled"})
+	if _, err = access.SetAccountDisabled(ctx, s, "AUDIT-USER", true); err != nil {
+		t.Fatal(err)
+	}
+	assertTrail([]string{"account_created", "account_disabled"})
+
+	// Re-enable records the symmetric transition; repeated re-enable stays silent.
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-user", false); err != nil {
+		t.Fatal(err)
+	}
+	assertTrail([]string{"account_created", "account_disabled", "account_enabled"})
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-user", false); err != nil {
+		t.Fatal(err)
+	}
+	assertTrail([]string{"account_created", "account_disabled", "account_enabled"})
+
+	// Every password reset replaces the credential and always leaves a row.
+	if _, err = access.ResetAccountPassword(ctx, s, "AUDIT-USER", "synthetic-rotated-password-42"); err != nil {
+		t.Fatal(err)
+	}
+	assertTrail([]string{"account_created", "account_disabled", "account_enabled", "password_reset"})
+
+	// The table rejects any event type outside the closed migration 028 set, and
+	// no default remains to silently label an untyped insert as a creation.
+	if _, err = s.Pool.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id,event_type) VALUES('operator',$1,'account_deleted')`, target.ID); err == nil {
+		t.Fatal("event type outside the closed set was accepted")
+	}
+	if _, err = s.Pool.Exec(ctx, `INSERT INTO account_provision_events(actor_kind,target_id) VALUES('operator',$1)`, target.ID); err == nil {
+		t.Fatal("insert without an explicit event type was accepted")
+	}
+
+	// Audit write failure must roll back the state mutation in the same tx.
+	if _, err = s.Pool.Exec(ctx, `CREATE FUNCTION deny_account_provision_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic audit failure'; END $$;
+	CREATE TRIGGER deny_account_provision_audit BEFORE INSERT ON account_provision_events FOR EACH ROW EXECUTE FUNCTION deny_account_provision_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = access.ResetAccountPassword(ctx, s, "audit-user", "synthetic-blocked-password-42"); err == nil {
+		t.Fatal("reset with a failing audit insert was accepted")
+	}
+	stored, err := s.FindUser(ctx, "audit-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("synthetic-rotated-password-42")) != nil {
+		t.Fatal("audit failure rolled the password forward", err)
+	}
+	if _, err = access.SetAccountDisabled(ctx, s, "audit-user", true); err == nil {
+		t.Fatal("disable with a failing audit insert was accepted")
+	}
+	if stored, err = s.FindUser(ctx, "audit-user"); err != nil || stored.Disabled {
+		t.Fatalf("audit failure changed disabled state: %+v %v", stored, err)
+	}
+}
