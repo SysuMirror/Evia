@@ -1492,3 +1492,78 @@ test('a throwing scroll host does not break the page listener or the client', as
   assert.equal(bodies.length, 1, 'only the explicit event should be sent');
   client.destroy();
 });
+
+test('public config accepts 205 events including the five reserved sys keys', async () => {
+  const sysKeys = [
+    'sys.page_view',
+    'sys.page_scroll',
+    'sys.identity_link',
+    'sys.session_end',
+    'sys.operation_failed',
+  ];
+  const buildConfig = (count: number): PublicConfig => ({
+    ...config(),
+    events: [
+      ...Array.from({ length: count - sysKeys.length }, (_, index) => ({
+        event_key: `event_${index}`,
+        schema_version: 1,
+        schema: { type: 'object' },
+      })),
+      ...sysKeys.map((event_key) => ({
+        event_key,
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+      })),
+    ],
+  });
+  const within = setup(
+    () => {
+      throw new Error('unused');
+    },
+    { fetch: async () => json(buildConfig(205)) },
+  );
+  await within.client.init();
+  within.client.destroy();
+
+  const over = setup(
+    () => {
+      throw new Error('unused');
+    },
+    { fetch: async () => json(buildConfig(206)) },
+  );
+  await assert.rejects(over.client.init(), /INVALID_CONFIG/);
+  over.client.destroy();
+});
+
+test('reserved sys events in public config are transmitted with the project release revision', async () => {
+  const cfg: PublicConfig = {
+    ...config(4),
+    events: [
+      ...config(4).events,
+      {
+        event_key: 'sys.operation_failed',
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false },
+      },
+    ],
+  };
+  const { client, bodies } = setupOperation((body) => receipt(body), {}, cfg);
+  const emission = client.reportOperationFailure({
+    operation: 'checkout_submit',
+    errorCategory: 'timeout',
+    retryable: true,
+  });
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  assert.equal(bodies.length, 1);
+  const sent = JSON.parse(bodies[0]!) as Body;
+  assert.equal(sent.events.length, 1);
+  const event = sent.events[0]!;
+  assert.equal(event.event_key, 'sys.operation_failed');
+  // The envelope revision is the source's active project release revision, kept
+  // as provenance even though the collector resolves sys.* via the system catalog.
+  assert.equal(event.release_revision, 4);
+  assert.equal(event.schema_version, 1);
+  client.destroy();
+});
