@@ -33,12 +33,16 @@ the account and the operator audit record through authorized database access,
 rather than expecting a retry to replace its credentials.
 
 Each successful creation inserts an `account_provision_events` record in the
-same transaction as the account. `actor_kind='operator'` identifies the database
-operator execution path; it does not assert an in-app human identity. `target_id`
-identifies the new account, and `occurred_at` records database time. Passwords,
-hashes and private environment values are absent from these records. Retain
-database/operator access records separately when individual operator attribution
-is required.
+same transaction as the account with `event_type='account_created'`.
+`actor_kind='operator'` identifies the database operator execution path; it does
+not assert an in-app human identity. `target_id` identifies the new account, and
+`occurred_at` records database time. The `event_type` column (migration 028) is a
+closed set of `account_created`, `account_disabled`, `account_enabled` and
+`password_reset`, enforced by a CHECK constraint; the column has no default, so
+an insert that omits the type fails instead of being mislabelled as a creation.
+Passwords, hashes and private environment values are absent from these records.
+Retain database/operator access records separately when individual operator
+attribution is required.
 
 The command refuses an empty installation and an installation with no enabled
 accounts. It is not an account recovery path. Password reset remains separate work.
@@ -68,11 +72,14 @@ integration test `TestSetAccountDisabledImmediatelyRevokesAndRestoresSession` pr
 session is rejected immediately after `account-disable` and resolves again after `account-enable`.
 `account-enable` restores access the same way.
 
-These commands change account state but do not currently write a typed event to
-`account_provision_events`, whose schema records creation only. Operator
-attribution for disable/enable stays in the operator's own access records and
-process logs until a follow-up migration adds an event type column. Password
-reset and invitation/registration self-service are still separate work.
+Each real state transition writes one typed `account_provision_events` row in
+the same transaction as the flag update: `account_disabled` when an enabled
+account becomes disabled, `account_enabled` for the reverse. An idempotent
+re-disable or re-enable that changes no state writes nothing, so every row
+corresponds to an actual account-state change rather than a repeated command
+invocation. Operator attribution still relies on the operator's own access
+records and process logs, because these rows deliberately carry no in-app actor.
+Invitation/registration self-service remains separate work.
 
 
 ## Resetting an account password
@@ -92,5 +99,7 @@ re-enabled separately with `account-enable`. An unknown username fails with
 `ACCOUNT_NOT_FOUND`. The real-PostgreSQL test
 `TestResetAccountPasswordReplacesHashAndRevokesSessions` verifies the old
 credential stops verifying, the new one verifies at cost 12, and sessions are
-revoked. Typed operator audit for password changes still requires a follow-up
-migration that adds an event type to `account_provision_events`.
+revoked. Every reset also inserts an `account_provision_events` row with
+`event_type='password_reset'` in that same transaction, so a failed audit write
+rolls the hash replacement and session revocation back together; resets always
+replace the credential and therefore always leave a row.

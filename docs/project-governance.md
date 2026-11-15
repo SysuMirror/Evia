@@ -57,7 +57,7 @@
 
 `from`、`to` 使用 RFC3339 时间，范围为半开区间 `[from,to)`，最大 31 天。`action` 是最长 128 字符的精确操作名，`actor_id` 是精确主体 UUID。默认 50、最多 100 条，按 `(occurred_at,id)` 倒序。
 
-每条结果只包含 `id`、`project_id`、`actor_id`、`actor_kind`、`credential_id`、`action`、`resource_key`、`occurred_at`。审计 bigint ID 以十进制字符串表示。机器操作可以返回对应凭据 ID，不返回凭据内容、请求正文、密码或业务事件。人类操作的 `credential_id` 为 null；运维账号创建保存在独立 `account_provision_events` 中，不冒用人类主体，也不出现在项目审计接口中。
+每条结果只包含 `id`、`project_id`、`actor_id`、`actor_kind`、`credential_id`、`action`、`resource_key`、`occurred_at`。审计 bigint ID 以十进制字符串表示。机器操作可以返回对应凭据 ID，不返回凭据内容、请求正文、密码或业务事件。人类操作的 `credential_id` 为 null；运维账号操作（创建、停用/启用状态转换、密码重置，迁移 028 起以 `event_type` 闭集列区分）保存在独立 `account_provision_events` 中，不冒用人类主体，也不出现在项目审计接口中。
 
 游标签名绑定读取者、项目、规范化的精确时间/操作/主体条件，不能换筛选条件后继续使用。数据库时间精度为微秒，存储查询对纳秒边界做向上取整，保持半开区间比较的真实语义。同一时间戳使用 bigint ID 消除排序歧义。
 

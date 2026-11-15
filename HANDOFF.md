@@ -173,7 +173,7 @@ docs/                            架构、标准、运行手册、验证和规�
 
 成员修订属于整个成员集合，独立于设置修订。必须保留最后一个启用 owner；删除再添加不复用旧修订。并发锁顺序、撤权后重试拒绝和查询授权复查已有真实数据库测试，不要绕过事务来简化 UI。
 
-`account-create` 只创建新账号与独立运维审计，不创建会话或成员关系，不覆盖现有密码，也不是账号恢复功能。它使用数据库运维权限和私有环境输入，不应包装成普通项目 owner 可调用的全局账号创建 API。`account-disable`/`account-enable` 同属运维命令，切换 `accounts.disabled` 并禁止停用最后一个启用账号。`account-reset-password` 替换密码哈希并在同事务删除该账号全部会话，是账号恢复路径。
+`account-create` 只创建新账号与独立运维审计，不创建会话或成员关系，不覆盖现有密码，也不是账号恢复功能。它使用数据库运维权限和私有环境输入，不应包装成普通项目 owner 可调用的全局账号创建 API。`account-disable`/`account-enable` 同属运维命令，切换 `accounts.disabled` 并禁止停用最后一个启用账号，仅在真实状态转换时向 `account_provision_events` 写 `account_disabled`/`account_enabled`，幂等 no-op 不写。`account-reset-password` 替换密码哈希并在同事务删除该账号全部会话、写 `password_reset`，是账号恢复路径。迁移 028 起该表 `event_type` 为四值闭集且无默认值，所有审计行与状态/凭据变更同事务原子提交。
 
 ### 5.3 保存分析与看板
 
