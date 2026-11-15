@@ -1264,13 +1264,18 @@ test('public emit still cannot forge sys.session_end', () => {
 class FakeScrollHost implements ScrollHost {
   private listener: (() => void) | null = null;
   private current = 0;
+  subscribed = false;
+  throwOnRatio = false;
   subscribe(listener: () => void): () => void {
     this.listener = listener;
+    this.subscribed = true;
     return () => {
       this.listener = null;
+      this.subscribed = false;
     };
   }
   ratio(): number {
+    if (this.throwOnRatio) throw new Error('synthetic host failure');
     return this.current;
   }
   setRatio(value: number): void {
@@ -1460,5 +1465,30 @@ test('public emit still cannot forge sys.page_scroll', () => {
     () => client.emit('sys.page_scroll'),
     (error) => error instanceof EviaSDKError && error.code === 'INVALID_CUSTOM_EVENT_KEY',
   );
+  client.destroy();
+});
+
+test('destroy unsubscribes the scroll host and ignores later activity', async () => {
+  const { client, scroll } = setupScroll((body) => receipt(body), { autoPageScrolls: true });
+  assert.equal(scroll.subscribed, true);
+  client.destroy();
+  assert.equal(scroll.subscribed, false, 'destroy must unsubscribe the scroll host to avoid leaks');
+  // Activity after destroy must neither throw nor enqueue.
+  assert.doesNotThrow(() => scroll.setRatio(0.5));
+});
+
+test('a throwing scroll host does not break the page listener or the client', async () => {
+  const { client, scroll, bodies } = setupScroll((body) => receipt(body), {
+    autoPageScrolls: true,
+  });
+  scroll.throwOnRatio = true;
+  assert.doesNotThrow(() => scroll.setRatio(0.4));
+  // The client stays usable for explicit events after the host failure.
+  scroll.throwOnRatio = false;
+  const emission = client.emit('page_opened', { value: 1 });
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  assert.equal(bodies.length, 1, 'only the explicit event should be sent');
   client.destroy();
 });
