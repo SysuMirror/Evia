@@ -2,7 +2,7 @@
 
 Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. The console now provides editing, version publication/history and per-widget execution using these same APIs. Actual browser evidence is recorded in the [delivery verification](verification/dashboards-sdk-2026-11-09.md).
 
-The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, archive/delete operations, independently versioned metrics, generic parameter bindings and cross-request result caching remain planned. Scoped machine authentication is implemented.
+The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, hard delete, independently versioned metrics, generic parameter bindings and cross-request result caching remain planned. Scoped machine authentication is implemented.
 
 ## Authentication and scope
 
@@ -16,7 +16,7 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 
 | Method and path                                            | Input                                                      | Result                                                      |
 | ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
-| `GET P/dashboards`                                         | Required `environment`; optional `limit`, `cursor`         | `{items,next_cursor}`, UUID order; default 20, maximum 100  |
+| `GET P/dashboards`                                         | Required `environment`; optional `view` (`active`/`archived`, default `active`), `limit`, `cursor` | `{items,next_cursor}`, UUID order; default 20, maximum 100  |
 | `POST P/dashboards`                                        | `{environment,definition}`; `Idempotency-Key`              | 201 draft with `ETag`                                       |
 | `GET P/dashboards/{dashboard_id}`                          | No query parameters                                        | Current resource summary                                    |
 | `GET P/dashboards/{dashboard_id}/draft`                    | No query parameters                                        | Draft with `ETag`                                           |
@@ -31,7 +31,7 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 | `POST P/dashboards/{dashboard_id}/archive`                 | No body or query parameters; `dashboards.write`            | 200 resource with `archived_at`/`archived_by`; 409 if already archived |
 | `POST P/dashboards/{dashboard_id}/unarchive`               | No body or query parameters; `dashboards.write`            | 200 active resource; 409 if not archived                    |
 
-Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope; they are not cross-page snapshots. Unknown/repeated query parameters, unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
+Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope, including the `active`/`archived` view, so a cursor from one view cannot page the other; they are not cross-page snapshots. Unknown/repeated query parameters (an unknown `view` value returns `INVALID_ARCHIVE_VIEW`), unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
 
 ## Define a draft
 
@@ -165,7 +165,7 @@ Run keys bind the explicit dashboard version, normalized absolute time, timezone
 
 ## Archive lifecycle
 
-Migration `029_dashboard_archive.sql` adds the nullable `archived_at`/`archived_by` columns, the active-scope partial index and a marker-soundness check. `POST .../archive` sets `archived_at`/`archived_by` and moves the dashboard out of the default `GET P/dashboards` listing (filtered with a partial index on `archived_at IS NULL`). Archiving is reversible through `POST .../unarchive`, which clears both markers. Both actions require `dashboards.write`, take no body and are audited as `dashboard.archived`/`dashboard.unarchived`. Re-archiving an archived dashboard returns 409 `DASHBOARD_ALREADY_ARCHIVED`; restoring an active one returns 409 `DASHBOARD_NOT_ARCHIVED`.
+Migration `029_dashboard_archive.sql` adds the nullable `archived_at`/`archived_by` columns, the active-scope partial index and a marker-soundness check. `POST .../archive` sets `archived_at`/`archived_by` and moves the dashboard out of the default `GET P/dashboards` listing (filtered with a partial index on `archived_at IS NULL`). Pass `view=archived` to list only archived dashboards, each carrying its archive marker; `view=active` and an omitted parameter are equivalent. Archiving is reversible through `POST .../unarchive`, which clears both markers. Both actions require `dashboards.write`, take no body and are audited as `dashboard.archived`/`dashboard.unarchived`. Re-archiving an archived dashboard returns 409 `DASHBOARD_ALREADY_ARCHIVED`; restoring an active one returns 409 `DASHBOARD_NOT_ARCHIVED`.
 
 Archived dashboards stay readable by ID, including drafts, immutable versions and run history. While archived, draft edits, validations, publications and new run enqueue all fail closed with 409 `DASHBOARD_ARCHIVED`; existing runs remain queryable and cancellable. The markers are optional nullable fields on the `Dashboard` response and are omitted for active dashboards.
 
@@ -193,3 +193,5 @@ Open a project and choose 自定义看板. Create a dashboard, add published sav
 The published-version view binds a time range/timezone and optional typed field filters to explicit widgets. Changing the selected version resets editable filters while preserving the identity of the earlier result snapshot. Each result has its own state, chart, complete table and coverage/accuracy details. Unknown publication/run responses retain their original idempotency key and payload. Concurrent draft changes can be read and compared without discarding local input.
 
 Desktop and mobile layouts use the shared dashboard grid. Charts fit the available card width; wide tables scroll within their own container. The console uses session authorization, not machine credentials.
+
+The dashboard list has 活跃看板 / 已归档 views. In the active view, write-authorized members choose 归档 and confirm in a modal explaining that edits, publication and runs are blocked while archived; the row then leaves the list and a success notice is shown. The archived view lists archive time instead of update time, disables opening drafts and offers 恢复看板 to write-authorized members. View switching resets pagination, and lifecycle mutations invalidate both list views so the moved row appears immediately in its new stream.
