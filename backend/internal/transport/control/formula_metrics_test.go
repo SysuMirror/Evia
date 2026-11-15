@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ type formulaHTTPService struct {
 	after, environment, key, id string
 	revision, version           int64
 	limit                       int
+	archivedOnly                bool
 	items                       []reporting.FormulaMetricRecord
 	versions                    []reporting.FormulaMetricVersion
 }
@@ -65,9 +67,17 @@ func (f *formulaHTTPService) CreateFormulaMetric(_ context.Context, actor, proje
 	f.key, f.environment = key, in.Environment
 	return formulaDraft(), f.call(actor, project)
 }
-func (f *formulaHTTPService) ListFormulaMetrics(_ context.Context, actor, project, env, after string, limit int) ([]reporting.FormulaMetricRecord, error) {
-	f.environment, f.after, f.limit = env, after, limit
+func (f *formulaHTTPService) ListFormulaMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.FormulaMetricRecord, error) {
+	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
 	return f.items, f.call(actor, project)
+}
+func (f *formulaHTTPService) ArchiveFormulaMetric(_ context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
+	f.id = id
+	return formulaRecord(), f.call(actor, project)
+}
+func (f *formulaHTTPService) UnarchiveFormulaMetric(_ context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
+	f.id = id
+	return formulaRecord(), f.call(actor, project)
 }
 func (f *formulaHTTPService) GetFormulaMetric(_ context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
 	f.id = id
@@ -139,6 +149,8 @@ func TestFormulaMetricHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"GET", formulaItem + "/versions", "", nil, 200, false},
 		{"GET", formulaItem + "/versions/1", "", nil, 200, false},
 		{"POST", formulaItem + "/versions/1/queries", formulaExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
+		{"POST", formulaItem + "/archive", "", nil, 200, true},
+		{"POST", formulaItem + "/unarchive", "", nil, 200, true},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			before := f.calls
@@ -169,6 +181,9 @@ func TestFormulaMetricHTTPStrictInputs(t *testing.T) {
 		{"missing env", "GET", formulaBase, "", nil, 400},
 		{"unknown env", "GET", formulaBase + "?environment=unknown", "", nil, 400},
 		{"unknown parameter", "GET", formulaBase + "?environment=development&search=x", "", nil, 400},
+		{"unknown archive view", "GET", formulaBase + "?environment=development&view=bogus", "", nil, 400},
+		{"duplicate archive view", "GET", formulaBase + "?environment=development&view=archived&view=active", "", nil, 400},
+		{"item route rejects view", "GET", formulaItem + "?view=archived", "", nil, 400},
 		{"list limit", "GET", formulaBase + "?environment=development&limit=101", "", nil, 400},
 		{"version limit", "GET", formulaItem + "/versions?limit=51", "", nil, 400},
 		{"invalid UUID", "GET", formulaBase + "/wrong", "", nil, 400},
@@ -198,5 +213,59 @@ func TestFormulaMetricHTTPStrictInputs(t *testing.T) {
 				t.Fatal("invalid input reached service")
 			}
 		})
+	}
+}
+
+func TestFormulaMetricHTTPArchiveViewSelector(t *testing.T) {
+	f := &formulaHTTPService{items: []reporting.FormulaMetricRecord{formulaRecord(), formulaRecord()}}
+	h, codec := formulaHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{formulaBase + "?environment=development", false},
+		{formulaBase + "?environment=development&view=active", false},
+		{formulaBase + "?environment=development&view=archived", true},
+	} {
+		f.archivedOnly = !tc.want
+		catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
+		if f.archivedOnly != tc.want {
+			t.Fatalf("archivedOnly not forwarded for %s: got %v", tc.path, f.archivedOnly)
+		}
+	}
+	for _, path := range []string{
+		formulaBase + "?environment=development&view=bogus",
+		formulaBase + "?environment=development&view=archived&view=active",
+		formulaItem + "?view=archived",
+	} {
+		before := f.calls
+		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
+		if f.calls != before {
+			t.Fatal("invalid view reached service")
+		}
+		if path == formulaItem+"?view=archived" && out["code"] != "INVALID_QUERY" {
+			t.Fatal("item route must keep the strict allowlist", out)
+		}
+		if strings.Contains(path, "bogus") && out["code"] != "INVALID_ARCHIVE_VIEW" {
+			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
+		}
+	}
+	activeScope := "formula_metrics:" + userID + ":" + projectID + ":development:active"
+	archivedScope := "formula_metrics:" + userID + ":" + projectID + ":development:archived"
+	archivedPage := catalogStatus(t, catalogRequest(h, "GET", formulaBase+"?environment=development&view=archived&limit=1", "", nil), 200)
+	next, ok := archivedPage["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing archived continuation")
+	}
+	if decoded, e := codec.Decode(archivedScope, next); e != nil || decoded != formulaID {
+		t.Fatal("archived cursor bound to wrong scope", decoded, e)
+	}
+	before := f.calls
+	bad := catalogStatus(t, catalogRequest(h, "GET", formulaBase+"?environment=development&cursor="+url.QueryEscape(next), "", nil), 400)
+	if bad["code"] != "INVALID_CURSOR" || f.calls != before {
+		t.Fatal("cross-view cursor reached service", bad)
+	}
+	if _, e := codec.Decode(activeScope, next); e == nil {
+		t.Fatal("archived cursor decoded under the active scope")
 	}
 }

@@ -24,7 +24,7 @@ var _ FormulaMetricService = (*FormulaMetrics)(nil)
 // FormulaMetricService is the management surface of composite formula metrics.
 type FormulaMetricService interface {
 	CreateFormulaMetric(context.Context, string, string, string, FormulaMetricCreate) (FormulaMetricDraft, error)
-	ListFormulaMetrics(context.Context, string, string, string, string, int) ([]FormulaMetricRecord, error)
+	ListFormulaMetrics(context.Context, string, string, string, string, int, bool) ([]FormulaMetricRecord, error)
 	GetFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 	GetFormulaMetricDraft(context.Context, string, string, string) (FormulaMetricDraft, error)
 	SaveFormulaMetricDraft(context.Context, string, string, string, int64, FormulaMetricDefinition) (FormulaMetricDraft, error)
@@ -33,6 +33,8 @@ type FormulaMetricService interface {
 	ListFormulaMetricVersions(context.Context, string, string, string, int64, int) ([]FormulaMetricVersion, error)
 	GetFormulaMetricVersion(context.Context, string, string, string, int64) (FormulaMetricVersion, error)
 	EnqueueFormulaMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
+	ArchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
+	UnarchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 }
 
 func NewFormulaMetrics(store FormulaMetricStore, validator analysis.Validator) *FormulaMetrics {
@@ -75,14 +77,14 @@ func (s *FormulaMetrics) CreateFormulaMetric(ctx context.Context, actor, project
 	return s.store.CreateFormulaMetric(ctx, actor, project, key, in)
 }
 
-func (s *FormulaMetrics) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int) ([]FormulaMetricRecord, error) {
+func (s *FormulaMetrics) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]FormulaMetricRecord, error) {
 	if !metricEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListFormulaMetrics(ctx, actor, project, environment, after, limit+1)
+	return s.store.ListFormulaMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly)
 }
 
 func (s *FormulaMetrics) GetFormulaMetric(ctx context.Context, actor, project, id string) (FormulaMetricRecord, error) {
@@ -189,4 +191,10 @@ func (s *FormulaMetrics) EnqueueFormulaMetricVersion(ctx context.Context, actor,
 		return analysis.Job{}, analysis.Invalid("INVALID_INTERVAL", "请选择时间粒度", "/interval")
 	}
 	return s.store.EnqueueFormulaMetricVersion(ctx, actor, project, id, version, key, in)
+}
+func (s *FormulaMetrics) ArchiveFormulaMetric(ctx context.Context, actor, project, id string) (FormulaMetricRecord, error) {
+	return s.store.ArchiveFormulaMetric(ctx, actor, project, id)
+}
+func (s *FormulaMetrics) UnarchiveFormulaMetric(ctx context.Context, actor, project, id string) (FormulaMetricRecord, error) {
+	return s.store.UnarchiveFormulaMetric(ctx, actor, project, id)
 }

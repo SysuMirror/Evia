@@ -51,14 +51,19 @@ func (s *Store) EnqueueFormulaMetricVersion(ctx context.Context, actor, project,
 	if in.Limit != 0 && (in.Limit < 1 || in.Limit > 500) {
 		return analysis.Job{}, analysis.Invalid("QUERY_RESULT_LIMIT_EXCEEDED", "结果行数超过预算", "/limit")
 	}
+	// Match the atomic run ordering: project lock, archive guard, then the
+	// immutable version read, so an archived parent cannot admit new runs.
+	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
+		return analysis.Job{}, e
+	}
+	if e = assertFormulaMetricActiveTx(ctx, tx, project, id); e != nil {
+		return analysis.Job{}, e
+	}
 	snapshot, e := readFormulaMetricVersionTx(ctx, tx, project, id, version)
 	if e != nil {
 		return analysis.Job{}, e
 	}
 	if e = s.authorizeQuery(ctx, tx, actor, project, snapshot.Environment, "queries.run", false); e != nil {
-		return analysis.Job{}, e
-	}
-	if _, e = tx.Exec(ctx, `SELECT id FROM projects WHERE id=$1 FOR UPDATE`, project); e != nil {
 		return analysis.Job{}, e
 	}
 	var queued int

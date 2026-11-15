@@ -31,14 +31,16 @@ type FormulaDependencyManifest struct {
 }
 
 type FormulaMetricRecord struct {
-	ID               string    `json:"metric_id"`
-	ProjectID        string    `json:"project_id"`
-	Environment      string    `json:"environment"`
-	Title            string    `json:"title"`
-	DraftRevision    int64     `json:"draft_revision"`
-	PublishedVersion int64     `json:"published_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string     `json:"metric_id"`
+	ProjectID        string     `json:"project_id"`
+	Environment      string     `json:"environment"`
+	Title            string     `json:"title"`
+	DraftRevision    int64      `json:"draft_revision"`
+	PublishedVersion int64      `json:"published_version"`
+	ArchivedAt       *time.Time `json:"archived_at,omitempty"`
+	ArchivedBy       string     `json:"archived_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type FormulaMetricDraft struct {
@@ -111,7 +113,7 @@ type FormulaMetricSnapshot struct {
 // with the query worker integration in a later vertical.
 type FormulaMetricStore interface {
 	CreateFormulaMetric(context.Context, string, string, string, FormulaMetricCreate) (FormulaMetricDraft, error)
-	ListFormulaMetrics(context.Context, string, string, string, string, int) ([]FormulaMetricRecord, error)
+	ListFormulaMetrics(context.Context, string, string, string, string, int, bool) ([]FormulaMetricRecord, error)
 	GetFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 	GetFormulaMetricDraft(context.Context, string, string, string) (FormulaMetricDraft, error)
 	SaveFormulaMetricDraft(context.Context, string, string, string, int64, FormulaMetricDefinition) (FormulaMetricDraft, error)
@@ -120,6 +122,8 @@ type FormulaMetricStore interface {
 	ListFormulaMetricVersions(context.Context, string, string, string, int64, int) ([]FormulaMetricVersion, error)
 	GetFormulaMetricVersion(context.Context, string, string, string, int64) (FormulaMetricVersion, error)
 	EnqueueFormulaMetricVersion(context.Context, string, string, string, int64, string, MetricExecute) (analysis.Job, error)
+	ArchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
+	UnarchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 }
 
 // NormalizeFormulaMetricDefinition returns an independent canonical composite

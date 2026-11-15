@@ -34,6 +34,8 @@ func (a *FormulaMetricsAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+base+"/{metric_id}/versions", a.API.projectPermissionAuth(true, access.PermissionMetricsPublish, a.publish))
 	mux.HandleFunc("GET "+base+"/{metric_id}/versions/{version}", a.API.projectPermissionAuth(false, access.PermissionMetricsRead, a.version))
 	mux.HandleFunc("POST "+base+"/{metric_id}/versions/{version}/queries", a.API.projectPermissionAuth(true, access.PermissionMetricsRun, a.execute))
+	mux.HandleFunc("POST "+base+"/{metric_id}/archive", a.API.projectPermissionAuth(true, access.PermissionMetricsWrite, a.archive))
+	mux.HandleFunc("POST "+base+"/{metric_id}/unarchive", a.API.projectPermissionAuth(true, access.PermissionMetricsWrite, a.unarchive))
 }
 
 func (a *FormulaMetricsAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
@@ -219,7 +221,7 @@ func (a *FormulaMetricsAPI) list(w http.ResponseWriter, r *http.Request, s autho
 	if e != nil {
 		return e
 	}
-	q, e := savedQuery(r, true, true)
+	q, e := savedArchiveQuery(r)
 	if e != nil {
 		return e
 	}
@@ -227,12 +229,17 @@ func (a *FormulaMetricsAPI) list(w http.ResponseWriter, r *http.Request, s autho
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"formula_metrics", s.ID, p, q.Get("environment")}, ":")
+	view := q.Get("view")
+	if view == "" {
+		view = "active"
+	}
+	archivedOnly := view == "archived"
+	scope := strings.Join([]string{"formula_metrics", s.ID, p, q.Get("environment"), view}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListFormulaMetrics(r.Context(), s.ID, p, q.Get("environment"), after, limit)
+	items, e := a.Service.ListFormulaMetrics(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly)
 	if e != nil {
 		return e
 	}
@@ -247,6 +254,36 @@ func (a *FormulaMetricsAPI) list(w http.ResponseWriter, r *http.Request, s autho
 	}
 	out.Items = append(out.Items, items...)
 	return a.API.Boundary.JSON(w, 200, "FormulaMetricList", out)
+}
+
+func (a *FormulaMetricsAPI) archive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.ArchiveFormulaMetric(r.Context(), s.ID, p, r.PathValue("metric_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "FormulaMetricRecord", out)
+}
+
+func (a *FormulaMetricsAPI) unarchive(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	out, e := a.Service.UnarchiveFormulaMetric(r.Context(), s.ID, p, r.PathValue("metric_id"))
+	if e != nil {
+		return e
+	}
+	return a.API.Boundary.JSON(w, 200, "FormulaMetricRecord", out)
 }
 
 func (a *FormulaMetricsAPI) versions(w http.ResponseWriter, r *http.Request, s authorizedActor) error {

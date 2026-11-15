@@ -22,7 +22,7 @@ func (f *fakeFormulaMetricStore) CreateFormulaMetric(_ context.Context, _, _, _ 
 	f.created = in
 	return FormulaMetricDraft{FormulaMetricRecord: FormulaMetricRecord{ID: "formula-one", ProjectID: "project-one", Environment: in.Environment, DraftRevision: 1}}, nil
 }
-func (f *fakeFormulaMetricStore) ListFormulaMetrics(_ context.Context, _, _, _, _ string, limit int) ([]FormulaMetricRecord, error) {
+func (f *fakeFormulaMetricStore) ListFormulaMetrics(_ context.Context, _, _, _, _ string, limit int, _ bool) ([]FormulaMetricRecord, error) {
 	f.listLimit = limit
 	return []FormulaMetricRecord{}, nil
 }
@@ -51,6 +51,12 @@ func (f *fakeFormulaMetricStore) GetFormulaMetricVersion(context.Context, string
 func (f *fakeFormulaMetricStore) EnqueueFormulaMetricVersion(_ context.Context, _, _, _ string, _ int64, key string, in MetricExecute) (analysis.Job, error) {
 	f.key = key
 	return analysis.Job{ID: "formula-job", State: "queued"}, f.err
+}
+func (f *fakeFormulaMetricStore) ArchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error) {
+	return FormulaMetricRecord{ID: "formula-one"}, nil
+}
+func (f *fakeFormulaMetricStore) UnarchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error) {
+	return FormulaMetricRecord{ID: "formula-one"}, nil
 }
 
 func formulaServiceDef() FormulaMetricDefinition {
@@ -104,10 +110,10 @@ func TestFormulaMetricServiceSaveRejectsRevisionAndContract(t *testing.T) {
 
 func TestFormulaMetricServiceListRejectsLimit(t *testing.T) {
 	svc := NewFormulaMetrics(&fakeFormulaMetricStore{}, savedValidator(t))
-	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "development", "", 0); e == nil {
+	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "development", "", 0, false); e == nil {
 		t.Fatal("expected limit rejection")
 	}
-	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "nope", "", 10); e == nil {
+	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "nope", "", 10, false); e == nil {
 		t.Fatal("expected environment rejection")
 	}
 }

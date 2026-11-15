@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
@@ -15,7 +16,7 @@ import (
 
 var _ reporting.FormulaMetricStore = (*Store)(nil)
 
-const formulaMetricColumns = `metric_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at`
+const formulaMetricColumns = `metric_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
 const formulaMetricVersionColumns = `metric_id::text,project_id::text,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_at,created_by::text`
 
 func formulaMetricMissing() error {
@@ -27,19 +28,23 @@ func formulaMetricVersionMissing() error {
 
 func scanFormulaMetricRecord(row pgx.Row) (reporting.FormulaMetricRecord, error) {
 	var out reporting.FormulaMetricRecord
-	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt)
+	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = formulaMetricMissing()
 	}
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	return out, e
 }
 
 func readFormulaMetricDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.FormulaMetricDraft, error) {
 	var out reporting.FormulaMetricDraft
 	var data []byte
-	e := tx.QueryRow(ctx, `SELECT `+formulaMetricColumns+`,definition FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &data)
+	e := tx.QueryRow(ctx, `SELECT `+formulaMetricColumns+`,definition FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return out, formulaMetricMissing()
 	}
@@ -48,6 +53,10 @@ func readFormulaMetricDraftTx(ctx context.Context, tx pgx.Tx, project, id string
 	}
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
+	if out.ArchivedAt != nil {
+		archivedAt := out.ArchivedAt.UTC()
+		out.ArchivedAt = &archivedAt
+	}
 	e = decodeMetric(data, &out.Definition)
 	return out, e
 }
@@ -168,7 +177,7 @@ func (s *Store) CreateFormulaMetric(ctx context.Context, actor, project, key str
 	return out, tx.Commit(ctx)
 }
 
-func (s *Store) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int) ([]reporting.FormulaMetricRecord, error) {
+func (s *Store) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.FormulaMetricRecord, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -183,7 +192,12 @@ func (s *Store) ListFormulaMetrics(ctx context.Context, actor, project, environm
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "metrics.read"); e != nil {
 		return nil, e
 	}
-	rows, e := tx.Query(ctx, `SELECT `+formulaMetricColumns+` FROM formula_metrics WHERE project_id=$1 AND environment=$2 AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit)
+	// The predicate is selected from the validated bool, never from request text.
+	archivePredicate := "archived_at IS NULL"
+	if archivedOnly {
+		archivePredicate = "archived_at IS NOT NULL"
+	}
+	rows, e := tx.Query(ctx, `SELECT `+formulaMetricColumns+` FROM formula_metrics WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -200,6 +214,89 @@ func (s *Store) ListFormulaMetrics(ctx context.Context, actor, project, environm
 		return nil, e
 	}
 	rows.Close()
+	return out, tx.Commit(ctx)
+}
+
+// assertFormulaMetricActiveTx blocks mutating operations on an archived formula
+// metric. Caller must already hold write authorization and the project lock.
+func assertFormulaMetricActiveTx(ctx context.Context, tx pgx.Tx, project, id string) error {
+	var archivedAt *time.Time
+	e := tx.QueryRow(ctx, `SELECT archived_at FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return formulaMetricMissing()
+	}
+	if e != nil {
+		return e
+	}
+	if archivedAt != nil {
+		return fault.New(fault.Conflict, "FORMULA_METRIC_ARCHIVED", "复合指标已归档，请先恢复后再修改")
+	}
+	return nil
+}
+
+func (s *Store) ArchiveFormulaMetric(ctx context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeFormulaResource(ctx, tx, actor, project, id, "formula_metrics", "metric_id", "metrics.write"); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.FormulaMetricRecord{}, formulaMetricMissing()
+	}
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	if archivedAt != nil {
+		return reporting.FormulaMetricRecord{}, fault.New(fault.Conflict, "FORMULA_METRIC_ALREADY_ARCHIVED", "复合指标已处于归档状态")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE formula_metrics SET archived_at=clock_timestamp(), archived_by=$3::uuid, updated_at=clock_timestamp() WHERE project_id=$1 AND metric_id=$2`, project, id, actor); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'formula_metric.archived',$3)`, project, actor, id); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	out, e := scanFormulaMetricRecord(tx.QueryRow(ctx, `SELECT `+formulaMetricColumns+` FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id))
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	return out, tx.Commit(ctx)
+}
+
+func (s *Store) UnarchiveFormulaMetric(ctx context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
+	tx, e := s.catalogTx(ctx, actor, project, true)
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	defer tx.Rollback(context.Background())
+	if e = s.authorizeFormulaResource(ctx, tx, actor, project, id, "formula_metrics", "metric_id", "metrics.write"); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	var archivedAt *time.Time
+	e = tx.QueryRow(ctx, `SELECT archived_at FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id).Scan(&archivedAt)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return reporting.FormulaMetricRecord{}, formulaMetricMissing()
+	}
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	if archivedAt == nil {
+		return reporting.FormulaMetricRecord{}, fault.New(fault.Conflict, "FORMULA_METRIC_NOT_ARCHIVED", "复合指标未归档，无需恢复")
+	}
+	if _, e = tx.Exec(ctx, `UPDATE formula_metrics SET archived_at=NULL, archived_by=NULL, updated_at=clock_timestamp() WHERE project_id=$1 AND metric_id=$2`, project, id); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'formula_metric.unarchived',$3)`, project, actor, id); e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
+	out, e := scanFormulaMetricRecord(tx.QueryRow(ctx, `SELECT `+formulaMetricColumns+` FROM formula_metrics WHERE project_id=$1 AND metric_id=$2`, project, id))
+	if e != nil {
+		return reporting.FormulaMetricRecord{}, e
+	}
 	return out, tx.Commit(ctx)
 }
 
@@ -249,6 +346,9 @@ func (s *Store) SaveFormulaMetricDraft(ctx context.Context, actor, project, id s
 	if e != nil {
 		return out, e
 	}
+	if old.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "FORMULA_METRIC_ARCHIVED", "复合指标已归档，请先恢复后再修改")
+	}
 	if revision < 1 {
 		return out, fault.New(fault.Invalid, "REVISION_REQUIRED", "需要草稿修订号")
 	}
@@ -284,6 +384,9 @@ func formulaSnapshotTx(ctx context.Context, tx pgx.Tx, store *Store, actor, proj
 	draft, e := readFormulaMetricDraftTx(ctx, tx, project, id)
 	if e != nil {
 		return out, e
+	}
+	if draft.ArchivedAt != nil {
+		return out, fault.New(fault.Conflict, "FORMULA_METRIC_ARCHIVED", "复合指标已归档，请先恢复后再校验或发布")
 	}
 	if in.DraftRevision != draft.DraftRevision {
 		return out, metricConflict("METRIC_REVISION_CONFLICT")
