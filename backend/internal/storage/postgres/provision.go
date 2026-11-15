@@ -142,3 +142,33 @@ func (s *Store) ResetAccountPassword(ctx context.Context, username, passwordHash
 	user.PasswordHash = passwordHash
 	return user, tx.Commit(ctx)
 }
+
+// AccountAuditEvents reads one account's typed operator history oldest first.
+// The account existence check keeps the read side consistent with the mutating
+// commands: an unknown username fails ACCOUNT_NOT_FOUND rather than silently
+// returning an empty trail.
+func (s *Store) AccountAuditEvents(ctx context.Context, username string) ([]access.AuditEvent, error) {
+	var targetID string
+	err := s.Pool.QueryRow(ctx, `SELECT id::text FROM accounts WHERE username=$1`, username).Scan(&targetID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fault.New(fault.NotFound, "ACCOUNT_NOT_FOUND", "account does not exist")
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT event_type, occurred_at FROM account_provision_events WHERE target_id=$1 ORDER BY occurred_at,id`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := make([]access.AuditEvent, 0)
+	for rows.Next() {
+		var event access.AuditEvent
+		if err = rows.Scan(&event.EventType, &event.OccurredAt); err != nil {
+			return nil, err
+		}
+		event.OccurredAt = event.OccurredAt.UTC()
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}

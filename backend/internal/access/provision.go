@@ -3,10 +3,20 @@ package access
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
+
+// AuditEvent is one typed operator action against an account. It carries only
+// safe metadata: no actor identity beyond the fixed operator kind, no
+// credential or request content. The closed EventType set mirrors the
+// account_provision_events CHECK constraint.
+type AuditEvent struct {
+	EventType  string    `json:"event_type"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
 
 // ProvisionStore persists an operator-created account and its operator audit
 // event atomically. It must reject an uninitialized installation and duplicates.
@@ -14,6 +24,9 @@ type ProvisionStore interface {
 	ProvisionAccount(context.Context, User) error
 	SetAccountDisabled(ctx context.Context, username string, disabled bool) (User, error)
 	ResetAccountPassword(ctx context.Context, username, passwordHash string) (User, error)
+	// AccountAuditEvents returns the account's typed operator history oldest
+	// first. An unknown username fails with ACCOUNT_NOT_FOUND.
+	AccountAuditEvents(ctx context.Context, username string) ([]AuditEvent, error)
 }
 
 // ProvisionAccount is an operator action, separate from bootstrap and project
@@ -76,4 +89,15 @@ func ResetAccountPassword(ctx context.Context, store ProvisionStore, username, p
 	}
 	user.PasswordHash = ""
 	return user, nil
+}
+
+// AccountAuditEvents is the read side of the operator audit trail. It applies
+// the same username normalization as the mutating commands and returns the
+// account's typed events oldest first. It never returns credential material.
+func AccountAuditEvents(ctx context.Context, store ProvisionStore, username string) ([]AuditEvent, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if !usernamePattern.MatchString(username) {
+		return nil, fault.New(fault.Invalid, "INVALID_USERNAME", "username must contain 1 to 100 ASCII letters, digits or ._@-")
+	}
+	return store.AccountAuditEvents(ctx, username)
 }
