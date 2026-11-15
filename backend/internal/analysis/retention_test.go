@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -256,14 +257,68 @@ func TestRetentionValidationClosedSet(t *testing.T) {
 	}
 }
 
-func TestRetentionRejectedFromSavedTemplates(t *testing.T) {
-	// Saved analyses stay limited to trend/funnel; the Template surface does
-	// not even carry a retention block in v1.
-	template := Template{Kind: "retention", Subject: "uid"}
-	var problem *fault.Error
-	e := ValidateTemplate(&template)
-	if e == nil || !errors.As(e, &problem) || problem.Code != "UNSUPPORTED_QUERY_KIND" {
-		t.Fatalf("saved analyses must reject retention: %v", e)
+func retentionTemplate() Template {
+	return Template{
+		Kind:    "retention",
+		Subject: "uid",
+		Retention: &Retention{
+			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
+			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
+			Granularity: "day",
+			Periods:     4,
+		},
+	}
+}
+
+func TestRetentionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
+	template := retentionTemplate()
+	if e := ValidateTemplate(&template); e != nil {
+		t.Fatalf("retention template must be reusable: %v", e)
+	}
+	if template.Retention == nil || template.Retention.StartEvent.EventKey != "sign_up" || len(template.EventVersions) != 0 {
+		t.Fatalf("retention block or pin projection changed: %+v", template)
+	}
+	encoded, e := json.Marshal(template)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, leaked := range []string{"environment", "time_range", "timezone", "event_versions", "funnel"} {
+		if strings.Contains(string(encoded), `"`+leaked+`"`) {
+			t.Fatal("runtime context escaped into retention template", leaked)
+		}
+	}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 4)}, "UTC")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if bound.Kind != "retention" || bound.Environment != "development" || bound.Retention == nil || bound.Retention.Periods != 4 {
+		t.Fatalf("retention bind lost configuration: %+v", bound)
+	}
+
+	for _, tc := range []struct {
+		name, code string
+		change     func(*Template)
+	}{
+		{"top level event versions", "INVALID_EVENT_SELECTION", func(t *Template) {
+			t.EventVersions = []EventVersion{{EventKey: "sign_up", SchemaVersion: 1}}
+		}},
+		{"missing retention block", "INVALID_RETENTION", func(t *Template) { t.Retention = nil }},
+		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
+		{"bad granularity", "INVALID_RETENTION_GRANULARITY", func(t *Template) { t.Retention.Granularity = "hour" }},
+		{"periods out of range", "INVALID_RETENTION_PERIODS", func(t *Template) { t.Retention.Periods = 13 }},
+		{"unpinned start event", "INVALID_RETENTION_STEP", func(t *Template) { t.Retention.StartEvent.SchemaVersion = 0 }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := retentionTemplate()
+			tc.change(&invalid)
+			var problem *fault.Error
+			err := ValidateTemplate(&invalid)
+			if err == nil || !errors.As(err, &problem) || problem.Code != tc.code {
+				t.Fatalf("want %s, got %v", tc.code, err)
+			}
+		})
 	}
 }
 

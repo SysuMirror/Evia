@@ -30,6 +30,13 @@ func savedSnapshot(t *testing.T, definition SavedAnalysisDefinition) SavedAnalys
 			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
 		}
 	}
+	if normalized.Query.Kind == "retention" {
+		mode = "retention_steps"
+		selected = nil
+		for _, step := range []analysis.Step{normalized.Query.Retention.StartEvent, normalized.Query.Retention.ReturnEvent} {
+			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
+		}
+	}
 	dependencies := []Dependency{}
 	seen := map[analysis.EventVersion]bool{}
 	for _, version := range selected {
@@ -224,6 +231,65 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 	f, e := BuildSavedAnalysisValidation(fs)
 	if e != nil || len(f.Diff) != 1 || f.Diff[0].Path != "/query/funnel" {
 		t.Fatal("funnel step ordering lost", f, e)
+	}
+}
+
+func retentionSavedDefinition() SavedAnalysisDefinition {
+	return SavedAnalysisDefinition{
+		Title: "Signup retention",
+		Query: analysis.Template{
+			Kind:    "retention",
+			Subject: "uid",
+			Retention: &analysis.Retention{
+				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
+				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 2},
+				Granularity: "day",
+				Periods:     4,
+			},
+		},
+		Visualization: SavedAnalysisVisualization{Kind: "table"},
+	}
+}
+
+func TestSavedValidationRetentionPinsBoundarySteps(t *testing.T) {
+	snapshot := savedSnapshot(t, retentionSavedDefinition())
+	out, e := BuildSavedAnalysisValidation(snapshot)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !out.Valid || out.Dependencies.SelectionMode != "retention_steps" {
+		t.Fatalf("retention dependency mode wrong: %+v", out.Dependencies)
+	}
+	if len(out.Dependencies.EventVersions) != 2 {
+		t.Fatalf("want two boundary step pins, got %d", len(out.Dependencies.EventVersions))
+	}
+	want := map[analysis.EventVersion]bool{
+		{EventKey: "sign_up", SchemaVersion: 1}: true,
+		{EventKey: "login", SchemaVersion: 2}:   true,
+	}
+	for _, dep := range out.Dependencies.EventVersions {
+		if !want[analysis.EventVersion{EventKey: dep.EventKey, SchemaVersion: dep.SchemaVersion}] {
+			t.Fatalf("unexpected retention dependency: %+v", dep)
+		}
+	}
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*SavedAnalysisSnapshot)
+	}{
+		{"wrong selection mode", func(s *SavedAnalysisSnapshot) { s.Dependencies.SelectionMode = "event_versions" }},
+		{"dropped boundary pin", func(s *SavedAnalysisSnapshot) { s.Dependencies.EventVersions = s.Dependencies.EventVersions[:1] }},
+		{"malformed definition digest", func(s *SavedAnalysisSnapshot) {
+			s.Dependencies.EventVersions[0].DefinitionHash = "not-a-hex-digest"
+		}},
+		{"unfixed event present", func(s *SavedAnalysisSnapshot) { s.Dependencies.UnfixedEventKeys = []string{"sign_up"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			broken := savedSnapshot(t, retentionSavedDefinition())
+			tc.mutate(&broken)
+			_, err := BuildSavedAnalysisValidation(broken)
+			savedErrorCode(t, err, "INVALID_ANALYSIS_DEPENDENCIES")
+		})
 	}
 }
 

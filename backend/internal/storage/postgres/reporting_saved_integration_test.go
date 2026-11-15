@@ -451,3 +451,48 @@ func TestSavedAnalysisDefinitionByteBoundary(t *testing.T) {
 		t.Fatal("database accepted oversized definition")
 	}
 }
+
+func TestSavedAnalysisRetentionPersistsAndPinsBoundarySteps(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	signUp := f.event(t, "sign_up")
+	if _, e := f.svc.CreateRelease(ctx, f.owner, f.project, "retention-release-start", releaseInput("sign_up", signUp.Revision)); e != nil {
+		t.Fatal(e)
+	}
+	login := f.event(t, "login")
+	if _, e := f.svc.CreateRelease(ctx, f.owner, f.project, "retention-release-return", releaseInput("login", login.Revision)); e != nil {
+		t.Fatal(e)
+	}
+	definition := reporting.SavedAnalysisDefinition{
+		Title: "Signup retention",
+		Query: analysis.Template{
+			Kind:    "retention",
+			Subject: "uid",
+			Retention: &analysis.Retention{
+				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
+				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 1},
+				Granularity: "day",
+				Periods:     4,
+			},
+		},
+		Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
+	}
+	draft, e := f.s.CreateSavedAnalysis(ctx, f.owner, f.project, "retention-create", reporting.SavedAnalysisCreate{Environment: "development", Definition: definition})
+	if e != nil {
+		t.Fatalf("retention saved analysis must pass the widened kind check: %v", e)
+	}
+	if draft.Kind != "retention" {
+		t.Fatalf("stored kind = %q, want retention", draft.Kind)
+	}
+	validation := savedValidate(t, f, draft)
+	if !validation.Valid || validation.Dependencies.SelectionMode != "retention_steps" || len(validation.Dependencies.EventVersions) != 2 {
+		t.Fatalf("retention dependency manifest wrong: %+v", validation.Dependencies)
+	}
+	version, e := f.s.PublishSavedAnalysis(ctx, f.owner, f.project, draft.ID, "retention-publish", savedPublish(draft, validation))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if version.Version != 1 || version.DefinitionHash != validation.DefinitionHash {
+		t.Fatal(version)
+	}
+}
