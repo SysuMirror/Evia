@@ -346,7 +346,7 @@ func TestMachineReportingIndependentReadWritePublishAndEnvironmentGrants(t *test
 	_, e = s.CreateSavedAnalysis(writeCtx, writer.Principal.ID, f.project, "machine-saved", reporting.SavedAnalysisCreate{Environment: "production", Definition: savedRunDefinition()})
 	machineForbidden(t, e)
 	readCtx, reader := queryMachine(t, f, "development", "analyses.read", "dashboards.read", "queries.read")
-	if _, e = s.ListSavedAnalyses(readCtx, reader.Principal.ID, f.project, "development", "", 10); e != nil {
+	if _, e = s.ListSavedAnalyses(readCtx, reader.Principal.ID, f.project, "development", "", 10, false); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.GetSavedAnalysisDraft(readCtx, reader.Principal.ID, f.project, saved.ID); e != nil {

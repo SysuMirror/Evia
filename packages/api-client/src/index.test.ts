@@ -406,6 +406,44 @@ test('saved analysis reads encode resource scope, cursors, versions and preserve
   }
 });
 
+test('saved analysis archive view encoding and lifecycle calls carry CSRF without body or key', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listSavedAnalyses(
+    'p/q',
+    { environment: 'development', view: 'archived', limit: 20 },
+    controller.signal,
+  );
+  await api.listSavedAnalyses(
+    'p/q',
+    { environment: 'development', view: 'active' },
+    controller.signal,
+  );
+  await api.archiveSavedAnalysis('p/q', 'a/b', 'csrf', controller.signal);
+  await api.unarchiveSavedAnalysis('p/q', 'a/b', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=development&limit=20&view=archived',
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=development&view=active',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/archive',
+      '/api/v1/projects/p%2Fq/saved-analyses/a%2Fb/unarchive',
+    ],
+  );
+  for (const index of [2, 3]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.method, 'POST');
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+    assert.equal((init.headers as Headers).has('Idempotency-Key'), false);
+    assert.equal(init.body, undefined);
+    assert.equal(init.credentials, 'same-origin');
+  }
+  controller.abort();
+  for (const call of fetch.mock.calls) {
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+  }
+});
+
 const savedDefinition = {
   title: 'Daily opens',
   description: '',

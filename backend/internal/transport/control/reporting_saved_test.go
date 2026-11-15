@@ -38,6 +38,7 @@ type savedHTTPService struct {
 	after, environment, key, id string
 	revision, version           int64
 	limit                       int
+	archivedOnly                bool
 	items                       []reporting.SavedAnalysis
 	versions                    []reporting.SavedAnalysisVersion
 }
@@ -66,8 +67,8 @@ func (f *savedHTTPService) CreateSavedAnalysis(_ context.Context, actor, project
 	f.key, f.environment = key, in.Environment
 	return savedDraft(), f.call(actor, project)
 }
-func (f *savedHTTPService) ListSavedAnalyses(_ context.Context, actor, project, env, after string, limit int) ([]reporting.SavedAnalysis, error) {
-	f.environment, f.after, f.limit = env, after, limit
+func (f *savedHTTPService) ListSavedAnalyses(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.SavedAnalysis, error) {
+	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
 	return f.items, f.call(actor, project)
 }
 func (f *savedHTTPService) GetSavedAnalysis(_ context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
@@ -106,6 +107,14 @@ func (f *savedHTTPService) EnqueueSavedAnalysisVersion(_ context.Context, actor,
 	f.id, f.version, f.key = id, version, key
 	return analysis.Job{ID: savedID, State: "queued", CreatedAt: savedResource().CreatedAt}, f.call(actor, project)
 }
+func (f *savedHTTPService) ArchiveSavedAnalysis(_ context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
+	f.id = id
+	return savedResource(), f.call(actor, project)
+}
+func (f *savedHTTPService) UnarchiveSavedAnalysis(_ context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
+	f.id = id
+	return savedResource(), f.call(actor, project)
+}
 func savedHTTP(t *testing.T, f *savedHTTPService, access AccessService) (http.Handler, *cursor.Codec) {
 	t.Helper()
 	v, e := contract.New()
@@ -137,6 +146,8 @@ func TestSavedAnalysisHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"POST", savedItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, map[string]string{"Idempotency-Key": "publish-key"}, 201, true},
 		{"GET", savedItem + "/versions/1", "", nil, 200, false},
 		{"POST", savedItem + "/versions/1/queries", savedExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
+		{"POST", savedItem + "/archive", "", nil, 200, true},
+		{"POST", savedItem + "/unarchive", "", nil, 200, true},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			before := f.calls
@@ -167,6 +178,9 @@ func TestSavedAnalysisHTTPStrictInputs(t *testing.T) {
 		{"unknown env", "GET", savedBase + "?environment=unknown", "", nil, 400},
 		{"duplicate env", "GET", savedBase + "?environment=development&environment=production", "", nil, 400},
 		{"unknown parameter", "GET", savedBase + "?environment=development&search=x", "", nil, 400},
+		{"unknown archive view", "GET", savedBase + "?environment=development&view=bogus", "", nil, 400},
+		{"duplicate archive view", "GET", savedBase + "?environment=development&view=archived&view=active", "", nil, 400},
+		{"item route rejects view", "GET", savedItem + "?view=archived", "", nil, 400},
 		{"invalid query encoding", "GET", savedBase + "?environment=%xx", "", nil, 400},
 		{"analysis limit", "GET", savedBase + "?environment=development&limit=101", "", nil, 400},
 		{"version limit", "GET", savedItem + "/versions?limit=51", "", nil, 400},
@@ -213,7 +227,7 @@ func TestSavedAnalysisHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{savedBase + "?environment=development&limit=1", "saved_analyses:" + userID + ":" + projectID + ":development", savedID, false},
+		{savedBase + "?environment=development&limit=1", "saved_analyses:" + userID + ":" + projectID + ":development:active", savedID, false},
 		{savedItem + "/versions?limit=1", "saved_analysis_versions:" + userID + ":" + projectID + ":" + savedID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -248,6 +262,60 @@ func TestSavedAnalysisHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 				t.Fatal("invalid signed position reached service")
 			}
 		}
+	}
+}
+
+func TestSavedAnalysisHTTPArchiveViewSelector(t *testing.T) {
+	f := &savedHTTPService{items: []reporting.SavedAnalysis{savedResource(), savedResource()}}
+	h, codec := savedHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{savedBase + "?environment=development", false},
+		{savedBase + "?environment=development&view=active", false},
+		{savedBase + "?environment=development&view=archived", true},
+	} {
+		f.archivedOnly = !tc.want
+		catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
+		if f.archivedOnly != tc.want {
+			t.Fatalf("archivedOnly not forwarded for %s: got %v", tc.path, f.archivedOnly)
+		}
+	}
+	for _, path := range []string{
+		savedBase + "?environment=development&view=bogus",
+		savedBase + "?environment=development&view=archived&view=active",
+		savedItem + "?view=archived",
+	} {
+		before := f.calls
+		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
+		if f.calls != before {
+			t.Fatal("invalid view reached service")
+		}
+		if path == savedItem+"?view=archived" && out["code"] != "INVALID_QUERY" {
+			t.Fatal("item route must keep the strict allowlist", out)
+		}
+		if strings.Contains(path, "bogus") && out["code"] != "INVALID_ARCHIVE_VIEW" {
+			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
+		}
+	}
+	activeScope := "saved_analyses:" + userID + ":" + projectID + ":development:active"
+	archivedScope := "saved_analyses:" + userID + ":" + projectID + ":development:archived"
+	archivedPage := catalogStatus(t, catalogRequest(h, "GET", savedBase+"?environment=development&view=archived&limit=1", "", nil), 200)
+	next, ok := archivedPage["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing archived continuation")
+	}
+	if decoded, e := codec.Decode(archivedScope, next); e != nil || decoded != savedID {
+		t.Fatal("archived cursor bound to wrong scope", decoded, e)
+	}
+	before := f.calls
+	bad := catalogStatus(t, catalogRequest(h, "GET", savedBase+"?environment=development&cursor="+url.QueryEscape(next), "", nil), 400)
+	if bad["code"] != "INVALID_CURSOR" || f.calls != before {
+		t.Fatal("cross-view cursor reached service", bad)
+	}
+	if _, e := codec.Decode(activeScope, next); e == nil {
+		t.Fatal("archived cursor decoded under the active scope")
 	}
 }
 func TestSavedAnalysisHTTPAuthRolesAndSafeFailures(t *testing.T) {

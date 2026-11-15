@@ -12,9 +12,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -255,11 +257,11 @@ func TestSavedAnalysisAuthorizationTypesAndAtomicRollback(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	page, e := f.s.ListSavedAnalyses(ctx, f.viewer, f.project, "staging", "", 101)
+	page, e := f.s.ListSavedAnalyses(ctx, f.viewer, f.project, "staging", "", 101, false)
 	if e != nil || len(page) != 1 || page[0].ID != staging.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
-	page, e = f.s.ListSavedAnalyses(ctx, f.viewer, f.project, "development", "", 101)
+	page, e = f.s.ListSavedAnalyses(ctx, f.viewer, f.project, "development", "", 101, false)
 	if e != nil || len(page) != 1 || page[0].ID != d.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
@@ -591,5 +593,129 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 				t.Fatalf("%s publish failed: %v", tc.name, e)
 			}
 		})
+	}
+}
+
+func TestSavedAnalysisArchiveLifecycleAndMutationGuards(t *testing.T) {
+	f, d := savedFixture(t)
+	ctx := context.Background()
+	validation := savedValidate(t, f, d)
+	if _, e := f.s.PublishSavedAnalysis(ctx, f.owner, f.project, d.ID, "archive-publish", savedPublish(d, validation)); e != nil {
+		t.Fatal(e)
+	}
+	keep, e := f.s.CreateSavedAnalysis(ctx, f.owner, f.project, "archive-keep", reporting.SavedAnalysisCreate{Environment: "development", Definition: savedDefinition()})
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	// A read-only viewer cannot change lifecycle state.
+	if _, e = f.s.ArchiveSavedAnalysis(ctx, f.viewer, f.project, d.ID); e == nil || faultPublicCode(e) != "PROJECT_FORBIDDEN" {
+		t.Fatalf("viewer archive must be forbidden: %v", e)
+	}
+
+	archived, e := f.s.ArchiveSavedAnalysis(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if archived.ArchivedAt == nil || archived.ArchivedBy != f.owner {
+		t.Fatalf("archive marker missing: %+v", archived)
+	}
+	if _, e = f.s.ArchiveSavedAnalysis(ctx, f.owner, f.project, d.ID); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_ALREADY_ARCHIVED" {
+		t.Fatalf("re-archive must conflict: %v", e)
+	}
+
+	// Default listing hides archived analyses; the archived stream is opt-in.
+	listed, e := f.s.ListSavedAnalyses(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, item := range listed {
+		if item.ID == d.ID {
+			t.Fatal("archived analysis must leave the default listing")
+		}
+		if item.ArchivedAt != nil {
+			t.Fatal("active analysis must not carry an archive marker")
+		}
+	}
+	if len(listed) != 1 || listed[0].ID != keep.ID {
+		t.Fatalf("listing must retain only the active analysis: %+v", listed)
+	}
+	archivedList, e := f.s.ListSavedAnalyses(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(archivedList) != 1 || archivedList[0].ID != d.ID || archivedList[0].ArchivedAt == nil {
+		t.Fatalf("archived listing must return only the archived analysis with marker: %+v", archivedList)
+	}
+
+	// Reads by ID and draft stay available and expose the marker.
+	got, e := f.s.GetSavedAnalysis(ctx, f.owner, f.project, d.ID)
+	if e != nil || got.ArchivedAt == nil {
+		t.Fatalf("archived analysis must remain readable by ID: %+v %v", got, e)
+	}
+	gotDraft, e := f.s.GetSavedAnalysisDraft(ctx, f.owner, f.project, d.ID)
+	if e != nil || gotDraft.ArchivedAt == nil {
+		t.Fatalf("archived draft must remain readable with marker: %+v %v", gotDraft, e)
+	}
+	// Immutable versions stay readable, keeping dashboard/report references valid.
+	if _, e = f.s.GetSavedAnalysisVersion(ctx, f.owner, f.project, d.ID, 1); e != nil {
+		t.Fatalf("immutable version must stay readable: %v", e)
+	}
+
+	// Every mutating path fails closed while archived.
+	if _, e = f.s.SaveSavedAnalysisDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, savedDefinition()); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_ARCHIVED" {
+		t.Fatalf("draft save must reject archived analysis: %v", e)
+	}
+	if _, e = f.s.SavedAnalysisValidationSnapshot(ctx, f.owner, f.project, d.ID, reporting.SavedAnalysisValidate{DraftRevision: d.DraftRevision}); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_ARCHIVED" {
+		t.Fatalf("validation must reject archived analysis: %v", e)
+	}
+	if _, e = f.s.PublishSavedAnalysis(ctx, f.owner, f.project, d.ID, ids.New(), savedPublish(d, validation)); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_ARCHIVED" {
+		t.Fatalf("publish must reject archived analysis: %v", e)
+	}
+	if _, e = f.s.EnqueueSavedAnalysisVersion(ctx, f.owner, f.project, d.ID, 1, ids.New(), reporting.SavedAnalysisExecute{TimeRange: analysis.TimeRange{From: archived.ArchivedAt.UTC(), To: archived.ArchivedAt.UTC().Add(time.Hour)}, Timezone: "UTC"}); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_ARCHIVED" {
+		t.Fatalf("run enqueue must reject archived analysis: %v", e)
+	}
+
+	// Unknown id resolves to not-found, not an archive conflict.
+	if _, e = f.s.ArchiveSavedAnalysis(ctx, f.owner, f.project, ids.New()); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_NOT_FOUND" {
+		t.Fatalf("unknown analysis must be not-found: %v", e)
+	}
+
+	// Restoring an active analysis conflicts; restoring the archived one clears markers.
+	if _, e = f.s.UnarchiveSavedAnalysis(ctx, f.owner, f.project, keep.ID); e == nil || faultPublicCode(e) != "SAVED_ANALYSIS_NOT_ARCHIVED" {
+		t.Fatalf("unarchiving an active analysis must conflict: %v", e)
+	}
+	restored, e := f.s.UnarchiveSavedAnalysis(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
+		t.Fatalf("restore must clear archive markers: %+v", restored)
+	}
+	listedAgain, e := f.s.ListSavedAnalyses(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil || len(listedAgain) != 2 {
+		t.Fatalf("restored analysis must rejoin the listing: %d %v", len(listedAgain), e)
+	}
+	restoredArchive, e := f.s.ListSavedAnalyses(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil || len(restoredArchive) != 0 {
+		t.Fatalf("restored analysis must leave the archived stream: %d %v", len(restoredArchive), e)
+	}
+
+	// Both lifecycle transitions are audited after the existing create/publish entries.
+	var actions []string
+	rows, e := f.s.Pool.Query(ctx, `SELECT action FROM audit_entries WHERE resource_key=$1 AND action IN ('analysis.archived','analysis.unarchived') ORDER BY id`, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var action string
+		if e = rows.Scan(&action); e != nil {
+			t.Fatal(e)
+		}
+		actions = append(actions, action)
+	}
+	if len(actions) != 2 || actions[0] != "analysis.archived" || actions[1] != "analysis.unarchived" {
+		t.Fatalf("lifecycle audit trail wrong: %v", actions)
 	}
 }
