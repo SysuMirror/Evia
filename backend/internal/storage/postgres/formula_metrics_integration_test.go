@@ -9,6 +9,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -216,5 +217,134 @@ func TestFormulaMetricEnforcesWritePermission(t *testing.T) {
 	ctx := context.Background()
 	if _, e := f.s.CreateFormulaMetric(ctx, f.viewer, f.project, "formula-forbidden", reporting.FormulaMetricCreate{Environment: "development", Definition: formulaMetricDef(f.atomicA, f.atomicB)}); e == nil {
 		t.Fatal("viewer must not create a formula metric")
+	}
+}
+
+func TestFormulaMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
+	f := formulaDB(t)
+	ctx := context.Background()
+	def := formulaMetricDef(f.atomicA, f.atomicB)
+	created, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "formula-archive", reporting.FormulaMetricCreate{Environment: "development", Definition: def})
+	if e != nil {
+		t.Fatal(e)
+	}
+	validation := formulaValidate(t, f, created)
+	version, e := f.s.PublishFormulaMetric(ctx, f.owner, f.project, created.ID, "formula-archive-publish", reporting.FormulaMetricPublish{DraftRevision: created.DraftRevision, ExpectedPublishedVersion: 0, ValidationHash: validation.ValidationHash})
+	if e != nil {
+		t.Fatal(e)
+	}
+	keep, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "formula-archive-keep", reporting.FormulaMetricCreate{Environment: "development", Definition: def})
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	// A read-only viewer cannot change lifecycle state.
+	if _, e = f.s.ArchiveFormulaMetric(ctx, f.viewer, f.project, created.ID); e == nil || faultPublicCode(e) != "PROJECT_FORBIDDEN" {
+		t.Fatalf("viewer archive must be forbidden: %v", e)
+	}
+
+	archived, e := f.s.ArchiveFormulaMetric(ctx, f.owner, f.project, created.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if archived.ArchivedAt == nil || archived.ArchivedBy != f.owner {
+		t.Fatalf("archive marker missing: %+v", archived)
+	}
+	if _, e = f.s.ArchiveFormulaMetric(ctx, f.owner, f.project, created.ID); e == nil || faultPublicCode(e) != "FORMULA_METRIC_ALREADY_ARCHIVED" {
+		t.Fatalf("re-archive must conflict: %v", e)
+	}
+
+	// Default listing hides archived formula metrics; the archived stream is opt-in.
+	listed, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, item := range listed {
+		if item.ID == created.ID {
+			t.Fatal("archived formula metric must leave the default listing")
+		}
+		if item.ArchivedAt != nil {
+			t.Fatal("active formula metric must not carry an archive marker")
+		}
+	}
+	if len(listed) != 1 || listed[0].ID != keep.ID {
+		t.Fatalf("listing must retain only the active metric: %+v", listed)
+	}
+	archivedList, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(archivedList) != 1 || archivedList[0].ID != created.ID || archivedList[0].ArchivedAt == nil {
+		t.Fatalf("archived listing must return only the archived metric with marker: %+v", archivedList)
+	}
+
+	// Reads by ID, draft and immutable version stay available with marker.
+	got, e := f.s.GetFormulaMetric(ctx, f.owner, f.project, created.ID)
+	if e != nil || got.ArchivedAt == nil {
+		t.Fatalf("archived metric must remain readable by ID: %+v %v", got, e)
+	}
+	gotDraft, e := f.s.GetFormulaMetricDraft(ctx, f.owner, f.project, created.ID)
+	if e != nil || gotDraft.ArchivedAt == nil {
+		t.Fatalf("archived draft must remain readable with marker: %+v %v", gotDraft, e)
+	}
+	if _, e = f.s.GetFormulaMetricVersion(ctx, f.owner, f.project, created.ID, version.Version); e != nil {
+		t.Fatalf("immutable version must stay readable: %v", e)
+	}
+
+	// Every mutating path fails closed while archived.
+	if _, e = f.s.SaveFormulaMetricDraft(ctx, f.owner, f.project, created.ID, created.DraftRevision, def); e == nil || faultPublicCode(e) != "FORMULA_METRIC_ARCHIVED" {
+		t.Fatalf("draft save must reject archived metric: %v", e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, created.ID, reporting.FormulaMetricValidate{DraftRevision: created.DraftRevision, ExpectedPublishedVersion: version.Version}); e == nil || faultPublicCode(e) != "FORMULA_METRIC_ARCHIVED" {
+		t.Fatalf("validation must reject archived metric: %v", e)
+	}
+	if _, e = f.s.PublishFormulaMetric(ctx, f.owner, f.project, created.ID, ids.New(), reporting.FormulaMetricPublish{DraftRevision: created.DraftRevision, ExpectedPublishedVersion: version.Version, ValidationHash: validation.ValidationHash}); e == nil || faultPublicCode(e) != "FORMULA_METRIC_ARCHIVED" {
+		t.Fatalf("publish must reject archived metric: %v", e)
+	}
+	if _, e = f.s.EnqueueFormulaMetricVersion(ctx, f.owner, f.project, created.ID, version.Version, ids.New(), formulaExecuteInput()); e == nil || faultPublicCode(e) != "FORMULA_METRIC_ARCHIVED" {
+		t.Fatalf("run enqueue must reject archived metric: %v", e)
+	}
+
+	// Unknown id resolves to not-found, not an archive conflict.
+	if _, e = f.s.ArchiveFormulaMetric(ctx, f.owner, f.project, ids.New()); e == nil || faultPublicCode(e) != "FORMULA_METRIC_NOT_FOUND" {
+		t.Fatalf("unknown metric must be not-found: %v", e)
+	}
+
+	// Restoring an active metric conflicts; restoring the archived one clears markers.
+	if _, e = f.s.UnarchiveFormulaMetric(ctx, f.owner, f.project, keep.ID); e == nil || faultPublicCode(e) != "FORMULA_METRIC_NOT_ARCHIVED" {
+		t.Fatalf("unarchiving an active metric must conflict: %v", e)
+	}
+	restored, e := f.s.UnarchiveFormulaMetric(ctx, f.owner, f.project, created.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
+		t.Fatalf("restore must clear archive markers: %+v", restored)
+	}
+	listedAgain, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil || len(listedAgain) != 2 {
+		t.Fatalf("restored metric must rejoin the listing: %d %v", len(listedAgain), e)
+	}
+	restoredArchive, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil || len(restoredArchive) != 0 {
+		t.Fatalf("restored metric must leave the archived stream: %d %v", len(restoredArchive), e)
+	}
+
+	// Both lifecycle transitions are audited after the existing create/publish entries.
+	var actions []string
+	rows, e := f.s.Pool.Query(ctx, `SELECT action FROM audit_entries WHERE resource_key=$1 AND action IN ('formula_metric.archived','formula_metric.unarchived') ORDER BY id`, created.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var action string
+		if e = rows.Scan(&action); e != nil {
+			t.Fatal(e)
+		}
+		actions = append(actions, action)
+	}
+	if len(actions) != 2 || actions[0] != "formula_metric.archived" || actions[1] != "formula_metric.unarchived" {
+		t.Fatalf("lifecycle audit trail wrong: %v", actions)
 	}
 }

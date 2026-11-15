@@ -1048,6 +1048,43 @@ test('metric archive view encoding and lifecycle calls carry CSRF without body o
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('formula metric archive view encoding and lifecycle calls carry CSRF without body or key', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listFormulaMetrics(
+    'p/q',
+    { environment: 'development', view: 'archived', limit: 20 },
+    controller.signal,
+  );
+  await api.listFormulaMetrics(
+    'p/q',
+    { environment: 'development', view: 'active' },
+    controller.signal,
+  );
+  await api.archiveFormulaMetric('p/q', 'm/1', 'csrf', controller.signal);
+  await api.unarchiveFormulaMetric('p/q', 'm/1', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/formula-metrics?environment=development&limit=20&view=archived',
+      '/api/v1/projects/p%2Fq/formula-metrics?environment=development&view=active',
+      '/api/v1/projects/p%2Fq/formula-metrics/m%2F1/archive',
+      '/api/v1/projects/p%2Fq/formula-metrics/m%2F1/unarchive',
+    ],
+  );
+  for (const index of [2, 3]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.method, 'POST');
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+    assert.equal((init.headers as Headers).has('Idempotency-Key'), false);
+    assert.equal(init.body, undefined);
+    assert.equal(init.credentials, 'same-origin');
+  }
+  controller.abort();
+  for (const call of fetch.mock.calls)
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
+
 test('erasure jobs encode scope, idempotency keys and signed cursors', async () => {
   const fetch = respond(200, { items: [], next_cursor: null });
   const controller = new AbortController();
