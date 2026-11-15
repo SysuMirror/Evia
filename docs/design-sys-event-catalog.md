@@ -90,11 +90,21 @@
   `internal/ingestion/systemcatalog.go` 加载器（`IsSystemKey`/`LoadSystemCatalog`/`Rule`，
   构造期 fail-closed）、闭集与 schema 编译测试。**不接线采集器**，默认行为逐字节不变，
   此阶段 SDK 上报 `sys.*` 仍按现状被项目目录拒绝。
-- **切片 2（待做）**：采集器 `sys.` 前缀旁路——绕过 release plan 查系统目录规则，保留来源
-  kind 校验与属性 schema 校验，明确信封 `release_revision` 在系统事件上的处理口径，单元与
-  HTTP 集成测试。
-- **切片 3（待做）**：端到端 SDK 上报 → 采集 → Kafka → ClickHouse 落库 → 可查询的真实依赖
-  验证与文档核销。
+- **切片 2（已交付，2026-11-15）**：采集器 `sys.` 前缀旁路——`Collector.WithSystemCatalog`
+  可选装配（nil 时逐字节保持项目计划单路径行为）；系统键跳过 release plan 解析与租约准入，
+  改查 embed 目录规则，仍依次过信封契约、来源 kind（五规则均 browser-only）、属性 JSON Schema、
+  context 与批次预算，拒绝码与普通路径完全一致；`cmd/evia` 启动时加载系统目录，固件损坏即
+  fail-closed 拒绝启动。
+- **切片 3（待做）**：公开配置（`/v1/config`）纳入系统事件使 SDK 真正发送，再做端到端
+  SDK 上报 → 采集 → Kafka → ClickHouse 落库 → 可查询的真实依赖验证与文档核销。
+
+### `release_revision` 口径（切片 2 定稿）
+
+系统事件不绑定任何项目发布，但信封契约要求 `release_revision >= 1`、pipeline 记录校验
+（`record.go`）同样强制该下界、ClickHouse `release_revision UInt64` 非空。因此采集器对系统
+事件**原样保留信封修订值仅作溯源**（SDK 发送时填来源当前项目发布修订），不据此查询项目计划、
+不参与租约准入复核；系统记录经 `systemItems` 显式标记并在准入复核中旁路。该口径不引入新的
+哨兵值，也不放宽 pipeline/CH 的既有不变量。
 
 ## 测试与验收
 
