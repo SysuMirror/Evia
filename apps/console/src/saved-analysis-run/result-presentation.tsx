@@ -1,4 +1,4 @@
-import type { QueryJob } from '@evia/api-client';
+import type { QueryJob, SavedAnalysisTemplate } from '@evia/api-client';
 import { Component, lazy, Suspense, useMemo, type ReactNode } from 'react';
 import {
   Alert,
@@ -45,6 +45,27 @@ const jobLabels: Record<QueryJob['state'], string> = {
   expired: '已过期',
 };
 
+/** Kind-specific result semantics. The row-count line stays generic; only the
+ * explanatory note changes so non-trend kinds no longer show trend-only wording. */
+function savedResultHint(kind: SavedAnalysisTemplate['kind']): string {
+  switch (kind) {
+    case 'trend':
+      return '缺失时间桶未补零，各桶去重数不能相加为整段去重数。';
+    case 'funnel':
+      return '转化率均相对首步计算，步骤按固定顺序排列，未到达的步骤不补零。';
+    case 'retention':
+      return '0 期留存率恒为 1.0；各队列按起始事件所在周期划分，期数受配置上限约束。';
+    case 'segment':
+      return '每个主体按最早分群事件的标量值唯一归组，缺失值归入固定缺失组。';
+    case 'path':
+      return '路径按事件因果序排列并受深度上限约束，事件不足深度的主体不参与统计。';
+    case 'attribution':
+      return '每个转化主体只归因一次；窗口内无触点的转化归入直接来源（__direct__），占比按转化主体数计算。';
+    default:
+      return '该范围内无匹配结果不等同于数值零。';
+  }
+}
+
 export function SavedResultPresentation({
   snapshot,
   compact = false,
@@ -62,6 +83,7 @@ export function SavedResultPresentation({
 }) {
   const result = snapshot.result,
     rows = result?.rows ?? [];
+  const queryKind = snapshot.version.definition.query.kind;
   const columns = result ? savedResultColumns(snapshot, result) : [];
   const metricName = (key: string) =>
     metricInfo(snapshot.version.definition, Number(key.slice(7))).label;
@@ -224,8 +246,8 @@ export function SavedResultPresentation({
               </>
             )}
             <p className="field-help">
-              返回 {rows.length} 行，上限 {snapshot.version.definition.query.limit ?? 200}{' '}
-              行。缺失时间桶未补零，各桶去重数不能相加为整段去重数。
+              返回 {rows.length} 行，上限 {snapshot.version.definition.query.limit ?? 200} 行。
+              {savedResultHint(queryKind)}
             </p>
             <details>
               <summary>原始结果 JSON</summary>
