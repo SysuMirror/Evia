@@ -20,17 +20,18 @@ import (
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type Collector struct {
-	sources    SourceResolver
-	plans      PlanResolver
-	queue      Queue
-	budget     Budget
-	validator  SchemaValidator
-	rejections RejectionSink
-	mu         sync.Mutex
-	cache      map[string]compiledPlan
-	inflight   map[string]*planFlight
-	misses     chan struct{}
-	cacheRules int
+	sources       SourceResolver
+	plans         PlanResolver
+	queue         Queue
+	budget        Budget
+	validator     SchemaValidator
+	rejections    RejectionSink
+	systemCatalog *SystemCatalog
+	mu            sync.Mutex
+	cache         map[string]compiledPlan
+	inflight      map[string]*planFlight
+	misses        chan struct{}
+	cacheRules    int
 }
 type compiledPlan struct {
 	plan    Plan
@@ -59,6 +60,16 @@ func NewCollector(sources SourceResolver, plans PlanResolver, queue Queue, budge
 // optional; without it collection behavior is unchanged.
 func (c *Collector) WithRejectionSink(sink RejectionSink) *Collector {
 	c.rejections = sink
+	return c
+}
+
+// WithSystemCatalog enables the reserved sys.* collection branch. Without it
+// the collector stays byte-identical to the project-plan-only behaviour and
+// sys.* keys are rejected through the normal (pointless) plan lookup. Wiring a
+// catalog makes reserved keys validate against the platform-built rules while
+// reusing the same source, budget, schema and durable-queue guarantees.
+func (c *Collector) WithSystemCatalog(catalog *SystemCatalog) *Collector {
+	c.systemCatalog = catalog
 	return c
 }
 func unavailable(code string) error {
@@ -265,6 +276,9 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 	out := Receipt{BatchID: batch.ID, ReceiptID: ids.New(), Results: make([]ItemResult, len(batch.Events))}
 	records := make([]Record, 0, len(batch.Events))
 	itemIndices := make([]int, 0, len(batch.Events))
+	// systemItems marks records validated against the embedded system catalog;
+	// they have no project release lease and must skip the admission recheck.
+	systemItems := map[int]bool{}
 	retryable := false
 	// Every distinct version is fetched at most once within this batch. Successful
 	// compiled manifests are shared across batches with a bounded staleness TTL.
@@ -318,6 +332,45 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 		}
 		if event.Occurred.After(now.Add(5 * time.Minute)) {
 			reject("EVENT_TIME_IN_FUTURE", false, "occurred_at")
+			out.Results[i] = result
+			continue
+		}
+		if c.systemCatalog != nil && IsSystemKey(event.Key) {
+			rule, systemSchema, found := c.systemCatalog.Rule(event.Key)
+			if !found || rule.Version != event.Version {
+				reject("SCHEMA_NOT_PUBLISHED", false, "schema_version")
+				out.Results[i] = result
+				continue
+			}
+			allowed := false
+			for _, kind := range rule.AllowedSourceKinds {
+				allowed = allowed || kind == source.Source.Kind
+			}
+			if !allowed {
+				reject("SOURCE_KIND_FORBIDDEN", false)
+				out.Results[i] = result
+				continue
+			}
+			properties, e := contract.Decode(event.Properties)
+			if e != nil || systemSchema.Validate(properties) != nil {
+				reject("PROPERTY_SCHEMA_MISMATCH", false, "properties")
+				out.Results[i] = result
+				continue
+			}
+			var eventContext EventContext
+			if e = json.Unmarshal(event.Context, &eventContext); e != nil {
+				reject("INVALID_EVENT_CONTEXT", false, "context")
+				out.Results[i] = result
+				continue
+			}
+			// The envelope revision is kept only as provenance (the pipeline
+			// requires release_revision >= 1): system events never resolve a
+			// project plan and have no release eligibility lease, so the final
+			// admission recheck must skip them via systemItems.
+			records = append(records, Record{ProjectID: source.Source.ProjectID, SourceID: source.Source.ID, SourceKind: source.Source.Kind, Environment: source.Source.Environment, ReceivedAt: now, EventID: event.ID, EventKey: event.Key, SchemaVersion: event.Version, ReleaseRevision: event.Revision, OccurredAt: event.Occurred.UTC(), UID: event.Identity.UID, AnonymousID: event.Identity.AnonymousID, Context: eventContext, ContextJSON: event.Context, PropertiesJSON: event.Properties, SDKName: event.SDK.Name, SDKVersion: event.SDK.Version})
+			systemItems[len(records)-1] = true
+			itemIndices = append(itemIndices, i)
+			result.Status = "accepted"
 			out.Results[i] = result
 			continue
 		}
@@ -419,6 +472,12 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 	}
 	admitted := records[:0]
 	for j, record := range records {
+		// System catalog rules carry no release lease; their eligibility is the
+		// running binary itself, so they bypass the project-plan recheck.
+		if systemItems[j] {
+			admitted = append(admitted, record)
+			continue
+		}
 		if !admittedRevisions[record.ReleaseRevision] {
 			item := &out.Results[itemIndices[j]]
 			item.Status = "rejected"

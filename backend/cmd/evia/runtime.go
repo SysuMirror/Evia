@@ -323,6 +323,14 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		if err != nil {
 			return stageError("collector configuration", err)
 		}
+		// The reserved catalog is embedded at build time; a corrupt catalog is a
+		// build/deployment fault, so fail startup instead of silently rejecting
+		// every reserved sys.* event.
+		systemCatalog, err := ingestion.LoadSystemCatalog()
+		if err != nil {
+			return stageError("system event catalog", err)
+		}
+		collector.WithSystemCatalog(systemCatalog)
 		collector.WithRejectionSink(recorder)
 		collectionAPI, err := control.NewCollectionAPI(boundary, collector)
 		if err != nil {
