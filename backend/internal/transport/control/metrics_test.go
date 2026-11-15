@@ -39,6 +39,7 @@ type metricHTTPService struct {
 	after, environment, key, id string
 	revision, version           int64
 	limit                       int
+	archivedOnly                bool
 	execution                   reporting.MetricExecute
 	items                       []reporting.MetricRecord
 	versions                    []reporting.MetricVersion
@@ -68,9 +69,17 @@ func (f *metricHTTPService) CreateMetric(_ context.Context, actor, project, key 
 	f.key, f.environment = key, in.Environment
 	return metricDraft(), f.call(actor, project)
 }
-func (f *metricHTTPService) ListMetrics(_ context.Context, actor, project, env, after string, limit int) ([]reporting.MetricRecord, error) {
-	f.environment, f.after, f.limit = env, after, limit
+func (f *metricHTTPService) ListMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.MetricRecord, error) {
+	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
 	return f.items, f.call(actor, project)
+}
+func (f *metricHTTPService) ArchiveMetric(_ context.Context, actor, project, id string) (reporting.MetricRecord, error) {
+	f.id = id
+	return metricResource(), f.call(actor, project)
+}
+func (f *metricHTTPService) UnarchiveMetric(_ context.Context, actor, project, id string) (reporting.MetricRecord, error) {
+	f.id = id
+	return metricResource(), f.call(actor, project)
 }
 func (f *metricHTTPService) GetMetric(_ context.Context, actor, project, id string) (reporting.MetricRecord, error) {
 	f.id = id
@@ -142,6 +151,8 @@ func TestMetricHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"POST", metricItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, map[string]string{"Idempotency-Key": "publish-key"}, 201, true},
 		{"GET", metricItem + "/versions/1", "", nil, 200, false},
 		{"POST", metricItem + "/versions/1/queries", metricExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
+		{"POST", metricItem + "/archive", "", nil, 200, true},
+		{"POST", metricItem + "/unarchive", "", nil, 200, true},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			before := f.calls
@@ -173,6 +184,9 @@ func TestMetricHTTPStrictInputs(t *testing.T) {
 		{"duplicate env", "GET", metricBase + "?environment=development&environment=production", "", nil, 400},
 		{"overlong query", "GET", metricBase + "?environment=development&cursor=" + strings.Repeat("x", 8192), "", nil, 400},
 		{"unknown parameter", "GET", metricBase + "?environment=development&search=x", "", nil, 400},
+		{"unknown archive view", "GET", metricBase + "?environment=development&view=bogus", "", nil, 400},
+		{"duplicate archive view", "GET", metricBase + "?environment=development&view=archived&view=active", "", nil, 400},
+		{"item route rejects view", "GET", metricItem + "?view=archived", "", nil, 400},
 		{"invalid query encoding", "GET", metricBase + "?environment=%xx", "", nil, 400},
 		{"analysis limit", "GET", metricBase + "?environment=development&limit=101", "", nil, 400},
 		{"version limit", "GET", metricItem + "/versions?limit=51", "", nil, 400},
@@ -221,7 +235,7 @@ func TestMetricHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{metricBase + "?environment=development&limit=1", "metrics:" + userID + ":" + projectID + ":development", metricID, false},
+		{metricBase + "?environment=development&limit=1", "metrics:" + userID + ":" + projectID + ":development:active", metricID, false},
 		{metricItem + "/versions?limit=1", "metric_versions:" + userID + ":" + projectID + ":" + metricID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -256,6 +270,60 @@ func TestMetricHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 				t.Fatal("invalid signed position reached service")
 			}
 		}
+	}
+}
+
+func TestMetricHTTPArchiveViewSelector(t *testing.T) {
+	f := &metricHTTPService{items: []reporting.MetricRecord{metricResource(), metricResource()}}
+	h, codec := metricHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{metricBase + "?environment=development", false},
+		{metricBase + "?environment=development&view=active", false},
+		{metricBase + "?environment=development&view=archived", true},
+	} {
+		f.archivedOnly = !tc.want
+		catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
+		if f.archivedOnly != tc.want {
+			t.Fatalf("archivedOnly not forwarded for %s: got %v", tc.path, f.archivedOnly)
+		}
+	}
+	for _, path := range []string{
+		metricBase + "?environment=development&view=bogus",
+		metricBase + "?environment=development&view=archived&view=active",
+		metricItem + "?view=archived",
+	} {
+		before := f.calls
+		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
+		if f.calls != before {
+			t.Fatal("invalid view reached service")
+		}
+		if path == metricItem+"?view=archived" && out["code"] != "INVALID_QUERY" {
+			t.Fatal("item route must keep the strict allowlist", out)
+		}
+		if strings.Contains(path, "bogus") && out["code"] != "INVALID_ARCHIVE_VIEW" {
+			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
+		}
+	}
+	activeScope := "metrics:" + userID + ":" + projectID + ":development:active"
+	archivedScope := "metrics:" + userID + ":" + projectID + ":development:archived"
+	archivedPage := catalogStatus(t, catalogRequest(h, "GET", metricBase+"?environment=development&view=archived&limit=1", "", nil), 200)
+	next, ok := archivedPage["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing archived continuation")
+	}
+	if decoded, e := codec.Decode(archivedScope, next); e != nil || decoded != metricID {
+		t.Fatal("archived cursor bound to wrong scope", decoded, e)
+	}
+	before := f.calls
+	bad := catalogStatus(t, catalogRequest(h, "GET", metricBase+"?environment=development&cursor="+url.QueryEscape(next), "", nil), 400)
+	if bad["code"] != "INVALID_CURSOR" || f.calls != before {
+		t.Fatal("cross-view cursor reached service", bad)
+	}
+	if _, e := codec.Decode(activeScope, next); e == nil {
+		t.Fatal("archived cursor decoded under the active scope")
 	}
 }
 func TestMetricHTTPAuthRolesAndSafeFailures(t *testing.T) {
@@ -396,6 +464,8 @@ func TestMetricHTTPAuthenticationAndFailuresOnEveryRoute(t *testing.T) {
 		{"POST", metricItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`},
 		{"GET", metricItem + "/versions/1", ""},
 		{"POST", metricItem + "/versions/1/queries", metricExecuteBody},
+		{"POST", metricItem + "/archive", ""},
+		{"POST", metricItem + "/unarchive", ""},
 	} {
 		t.Run(route.method+route.path, func(t *testing.T) {
 			f := &metricHTTPService{}
@@ -479,6 +549,8 @@ func TestMetricHTTPRegisteredRoutesRequireExactMachinePermission(t *testing.T) {
 		{"POST", metricItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, access.PermissionMetricsPublish, 201},
 		{"GET", metricItem + "/versions/1", "", access.PermissionMetricsRead, 200},
 		{"POST", metricItem + "/versions/1/queries", metricExecuteBody, access.PermissionMetricsRun, 202},
+		{"POST", metricItem + "/archive", "", access.PermissionMetricsWrite, 200},
+		{"POST", metricItem + "/unarchive", "", access.PermissionMetricsWrite, 200},
 	} {
 		t.Run(route.method+route.path, func(t *testing.T) {
 			f := &metricHTTPService{}

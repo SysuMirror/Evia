@@ -10,8 +10,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -258,11 +260,11 @@ func TestMetricAuthorizationTypesAndAtomicRollback(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	page, e := f.s.ListMetrics(ctx, f.viewer, f.project, "staging", "", 101)
+	page, e := f.s.ListMetrics(ctx, f.viewer, f.project, "staging", "", 101, false)
 	if e != nil || len(page) != 1 || page[0].ID != staging.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
-	page, e = f.s.ListMetrics(ctx, f.viewer, f.project, "development", "", 101)
+	page, e = f.s.ListMetrics(ctx, f.viewer, f.project, "development", "", 101, false)
 	if e != nil || len(page) != 1 || page[0].ID != d.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
@@ -383,5 +385,130 @@ func TestMetricDefinitionByteBoundary(t *testing.T) {
 	faultCode(t, e, "BODY_TOO_LARGE")
 	if _, e = f.s.Pool.Exec(ctx, `UPDATE metrics SET definition=json_build_object('title',title,'description',repeat('x',131072),'event_versions',definition->'event_versions','aggregation',definition->'aggregation') WHERE metric_id=$1`, d.ID); e == nil {
 		t.Fatal("database accepted oversized definition")
+	}
+}
+
+func TestMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
+	f, d := metricFixture(t)
+	ctx := context.Background()
+	validation := metricValidate(t, f, d)
+	if _, e := f.s.PublishMetric(ctx, f.owner, f.project, d.ID, ids.New(), metricPublish(d, validation)); e != nil {
+		t.Fatal(e)
+	}
+	keep, e := f.s.CreateMetric(ctx, f.owner, f.project, "archive-keep", reporting.MetricCreate{Environment: "development", Definition: metricDefinition()})
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	// A read-only viewer cannot change lifecycle state.
+	if _, e = f.s.ArchiveMetric(ctx, f.viewer, f.project, d.ID); e == nil || faultPublicCode(e) != "PROJECT_FORBIDDEN" {
+		t.Fatalf("viewer archive must be forbidden: %v", e)
+	}
+
+	archived, e := f.s.ArchiveMetric(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if archived.ArchivedAt == nil || archived.ArchivedBy != f.owner {
+		t.Fatalf("archive marker missing: %+v", archived)
+	}
+	if _, e = f.s.ArchiveMetric(ctx, f.owner, f.project, d.ID); e == nil || faultPublicCode(e) != "METRIC_ALREADY_ARCHIVED" {
+		t.Fatalf("re-archive must conflict: %v", e)
+	}
+
+	// Default listing hides archived metrics; the archived stream is opt-in.
+	listed, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, item := range listed {
+		if item.ID == d.ID {
+			t.Fatal("archived metric must leave the default listing")
+		}
+		if item.ArchivedAt != nil {
+			t.Fatal("active metric must not carry an archive marker")
+		}
+	}
+	if len(listed) != 1 || listed[0].ID != keep.ID {
+		t.Fatalf("listing must retain only the active metric: %+v", listed)
+	}
+	archivedList, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(archivedList) != 1 || archivedList[0].ID != d.ID || archivedList[0].ArchivedAt == nil {
+		t.Fatalf("archived listing must return only the archived metric with marker: %+v", archivedList)
+	}
+
+	// Reads by ID, draft and immutable version stay available with marker.
+	got, e := f.s.GetMetric(ctx, f.owner, f.project, d.ID)
+	if e != nil || got.ArchivedAt == nil {
+		t.Fatalf("archived metric must remain readable by ID: %+v %v", got, e)
+	}
+	gotDraft, e := f.s.GetMetricDraft(ctx, f.owner, f.project, d.ID)
+	if e != nil || gotDraft.ArchivedAt == nil {
+		t.Fatalf("archived draft must remain readable with marker: %+v %v", gotDraft, e)
+	}
+	if _, e = f.s.GetMetricVersion(ctx, f.owner, f.project, d.ID, 1); e != nil {
+		t.Fatalf("immutable version must stay readable: %v", e)
+	}
+
+	// Every mutating path fails closed while archived.
+	if _, e = f.s.SaveMetricDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, metricDefinition()); e == nil || faultPublicCode(e) != "METRIC_ARCHIVED" {
+		t.Fatalf("draft save must reject archived metric: %v", e)
+	}
+	if _, e = f.s.MetricValidationSnapshot(ctx, f.owner, f.project, d.ID, reporting.MetricValidate{DraftRevision: d.DraftRevision}); e == nil || faultPublicCode(e) != "METRIC_ARCHIVED" {
+		t.Fatalf("validation must reject archived metric: %v", e)
+	}
+	if _, e = f.s.PublishMetric(ctx, f.owner, f.project, d.ID, ids.New(), metricPublish(d, validation)); e == nil || faultPublicCode(e) != "METRIC_ARCHIVED" {
+		t.Fatalf("publish must reject archived metric: %v", e)
+	}
+	from := archived.ArchivedAt.UTC()
+	execute := reporting.MetricExecute{TimeRange: analysis.TimeRange{From: from, To: from.Add(time.Hour)}, Timezone: "UTC", Interval: "hour"}
+	if _, e = f.s.EnqueueMetricVersion(ctx, f.owner, f.project, d.ID, 1, ids.New(), execute); e == nil || faultPublicCode(e) != "METRIC_ARCHIVED" {
+		t.Fatalf("run enqueue must reject archived metric: %v", e)
+	}
+
+	// Unknown id resolves to not-found, not an archive conflict.
+	if _, e = f.s.ArchiveMetric(ctx, f.owner, f.project, ids.New()); e == nil || faultPublicCode(e) != "METRIC_NOT_FOUND" {
+		t.Fatalf("unknown metric must be not-found: %v", e)
+	}
+
+	// Restoring an active metric conflicts; restoring the archived one clears markers.
+	if _, e = f.s.UnarchiveMetric(ctx, f.owner, f.project, keep.ID); e == nil || faultPublicCode(e) != "METRIC_NOT_ARCHIVED" {
+		t.Fatalf("unarchiving an active metric must conflict: %v", e)
+	}
+	restored, e := f.s.UnarchiveMetric(ctx, f.owner, f.project, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
+		t.Fatalf("restore must clear archive markers: %+v", restored)
+	}
+	listedAgain, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	if e != nil || len(listedAgain) != 2 {
+		t.Fatalf("restored metric must rejoin the listing: %d %v", len(listedAgain), e)
+	}
+	restoredArchive, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	if e != nil || len(restoredArchive) != 0 {
+		t.Fatalf("restored metric must leave the archived stream: %d %v", len(restoredArchive), e)
+	}
+
+	// Both lifecycle transitions are audited after the existing create/publish entries.
+	var actions []string
+	rows, e := f.s.Pool.Query(ctx, `SELECT action FROM audit_entries WHERE resource_key=$1 AND action IN ('metric.archived','metric.unarchived') ORDER BY id`, d.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var action string
+		if e = rows.Scan(&action); e != nil {
+			t.Fatal(e)
+		}
+		actions = append(actions, action)
+	}
+	if len(actions) != 2 || actions[0] != "metric.archived" || actions[1] != "metric.unarchived" {
+		t.Fatalf("lifecycle audit trail wrong: %v", actions)
 	}
 }

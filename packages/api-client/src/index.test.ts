@@ -1015,6 +1015,39 @@ test('metric reads encode environment scope and write calls pin revisions and id
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('metric archive view encoding and lifecycle calls carry CSRF without body or key', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  await api.listMetrics(
+    'p/q',
+    { environment: 'development', view: 'archived', limit: 20 },
+    controller.signal,
+  );
+  await api.listMetrics('p/q', { environment: 'development', view: 'active' }, controller.signal);
+  await api.archiveMetric('p/q', 'm/1', 'csrf', controller.signal);
+  await api.unarchiveMetric('p/q', 'm/1', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/metrics?environment=development&limit=20&view=archived',
+      '/api/v1/projects/p%2Fq/metrics?environment=development&view=active',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/archive',
+      '/api/v1/projects/p%2Fq/metrics/m%2F1/unarchive',
+    ],
+  );
+  for (const index of [2, 3]) {
+    const init = fetch.mock.calls[index]!.arguments[1] as RequestInit;
+    assert.equal(init.method, 'POST');
+    assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+    assert.equal((init.headers as Headers).has('Idempotency-Key'), false);
+    assert.equal(init.body, undefined);
+    assert.equal(init.credentials, 'same-origin');
+  }
+  controller.abort();
+  for (const call of fetch.mock.calls)
+    assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
+});
+
 test('erasure jobs encode scope, idempotency keys and signed cursors', async () => {
   const fetch = respond(200, { items: [], next_cursor: null });
   const controller = new AbortController();

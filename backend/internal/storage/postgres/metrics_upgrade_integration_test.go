@@ -51,10 +51,10 @@ func TestMetricUpgradePreservesExistingImmutableFactsJobsAndGrants(t *testing.T)
 		t.Fatal(e)
 	}
 	for _, entry := range entries {
-		// The baseline is the pre-metric (012) schema. Current saved-analysis
-		// read code selects the 030 archive marker columns, which depend only on
-		// saved_analyses/accounts already present here, so include that additive
-		// migration in the baseline rather than waiting for the upgrade pass.
+		// The baseline is the pre-metric (012) schema, so the metrics table does
+		// not exist yet and 031 (metric archive) must wait for the Migrate pass.
+		// Current saved-analysis read code selects the 030 archive columns, whose
+		// table already exists here, so 030 alone is pulled into the baseline.
 		if entry.Name() >= "012_metrics.sql" && entry.Name() != "030_saved_analysis_archive.sql" {
 			continue
 		}
@@ -121,7 +121,7 @@ func TestMetricUpgradePreservesExistingImmutableFactsJobsAndGrants(t *testing.T)
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = s.ListMetrics(access.WithIdentity(ctx, identity), m.Principal.ID, f.project, "development", "", 10)
+	_, e = s.ListMetrics(access.WithIdentity(ctx, identity), m.Principal.ID, f.project, "development", "", 10, false)
 	machineForbidden(t, e)
 	metric, e := s.CreateMetric(ctx, f.owner, f.project, "after-upgrade", reporting.MetricCreate{Environment: "development", Definition: metricDefinition()})
 	if e != nil {

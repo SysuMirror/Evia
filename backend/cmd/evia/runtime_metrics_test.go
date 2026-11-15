@@ -27,8 +27,8 @@ type runtimeMetricStore struct {
 	reads int
 }
 
-func (s *runtimeMetricStore) ListMetrics(_ context.Context, actor, project, environment, after string, limit int) ([]reporting.MetricRecord, error) {
-	if actor != runtimeActor || project != runtimeProject || environment != "development" || after != "" || limit < 1 {
+func (s *runtimeMetricStore) ListMetrics(_ context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.MetricRecord, error) {
+	if actor != runtimeActor || project != runtimeProject || environment != "development" || after != "" || limit < 1 || archivedOnly {
 		panic("metric configuration lost runtime scope")
 	}
 	s.reads++
