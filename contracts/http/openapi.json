@@ -20587,7 +20587,10 @@
               "funnel_steps",
               "event_keys",
               "all_events",
-              "retention_steps"
+              "retention_steps",
+              "segment_steps",
+              "path_steps",
+              "attribution_steps"
             ]
           },
           "unfixed_event_keys": {

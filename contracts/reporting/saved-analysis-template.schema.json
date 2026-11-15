@@ -9,7 +9,10 @@
       "enum": [
         "trend",
         "funnel",
-        "retention"
+        "retention",
+        "segment",
+        "path",
+        "attribution"
       ]
     },
     "event_versions": {
@@ -38,6 +41,15 @@
     },
     "retention": {
       "$ref": "../query/query-request.schema.json#/properties/retention"
+    },
+    "segment": {
+      "$ref": "../query/query-request.schema.json#/properties/segment"
+    },
+    "path": {
+      "$ref": "../query/query-request.schema.json#/properties/path"
+    },
+    "attribution": {
+      "$ref": "../query/query-request.schema.json#/properties/attribution"
     }
   },
   "required": [
@@ -140,6 +152,183 @@
             {
               "required": [
                 "funnel"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "segment"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "segment",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
+              ]
+            },
+            {
+              "required": [
+                "retention"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "attribution"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "path"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "path",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
+              ]
+            },
+            {
+              "required": [
+                "retention"
+              ]
+            },
+            {
+              "required": [
+                "segment"
+              ]
+            },
+            {
+              "required": [
+                "attribution"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "attribution"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "attribution",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
+              ]
+            },
+            {
+              "required": [
+                "retention"
+              ]
+            },
+            {
+              "required": [
+                "segment"
+              ]
+            },
+            {
+              "required": [
+                "path"
               ]
             }
           ]

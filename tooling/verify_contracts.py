@@ -244,6 +244,51 @@ reject_saved("SavedAnalysisDefinition", "retention bad granularity", retention_d
 reject_saved("SavedAnalysisDefinition", "retention unbounded periods", retention_definition, ["query", "retention", "periods"], 13)
 reject_saved("SavedAnalysisDefinition", "retention unpinned start", retention_definition, ["query", "retention", "start_event", "schema_version"], 0)
 
+segment_definition = copy.deepcopy(saved_definition)
+segment_definition["query"] = {
+    "kind": "segment", "subject": "uid",
+    "segment": {"event": {"event_key": "sign_up", "schema_version": 1},
+                "field": {"kind": "property", "event_key": "sign_up", "schema_version": 1, "key": "plan"}},
+}
+segment_definition["visualization"]["kind"] = "table"
+validator("SavedAnalysisDefinition").validate(segment_definition)
+validator("SavedAnalysisTemplate").validate(segment_definition["query"])
+reject_saved("SavedAnalysisDefinition", "segment event_versions", segment_definition, ["query", "event_versions"], saved_definition["query"]["event_versions"])
+reject_saved("SavedAnalysisDefinition", "segment without subject", segment_definition, ["query", "subject"], None)
+reject_saved("SavedAnalysisDefinition", "segment missing block", segment_definition, ["query", "segment"], None)
+reject_saved("SavedAnalysisDefinition", "segment unpinned event", segment_definition, ["query", "segment", "event", "schema_version"], 0)
+
+path_definition = copy.deepcopy(saved_definition)
+path_definition["query"] = {
+    "kind": "path", "subject": "uid",
+    "path": {"depth": 3, "start_event": {"event_key": "open", "schema_version": 1}},
+}
+path_definition["visualization"]["kind"] = "table"
+validator("SavedAnalysisDefinition").validate(path_definition)
+validator("SavedAnalysisTemplate").validate(path_definition["query"])
+unpinned_path = copy.deepcopy(path_definition)
+del unpinned_path["query"]["path"]["start_event"]
+validator("SavedAnalysisTemplate").validate(unpinned_path["query"])
+reject_saved("SavedAnalysisDefinition", "path bad depth", path_definition, ["query", "path", "depth"], 1)
+reject_saved("SavedAnalysisDefinition", "path unpinned start", path_definition, ["query", "path", "start_event", "schema_version"], 0)
+reject_saved("SavedAnalysisDefinition", "path event_versions", path_definition, ["query", "event_versions"], saved_definition["query"]["event_versions"])
+
+attribution_definition = copy.deepcopy(saved_definition)
+attribution_definition["query"] = {
+    "kind": "attribution", "subject": "uid",
+    "attribution": {
+        "conversion": {"event_key": "buy", "schema_version": 1},
+        "touchpoints": [{"event_key": "ad_click", "schema_version": 1}],
+        "window_seconds": 86400, "model": "last_touch",
+    },
+}
+attribution_definition["visualization"]["kind"] = "table"
+validator("SavedAnalysisDefinition").validate(attribution_definition)
+validator("SavedAnalysisTemplate").validate(attribution_definition["query"])
+reject_saved("SavedAnalysisDefinition", "attribution bad window", attribution_definition, ["query", "attribution", "window_seconds"], 0)
+reject_saved("SavedAnalysisDefinition", "attribution unknown model", attribution_definition, ["query", "attribution", "model"], "position_based")
+reject_saved("SavedAnalysisDefinition", "attribution event_versions", attribution_definition, ["query", "event_versions"], saved_definition["query"]["event_versions"])
+
 print(
     f"OpenAPI and JSON Schemas verified; {len(fixtures)} shared fixtures, "
     f"{len(journey['items'])} journey events, {len(system['events'])} system "

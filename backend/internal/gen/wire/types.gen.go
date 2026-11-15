@@ -1366,6 +1366,9 @@ type SavedAnalysisTemplate struct {
 	Funnel        json.RawMessage `json:"funnel,omitempty"`
 	Limit         json.RawMessage `json:"limit,omitempty"`
 	Retention     json.RawMessage `json:"retention,omitempty"`
+	Segment       json.RawMessage `json:"segment,omitempty"`
+	Path          json.RawMessage `json:"path,omitempty"`
+	Attribution   json.RawMessage `json:"attribution,omitempty"`
 }
 
 type SavedAnalysisUpdate struct {

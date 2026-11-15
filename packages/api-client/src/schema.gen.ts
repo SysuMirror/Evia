@@ -2127,7 +2127,7 @@ export interface components {
             project_id: string;
             environment: string;
             /** @enum {string} */
-            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events" | "retention_steps";
+            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events" | "retention_steps" | "segment_steps" | "path_steps" | "attribution_steps";
             unfixed_event_keys: string[];
             event_versions: components["schemas"]["QueryDependency"][];
             metric?: components["schemas"]["MetricDependency"];
@@ -3397,10 +3397,29 @@ export interface components {
             granularity: "day" | "week";
             periods: number;
         };
+        segment: {
+            event: components["schemas"]["retention_step"];
+            field: components["schemas"]["segment_field"];
+        };
+        path: {
+            start_event?: components["schemas"]["retention_step"];
+            depth: number;
+            /** @description When true, fold consecutive identical event keys into one node before start-pin and depth extraction. Defaults to false so existing path results stay byte-stable. */
+            collapse_repeats?: boolean;
+        };
+        attribution: {
+            conversion: components["schemas"]["retention_step"];
+            touchpoints: components["schemas"]["retention_step"][];
+            window_seconds: number;
+            /** @description Half-life in seconds used only by the time_decay model; required when model is time_decay, ignored otherwise. */
+            decay_half_life_seconds?: number;
+            /** @enum {string} */
+            model: "last_touch" | "first_touch" | "linear" | "time_decay";
+        };
         /** @description Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference. */
         "saved-analysis-template.schema": {
             /** @enum {string} */
-            kind: "trend" | "funnel" | "retention";
+            kind: "trend" | "funnel" | "retention" | "segment" | "path" | "attribution";
             event_versions?: components["schemas"]["event_versions"];
             filter?: components["schemas"]["filter"];
             subject?: components["schemas"]["subject"];
@@ -3410,7 +3429,10 @@ export interface components {
             funnel?: components["schemas"]["funnel"];
             limit?: components["schemas"]["limit"];
             retention?: components["schemas"]["retention"];
-        } & (unknown & unknown & unknown);
+            segment?: components["schemas"]["segment"];
+            path?: components["schemas"]["path"];
+            attribution?: components["schemas"]["attribution"];
+        } & (unknown & unknown & unknown & unknown & unknown & unknown);
         time_range: {
             /** Format: date-time */
             from: string;
