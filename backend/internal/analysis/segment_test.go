@@ -205,11 +205,50 @@ func TestSegmentPlannerEmitsBoundedSubjectPull(t *testing.T) {
 	}
 }
 
-func TestSegmentRejectedFromSavedTemplates(t *testing.T) {
-	template := Template{Kind: "segment", Subject: "uid"}
-	var problem *fault.Error
-	e := ValidateTemplate(&template)
-	if e == nil || !errors.As(e, &problem) || problem.Code != "UNSUPPORTED_QUERY_KIND" {
-		t.Fatalf("saved analyses must reject segment: %v", e)
+func segmentTemplate() Template {
+	return Template{
+		Kind:    "segment",
+		Subject: "uid",
+		Segment: &Segment{
+			Event: Step{EventKey: "sign_up", SchemaVersion: 1},
+			Field: Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "plan"},
+		},
+	}
+}
+
+func TestSegmentSavedTemplateValidatesPinsAndBinds(t *testing.T) {
+	template := segmentTemplate()
+	if e := ValidateTemplate(&template); e != nil {
+		t.Fatalf("segment template must be reusable: %v", e)
+	}
+	if template.Segment == nil || template.Segment.Field.ResolvedType != "" || len(template.EventVersions) != 0 {
+		t.Fatalf("segment projection changed: %+v", template)
+	}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 7)}, "UTC")
+	if e != nil || bound.Kind != "segment" || bound.Segment == nil {
+		t.Fatalf("segment bind failed: %v", e)
+	}
+	for _, tc := range []struct {
+		name, code string
+		change     func(*Template)
+	}{
+		{"top level event versions", "INVALID_EVENT_SELECTION", func(t *Template) {
+			t.EventVersions = []EventVersion{{EventKey: "sign_up", SchemaVersion: 1}}
+		}},
+		{"missing segment block", "INVALID_SEGMENT", func(t *Template) { t.Segment = nil }},
+		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
+		{"unpinned segment event", "INVALID_SEGMENT_EVENT", func(t *Template) { t.Segment.Event.SchemaVersion = 0 }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := segmentTemplate()
+			tc.change(&invalid)
+			var problem *fault.Error
+			err := ValidateTemplate(&invalid)
+			if err == nil || !errors.As(err, &problem) || problem.Code != tc.code {
+				t.Fatalf("want %s, got %v", tc.code, err)
+			}
+		})
 	}
 }

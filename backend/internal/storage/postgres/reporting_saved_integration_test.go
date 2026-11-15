@@ -496,3 +496,100 @@ func TestSavedAnalysisRetentionPersistsAndPinsBoundarySteps(t *testing.T) {
 		t.Fatal(version)
 	}
 }
+
+func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	for _, key := range []string{"sign_up", "open", "buy", "ad_click"} {
+		draft := f.event(t, key)
+		if _, e := f.svc.CreateRelease(ctx, f.owner, f.project, "release-"+key, releaseInput(key, draft.Revision)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	cases := []struct {
+		name       string
+		mode       string
+		pinCount   int
+		definition reporting.SavedAnalysisDefinition
+	}{
+		{
+			name:     "segment",
+			mode:     "segment_steps",
+			pinCount: 1,
+			definition: reporting.SavedAnalysisDefinition{
+				Title: "Plan segments",
+				Query: analysis.Template{
+					Kind: "segment", Subject: "uid",
+					Segment: &analysis.Segment{
+						Event: analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
+						Field: analysis.Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "lesson_id"},
+					},
+				},
+				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
+			},
+		},
+		{
+			name:     "pinned path",
+			mode:     "path_steps",
+			pinCount: 1,
+			definition: reporting.SavedAnalysisDefinition{
+				Title: "Onboarding paths",
+				Query: analysis.Template{
+					Kind: "path", Subject: "uid",
+					Path: &analysis.Path{Depth: 3, StartEvent: &analysis.Step{EventKey: "open", SchemaVersion: 1}},
+				},
+				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
+			},
+		},
+		{
+			name:     "unpinned path",
+			mode:     "all_events",
+			pinCount: 0,
+			definition: reporting.SavedAnalysisDefinition{
+				Title: "Full paths",
+				Query: analysis.Template{
+					Kind: "path", Subject: "uid",
+					Path: &analysis.Path{Depth: 3},
+				},
+				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
+			},
+		},
+		{
+			name:     "attribution",
+			mode:     "attribution_steps",
+			pinCount: 2,
+			definition: reporting.SavedAnalysisDefinition{
+				Title: "Conversion attribution",
+				Query: analysis.Template{
+					Kind: "attribution", Subject: "uid",
+					Attribution: &analysis.Attribution{
+						Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
+						Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}},
+						WindowSeconds: 86400,
+						Model:         "last_touch",
+					},
+				},
+				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			draft, e := f.s.CreateSavedAnalysis(ctx, f.owner, f.project, "advanced-create-"+tc.name, reporting.SavedAnalysisCreate{Environment: "development", Definition: tc.definition})
+			if e != nil {
+				t.Fatalf("%s must pass the widened kind check: %v", tc.name, e)
+			}
+			if draft.Kind != tc.definition.Query.Kind {
+				t.Fatalf("stored kind = %q", draft.Kind)
+			}
+			validation := savedValidate(t, f, draft)
+			if !validation.Valid || validation.Dependencies.SelectionMode != tc.mode || len(validation.Dependencies.EventVersions) != tc.pinCount {
+				t.Fatalf("%s manifest wrong: %+v", tc.name, validation.Dependencies)
+			}
+			version, e := f.s.PublishSavedAnalysis(ctx, f.owner, f.project, draft.ID, "advanced-publish-"+tc.name, savedPublish(draft, validation))
+			if e != nil || version.Version != 1 {
+				t.Fatalf("%s publish failed: %v", tc.name, e)
+			}
+		})
+	}
+}

@@ -603,11 +603,53 @@ func TestTimeDecayPlannerEmitsCreditColumn(t *testing.T) {
 	}
 }
 
-func TestAttributionRejectedFromSavedTemplates(t *testing.T) {
-	template := Template{Kind: "attribution", Subject: "uid"}
-	var problem *fault.Error
-	e := ValidateTemplate(&template)
-	if e == nil || !errors.As(e, &problem) || problem.Code != "UNSUPPORTED_QUERY_KIND" {
-		t.Fatalf("saved analyses must reject attribution: %v", e)
+func attributionTemplate() Template {
+	return Template{
+		Kind:    "attribution",
+		Subject: "uid",
+		Attribution: &Attribution{
+			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}},
+			WindowSeconds: 86400,
+			Model:         "last_touch",
+		},
+	}
+}
+
+func TestAttributionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
+	template := attributionTemplate()
+	if e := ValidateTemplate(&template); e != nil {
+		t.Fatalf("attribution template must be reusable: %v", e)
+	}
+	if template.Attribution == nil || len(template.EventVersions) != 0 {
+		t.Fatalf("attribution projection changed: %+v", template)
+	}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 7)}, "UTC")
+	if e != nil || bound.Kind != "attribution" || bound.Attribution == nil {
+		t.Fatalf("attribution bind failed: %v", e)
+	}
+	for _, tc := range []struct {
+		name, code string
+		change     func(*Template)
+	}{
+		{"top level event versions", "INVALID_EVENT_SELECTION", func(t *Template) {
+			t.EventVersions = []EventVersion{{EventKey: "buy", SchemaVersion: 1}}
+		}},
+		{"missing attribution block", "INVALID_ATTRIBUTION", func(t *Template) { t.Attribution = nil }},
+		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
+		{"window out of range", "INVALID_ATTRIBUTION_WINDOW", func(t *Template) { t.Attribution.WindowSeconds = 0 }},
+		{"unknown model", "INVALID_ATTRIBUTION_MODEL", func(t *Template) { t.Attribution.Model = "position_based" }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := attributionTemplate()
+			tc.change(&invalid)
+			var problem *fault.Error
+			err := ValidateTemplate(&invalid)
+			if err == nil || !errors.As(err, &problem) || problem.Code != tc.code {
+				t.Fatalf("want %s, got %v", tc.code, err)
+			}
+		})
 	}
 }

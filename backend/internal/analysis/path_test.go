@@ -233,12 +233,54 @@ func TestPathPlannerEmitsBoundedSubjectPull(t *testing.T) {
 	}
 }
 
-func TestPathRejectedFromSavedTemplates(t *testing.T) {
-	template := Template{Kind: "path", Subject: "uid"}
-	var problem *fault.Error
-	e := ValidateTemplate(&template)
-	if e == nil || !errors.As(e, &problem) || problem.Code != "UNSUPPORTED_QUERY_KIND" {
-		t.Fatalf("saved analyses must reject path: %v", e)
+func pathTemplate(start *Step) Template {
+	return Template{
+		Kind:    "path",
+		Subject: "uid",
+		Path:    &Path{Depth: 3, StartEvent: start},
+	}
+}
+
+func TestPathSavedTemplateValidatesPinsAndBinds(t *testing.T) {
+	for _, hasStart := range []bool{false, true} {
+		var start *Step
+		if hasStart {
+			start = &Step{EventKey: "open", SchemaVersion: 1}
+		}
+		template := pathTemplate(start)
+		if e := ValidateTemplate(&template); e != nil {
+			t.Fatalf("path template (start=%t) must be reusable: %v", hasStart, e)
+		}
+		from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+		bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 7)}, "UTC")
+		if e != nil || bound.Kind != "path" || bound.Path == nil || bound.Path.Depth != 3 {
+			t.Fatalf("path bind failed (start=%t): %v", hasStart, e)
+		}
+	}
+	for _, tc := range []struct {
+		name, code string
+		change     func(*Template)
+	}{
+		{"top level event versions", "INVALID_EVENT_SELECTION", func(t *Template) {
+			t.EventVersions = []EventVersion{{EventKey: "open", SchemaVersion: 1}}
+		}},
+		{"missing path block", "INVALID_PATH", func(t *Template) { t.Path = nil }},
+		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
+		{"depth out of range", "INVALID_PATH_DEPTH", func(t *Template) { t.Path.Depth = 1 }},
+		{"unpinned start event", "INVALID_PATH_START_EVENT", func(t *Template) {
+			t.Path.StartEvent = &Step{EventKey: "open", SchemaVersion: 0}
+		}},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := pathTemplate(nil)
+			tc.change(&invalid)
+			var problem *fault.Error
+			err := ValidateTemplate(&invalid)
+			if err == nil || !errors.As(err, &problem) || problem.Code != tc.code {
+				t.Fatalf("want %s, got %v", tc.code, err)
+			}
+		})
 	}
 }
 

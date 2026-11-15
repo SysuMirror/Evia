@@ -37,6 +37,29 @@ func savedSnapshot(t *testing.T, definition SavedAnalysisDefinition) SavedAnalys
 			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
 		}
 	}
+	if normalized.Query.Kind == "segment" {
+		mode = "segment_steps"
+		selected = nil
+		step := normalized.Query.Segment.Event
+		selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
+	}
+	if normalized.Query.Kind == "path" {
+		selected = nil
+		if normalized.Query.Path.StartEvent != nil {
+			mode = "path_steps"
+			step := *normalized.Query.Path.StartEvent
+			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
+		} else {
+			mode = "all_events"
+		}
+	}
+	if normalized.Query.Kind == "attribution" {
+		mode = "attribution_steps"
+		selected = nil
+		for _, step := range append([]analysis.Step{normalized.Query.Attribution.Conversion}, normalized.Query.Attribution.Touchpoints...) {
+			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
+		}
+	}
 	dependencies := []Dependency{}
 	seen := map[analysis.EventVersion]bool{}
 	for _, version := range selected {
@@ -286,6 +309,144 @@ func TestSavedValidationRetentionPinsBoundarySteps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			broken := savedSnapshot(t, retentionSavedDefinition())
+			tc.mutate(&broken)
+			_, err := BuildSavedAnalysisValidation(broken)
+			savedErrorCode(t, err, "INVALID_ANALYSIS_DEPENDENCIES")
+		})
+	}
+}
+
+func segmentSavedDefinition() SavedAnalysisDefinition {
+	return SavedAnalysisDefinition{
+		Title: "Plan segments",
+		Query: analysis.Template{
+			Kind:    "segment",
+			Subject: "uid",
+			Segment: &analysis.Segment{
+				Event: analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
+				Field: analysis.Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "plan"},
+			},
+		},
+		Visualization: SavedAnalysisVisualization{Kind: "table"},
+	}
+}
+
+func TestSavedValidationSegmentPinsEvent(t *testing.T) {
+	snapshot := savedSnapshot(t, segmentSavedDefinition())
+	out, e := BuildSavedAnalysisValidation(snapshot)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !out.Valid || out.Dependencies.SelectionMode != "segment_steps" || len(out.Dependencies.EventVersions) != 1 {
+		t.Fatalf("segment dependency wrong: %+v", out.Dependencies)
+	}
+	if out.Dependencies.EventVersions[0].EventKey != "sign_up" {
+		t.Fatalf("segment pin lost: %+v", out.Dependencies.EventVersions[0])
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*SavedAnalysisSnapshot)
+	}{
+		{"wrong selection mode", func(s *SavedAnalysisSnapshot) { s.Dependencies.SelectionMode = "event_versions" }},
+		{"malformed digest", func(s *SavedAnalysisSnapshot) {
+			s.Dependencies.EventVersions[0].DefinitionHash = "not-a-hex-digest"
+		}},
+		{"unfixed event present", func(s *SavedAnalysisSnapshot) { s.Dependencies.UnfixedEventKeys = []string{"sign_up"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			broken := savedSnapshot(t, segmentSavedDefinition())
+			tc.mutate(&broken)
+			_, err := BuildSavedAnalysisValidation(broken)
+			savedErrorCode(t, err, "INVALID_ANALYSIS_DEPENDENCIES")
+		})
+	}
+}
+
+func pathSavedDefinition(start *analysis.Step) SavedAnalysisDefinition {
+	return SavedAnalysisDefinition{
+		Title: "Onboarding paths",
+		Query: analysis.Template{
+			Kind:    "path",
+			Subject: "uid",
+			Path:    &analysis.Path{Depth: 3, StartEvent: start},
+		},
+		Visualization: SavedAnalysisVisualization{Kind: "table"},
+	}
+}
+
+func TestSavedValidationPathPinsStartOrReadsAllEvents(t *testing.T) {
+	// With a pinned start event the manifest carries one path_steps dependency.
+	started := savedSnapshot(t, pathSavedDefinition(&analysis.Step{EventKey: "open", SchemaVersion: 1}))
+	out, e := BuildSavedAnalysisValidation(started)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !out.Valid || out.Dependencies.SelectionMode != "path_steps" || len(out.Dependencies.EventVersions) != 1 {
+		t.Fatalf("pinned path dependency wrong: %+v", out.Dependencies)
+	}
+	// Without a start event the path reads every in-window event: all_events, no pins.
+	unpinned := savedSnapshot(t, pathSavedDefinition(nil))
+	all, e := BuildSavedAnalysisValidation(unpinned)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !all.Valid || all.Dependencies.SelectionMode != "all_events" || len(all.Dependencies.EventVersions) != 0 {
+		t.Fatalf("unpinned path must be all_events with no pins: %+v", all.Dependencies)
+	}
+	broken := savedSnapshot(t, pathSavedDefinition(&analysis.Step{EventKey: "open", SchemaVersion: 1}))
+	broken.Dependencies.SelectionMode = "all_events"
+	_, err := BuildSavedAnalysisValidation(broken)
+	savedErrorCode(t, err, "INVALID_ANALYSIS_DEPENDENCIES")
+}
+
+func attributionSavedDefinition() SavedAnalysisDefinition {
+	return SavedAnalysisDefinition{
+		Title: "Conversion attribution",
+		Query: analysis.Template{
+			Kind:    "attribution",
+			Subject: "uid",
+			Attribution: &analysis.Attribution{
+				Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
+				Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 2}},
+				WindowSeconds: 86400,
+				Model:         "last_touch",
+			},
+		},
+		Visualization: SavedAnalysisVisualization{Kind: "table"},
+	}
+}
+
+func TestSavedValidationAttributionPinsConversionAndTouchpoints(t *testing.T) {
+	snapshot := savedSnapshot(t, attributionSavedDefinition())
+	out, e := BuildSavedAnalysisValidation(snapshot)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !out.Valid || out.Dependencies.SelectionMode != "attribution_steps" || len(out.Dependencies.EventVersions) != 3 {
+		t.Fatalf("attribution dependency wrong: %+v", out.Dependencies)
+	}
+	want := map[analysis.EventVersion]bool{
+		{EventKey: "buy", SchemaVersion: 1}:        true,
+		{EventKey: "ad_click", SchemaVersion: 1}:   true,
+		{EventKey: "email_open", SchemaVersion: 2}: true,
+	}
+	for _, dep := range out.Dependencies.EventVersions {
+		if !want[analysis.EventVersion{EventKey: dep.EventKey, SchemaVersion: dep.SchemaVersion}] {
+			t.Fatalf("unexpected attribution dependency: %+v", dep)
+		}
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*SavedAnalysisSnapshot)
+	}{
+		{"wrong selection mode", func(s *SavedAnalysisSnapshot) { s.Dependencies.SelectionMode = "event_versions" }},
+		{"dropped touchpoint pin", func(s *SavedAnalysisSnapshot) { s.Dependencies.EventVersions = s.Dependencies.EventVersions[:2] }},
+		{"malformed digest", func(s *SavedAnalysisSnapshot) {
+			s.Dependencies.EventVersions[0].DefinitionHash = "not-a-hex-digest"
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			broken := savedSnapshot(t, attributionSavedDefinition())
 			tc.mutate(&broken)
 			_, err := BuildSavedAnalysisValidation(broken)
 			savedErrorCode(t, err, "INVALID_ANALYSIS_DEPENDENCIES")
