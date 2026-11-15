@@ -45,17 +45,18 @@
 
 `TestDashboardArchiveLifecycleAndMutationGuards` 增补断言：归档后 `archivedOnly=true` 列表恰返回该看板且带标记、活跃列表恰返回另一看板；恢复后归档流为空、活跃流回到 2 行。全部既有看板/查询机器集成测试仅追加布尔实参，语义不变。
 
-### 变异红绿（两轮，sha256 逐字节还原）
+### 变异红绿（三轮，sha256/逐字节还原）
 
 1. 移除 `view` 闭集拒绝分支 → `view=bogus` 被当活跃流放行返回 200，新测试如期变红；
-2. 反转 SQL 谓词选择 → 默认列表泄漏归档看板，集成测试如期变红（`archived dashboard must leave the default listing`）。
+2. 反转 SQL 谓词选择 → 默认列表泄漏归档看板，集成测试如期变红（`archived dashboard must leave the default listing`）；
+3. 移除 `catalogQuery` 的 `view` 输出 → 客户端归档流 URL 丢失视图参数，新增 api-client 用例如期变红（其余 35 用例保持通过）。
 
-两轮均以 sha256 校验还原到基线后转绿。
+三轮均还原到基线后转绿（前两轮以 sha256 校验，客户端轮以 `git diff` 零差异确认）。
 
 ### 前端与门禁
 
-- `pnpm typecheck`（全工作区 tsc）零错误；`pnpm test:client` 35/35 通过；`pnpm build` 控制台构建成功；prettier 全量格式化通过；
-- 完整 `make check` 退出码 0；codegen 幂等；命名检查无禁词。
+- `pnpm typecheck`（全工作区 tsc）零错误；`pnpm test:client` 36/36 通过（新增专用用例钉死 `view` 查询串编码顺序、archive/unarchive 的 POST/CSRF/无请求体/无幂等键与信号转发）；`pnpm build` 控制台构建成功；prettier 全量格式化通过；
+- 完整 `make check` 退出码 0（32 个 Go 包 ok、0 FAIL）；codegen 幂等；命名检查无禁词。
 
 ## 明确未做（边界）
 
