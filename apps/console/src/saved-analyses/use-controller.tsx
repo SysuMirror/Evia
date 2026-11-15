@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, type SavedAnalysis, type SavedAnalysisDefinition } from '@evia/api-client';
+import { ApiError, api, type SavedAnalysis, type SavedAnalysisDefinition } from '@evia/api-client';
+import { useToast } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
 import type { SavedRunWork } from '../saved-analysis-run';
 import { useUnsavedWork } from '../use-unsaved-work';
@@ -10,6 +11,7 @@ import { useSavedAnalysisPublication } from './use-publication';
 
 export function useSavedAnalysesController(context: CatalogPageProps) {
   const { project, environment, session } = context;
+  const toast = useToast();
   const canRead = project.permissions.includes('project.read'),
     canWrite = project.permissions.includes('project.write');
   const identity = JSON.stringify([
@@ -125,6 +127,30 @@ export function useSavedAnalysesController(context: CatalogPageProps) {
   function readLatest() {
     draft.readLatest(publication.resetReview);
   }
+  function archive(analysis: SavedAnalysis) {
+    if (request.isPending()) return;
+    void request.perform(
+      '归档分析',
+      (signal) =>
+        api.archiveSavedAnalysis(project.id, analysis.analysis_id, session.csrf_token, signal),
+      () => {
+        toast.success(`分析「${analysis.title}」已归档，可在已归档视图中恢复。`);
+        history.invalidateList();
+      },
+    );
+  }
+  function unarchive(analysis: SavedAnalysis) {
+    if (request.isPending()) return;
+    void request.perform(
+      '恢复分析',
+      (signal) =>
+        api.unarchiveSavedAnalysis(project.id, analysis.analysis_id, session.csrf_token, signal),
+      () => {
+        toast.success(`分析「${analysis.title}」已恢复到活跃列表。`);
+        history.invalidateList();
+      },
+    );
+  }
   function rebaseLocal() {
     draft.rebaseLocal();
     publication.resetReview();
@@ -156,6 +182,8 @@ export function useSavedAnalysesController(context: CatalogPageProps) {
     changeDefinition,
     save,
     readLatest,
+    archive,
+    unarchive,
     rebaseLocal,
     adoptLatest,
     confirmation: guard.confirmation,
