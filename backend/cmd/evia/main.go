@@ -28,15 +28,15 @@ func main() {
 
 func execute(ctx context.Context, args []string, get func(string) string, logger *slog.Logger) error {
 	if len(args) != 1 {
-		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | retention-worker | export-worker | backfill-worker | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password")
+		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | retention-worker | export-worker | backfill-worker | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password | account-audit")
 	}
 	command := args[0]
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" && command != "account-audit" {
 		return errors.New("unknown command")
 	}
 	var cfg config.Config
 	var err error
-	if command == "migrate" || command == "bootstrap" || command == "account-create" || command == "account-disable" || command == "account-enable" || command == "account-reset-password" {
+	if command == "migrate" || command == "bootstrap" || command == "account-create" || command == "account-disable" || command == "account-enable" || command == "account-reset-password" || command == "account-audit" {
 		cfg.DatabaseURL = get("EVIA_DATABASE_URL")
 		if cfg.DatabaseURL == "" {
 			return errors.New("EVIA_DATABASE_URL is required")
@@ -92,6 +92,10 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 	if command == "account-reset-password" {
 		defer cancel()
 		return accountResetPassword(startup, store, get, logger)
+	}
+	if command == "account-audit" {
+		defer cancel()
+		return accountAudit(startup, store, get, logger)
 	}
 	cancel()
 	switch command {

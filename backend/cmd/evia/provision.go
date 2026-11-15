@@ -69,3 +69,26 @@ func accountResetPassword(ctx context.Context, store access.ProvisionStore, get 
 	logger.Info("account password reset and sessions revoked", "account_id", user.ID)
 	return nil
 }
+
+// accountAudit is the read-only operator path for one account's typed audit
+// history. Output goes through the structured logger only, never stdout
+// printing, and contains just event type and timestamp: no credentials, hashes
+// or in-app actor identity.
+func accountAudit(ctx context.Context, store access.ProvisionStore, get func(string) string, logger *slog.Logger) error {
+	events, err := access.AccountAuditEvents(ctx, store, get("EVIA_ACCOUNT_USERNAME"))
+	if err != nil {
+		var known *fault.Error
+		if errors.As(err, &known) && (known.Kind == fault.Invalid || known.Kind == fault.NotFound) {
+			switch known.Code {
+			case "INVALID_USERNAME", "ACCOUNT_NOT_FOUND":
+				return fault.New(known.Kind, known.Code, known.Message)
+			}
+		}
+		return stageError("account audit", err)
+	}
+	logger.Info("account audit history", "event_count", len(events))
+	for i, event := range events {
+		logger.Info("account audit event", "sequence", i+1, "event_type", event.EventType, "occurred_at", event.OccurredAt.UTC().Format("2006-01-02T15:04:05.000000Z"))
+	}
+	return nil
+}
