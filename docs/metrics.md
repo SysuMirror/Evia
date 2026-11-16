@@ -86,7 +86,7 @@
 
 ## 复合指标公式（全链路已打通）
 
-公式（复合）指标把多个已发布的不可变指标版本，通过受限的有类型表达式组合成新口径。当前已全链路打通：纯领域引擎、持久化生命周期（迁移 `013`/`014`）、完整 OpenAPI 契约与代码生成、`FormulaMetrics` 服务、注册在 `/api/v1/projects/{project_id}/formula-metrics` 的完整 HTTP 接口（含运行入队）、查询工作进程复合扇出执行、`@evia/api-client` TypeScript 客户端，以及 React 控制台「复合公式指标」工作区（列表、双操作数表达式编辑器、校验/发布、版本与运行轮询），并以真实 PostgreSQL 竞态集成测试、契约正反向用例、HTTP 边界测试、客户端单测、控制台模型测试与类型检查验证。该能力不改变现有原子指标与查询路径，单位换算、看板直接引用指标版本仍待交付。现有保存分析可固定引用不可变指标版本，已有看板不会被新指标或指标草稿修改。
+公式（复合）指标把多个已发布的不可变指标版本，通过受限的有类型表达式组合成新口径。当前已全链路打通：纯领域引擎、持久化生命周期（迁移 `013`/`014`/`033`）、完整 OpenAPI 契约与代码生成、`FormulaMetrics` 服务、注册在 `/api/v1/projects/{project_id}/formula-metrics` 的完整 HTTP 接口（含运行入队）、查询工作进程复合扇出执行、`@evia/api-client` TypeScript 客户端，以及 React 控制台「复合公式指标」工作区（列表、双操作数表达式编辑器、校验/发布、版本与运行轮询），并以真实 PostgreSQL 竞态集成测试、契约正反向用例、HTTP 边界测试、客户端单测、控制台模型测试与类型检查验证。复合指标可继续引用其他已发布复合指标形成嵌套 DAG（迁移 `033` 起），该能力不改变现有原子指标与查询路径，单位换算、看板直接引用指标版本仍待交付。现有保存分析可固定引用不可变指标版本，已有看板不会被新指标或指标草稿修改。
 
 ### 受限表达式与预算
 
@@ -96,11 +96,11 @@
 - `metric`：固定 `metric_id` 与 `version` 的不可变指标引用；
 - `add`、`subtract`、`multiply`、`divide`：二元运算。
 
-结构性预算：树深度最多 8、节点最多 64、单个表达式内不同指标引用最多 8。跨指标依赖另有限制：依赖链深度最多 4，完全展开后的不同原子指标最多 32，重复引用只计一次。归一化返回独立深拷贝，拒绝未知节点、不安全常量、自引用以及超出预算的表达式或依赖图。
+结构性预算：树深度最多 8、节点最多 64、单个表达式内不同指标引用最多 8。跨指标依赖另有限制：依赖链深度最多 4（只引用原子指标的公式深度为 1），完全展开后的不同原子指标最多 32，重复引用只计一次。归一化返回独立深拷贝，拒绝未知节点、不安全常量、自引用以及超出预算的表达式或依赖图。嵌套复合指标复用同一组预算，不需要额外限额。
 
 ### 依赖 DAG 与单位
 
-`FormulaMetricResolver` 在授权事务内加载不可变指标版本（同项目/环境、`metrics.read`、禁止隐式解析到最新版本），领域层据此执行三态 DFS，拒绝循环、自引用、过深依赖与展开超预算。单位采用保守的显式代数而非开放量纲系统：
+`FormulaMetricResolver` 在授权事务内加载不可变指标版本（同项目/环境、`metrics.read`、禁止隐式解析到最新版本）：引用命中 `formula_metric_versions` 时返回复合节点（带其直接引用清单与公式单位），否则按原子指标版本解析。领域层据此执行三态 DFS，拒绝循环、自引用、过深依赖与展开超预算。单位采用保守的显式代数而非开放量纲系统：
 
 - 加减要求两侧单位一致，结果单位不变；
 - 乘法仅允许无量纲 `number` 缩放带单位量，两个带单位量相乘拒绝；
@@ -122,9 +122,9 @@
 
 - `formula_metrics` 保存可变草稿，定义 CHECK 强制 `formula` 形态且禁止携带 `event_versions`/`aggregation`；
 - `formula_metric_versions` 保存不可变版本、依赖清单与三类摘要，触发器禁止更新或删除；
-- `formula_metric_dependencies` 以关系外键把每个引用固定到 `metric_versions` 的某个不可变原子版本，数据库层即保证被引用版本已发布且属于同项目/环境，无法固定草稿或跨作用域指标。
+- `formula_metric_dependencies` 以关系外键把每个直接引用固定到某个不可变版本。迁移 `033` 起见证改为双目标：原子引用经 `ref_atomic_*` 外键指向 `metric_versions`，复合引用经 `ref_formula_*` 外键指向 `formula_metric_versions`，soundness CHECK 保证两行键恰有一个目标且与通用身份列一致，数据库层即保证被引用版本已发布且属于同项目/环境，无法固定草稿或跨作用域指标。
 
-校验快照在授权事务内通过 PG 版 `FormulaMetricResolver` 完成 DAG 解析（同项目/环境、`metrics.read`、禁止隐式最新版本），再由纯函数 `BuildFormulaMetricValidation` 派生依赖清单、差异与摘要；发布事务重算校验并核对 `validation_hash`，写入版本与依赖见证。创建/发布复用 `metric_idempotency`，操作名以 `formula_` 前缀隔离。当前 v1 仅允许引用原子指标版本（引用复合指标会因找不到原子版本而拒绝），嵌套复合是后续扩展；运行入队、HTTP 与控制台尚未接入。
+校验快照在授权事务内通过 PG 版 `FormulaMetricResolver` 完成 DAG 解析（同项目/环境、`metrics.read`、禁止隐式最新版本，复合节点返回其直接引用清单），再由纯函数 `BuildFormulaMetricValidation` 派生依赖清单、差异与摘要；发布事务重算校验并核对 `validation_hash`，写入版本与依赖见证，见证外键目标按校验图中的原子叶子集合选择。创建/发布复用 `metric_idempotency`，操作名以 `formula_` 前缀隔离。复合指标引用复合指标即嵌套 DAG，受同一组深度/展开预算约束；运行入队、HTTP 与控制台均已接入。
 
 ### HTTP 管理接口
 
@@ -154,7 +154,7 @@
 
 入队与执行复用共享 `analysis_query_jobs`、项目锁和 4 运行/32 排队预算，不新增独立队列。迁移 `014` 的 `formula_metric_query_requests` 只保存幂等键、请求摘要与到复合不可变版本、查询任务的外键见证，触发器保证不可变。
 
-复合任务在任务请求中携带一个**内部标记** `formula_ref`（`analysis.FormulaJobRef`），任务 `kind` 仍为 `trend`，因此无需放宽作业表约束。该字段不在公共查询契约中（根 schema `additionalProperties:false`），外部请求无法注入，只有内部入队路径写入。查询工作进程装配 `CompositeFormulaEngine`：普通请求原样委托 ClickHouse 引擎；遇到标记请求时经 `LoadFormulaExecution` 在授权上下文重读复合版本、按每个原子叶子用同一 `MetricTemplate` 构建趋势请求，再对内部引擎逐叶子扇出（重复引用只执行一次），最后用 `EvaluateFormulaResult` 按时间桶/分组对齐并应用 null、除零与单位语义。任一叶子失败即中止，错误不会被当成 null。运行入队的存储方法与真实 PG 测试已就绪，对外 HTTP 运行端点与控制台是剩余工作。
+复合任务在任务请求中携带一个**内部标记** `formula_ref`（`analysis.FormulaJobRef`），任务 `kind` 仍为 `trend`，因此无需放宽作业表约束。该字段不在公共查询契约中（根 schema `additionalProperties:false`），外部请求无法注入，只有内部入队路径写入。查询工作进程装配 `CompositeFormulaEngine`：普通请求原样委托 ClickHouse 引擎；遇到标记请求时经 `LoadFormulaExecution` 在 worker 上下文把根版本**递归展开**为 `FormulaExecutionPlan`——每个复合节点（根与嵌套子公式）记录其规范化公式，每个不同原子叶子用同一 `MetricTemplate` 构建一个趋势请求；引擎对原子叶子逐一扇出（共享叶子只执行一次），再由纯函数 `EvaluateFormulaPlan` 按 DAG 自底向上逐级 `EvaluateFormulaResult`，按时间桶/分组对齐并应用 null、除零与单位语义，计划内意外环仍 fail-closed。任一叶子失败即中止，错误不会被当成 null。
 
 ## 部署与存储
 
