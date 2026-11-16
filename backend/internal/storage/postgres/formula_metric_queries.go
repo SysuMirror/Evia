@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
@@ -154,45 +155,88 @@ func (s *Store) EnqueueFormulaMetricVersion(ctx context.Context, actor, project,
 	return job, tx.Commit(ctx)
 }
 
-// LoadFormulaExecution resolves a formula job into its normalized definition and
-// one executable trend request per distinct atomic leaf metric. It runs in the
-// worker's authorized context and never resolves an implicit latest version.
-func (s *Store) LoadFormulaExecution(ctx context.Context, scope analysis.Scope, ref reporting.MetricReference, execute reporting.MetricExecute) (reporting.FormulaDefinition, map[reporting.MetricReference]analysis.Request, error) {
+// LoadFormulaExecution resolves a formula job into a fully expanded execution
+// plan: every nested composite definition and one executable trend request per
+// distinct atomic leaf. It runs in the worker's context and never resolves an
+// implicit latest version; the publish-time DAG bounds keep recursion finite.
+func (s *Store) LoadFormulaExecution(ctx context.Context, scope analysis.Scope, ref reporting.MetricReference, execute reporting.MetricExecute) (reporting.FormulaExecutionPlan, error) {
 	tx, e := s.Pool.Begin(ctx)
 	if e != nil {
-		return reporting.FormulaDefinition{}, nil, e
+		return reporting.FormulaExecutionPlan{}, e
 	}
 	defer tx.Rollback(context.Background())
-	version, e := readFormulaMetricVersionTx(ctx, tx, scope.ProjectID, ref.MetricID, ref.Version)
+	root, e := readFormulaMetricVersionTx(ctx, tx, scope.ProjectID, ref.MetricID, ref.Version)
 	if e != nil {
-		return reporting.FormulaDefinition{}, nil, e
+		return reporting.FormulaExecutionPlan{}, e
 	}
-	if version.Environment != scope.Environment {
-		return reporting.FormulaDefinition{}, nil, analysis.Invalid("FORMULA_SCOPE_MISMATCH", "复合指标与执行环境不一致", "/formula")
+	if root.Environment != scope.Environment {
+		return reporting.FormulaExecutionPlan{}, analysis.Invalid("FORMULA_SCOPE_MISMATCH", "复合指标与执行环境不一致", "/formula")
 	}
-	definition, e := reporting.NormalizeFormulaMetricDefinition(version.Definition)
-	if e != nil {
-		return reporting.FormulaDefinition{}, nil, e
+	plan := reporting.FormulaExecutionPlan{
+		Root:           ref,
+		Composite:      map[reporting.MetricReference]reporting.FormulaDefinition{},
+		AtomicRequests: map[reporting.MetricReference]analysis.Request{},
 	}
-	refs := reporting.FormulaReferences(definition.Formula.Expression)
-	leaves := make(map[reporting.MetricReference]analysis.Request, len(refs))
-	for _, leafRef := range refs {
-		atomic, e := readMetricVersionTx(ctx, tx, scope.ProjectID, leafRef.MetricID, leafRef.Version)
+	visited := map[string]bool{}
+	var expand func(node reporting.MetricReference) error
+	expand = func(node reporting.MetricReference) error {
+		key := node.MetricID + "#" + strconv.FormatInt(node.Version, 10)
+		if visited[key] {
+			return nil
+		}
+		visited[key] = true
+		var composite bool
+		if e = tx.QueryRow(ctx, `SELECT true FROM formula_metric_versions WHERE project_id=$1 AND metric_id=$2 AND version=$3`, scope.ProjectID, node.MetricID, node.Version).Scan(&composite); e != nil && !errors.Is(e, pgx.ErrNoRows) {
+			return e
+		}
+		if e == nil {
+			version, readErr := readFormulaMetricVersionTx(ctx, tx, scope.ProjectID, node.MetricID, node.Version)
+			if readErr != nil {
+				return readErr
+			}
+			if version.Environment != scope.Environment {
+				return analysis.Invalid("FORMULA_SCOPE_MISMATCH", "复合指标与执行环境不一致", "/formula")
+			}
+			normalized, e := reporting.NormalizeFormulaMetricDefinition(version.Definition)
+			if e != nil {
+				return e
+			}
+			plan.Composite[node] = normalized.Formula
+			for _, child := range reporting.FormulaReferences(normalized.Formula.Expression) {
+				if e = expand(child); e != nil {
+					return e
+				}
+			}
+			return nil
+		}
+		atomic, e := readMetricVersionTx(ctx, tx, scope.ProjectID, node.MetricID, node.Version)
 		if e != nil {
-			return reporting.FormulaDefinition{}, nil, e
+			return e
 		}
 		if atomic.Environment != scope.Environment {
-			return reporting.FormulaDefinition{}, nil, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/formula")
+			return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/formula")
 		}
 		template, e := reporting.MetricTemplate(atomic.Definition, execute)
 		if e != nil {
-			return reporting.FormulaDefinition{}, nil, e
+			return e
 		}
 		leafRequest, e := template.Bind(scope.Environment, execute.TimeRange, execute.Timezone)
 		if e != nil {
-			return reporting.FormulaDefinition{}, nil, e
+			return e
 		}
-		leaves[leafRef] = leafRequest
+		plan.AtomicRequests[node] = leafRequest
+		return nil
 	}
-	return definition.Formula, leaves, tx.Commit(ctx)
+	rootDefinition, e := reporting.NormalizeFormulaMetricDefinition(root.Definition)
+	if e != nil {
+		return reporting.FormulaExecutionPlan{}, e
+	}
+	plan.Composite[ref] = rootDefinition.Formula
+	visited[ref.MetricID+"#"+strconv.FormatInt(ref.Version, 10)] = true
+	for _, child := range reporting.FormulaReferences(rootDefinition.Formula.Expression) {
+		if e = expand(child); e != nil {
+			return reporting.FormulaExecutionPlan{}, e
+		}
+	}
+	return plan, tx.Commit(ctx)
 }

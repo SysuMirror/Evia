@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
@@ -12,6 +13,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var _ reporting.FormulaMetricStore = (*Store)(nil)
@@ -97,6 +99,34 @@ type pgFormulaResolver struct {
 var _ reporting.FormulaMetricResolver = (*pgFormulaResolver)(nil)
 
 func (r *pgFormulaResolver) ResolveFormulaMetric(ctx context.Context, ref reporting.MetricReference) (reporting.FormulaResolvedMetric, error) {
+	var composite bool
+	e := r.tx.QueryRow(ctx, `SELECT true FROM formula_metric_versions WHERE project_id=$1 AND metric_id=$2 AND version=$3`, r.project, ref.MetricID, ref.Version).Scan(&composite)
+	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+		return reporting.FormulaResolvedMetric{}, e
+	}
+	if e == nil {
+		version, readErr := readFormulaMetricVersionTx(ctx, r.tx, r.project, ref.MetricID, ref.Version)
+		if readErr != nil {
+			return reporting.FormulaResolvedMetric{}, readErr
+		}
+		if version.Environment != r.environment {
+			return reporting.FormulaResolvedMetric{}, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/formula/expression")
+		}
+		if e = r.store.authorizeOperation(ctx, r.tx, r.actor, r.project, r.environment, "metrics.read"); e != nil {
+			return reporting.FormulaResolvedMetric{}, e
+		}
+		normalized, e := reporting.NormalizeFormulaMetricDefinition(version.Definition)
+		if e != nil {
+			return reporting.FormulaResolvedMetric{}, e
+		}
+		return reporting.FormulaResolvedMetric{
+			Ref:            ref,
+			Unit:           normalized.Formula.Unit,
+			DefinitionHash: version.DefinitionHash,
+			Composite:      true,
+			References:     reporting.FormulaReferences(normalized.Formula.Expression),
+		}, nil
+	}
 	metric, e := readMetricVersionTx(ctx, r.tx, r.project, ref.MetricID, ref.Version)
 	if e != nil {
 		return reporting.FormulaResolvedMetric{}, e
@@ -498,8 +528,19 @@ func (s *Store) PublishFormulaMetric(ctx context.Context, actor, project, id, ke
 	if _, e = tx.Exec(ctx, `INSERT INTO formula_metric_versions(project_id,metric_id,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, project, id, draft.Environment, version, draft.DraftRevision, definition, deps, validation.DefinitionHash, validation.DependencyHash, validation.ValidationHash, actor); e != nil {
 		return out, e
 	}
+	// Direct references that are not atomic leaves are themselves composite
+	// versions, so their witness must target formula_metric_versions.
+	atomicLeaves := make(map[string]bool, len(snapshot.Graph.AtomicLeaves))
+	for _, leaf := range snapshot.Graph.AtomicLeaves {
+		atomicLeaves[leaf.MetricID+"#"+strconv.FormatInt(leaf.Version, 10)] = true
+	}
 	for _, dep := range validation.Dependencies.Metrics {
-		result, e := tx.Exec(ctx, `INSERT INTO formula_metric_dependencies(project_id,environment,metric_id,version,ref_metric_id,ref_version,definition_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`, project, draft.Environment, id, version, dep.MetricID, dep.Version, dep.DefinitionHash)
+		var result pgconn.CommandTag
+		if atomicLeaves[dep.MetricID+"#"+strconv.FormatInt(dep.Version, 10)] {
+			result, e = tx.Exec(ctx, `INSERT INTO formula_metric_dependencies(project_id,environment,metric_id,version,ref_metric_id,ref_version,ref_atomic_metric_id,ref_atomic_version,definition_hash) VALUES($1,$2,$3,$4,$5,$6,$5,$6,$7)`, project, draft.Environment, id, version, dep.MetricID, dep.Version, dep.DefinitionHash)
+		} else {
+			result, e = tx.Exec(ctx, `INSERT INTO formula_metric_dependencies(project_id,environment,metric_id,version,ref_metric_id,ref_version,ref_formula_metric_id,ref_formula_version,definition_hash) VALUES($1,$2,$3,$4,$5,$6,$5,$6,$7)`, project, draft.Environment, id, version, dep.MetricID, dep.Version, dep.DefinitionHash)
+		}
 		if e != nil {
 			return out, e
 		}

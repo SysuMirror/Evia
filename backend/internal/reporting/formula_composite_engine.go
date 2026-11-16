@@ -7,12 +7,13 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
-// FormulaExecutionLoader resolves a durable formula job into its normalized
-// definition and one executable request per distinct atomic leaf. The storage
-// implementation rechecks authorization and the immutable pin inside the
-// worker's context and builds every leaf through the same metric template path.
+// FormulaExecutionLoader resolves a durable formula job into its fully
+// expanded execution plan: every nested composite definition and one
+// executable request per distinct atomic leaf. The storage implementation
+// rechecks the immutable pin inside the worker's context and builds every
+// leaf through the same metric template path.
 type FormulaExecutionLoader interface {
-	LoadFormulaExecution(context.Context, analysis.Scope, MetricReference, MetricExecute) (FormulaDefinition, map[MetricReference]analysis.Request, error)
+	LoadFormulaExecution(context.Context, analysis.Scope, MetricReference, MetricExecute) (FormulaExecutionPlan, error)
 }
 
 // CompositeFormulaEngine implements analysis.Engine by routing internal formula
@@ -42,12 +43,12 @@ func (e *CompositeFormulaEngine) Execute(ctx context.Context, scope analysis.Sco
 	}
 	ref := MetricReference{MetricID: request.Formula.MetricID, Version: request.Formula.Version}
 	execute := metricExecuteFromRequest(request)
-	definition, leaves, err := e.loader.LoadFormulaExecution(ctx, scope, ref, execute)
+	plan, err := e.loader.LoadFormulaExecution(ctx, scope, ref, execute)
 	if err != nil {
 		return analysis.Result{}, err
 	}
-	results := make(map[MetricReference]analysis.Result, len(leaves))
-	for leafRef, leafRequest := range leaves {
+	results := make(map[MetricReference]analysis.Result, len(plan.AtomicRequests))
+	for leafRef, leafRequest := range plan.AtomicRequests {
 		// Defense in depth: leaf requests must never themselves be formula jobs.
 		leafRequest.Formula = nil
 		result, err := e.inner.Execute(ctx, scope, leafRequest)
@@ -56,7 +57,7 @@ func (e *CompositeFormulaEngine) Execute(ctx context.Context, scope analysis.Sco
 		}
 		results[leafRef] = result
 	}
-	return EvaluateFormulaResult(definition, results)
+	return EvaluateFormulaPlan(plan, results)
 }
 
 // metricExecuteFromRequest recovers the runtime parameters the enqueue path
