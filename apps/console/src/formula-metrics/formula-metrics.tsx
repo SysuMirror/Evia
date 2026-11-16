@@ -7,7 +7,6 @@ import {
   type FormulaMetricRecord,
   type FormulaMetricValidation,
   type FormulaMetricVersion,
-  type MetricRecord,
   type Project,
   type QueryJob,
   type QueryResult,
@@ -53,6 +52,7 @@ import './styles.css';
 
 type PageProps = { project: Project; session: Session; environment: Environment };
 type FormulaMetricListView = 'active' | 'archived';
+type FormulaOperandOption = { id: string; version: number; label: string };
 
 export function FormulaMetricsPage({ project, session, environment }: PageProps) {
   const canRead = project.permissions.includes('metrics.read');
@@ -443,10 +443,16 @@ function FormulaEditor({
     queryFn: ({ signal }) => api.getFormulaMetricDraft(project.id, metricID!, signal),
     enabled: !!metricID,
   });
-  // Published atomic metrics are the selectable operands in this environment.
+  // Published atomic and composite metrics are both selectable operands.
   const atomic = useQuery({
     queryKey: ['metrics', project.id, session.user_id, environment, 'formula-operands'],
     queryFn: ({ signal }) => api.listMetrics(project.id, { environment, limit: 100 }, signal),
+    enabled: canWrite,
+  });
+  const composite = useQuery({
+    queryKey: ['formula-metrics', project.id, session.user_id, environment, 'formula-operands'],
+    queryFn: ({ signal }) =>
+      api.listFormulaMetrics(project.id, { environment, limit: 100 }, signal),
     enabled: canWrite,
   });
   const [form, setForm] = useState<FormulaFormState>(() => defaultFormState());
@@ -462,6 +468,21 @@ function FormulaEditor({
   }, [metricID, draft.data, loadedFor]);
 
   const operands = (atomic.data?.items ?? []).filter((row) => row.published_version > 0);
+  const compositeOperands = (composite.data?.items ?? []).filter(
+    (row) => row.published_version > 0 && row.metric_id !== metricID,
+  );
+  const operandOptions: FormulaOperandOption[] = [
+    ...operands.map((row) => ({
+      id: row.metric_id,
+      version: row.published_version,
+      label: `原子｜${row.title}（v${row.published_version}）`,
+    })),
+    ...compositeOperands.map((row) => ({
+      id: row.metric_id,
+      version: row.published_version,
+      label: `复合｜${row.title}（v${row.published_version}）`,
+    })),
+  ];
   const updateOperand = (side: 'left' | 'right', changes: Partial<OperandState>) =>
     setForm((current) => ({ ...current, [side]: { ...current[side], ...changes } }));
 
@@ -614,11 +635,11 @@ function FormulaEditor({
       </Field>
 
       <fieldset className="formula-fieldset">
-        <legend>公式表达式（两个操作数，引用已发布原子指标版本或常量）</legend>
+        <legend>公式表达式（两个操作数，引用已发布指标版本或常量，复合指标可继续嵌套）</legend>
         <OperandEditor
           label="左操作数"
           operand={form.left}
-          operands={operands}
+          options={operandOptions}
           disabled={!canWrite}
           onChange={(changes) => updateOperand('left', changes)}
         />
@@ -639,7 +660,7 @@ function FormulaEditor({
         <OperandEditor
           label="右操作数"
           operand={form.right}
-          operands={operands}
+          options={operandOptions}
           disabled={!canWrite}
           onChange={(changes) => updateOperand('right', changes)}
         />
@@ -689,9 +710,9 @@ function FormulaEditor({
           )}
         </div>
       )}
-      {operands.length === 0 && canWrite && (
+      {operandOptions.length === 0 && canWrite && (
         <p className="evia-field-hint">
-          当前环境还没有已发布的原子指标，可先在「独立指标」中发布后再引用。
+          当前环境还没有已发布指标，可先在「独立指标」或本工作区发布后再引用；复合指标也可作为操作数继续嵌套。
         </p>
       )}
     </div>
@@ -701,13 +722,13 @@ function FormulaEditor({
 function OperandEditor({
   label,
   operand,
-  operands,
+  options,
   disabled,
   onChange,
 }: {
   label: string;
   operand: OperandState;
-  operands: MetricRecord[];
+  options: FormulaOperandOption[];
   disabled: boolean;
   onChange: (changes: Partial<OperandState>) => void;
 }) {
@@ -720,7 +741,7 @@ function OperandEditor({
           value={operand.kind}
           disabled={disabled}
           options={[
-            { value: 'metric', label: '原子指标引用' },
+            { value: 'metric', label: '指标引用' },
             { value: 'constant', label: '常量' },
           ]}
           onChange={(event) => onChange({ kind: event.target.value as OperandState['kind'] })}
@@ -728,23 +749,20 @@ function OperandEditor({
       </Field>
       {operand.kind === 'metric' ? (
         <>
-          <Field label="原子指标" htmlFor={`${label}-metric`}>
+          <Field label="指标（原子或复合）" htmlFor={`${label}-metric`}>
             <Select
               id={`${label}-metric`}
               value={operand.metricID}
               disabled={disabled}
               options={[
-                { value: '', label: '请选择已发布原子指标' },
-                ...operands.map((row) => ({
-                  value: row.metric_id,
-                  label: `${row.title}（v${row.published_version}）`,
-                })),
+                { value: '', label: '请选择已发布指标' },
+                ...options.map((option) => ({ value: option.id, label: option.label })),
               ]}
               onChange={(event) => {
-                const selected = operands.find((row) => row.metric_id === event.target.value);
+                const selected = options.find((option) => option.id === event.target.value);
                 onChange({
                   metricID: event.target.value,
-                  version: selected ? String(selected.published_version) : '1',
+                  version: selected ? String(selected.version) : '1',
                 });
               }}
             />
