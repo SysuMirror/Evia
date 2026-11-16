@@ -78,14 +78,14 @@ func TestFormulaMetricLoadExecutionBuildsLeafRequests(t *testing.T) {
 	version := formulaPublished(t, f)
 	in := formulaExecuteInput()
 	scope := analysis.Scope{ProjectID: f.project, Environment: "development"}
-	definition, leaves, e := f.s.LoadFormulaExecution(ctx, scope, reporting.MetricReference{MetricID: version.MetricID, Version: version.Version}, in)
+	plan, e := f.s.LoadFormulaExecution(ctx, scope, reporting.MetricReference{MetricID: version.MetricID, Version: version.Version}, in)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(leaves) != 2 {
-		t.Fatalf("expected two leaf requests, got %d", len(leaves))
+	if len(plan.AtomicRequests) != 2 {
+		t.Fatalf("expected two leaf requests, got %d", len(plan.AtomicRequests))
 	}
-	for ref, request := range leaves {
+	for ref, request := range plan.AtomicRequests {
 		if request.Formula != nil {
 			t.Fatal("leaf request must not carry a formula marker")
 		}
@@ -96,8 +96,9 @@ func TestFormulaMetricLoadExecutionBuildsLeafRequests(t *testing.T) {
 			t.Fatalf("runtime parameters not propagated to leaf: %+v", request)
 		}
 	}
-	if len(reporting.FormulaReferences(definition.Expression)) != 2 {
-		t.Fatalf("definition references %+v", definition)
+	rootRef := reporting.MetricReference{MetricID: version.MetricID, Version: version.Version}
+	if len(plan.Composite) != 1 || len(reporting.FormulaReferences(plan.Composite[rootRef].Expression)) != 2 {
+		t.Fatalf("plan must contain the root composite definition: %+v", plan.Composite)
 	}
 }
 
@@ -124,7 +125,7 @@ func TestFormulaMetricLoadExecutionRejectsScopeMismatch(t *testing.T) {
 	f := formulaDB(t)
 	version := formulaPublished(t, f)
 	scope := analysis.Scope{ProjectID: f.project, Environment: "production"}
-	if _, _, e := f.s.LoadFormulaExecution(context.Background(), scope, reporting.MetricReference{MetricID: version.MetricID, Version: version.Version}, formulaExecuteInput()); e == nil {
+	if _, e := f.s.LoadFormulaExecution(context.Background(), scope, reporting.MetricReference{MetricID: version.MetricID, Version: version.Version}, formulaExecuteInput()); e == nil {
 		t.Fatal("expected cross environment rejection")
 	}
 }

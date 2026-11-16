@@ -220,6 +220,122 @@ func TestFormulaMetricEnforcesWritePermission(t *testing.T) {
 	}
 }
 
+// publishFormula is a small helper that creates, validates and publishes one
+// composite metric from an explicit definition.
+func publishFormula(t *testing.T, f formulaFixture, idempotency, title string, def reporting.FormulaMetricDefinition) reporting.FormulaMetricVersion {
+	t.Helper()
+	ctx := context.Background()
+	draft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, idempotency, reporting.FormulaMetricCreate{Environment: "development", Definition: def})
+	if e != nil {
+		t.Fatal(e)
+	}
+	validation := formulaValidate(t, f, draft)
+	version, e := f.s.PublishFormulaMetric(ctx, f.owner, f.project, draft.ID, idempotency+"-publish", reporting.FormulaMetricPublish{DraftRevision: draft.DraftRevision, ExpectedPublishedVersion: 0, ValidationHash: validation.ValidationHash})
+	if e != nil {
+		t.Fatalf("publish %s: %v", title, e)
+	}
+	return version
+}
+
+func TestFormulaMetricNestedCompositeExpansion(t *testing.T) {
+	f := formulaDB(t)
+	ctx := context.Background()
+
+	// Level 1: C = A / B, a dimensionless composite over the two atomic metrics.
+	cVersion := publishFormula(t, f, "nested-c", "C", formulaMetricDef(f.atomicA, f.atomicB))
+	refC := reporting.MetricReference{MetricID: cVersion.MetricID, Version: cVersion.Version}
+	refA := reporting.MetricReference{MetricID: f.atomicA.ID, Version: f.atomicA.PublishedVersion}
+	refB := reporting.MetricReference{MetricID: f.atomicB.ID, Version: f.atomicB.PublishedVersion}
+
+	// Level 2: D = C * A; scaling an event metric by a dimensionless composite.
+	expr := reporting.FormulaExpression{
+		Op:    reporting.FormulaMultiply,
+		Left:  &reporting.FormulaExpression{Op: reporting.FormulaMetric, Metric: &refC},
+		Right: &reporting.FormulaExpression{Op: reporting.FormulaMetric, Metric: &refA},
+	}
+	dDef := reporting.FormulaMetricDefinition{Title: "Nested D", Description: "composite over composite", Formula: reporting.FormulaDefinition{Expression: expr, Unit: "event"}}
+	dVersion := publishFormula(t, f, "nested-d", "D", dDef)
+
+	dValidation := formulaValidate(t, f, mustFormulaDraft(t, f, dVersion.MetricID))
+	if len(dValidation.Dependencies.Metrics) != 2 {
+		t.Fatalf("D must pin two direct references C and A: %+v", dValidation.Dependencies.Metrics)
+	}
+
+	// Witnesses split across the two immutable version tables.
+	var atomicWitnesses, formulaWitnesses int
+	if e := f.s.Pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE ref_atomic_metric_id IS NOT NULL), count(*) FILTER (WHERE ref_formula_metric_id IS NOT NULL) FROM formula_metric_dependencies WHERE project_id=$1 AND metric_id=$2 AND version=$3`, f.project, dVersion.MetricID, dVersion.Version).Scan(&atomicWitnesses, &formulaWitnesses); e != nil {
+		t.Fatal(e)
+	}
+	if atomicWitnesses != 1 || formulaWitnesses != 1 {
+		t.Fatalf("D witnesses must target one atomic and one composite version: atomic=%d formula=%d", atomicWitnesses, formulaWitnesses)
+	}
+	// The level-1 composite still pins only atomic versions.
+	var cAtomic, cFormula int
+	if e := f.s.Pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE ref_atomic_metric_id IS NOT NULL), count(*) FILTER (WHERE ref_formula_metric_id IS NOT NULL) FROM formula_metric_dependencies WHERE project_id=$1 AND metric_id=$2 AND version=$3`, f.project, cVersion.MetricID, cVersion.Version).Scan(&cAtomic, &cFormula); e != nil {
+		t.Fatal(e)
+	}
+	if cAtomic != 2 || cFormula != 0 {
+		t.Fatalf("C witnesses must stay atomic-only: atomic=%d formula=%d", cAtomic, cFormula)
+	}
+
+	// The worker plan expands both composite nodes and the shared atomic leaves.
+	scope := analysis.Scope{ProjectID: f.project, Environment: "development"}
+	rootRef := reporting.MetricReference{MetricID: dVersion.MetricID, Version: dVersion.Version}
+	plan, e := f.s.LoadFormulaExecution(ctx, scope, rootRef, formulaExecuteInput())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(plan.Composite) != 2 {
+		t.Fatalf("plan must contain D and C composite nodes: %+v", plan.Composite)
+	}
+	if len(plan.AtomicRequests) != 2 {
+		t.Fatalf("plan must fan out to two distinct atomic leaves: %d", len(plan.AtomicRequests))
+	}
+	if _, ok := plan.AtomicRequests[refA]; !ok {
+		t.Fatalf("missing atomic leaf A: %+v", plan.AtomicRequests)
+	}
+	if _, ok := plan.AtomicRequests[refB]; !ok {
+		t.Fatalf("missing atomic leaf B: %+v", plan.AtomicRequests)
+	}
+
+	// The nested version enqueues like any formula job and stays marker-based.
+	job, e := f.s.EnqueueFormulaMetricVersion(ctx, f.owner, f.project, dVersion.MetricID, dVersion.Version, "nested-run", formulaExecuteInput())
+	if e != nil || job.State != "queued" {
+		t.Fatalf("nested enqueue failed: %+v %v", job, e)
+	}
+
+	// A production composite cannot reference a development composite version.
+	production := reporting.FormulaMetricDefinition{Title: "Cross env", Description: "", Formula: reporting.FormulaDefinition{Expression: reporting.FormulaExpression{Op: reporting.FormulaMetric, Metric: &refC}, Unit: "number"}}
+	crossDraft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "nested-cross", reporting.FormulaMetricCreate{Environment: "production", Definition: production})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, crossDraft.ID, reporting.FormulaMetricValidate{DraftRevision: crossDraft.DraftRevision, ExpectedPublishedVersion: 0}); e == nil {
+		t.Fatal("expected cross environment composite reference rejection")
+	}
+
+	// A reference to a nonexistent composite version fails instead of silently
+	// downgrading to an atomic lookup.
+	missing := reporting.MetricReference{MetricID: ids.New(), Version: 1}
+	missingDef := reporting.FormulaMetricDefinition{Title: "Missing composite", Description: "", Formula: reporting.FormulaDefinition{Expression: reporting.FormulaExpression{Op: reporting.FormulaMetric, Metric: &missing}, Unit: "number"}}
+	missingDraft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "nested-missing", reporting.FormulaMetricCreate{Environment: "development", Definition: missingDef})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, missingDraft.ID, reporting.FormulaMetricValidate{DraftRevision: missingDraft.DraftRevision, ExpectedPublishedVersion: 0}); e == nil {
+		t.Fatal("expected unpublished composite reference rejection")
+	}
+}
+
+func mustFormulaDraft(t *testing.T, f formulaFixture, id string) reporting.FormulaMetricDraft {
+	t.Helper()
+	draft, e := f.s.GetFormulaMetricDraft(context.Background(), f.owner, f.project, id)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return draft
+}
+
 func TestFormulaMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	f := formulaDB(t)
 	ctx := context.Background()
