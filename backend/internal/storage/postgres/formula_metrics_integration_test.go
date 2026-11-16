@@ -220,6 +220,106 @@ func TestFormulaMetricEnforcesWritePermission(t *testing.T) {
 	}
 }
 
+// publishMillisecondMetric creates and publishes an atomic sum metric whose
+// declared unit is millisecond, giving convert formulas a real duration source.
+func publishMillisecondMetric(t *testing.T, f formulaFixture) reporting.MetricDraft {
+	t.Helper()
+	ctx := context.Background()
+	field := &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}
+	def := reporting.MetricDefinition{
+		Title:         "Lesson duration ms",
+		EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}},
+		Subject:       "uid",
+		Aggregation:   analysis.Metric{Op: "sum", Field: field},
+		Unit:          "millisecond",
+	}
+	created, e := f.s.CreateMetric(ctx, f.owner, f.project, "create-duration-ms", reporting.MetricCreate{Environment: "development", Definition: def})
+	if e != nil {
+		t.Fatal(e)
+	}
+	snapshot, e := f.s.MetricValidationSnapshot(ctx, f.owner, f.project, created.ID, reporting.MetricValidate{DraftRevision: created.DraftRevision, ExpectedPublishedVersion: 0})
+	if e != nil {
+		t.Fatal(e)
+	}
+	validation, e := reporting.BuildMetricValidation(snapshot)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.PublishMetric(ctx, f.owner, f.project, created.ID, "publish-duration-ms", reporting.MetricPublish{DraftRevision: created.DraftRevision, ExpectedPublishedVersion: 0, ValidationHash: validation.ValidationHash}); e != nil {
+		t.Fatal(e)
+	}
+	published, e := f.s.GetMetricDraft(ctx, f.owner, f.project, created.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return published
+}
+
+func convertDef(metric reporting.MetricDraft, target string) reporting.FormulaMetricDefinition {
+	ref := reporting.MetricReference{MetricID: metric.ID, Version: metric.PublishedVersion}
+	expr := reporting.FormulaExpression{
+		Op:         reporting.FormulaConvert,
+		Left:       &reporting.FormulaExpression{Op: reporting.FormulaMetric, Metric: &ref},
+		TargetUnit: target,
+	}
+	return reporting.FormulaMetricDefinition{Title: "Converted duration", Description: "explicit unit conversion", Formula: reporting.FormulaDefinition{Expression: expr, Unit: target}}
+}
+
+func TestFormulaMetricUnitConversion(t *testing.T) {
+	f := formulaDB(t)
+	ctx := context.Background()
+	msMetric := publishMillisecondMetric(t, f)
+
+	// millisecond -> second is a valid same-dimension conversion and publishes.
+	secondVersion := publishFormula(t, f, "convert-ms-to-s", "Converted duration", convertDef(msMetric, "second"))
+
+	// The execution plan preserves the convert node and its target unit.
+	scope := analysis.Scope{ProjectID: f.project, Environment: "development"}
+	rootRef := reporting.MetricReference{MetricID: secondVersion.MetricID, Version: secondVersion.Version}
+	plan, e := f.s.LoadFormulaExecution(ctx, scope, rootRef, formulaExecuteInput())
+	if e != nil {
+		t.Fatal(e)
+	}
+	root := plan.Composite[rootRef]
+	if root.Expression.Op != reporting.FormulaConvert || root.Expression.TargetUnit != "second" {
+		t.Fatalf("convert node lost in plan: %+v", root.Expression)
+	}
+	if len(plan.AtomicRequests) != 1 {
+		t.Fatalf("convert formula must fan out to its single atomic source, got %d", len(plan.AtomicRequests))
+	}
+
+	// Identity conversion (millisecond -> millisecond) is not in the table.
+	identity := convertDef(msMetric, "millisecond")
+	identityDraft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "convert-identity", reporting.FormulaMetricCreate{Environment: "development", Definition: identity})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, identityDraft.ID, reporting.FormulaMetricValidate{DraftRevision: identityDraft.DraftRevision, ExpectedPublishedVersion: 0}); e == nil {
+		t.Fatal("expected identity conversion rejection")
+	}
+
+	// An event-count metric cannot be converted to a time unit.
+	eventToSecond := convertDef(f.atomicA, "second")
+	eventDraft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "convert-event", reporting.FormulaMetricCreate{Environment: "development", Definition: eventToSecond})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, eventDraft.ID, reporting.FormulaMetricValidate{DraftRevision: eventDraft.DraftRevision, ExpectedPublishedVersion: 0}); e == nil {
+		t.Fatal("expected cross-dimension conversion rejection")
+	}
+
+	// A declared result unit that disagrees with the convert target fails.
+	mismatch := convertDef(msMetric, "second")
+	mismatch.Formula.Unit = "millisecond"
+	mismatchDraft, e := f.s.CreateFormulaMetric(ctx, f.owner, f.project, "convert-mismatch", reporting.FormulaMetricCreate{Environment: "development", Definition: mismatch})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.FormulaMetricValidationSnapshot(ctx, f.owner, f.project, mismatchDraft.ID, reporting.FormulaMetricValidate{DraftRevision: mismatchDraft.DraftRevision, ExpectedPublishedVersion: 0}); e == nil {
+		t.Fatal("expected declared/derived unit mismatch rejection")
+	}
+}
+
 // publishFormula is a small helper that creates, validates and publishes one
 // composite metric from an explicit definition.
 func publishFormula(t *testing.T, f formulaFixture, idempotency, title string, def reporting.FormulaMetricDefinition) reporting.FormulaMetricVersion {
