@@ -35,6 +35,8 @@ import {
 import { useFormulaMetricsRequest } from './use-formula-metrics-request';
 import {
   buildFormulaRun,
+  convertTargetLabels,
+  convertTargetUnits,
   defaultFormState,
   defaultRunForm,
   formatFormulaInstant,
@@ -635,7 +637,7 @@ function FormulaEditor({
       </Field>
 
       <fieldset className="formula-fieldset">
-        <legend>公式表达式（两个操作数，引用已发布指标版本或常量，复合指标可继续嵌套）</legend>
+        <legend>公式表达式（引用已发布指标版本或常量，复合指标可继续嵌套）</legend>
         <OperandEditor
           label="左操作数"
           operand={form.left}
@@ -657,13 +659,39 @@ function FormulaEditor({
             }
           />
         </Field>
-        <OperandEditor
-          label="右操作数"
-          operand={form.right}
-          options={operandOptions}
-          disabled={!canWrite}
-          onChange={(changes) => updateOperand('right', changes)}
-        />
+        {form.operator === 'convert' ? (
+          <Field label="换算目标单位" htmlFor="formula-convert-target">
+            <Select
+              id="formula-convert-target"
+              value={form.targetUnit}
+              disabled={!canWrite}
+              options={convertTargetUnits.map((unit) => ({
+                value: unit,
+                label: convertTargetLabels[unit],
+              }))}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  targetUnit: event.target.value as FormulaFormState['targetUnit'],
+                }))
+              }
+            />
+          </Field>
+        ) : (
+          <OperandEditor
+            label="右操作数"
+            operand={form.right}
+            options={operandOptions}
+            disabled={!canWrite}
+            onChange={(changes) => updateOperand('right', changes)}
+          />
+        )}
+        {form.operator === 'convert' && (
+          <p className="evia-field-hint">
+            单位换算只支持封闭的同量纲转换：毫秒→秒（除以 1000）或秒→毫秒（乘以
+            1000）；请把结果单位设为目标单位。
+          </p>
+        )}
       </fieldset>
 
       <Field label="结果单位" htmlFor="formula-unit">

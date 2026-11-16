@@ -1,6 +1,7 @@
 import type { FormulaExpression, FormulaMetricDefinition, MetricReference } from '@evia/api-client';
 
-export type FormulaOperator = 'add' | 'subtract' | 'multiply' | 'divide';
+export type FormulaOperator = 'add' | 'subtract' | 'multiply' | 'divide' | 'convert';
+export type ConvertTargetUnit = 'millisecond' | 'second';
 export type OperandKind = 'metric' | 'constant';
 export type FormulaMetricUnit =
   | 'event'
@@ -12,13 +13,27 @@ export type FormulaMetricUnit =
   | 'second'
   | 'byte';
 
-export const formulaOperators: FormulaOperator[] = ['add', 'subtract', 'multiply', 'divide'];
+export const formulaOperators: FormulaOperator[] = [
+  'add',
+  'subtract',
+  'multiply',
+  'divide',
+  'convert',
+];
 
 export const operatorLabels: Record<FormulaOperator, string> = {
   add: '加法 add（+）',
   subtract: '减法 subtract（−）',
   multiply: '乘法 multiply（×）',
   divide: '除法 divide（÷）',
+  convert: '单位换算 convert（毫秒↔秒）',
+};
+
+export const convertTargetUnits: ConvertTargetUnit[] = ['millisecond', 'second'];
+
+export const convertTargetLabels: Record<ConvertTargetUnit, string> = {
+  millisecond: '毫秒 millisecond（源须为秒）',
+  second: '秒 second（源须为毫秒）',
 };
 
 export const formulaUnits: FormulaMetricUnit[] = [
@@ -59,6 +74,8 @@ export interface FormulaFormState {
   operator: FormulaOperator;
   left: OperandState;
   right: OperandState;
+  // Used only when operator === 'convert'.
+  targetUnit: ConvertTargetUnit;
 }
 
 export function defaultOperand(kind: OperandKind = 'metric'): OperandState {
@@ -73,6 +90,7 @@ export function defaultFormState(): FormulaFormState {
     operator: 'divide',
     left: defaultOperand('metric'),
     right: defaultOperand('metric'),
+    targetUnit: 'second',
   };
 }
 
@@ -112,6 +130,23 @@ export function toFormulaDefinition(state: FormulaFormState): {
   if (state.description.length > 2000) errors.push('描述不能超过 2000 个字符。');
 
   const left = buildOperand(state.left, errors, '左操作数');
+  if (state.operator === 'convert') {
+    if (errors.length || !left) return { errors };
+    const expression: FormulaExpression = {
+      op: 'convert',
+      left,
+      target_unit: state.targetUnit,
+    };
+    return {
+      definition: {
+        title,
+        description: state.description.trim(),
+        formula: { expression, unit: state.unit },
+      },
+      errors: [],
+    };
+  }
+
   const right = buildOperand(state.right, errors, '右操作数');
   if (left && right && left.op === 'metric' && right.op === 'metric') {
     const same =
@@ -151,7 +186,11 @@ export function fromFormulaDefinition(definition: FormulaMetricDefinition): Form
   state.description = definition.description ?? '';
   state.unit = definition.formula.unit;
   const expression = definition.formula.expression;
-  if (expression.op !== 'constant' && expression.op !== 'metric') {
+  if (expression.op === 'convert') {
+    state.operator = 'convert';
+    state.left = readOperand(expression.left);
+    state.targetUnit = expression.target_unit === 'millisecond' ? 'millisecond' : 'second';
+  } else if (expression.op !== 'constant' && expression.op !== 'metric') {
     state.operator = expression.op;
     state.left = readOperand(expression.left);
     state.right = readOperand(expression.right);
