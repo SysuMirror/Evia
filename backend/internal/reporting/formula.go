@@ -20,6 +20,10 @@ const (
 	FormulaSubtract = "subtract"
 	FormulaMultiply = "multiply"
 	FormulaDivide   = "divide"
+	// FormulaConvert is a unary node that re-expresses one physical quantity in
+	// another unit of the same dimension. It carries one child (Left) and a
+	// target unit; the closed conversion table rejects every other pair.
+	FormulaConvert = "convert"
 )
 
 // Structural budgets keep a single formula bounded regardless of how deeply
@@ -40,12 +44,15 @@ const (
 //	constant: only Value is set
 //	metric:   only Metric is set and pins an immutable metric version
 //	add/subtract/multiply/divide: only Left and Right are set
+//	convert:  only Left and TargetUnit are set; it re-expresses one physical
+//	          quantity in another unit of the same dimension
 type FormulaExpression struct {
-	Op     string             `json:"op"`
-	Value  *float64           `json:"value,omitempty"`
-	Metric *MetricReference   `json:"metric,omitempty"`
-	Left   *FormulaExpression `json:"left,omitempty"`
-	Right  *FormulaExpression `json:"right,omitempty"`
+	Op         string             `json:"op"`
+	Value      *float64           `json:"value,omitempty"`
+	Metric     *MetricReference   `json:"metric,omitempty"`
+	Left       *FormulaExpression `json:"left,omitempty"`
+	Right      *FormulaExpression `json:"right,omitempty"`
+	TargetUnit string             `json:"target_unit,omitempty"`
 }
 
 // FormulaDefinition is the normalized composite metric configuration. Unit is
@@ -59,11 +66,12 @@ type FormulaDefinition struct {
 // formulaDecode retains numeric identity long enough to reject values that do
 // not fit the safe number range before they become float64.
 type formulaDecode struct {
-	Op     string           `json:"op"`
-	Value  json.Number      `json:"value,omitempty"`
-	Metric *MetricReference `json:"metric,omitempty"`
-	Left   *formulaDecode   `json:"left,omitempty"`
-	Right  *formulaDecode   `json:"right,omitempty"`
+	Op         string           `json:"op"`
+	Value      json.Number      `json:"value,omitempty"`
+	Metric     *MetricReference `json:"metric,omitempty"`
+	Left       *formulaDecode   `json:"left,omitempty"`
+	Right      *formulaDecode   `json:"right,omitempty"`
+	TargetUnit string           `json:"target_unit,omitempty"`
 }
 
 // formulaDefinitionDecode mirrors the public FormulaDefinition so the strict
@@ -165,6 +173,19 @@ func normalizeFormulaNode(in *formulaDecode, depth int, stats *formulaStats) (*F
 			return nil, e
 		}
 		out.Left, out.Right = left, right
+	case FormulaConvert:
+		if in.Value != "" || in.Metric != nil || in.Right != nil || in.Left == nil || in.TargetUnit == "" {
+			return nil, formulaInvalid("INVALID_FORMULA", "单位换算节点必须包含一个子表达式和目标单位", "/formula/expression")
+		}
+		if !formulaConvertibleTarget(in.TargetUnit) {
+			return nil, formulaInvalid("FORMULA_UNIT_INCOMPATIBLE", "目标单位不支持显式换算", "/formula/expression/target_unit")
+		}
+		left, e := normalizeFormulaNode(in.Left, depth+1, stats)
+		if e != nil {
+			return nil, e
+		}
+		out.Left = left
+		out.TargetUnit = in.TargetUnit
 	default:
 		return nil, formulaInvalid("INVALID_FORMULA_OP", "公式运算不受支持", "/formula/expression/op")
 	}
@@ -218,4 +239,50 @@ func formulaKnownUnit(unit string) bool {
 		return true
 	}
 	return false
+}
+
+// formulaConversions is the single closed table of explicit same-dimension
+// unit conversions: source unit -> target unit -> multiplier applied to the
+// source value. Only quantities with a defined linear factor are reachable, so
+// a convert node can never invent a relationship between unrelated dimensions
+// (no byte↔millisecond, no currency because no currency unit exists yet).
+var formulaConversions = map[string]map[string]float64{
+	"millisecond": {"second": 0.001},
+	"second":      {"millisecond": 1000},
+}
+
+// formulaConvertibleTarget reports whether a unit may appear as the target of
+// an explicit convert node at normalization time, before source units are
+// resolved.
+func formulaConvertibleTarget(unit string) bool {
+	for _, targets := range formulaConversions {
+		if _, ok := targets[unit]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// formulaConversionFactor returns the multiplier for a validated source→target
+// pair. Unit inference calls it and fails closed when the pair is not in the
+// table.
+func formulaConversionFactor(source, target string) (float64, bool) {
+	if targets, ok := formulaConversions[source]; ok {
+		factor, ok := targets[target]
+		return factor, ok
+	}
+	return 0, false
+}
+
+// formulaConvertEvalFactor returns the numeric multiplier for a target unit.
+// Each convertible target has exactly one source in the closed table, and unit
+// inference guarantees the child unit is that source, so the evaluator does not
+// need to thread static units through numeric evaluation.
+func formulaConvertEvalFactor(target string) (float64, bool) {
+	for _, targets := range formulaConversions {
+		if factor, ok := targets[target]; ok {
+			return factor, true
+		}
+	}
+	return 0, false
 }

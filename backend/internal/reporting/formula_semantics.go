@@ -67,6 +67,15 @@ func inferFormulaUnitNode(node *FormulaExpression, units map[string]string) (str
 		default:
 			return "", formulaInvalid("FORMULA_UNIT_INCOMPATIBLE", "当前单位组合的除法不受支持", "/formula/expression")
 		}
+	case FormulaConvert:
+		child, e := inferFormulaUnitNode(node.Left, units)
+		if e != nil {
+			return "", e
+		}
+		if _, ok := formulaConversionFactor(child, node.TargetUnit); !ok {
+			return "", formulaInvalid("FORMULA_UNIT_INCOMPATIBLE", "单位换算仅支持封闭表内的同量纲换算", "/formula/expression/target_unit")
+		}
+		return node.TargetUnit, nil
 	default:
 		return "", formulaInvalid("INVALID_FORMULA_OP", "公式运算不受支持", "/formula/expression/op")
 	}
@@ -136,6 +145,23 @@ func evaluateFormula(node *FormulaExpression, values map[string]*float64) *float
 			}
 			result = *left / *right
 		}
+		if math.IsNaN(result) || math.IsInf(result, 0) || math.Abs(result) > analysis.MaxSafeInteger {
+			return nil
+		}
+		return &result
+	case FormulaConvert:
+		child := evaluateFormula(node.Left, values)
+		if child == nil {
+			return nil
+		}
+		// Unit inference already proved the child unit converts to TargetUnit,
+		// so the factor is determined by the target alone. Fail closed if the
+		// factor is somehow absent rather than returning an unconverted value.
+		factor, ok := formulaConvertEvalFactor(node.TargetUnit)
+		if !ok {
+			return nil
+		}
+		result := *child * factor
 		if math.IsNaN(result) || math.IsInf(result, 0) || math.Abs(result) > analysis.MaxSafeInteger {
 			return nil
 		}
