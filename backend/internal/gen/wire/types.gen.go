@@ -626,11 +626,12 @@ type FormulaDependencyManifest struct {
 }
 
 type FormulaExpression struct {
-	Op     string             `json:"op"`
-	Value  *float64           `json:"value,omitempty"`
-	Metric *MetricReference   `json:"metric,omitempty"`
-	Left   *FormulaExpression `json:"left,omitempty"`
-	Right  *FormulaExpression `json:"right,omitempty"`
+	Op         string             `json:"op"`
+	Value      *float64           `json:"value,omitempty"`
+	Metric     *MetricReference   `json:"metric,omitempty"`
+	Left       *FormulaExpression `json:"left,omitempty"`
+	Right      *FormulaExpression `json:"right,omitempty"`
+	TargetUnit *string            `json:"target_unit,omitempty"`
 }
 
 type FormulaMetricChange struct {

@@ -21798,7 +21798,8 @@
               "add",
               "subtract",
               "multiply",
-              "divide"
+              "divide",
+              "convert"
             ]
           },
           "value": {
@@ -21814,12 +21815,20 @@
           },
           "right": {
             "$ref": "#/components/schemas/FormulaExpression"
+          },
+          "target_unit": {
+            "type": "string",
+            "enum": [
+              "millisecond",
+              "second"
+            ],
+            "description": "Target unit of a convert node. Only the closed same-dimension pair millisecond/second is convertible; unit inference rejects every other source/target combination."
           }
         },
         "required": [
           "op"
         ],
-        "description": "Restricted typed formula node. constant carries only value, metric carries only an immutable reference, and add/subtract/multiply/divide carry only left and right children. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8."
+        "description": "Restricted typed formula node. constant carries only value, metric carries only an immutable reference, add/subtract/multiply/divide carry only left and right children, and convert carries only a left child plus target_unit for an explicit same-dimension unit conversion. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8."
       },
       "FormulaDefinition": {
         "type": "object",

@@ -2320,14 +2320,19 @@ export interface components {
             metric_id: string;
             version: number;
         };
-        /** @description Restricted typed formula node. constant carries only value, metric carries only an immutable reference, and add/subtract/multiply/divide carry only left and right children. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8. */
+        /** @description Restricted typed formula node. constant carries only value, metric carries only an immutable reference, add/subtract/multiply/divide carry only left and right children, and convert carries only a left child plus target_unit for an explicit same-dimension unit conversion. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8. */
         FormulaExpression: {
             /** @enum {string} */
-            op: "constant" | "metric" | "add" | "subtract" | "multiply" | "divide";
+            op: "constant" | "metric" | "add" | "subtract" | "multiply" | "divide" | "convert";
             value?: number;
             metric?: components["schemas"]["MetricReference"];
             left?: components["schemas"]["FormulaExpression"];
             right?: components["schemas"]["FormulaExpression"];
+            /**
+             * @description Target unit of a convert node. Only the closed same-dimension pair millisecond/second is convertible; unit inference rejects every other source/target combination.
+             * @enum {string}
+             */
+            target_unit?: "millisecond" | "second";
         };
         /** @description Composite formula and its declared result unit, which must match the unit derived from the operands. Unit labels never convert values. */
         FormulaDefinition: {
