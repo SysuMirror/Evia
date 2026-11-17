@@ -42,7 +42,7 @@
 
 ## 标题搜索
 
-指标列表接受可选 `q` 查询参数，按大小写不敏感的标题子串过滤，契约与看板/保存分析完全一致：边界去首尾空白，超过 128 rune 返回 `INVALID_QUERY`（`/q`），省略或空白即不过滤。服务端转义 `\`、`%`、`_` 并在存储侧声明 `ESCAPE '\'`，因此元字符按字面量匹配。搜索与环境、归档谓词合取且不跨环境；归一化词进入签名游标作用域，跨词分页返回 `INVALID_CURSOR`。复合公式指标列表仍不接受 `q`，发送即 `INVALID_QUERY`。控制台提供 300ms 防抖搜索框、镜像 128 rune 钳制、空白省略 `q` 并在换词时回到第一页。
+指标列表接受可选 `q` 查询参数，按大小写不敏感的标题子串过滤，契约与看板/保存分析完全一致：边界去首尾空白，超过 128 rune 返回 `INVALID_QUERY`（`/q`），省略或空白即不过滤。服务端转义 `\`、`%`、`_` 并在存储侧声明 `ESCAPE '\'`，因此元字符按字面量匹配。搜索与环境、归档谓词合取且不跨环境；归一化词进入签名游标作用域，跨词分页返回 `INVALID_CURSOR`。复合公式指标列表使用同一契约，见下文复合指标章节。控制台提供 300ms 防抖搜索框、镜像 128 rune 钳制、空白省略 `q` 并在换词时回到第一页。
 
 人类 owner/editor 可编辑、校验和发布；viewer 可读取和运行聚合。会话写请求仍需 CSRF。读取查询任务/结果使用现有查询接口和 `queries.read`；涉及身份字段时额外检查 `queries.raw.read`，不能通过指标筛选或分组绕过。机器创建后的权限不可变，原 `analyses.*` 权限不隐含新增的 `metrics.*`。
 
@@ -138,7 +138,7 @@
 
 | 方法与路径 | 行为 | 机器权限 |
 | --- | --- | --- |
-| `GET F` | 按必填 `environment` 分页，`limit` 默认 20、最大 100；可选 `view`（`active`/`archived`，默认 `active`） | `metrics.read` |
+| `GET F` | 按必填 `environment` 分页，`limit` 默认 20、最大 100；可选 `view`（`active`/`archived`，默认 `active`）与 `q` 标题搜索 | `metrics.read` |
 | `POST F` | 创建草稿，必需 `Idempotency-Key`，返回 201 | `metrics.write` |
 | `GET F/{metric_id}`、`GET F/{metric_id}/draft` | 读取资源或草稿（草稿带 `ETag` 修订） | `metrics.read` |
 | `PATCH F/{metric_id}/draft` | 替换完整 definition，必需 `If-Match: "revision"` | `metrics.write` |
@@ -155,6 +155,8 @@
 `032_formula_metric_archive.sql` 给 `formula_metrics` 增加可空 `archived_at`/`archived_by` 列、活跃部分索引 `formula_metrics_active_scope` 与标记 soundness CHECK。既有 `formula_metric_preserve_scope` 触发器只保护 project/environment/metric_id/created_at，标记更新无需改触发器。`POST F/{metric_id}/archive` 设置两个标记并把复合指标移出默认 `GET F` 列表；`view=archived` 列出已归档项，`view=active`（或缺省）为默认流。归档可经 `POST F/{metric_id}/unarchive` 逆转并清空标记。两个动作都要求 `metrics.write`、无请求体，写审计 `formula_metric.archived`/`formula_metric.unarchived`。重复归档返回 409 `FORMULA_METRIC_ALREADY_ARCHIVED`，对活跃指标恢复返回 409 `FORMULA_METRIC_NOT_ARCHIVED`。
 
 归档复合指标按 ID、草稿与不可变版本仍可读；归档期间草稿保存、校验快照（覆盖发布路径）与新运行入队统一 409 `FORMULA_METRIC_ARCHIVED` fail-closed，已建查询作业仍可查询/取消。不可变版本是事实：复合指标对原子指标的依赖经 `formula_metric_dependencies` 外键哈希见证引用 `metric_versions` 不可变表、从不回读可变父行，因此归档复合父指标不破坏其已发布版本与历史运行，被其引用的原子指标归档同理不受影响。列表谓词仅由校验后布尔量在两个常量间选择，请求文本永不进 SQL；游标按 actor/project/environment 再绑定 `active`/`archived` 视图，跨视图复用一律 `INVALID_CURSOR`，未知 `view` 值返回 `INVALID_ARCHIVE_VIEW`。
+
+复合指标列表接受可选 `q` 查询参数，契约与原子指标完全一致：边界去首尾空白，超过 128 rune 返回 `INVALID_QUERY`（`/q`），省略或空白即不过滤；服务端转义 `\`、`%`、`_` 并在存储侧声明 `ESCAPE '\'`，元字符按字面量匹配。搜索与环境、归档谓词合取且不跨环境，归一化词进入签名游标作用域，跨词分页返回 `INVALID_CURSOR`。控制台提供 300ms 防抖搜索框、镜像 128 rune 钳制、空白省略 `q` 并在换词时回到第一页。
 
 ### 执行内核与扇出（迁移 `014`，worker 已接通）
 
