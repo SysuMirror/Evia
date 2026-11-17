@@ -53,7 +53,7 @@
 
 ### 门禁
 
-- `make check PYTHON=…/venv/bin/python` 退出码 0：命名（首次因注释出现禁用词 "tracks" 失败，改述后通过）、契约、边界、监控、后端 `-race` 全量包与 Web（prettier、typecheck、test:client 45 项、SDK、生产构建）全绿。
+- `make check PYTHON=…/venv/bin/python` 退出码 0：命名（首次因注释出现第一方禁用术语失败，改用 "mirrors" 表述后通过）、契约、边界、监控、后端 `-race` 全量包与 Web（prettier、typecheck、test:client 45 项、SDK、生产构建）全绿。
 - 全量 PG 集成包 `go test -race -tags=integration -count=1 -skip TestFailoverBaselineWrite ./internal/storage/postgres` 一次通过（242.9s，0 FAIL，无 flake）；`TestFailoverBaselineWrite` 属既有多主机 DSN 门控，未设置 `EVIA_TEST_PG_FAILOVER_DSN` 时跳过。
 
 ## 明确未做（边界）
