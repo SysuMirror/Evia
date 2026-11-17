@@ -1,7 +1,9 @@
 package reporting
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
@@ -115,8 +117,15 @@ func validateParameterValue(decl ParameterDeclaration, value any) error {
 	case ParameterNumber:
 		switch v := value.(type) {
 		case float64:
-			// JSON numbers decode to float64; reject non-finite values.
-			if v != v {
+			// JSON numbers decode to float64; reject non-finite and unsafe values.
+			if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > analysis.MaxSafeInteger {
+				return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数值无效", "/parameters")
+			}
+		case json.Number:
+			// The HTTP boundary and execution normalizer decode with UseNumber,
+			// so runtime values arrive as json.Number rather than float64.
+			f, e := v.Float64()
+			if e != nil || math.IsNaN(f) || math.IsInf(f, 0) || math.Abs(f) > analysis.MaxSafeInteger {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数值无效", "/parameters")
 			}
 		case []any:
@@ -124,7 +133,17 @@ func validateParameterValue(decl ParameterDeclaration, value any) error {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "数值数组参数无效", "/parameters")
 			}
 			for _, item := range v {
-				if _, ok := item.(float64); !ok {
+				switch n := item.(type) {
+				case float64:
+					if math.IsNaN(n) || math.IsInf(n, 0) || math.Abs(n) > analysis.MaxSafeInteger {
+						return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数组必须为同类型有效数值", "/parameters")
+					}
+				case json.Number:
+					f, e := n.Float64()
+					if e != nil || math.IsNaN(f) || math.IsInf(f, 0) || math.Abs(f) > analysis.MaxSafeInteger {
+						return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数组必须为同类型有效数值", "/parameters")
+					}
+				default:
 					return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数组必须为同类型数值", "/parameters")
 				}
 			}
@@ -210,4 +229,51 @@ func CompileWidgetParameterFilters(
 		})
 	}
 	return filters, nil
+}
+
+// ValidateParameterValues guards the run request boundary before any widget is
+// compiled: the value map is bounded, every key references a declared
+// parameter, and every value matches its declaration's type and bounds. The
+// per-widget compiler repeats the declaration checks, so a storage caller can
+// never bypass the closed set by skipping this entry point.
+func ValidateParameterValues(declarations []ParameterDeclaration, values ParameterValues) error {
+	if len(values) > MaxParameterDeclarations {
+		return analysis.Invalid("INVALID_PARAMETER", "参数数量超过上限", "/parameters")
+	}
+	declared := make(map[string]ParameterDeclaration, len(declarations))
+	for _, decl := range declarations {
+		declared[decl.ParameterID] = decl
+	}
+	for key, value := range values {
+		decl, exists := declared[key]
+		if !exists {
+			return analysis.Invalid("INVALID_PARAMETER", fmt.Sprintf("未知参数 %q", key), "/parameters")
+		}
+		if e := validateParameterValue(decl, value); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// CombineWidgetRuntimeFilters merges compiled parameter predicates with the
+// widget's local runtime filter in the mandated order: parameter bindings
+// first, then the local filter. Immutable metric/analysis fixed filters live
+// inside the pinned template and are ANDed by the existing binding path, so
+// the final predicate is fixed filters AND parameter filters AND local filter.
+func CombineWidgetRuntimeFilters(paramFilters []*analysis.Filter, local *analysis.Filter) *analysis.Filter {
+	switch {
+	case len(paramFilters) == 0:
+		return local
+	case local == nil:
+		if len(paramFilters) == 1 {
+			return paramFilters[0]
+		}
+		return &analysis.Filter{Op: "and", Args: paramFilters}
+	default:
+		args := make([]*analysis.Filter, 0, len(paramFilters)+1)
+		args = append(args, paramFilters...)
+		args = append(args, local)
+		return &analysis.Filter{Op: "and", Args: args}
+	}
 }
