@@ -4,8 +4,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
 // parameterShapeWidget is a minimal valid analysis widget the pre-parameter
@@ -117,4 +122,155 @@ func shapeManyParams(n int) string {
 		parts = append(parts, `{"parameter_id":"p`+string(rune('a'+i))+`","label":"P","type":"string","operator":"eq","required":false}`)
 	}
 	return strings.Join(parts, ",")
+}
+
+// parameterRunFixture builds a one-widget dashboard pinned to the saved-run
+// fixture analysis, with one numeric parameter bound to its lesson_id field.
+func parameterRunFixture(t *testing.T, required bool) (catalogFixture, reporting.DashboardDraft, reporting.DashboardExecute, analysis.Field) {
+	t.Helper()
+	f, v, r := savedRunFixture(t)
+	field := analysis.Field{Kind: "property", Key: "lesson_id", EventKey: "lesson_opened", SchemaVersion: 1}
+	def := reporting.DashboardDefinition{
+		Title: "Parameter dashboard",
+		Parameters: []reporting.ParameterDeclaration{{
+			ParameterID: "min_lesson", Label: "最小学课ID", Type: reporting.ParameterNumber, Operator: "gte", Required: required,
+		}},
+		Widgets: []reporting.DashboardWidget{{
+			ID: ids.New(), AnalysisID: v.AnalysisID, AnalysisVersion: v.Version, Title: "Lesson total",
+			ReadingOrder: 0, Layout: reporting.DashboardLayout{Width: 12, Height: 2},
+			ParameterBindings: []reporting.ParameterBinding{{ParameterID: "min_lesson", Field: field}},
+		}},
+	}
+	d, e := f.s.CreateDashboard(context.Background(), f.owner, f.project, ids.New(), reporting.DashboardCreate{Environment: "development", Definition: def})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(d.Definition.Parameters) != 1 || len(d.Definition.Widgets[0].ParameterBindings) != 1 {
+		t.Fatalf("draft must round-trip parameters and bindings: %+v", d.Definition)
+	}
+	return f, d, reporting.DashboardExecute{TimeRange: r.TimeRange, Timezone: r.Timezone}, field
+}
+
+func TestDashboardParameterRunCompilesFiltersAndRoundTrips(t *testing.T) {
+	f, d, in, field := parameterRunFixture(t, true)
+	dashboardPublish(t, f, d)
+	ctx := context.Background()
+	in.ParameterValues = reporting.ParameterValues{"min_lesson": float64(5)}
+	run, e := f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "parameter-run", in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(run.Widgets) != 1 {
+		t.Fatalf("expected one widget run, got %+v", run.Widgets)
+	}
+	var op, value, fieldKey string
+	if e = f.s.Pool.QueryRow(ctx, `SELECT request->'filter'->>'op', request->'filter'->>'value', request->'filter'->'field'->>'key' FROM analysis_query_jobs WHERE id=$1`, run.Widgets[0].Query.ID).Scan(&op, &value, &fieldKey); e != nil {
+		t.Fatal(e)
+	}
+	if op != "gte" || value != "5" || fieldKey != field.Key {
+		t.Fatalf("parameter predicate missing from child request: op=%s value=%s field=%s", op, value, fieldKey)
+	}
+	// Read-back echoes the runtime values (normalized to json.Number).
+	got, e := f.s.GetDashboardRun(ctx, f.viewer, f.project, run.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if got.ParameterValues["min_lesson"] != json.Number("5") {
+		t.Fatalf("run must echo parameter values, got %+v", got.ParameterValues)
+	}
+	// Same-key replay returns the identical run.
+	replay, e := f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "parameter-run", in)
+	if e != nil || replay.ID != run.ID {
+		t.Fatalf("idempotent replay changed: %+v %v", replay, e)
+	}
+	// A different parameter value is a different request under the same key.
+	changed := in
+	changed.ParameterValues = reporting.ParameterValues{"min_lesson": float64(9)}
+	_, e = f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "parameter-run", changed)
+	faultCode(t, e, "IDEMPOTENCY_CONFLICT")
+}
+
+func TestDashboardParameterRunMergesAheadOfLocalFilter(t *testing.T) {
+	f, d, in, _ := parameterRunFixture(t, false)
+	dashboardPublish(t, f, d)
+	ctx := context.Background()
+	in.ParameterValues = reporting.ParameterValues{"min_lesson": float64(5)}
+	in.WidgetFilters = []reporting.DashboardWidgetFilter{{
+		WidgetID: d.Definition.Widgets[0].ID,
+		Filter:   &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "system", Key: "uid"}, Value: "user-1"},
+	}}
+	run, e := f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "parameter-local-run", in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var argOps, argFields []string
+	rows, e := f.s.Pool.Query(ctx, `SELECT arg->>'op', arg->'field'->>'key' FROM analysis_query_jobs, jsonb_array_elements(request->'filter'->'args') arg WHERE id=$1`, run.Widgets[0].Query.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var op, key string
+		if e = rows.Scan(&op, &key); e != nil {
+			t.Fatal(e)
+		}
+		argOps = append(argOps, op)
+		argFields = append(argFields, key)
+	}
+	if e = rows.Err(); e != nil {
+		t.Fatal(e)
+	}
+	if len(argOps) != 2 || argOps[0] != "gte" || argFields[0] != "lesson_id" || argOps[1] != "eq" || argFields[1] != "uid" {
+		t.Fatalf("expected parameter AND local ordering, got ops=%v fields=%v", argOps, argFields)
+	}
+}
+
+func TestDashboardParameterRunFailClosed(t *testing.T) {
+	ctx := context.Background()
+	// Required parameter without a value must be rejected.
+	f, d, in, _ := parameterRunFixture(t, true)
+	dashboardPublish(t, f, d)
+	_, e := f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "missing-required", in)
+	faultCode(t, e, "MISSING_PARAMETER_VALUE")
+	bad := in
+	bad.ParameterValues = reporting.ParameterValues{"ghost": float64(1)}
+	_, e = f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "unknown-key", bad)
+	faultCode(t, e, "INVALID_PARAMETER")
+	typed := in
+	typed.ParameterValues = reporting.ParameterValues{"min_lesson": "not-a-number"}
+	_, e = f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "type-mismatch", typed)
+	faultCode(t, e, "INVALID_PARAMETER_VALUE")
+
+	// Optional parameter with no value and no default compiles to no filter.
+	fo, do, io, _ := parameterRunFixture(t, false)
+	dashboardPublish(t, fo, do)
+	run, e := fo.s.EnqueueDashboardRun(ctx, fo.owner, fo.project, do.ID, 1, "optional-skip", io)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var hasFilter bool
+	if e = fo.s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM analysis_query_jobs WHERE id=$1 AND request ? 'filter')`, run.Widgets[0].Query.ID).Scan(&hasFilter); e != nil {
+		t.Fatal(e)
+	}
+	if hasFilter {
+		t.Fatal("skipped optional parameter must not produce a filter predicate")
+	}
+}
+
+func TestDashboardParameterBindingRejectedAtDraftSave(t *testing.T) {
+	f, v, _ := savedRunFixture(t)
+	def := reporting.DashboardDefinition{
+		Title:      "Broken bindings",
+		Parameters: nil,
+		Widgets: []reporting.DashboardWidget{{
+			ID: ids.New(), AnalysisID: v.AnalysisID, AnalysisVersion: v.Version, Title: "Lesson total",
+			ReadingOrder: 0, Layout: reporting.DashboardLayout{Width: 12, Height: 2},
+			ParameterBindings: []reporting.ParameterBinding{{
+				ParameterID: "ghost",
+				Field:       analysis.Field{Kind: "property", Key: "lesson_id", EventKey: "lesson_opened", SchemaVersion: 1},
+			}},
+		}},
+	}
+	_, e := f.s.CreateDashboard(context.Background(), f.owner, f.project, ids.New(), reporting.DashboardCreate{Environment: "development", Definition: def})
+	faultCode(t, e, "INVALID_PARAMETER_BINDING")
 }

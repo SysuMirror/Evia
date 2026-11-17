@@ -194,7 +194,7 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 	if e = decodeSaved(executionData, &execution); e != nil {
 		return out, e
 	}
-	out.TimeRange, out.Timezone, out.WidgetFilters, out.Comparison = execution.TimeRange, execution.Timezone, execution.WidgetFilters, execution.Comparison
+	out.TimeRange, out.Timezone, out.WidgetFilters, out.ParameterValues, out.Comparison = execution.TimeRange, execution.Timezone, execution.WidgetFilters, execution.ParameterValues, execution.Comparison
 	snapshot, e := readDashboardVersionTx(ctx, tx, project, out.DashboardID, out.Version)
 	if e != nil {
 		return out, e
@@ -406,6 +406,14 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 	}
 	requests := make([]dashboardWidgetRequests, 0, len(snapshot.Definition.Widgets))
 	for _, widget := range snapshot.Definition.Widgets {
+		// Parameter predicates compile from the immutable version's
+		// declarations and this widget's own field bindings, then merge ahead
+		// of the local widget filter: fixed AND parameter AND local.
+		paramFilters, e := reporting.CompileWidgetParameterFilters(snapshot.Definition.Parameters, widget.ParameterBindings, in.ParameterValues)
+		if e != nil {
+			return nil, e
+		}
+		filter := reporting.CombineWidgetRuntimeFilters(paramFilters, filters[widget.ID])
 		var request analysis.Request
 		if widget.MetricRef != nil {
 			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
@@ -418,7 +426,7 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 			execute := reporting.MetricExecute{
 				TimeRange: in.TimeRange,
 				Timezone:  in.Timezone,
-				Filter:    filters[widget.ID],
+				Filter:    filter,
 			}
 			template, e := reporting.MetricTemplate(mv.Definition, execute)
 			if e != nil {
@@ -436,7 +444,7 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 			if v.Environment != snapshot.Environment {
 				return nil, analysis.Invalid("DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH", "看板组件分析版本不属于当前环境")
 			}
-			request, e = reporting.BindDashboardWidget(v, filters[widget.ID], in)
+			request, e = reporting.BindDashboardWidget(v, filter, in)
 			if e != nil {
 				return nil, e
 			}
@@ -446,7 +454,7 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 		}
 		pair := dashboardWidgetRequests{Current: request}
 		if comparisonRange != nil {
-			comparison, e := s.dashboardComparisonRequestTx(ctx, tx, actor, project, snapshot, widget, filters[widget.ID], in, *comparisonRange, permission)
+			comparison, e := s.dashboardComparisonRequestTx(ctx, tx, actor, project, snapshot, widget, filter, in, *comparisonRange, permission)
 			if e != nil {
 				return nil, e
 			}
