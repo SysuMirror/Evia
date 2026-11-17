@@ -2,7 +2,7 @@
 
 Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. The console now provides editing, version publication/history and per-widget execution using these same APIs. Actual browser evidence is recorded in the [delivery verification](verification/dashboards-sdk-2026-11-09.md).
 
-The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, hard delete, generic parameter bindings and cross-request result caching remain planned. Direct immutable metric-version widgets are implemented (migration `034`); scoped machine authentication is implemented.
+The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Hard delete of dashboards, generic parameter bindings and cross-request result caching remain planned. Direct immutable metric-version widgets are implemented (migration `034`); bounded dashboard folders are implemented (migration `035`); scoped machine authentication is implemented.
 
 ## Authentication and scope
 
@@ -30,8 +30,18 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 | `DELETE P/dashboard-runs/{run_id}`                         | CSRF headers for session callers                           | Cancels active children and returns current run             |
 | `POST P/dashboards/{dashboard_id}/archive`                 | No body or query parameters; `dashboards.write`            | 200 resource with `archived_at`/`archived_by`; 409 if already archived |
 | `POST P/dashboards/{dashboard_id}/unarchive`               | No body or query parameters; `dashboards.write`            | 200 active resource; 409 if not archived                    |
+| `GET/POST P/dashboard-folders`                             | GET: required `environment`, optional `limit`/`cursor`; POST: `{environment,title,parent_id?}` + `Idempotency-Key` | GET 200 `{items,next_cursor}`; POST 201 folder with ETag; unknown parent 404, depth over 3 400 |
+| `GET/PATCH/DELETE P/dashboard-folders/{folder_id}`         | PATCH `{title}` with quoted `If-Match`; DELETE has no body  | GET/PATCH 200 folder; DELETE 204 only when empty, else 409 `DASHBOARD_FOLDER_NOT_EMPTY`; stale revision 409 |
 
-Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope, including the `active`/`archived` view, so a cursor from one view cannot page the other; they are not cross-page snapshots. Unknown/repeated query parameters (an unknown `view` value returns `INVALID_ARCHIVE_VIEW`), unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
+Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope, including the `active`/`archived` view and any `folder_id` filter, so a cursor from one scope cannot page another; they are not cross-page snapshots. Unknown/repeated query parameters (an unknown `view` value returns `INVALID_ARCHIVE_VIEW`), unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
+
+## Folder hierarchy
+
+Dashboard folders are scoped organization metadata with no immutable witnesses. A folder belongs to one project/environment and is either a root node (`parent_id` omitted) or a child of another folder. The hierarchy depth is bounded to 3: creating a fourth-level node returns `DASHBOARD_FOLDER_TOO_DEEP`. A parent that does not exist in the same scope returns `DASHBOARD_FOLDER_PARENT_NOT_FOUND`; cross-environment parents get the same not-found answer so the API never probes foreign environments.
+
+A folder's `parent_id` and `depth` are fixed at creation and protected by an immutability trigger; the only mutation is a rename through `PATCH` with the current quoted revision in `If-Match` (`REVISION_REQUIRED` when missing, `DASHBOARD_FOLDER_REVISION_CONFLICT` when stale), which bumps `revision` and returns the new ETag. Deletion is a hard delete of an **empty** folder only: any child folder or contained dashboard produces 409 `DASHBOARD_FOLDER_NOT_EMPTY`, and `ON DELETE RESTRICT` foreign keys are the database-level backstop. Reorganization therefore uses create folder, move dashboards, then delete the empty old folder.
+
+Dashboards carry an optional `folder_id` on create and on every draft PATCH (full-replacement semantics: omitted or empty moves the dashboard back to the root). A missing or cross-scope folder fails with `DASHBOARD_FOLDER_NOT_FOUND` before insertion. The dashboard list accepts `folder_id=<uuid>` to list one folder or `folder_id=root` for unfiled dashboards; omitting the parameter applies no folder filter, preserving the previous flat listing behavior. Folders reuse `dashboards.read`/`dashboards.write` for sessions and the matching machine grants; no new permission is introduced.
 
 ## Define a draft
 
