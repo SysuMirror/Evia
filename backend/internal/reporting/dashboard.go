@@ -25,11 +25,16 @@ type DashboardWidget struct {
 	Title           string           `json:"title"`
 	ReadingOrder    int              `json:"reading_order"`
 	Layout          DashboardLayout  `json:"layout"`
+	// ParameterBindings maps dashboard-level parameters to this widget's own
+	// pinned event fields. It never stores a pseudo-global field name: each
+	// binding carries the concrete field the widget's source owns.
+	ParameterBindings []ParameterBinding `json:"parameter_bindings,omitempty"`
 }
 type DashboardDefinition struct {
-	Title       string            `json:"title"`
-	Description string            `json:"description"`
-	Widgets     []DashboardWidget `json:"widgets"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Parameters  []ParameterDeclaration `json:"parameters,omitempty"`
+	Widgets     []DashboardWidget      `json:"widgets"`
 }
 type Dashboard struct {
 	ID          string `json:"dashboard_id"`
@@ -124,6 +129,9 @@ type DashboardExecute struct {
 	TimeRange     analysis.TimeRange      `json:"time_range"`
 	Timezone      string                  `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitempty"`
+	// ParameterValues carries runtime values keyed by the declared
+	// parameter_id; unknown keys and type mismatches fail closed.
+	ParameterValues ParameterValues `json:"parameter_values,omitempty"`
 	// Comparison, when set, adds one shifted-window query per widget using the
 	// DST-safe ShiftTimeRange derivation; nil runs the current window only.
 	Comparison *ComparisonSpec `json:"comparison,omitempty"`
@@ -144,21 +152,22 @@ type DashboardWidgetRun struct {
 	Comparison *analysis.Job `json:"comparison,omitempty"`
 }
 type DashboardRun struct {
-	ID            string                  `json:"run_id"`
-	DashboardID   string                  `json:"dashboard_id"`
-	ProjectID     string                  `json:"project_id"`
-	Environment   string                  `json:"environment"`
-	Version       int64                   `json:"version"`
-	CreatedBy     string                  `json:"created_by"`
-	TimeRange     analysis.TimeRange      `json:"time_range"`
-	Timezone      string                  `json:"timezone"`
-	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitempty"`
-	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
-	State         string                  `json:"state"`
-	CreatedAt     time.Time               `json:"created_at"`
-	ExpiresAt     time.Time               `json:"expires_at"`
-	PollAfterMS   *int                    `json:"poll_after_ms,omitempty"`
-	Widgets       []DashboardWidgetRun    `json:"widgets"`
+	ID              string                  `json:"run_id"`
+	DashboardID     string                  `json:"dashboard_id"`
+	ProjectID       string                  `json:"project_id"`
+	Environment     string                  `json:"environment"`
+	Version         int64                   `json:"version"`
+	CreatedBy       string                  `json:"created_by"`
+	TimeRange       analysis.TimeRange      `json:"time_range"`
+	Timezone        string                  `json:"timezone"`
+	WidgetFilters   []DashboardWidgetFilter `json:"widget_filters,omitempty"`
+	ParameterValues ParameterValues         `json:"parameter_values,omitempty"`
+	Comparison      *ComparisonSpec         `json:"comparison,omitempty"`
+	State           string                  `json:"state"`
+	CreatedAt       time.Time               `json:"created_at"`
+	ExpiresAt       time.Time               `json:"expires_at"`
+	PollAfterMS     *int                    `json:"poll_after_ms,omitempty"`
+	Widgets         []DashboardWidgetRun    `json:"widgets"`
 }
 
 type DashboardStore interface {

@@ -3,6 +3,7 @@ package reporting
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,6 +30,9 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 	}
 	if len(out.Widgets) < 1 || len(out.Widgets) > MaxDashboardWidgets {
 		return out, analysis.Invalid("INVALID_DASHBOARD_WIDGETS", "看板需要 1 到 12 个组件", "/widgets")
+	}
+	if e := normalizeDashboardParameters(&out); e != nil {
+		return out, e
 	}
 	ids, orders := map[string]bool{}, map[int]bool{}
 	for i := range out.Widgets {
@@ -60,6 +64,77 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 	sort.Slice(out.Widgets, func(i, j int) bool { return out.Widgets[i].ReadingOrder < out.Widgets[j].ReadingOrder })
 	return out, nil
 }
+
+// normalizeDashboardParameters validates the dashboard-level parameter
+// contract and every widget binding while a definition is normalized. The
+// closed set keeps the published shape sound; runtime value and required
+// checks stay in the compiler, so an immutable version can never be enqueued
+// with a bad predicate even if a later caller skips normalization.
+func normalizeDashboardParameters(out *DashboardDefinition) error {
+	if len(out.Parameters) > MaxParameterDeclarations {
+		return analysis.Invalid("INVALID_PARAMETER", "参数数量超过上限", "/parameters")
+	}
+	declared := map[string]bool{}
+	for i := range out.Parameters {
+		decl := &out.Parameters[i]
+		if e := ValidateDeclaration(*decl); e != nil {
+			return e
+		}
+		if declared[decl.ParameterID] {
+			return analysis.Invalid("INVALID_PARAMETER", "参数标识必须唯一", "/parameters")
+		}
+		declared[decl.ParameterID] = true
+	}
+	for i := range out.Widgets {
+		w := &out.Widgets[i]
+		seenParams := map[string]bool{}
+		seenFields := map[string]bool{}
+		for _, binding := range w.ParameterBindings {
+			if !declared[binding.ParameterID] {
+				return analysis.Invalid("INVALID_PARAMETER_BINDING", "组件绑定了未声明的参数", "/parameter_bindings")
+			}
+			if seenParams[binding.ParameterID] {
+				return analysis.Invalid("INVALID_PARAMETER_BINDING", "同一参数在一个组件内只能绑定一次", "/parameter_bindings")
+			}
+			seenParams[binding.ParameterID] = true
+			if e := validateBindingFieldShape(binding.Field); e != nil {
+				return e
+			}
+			fieldKey := strings.Join([]string{
+				binding.Field.Kind,
+				binding.Field.Key,
+				binding.Field.EventKey,
+				fmt.Sprintf("%d", binding.Field.SchemaVersion),
+			}, ":")
+			if seenFields[fieldKey] {
+				return analysis.Invalid("INVALID_PARAMETER_BINDING", "同一字段不能绑定多个参数", "/parameter_bindings")
+			}
+			seenFields[fieldKey] = true
+		}
+	}
+	return nil
+}
+
+// validateBindingFieldShape performs structural validation without database
+// access. Property existence on the pinned event version is enforced later
+// through the ordinary filter validation path, so a stale binding can never
+// produce a successful query.
+func validateBindingFieldShape(field analysis.Field) error {
+	switch field.Kind {
+	case "system":
+		if field.Key == "" || field.EventKey != "" || field.SchemaVersion != 0 {
+			return analysis.Invalid("INVALID_PARAMETER_BINDING", "系统字段绑定形状无效", "/parameter_bindings")
+		}
+	case "property":
+		if field.Key == "" || field.EventKey == "" || field.SchemaVersion < 1 || field.SchemaVersion > analysis.MaxSafeInteger {
+			return analysis.Invalid("INVALID_PARAMETER_BINDING", "属性字段必须限定事件与已发布版本", "/parameter_bindings")
+		}
+	default:
+		return analysis.Invalid("INVALID_PARAMETER_BINDING", "参数字段类型不受支持", "/parameter_bindings")
+	}
+	return nil
+}
+
 func dashboardText(s string, max int, empty bool) bool {
 	return utf8.ValidString(s) && (empty || s != "") && utf8.RuneCountInString(s) <= max && !strings.ContainsRune(s, 0)
 }
@@ -121,6 +196,7 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 		}
 		add("metadata", "/title", baseline.Title, definition.Title)
 		add("metadata", "/description", baseline.Description, definition.Description)
+		add("parameters", "/parameters", baseline.Parameters, definition.Parameters)
 		old := map[string]DashboardWidget{}
 		for _, w := range baseline.Widgets {
 			old[w.ID] = w
@@ -135,6 +211,7 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 			add("dependencies", "/widgets/"+w.ID+"/analysis", []any{prev.AnalysisID, prev.AnalysisVersion}, []any{w.AnalysisID, w.AnalysisVersion})
 			add("layout", "/widgets/"+w.ID+"/layout", prev.Layout, w.Layout)
 			add("layout", "/widgets/"+w.ID+"/reading_order", prev.ReadingOrder, w.ReadingOrder)
+			add("parameters", "/widgets/"+w.ID+"/parameter_bindings", prev.ParameterBindings, w.ParameterBindings)
 			delete(old, w.ID)
 		}
 		removed := []string{}
@@ -184,6 +261,9 @@ func NormalizeDashboardExecution(in DashboardExecute, definition DashboardDefini
 	}
 	if out.Comparison != nil && !out.Comparison.Valid() {
 		return out, analysis.Invalid("INVALID_COMPARISON_SPEC", "比较期单位或数量无效", "/comparison")
+	}
+	if e := ValidateParameterValues(definition.Parameters, out.ParameterValues); e != nil {
+		return out, e
 	}
 	ids := map[string]bool{}
 	for _, w := range definition.Widgets {

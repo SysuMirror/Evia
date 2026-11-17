@@ -134,6 +134,94 @@ func TestDashboardExecutionTargetsAndCanonicalInput(t *testing.T) {
 		}
 	}
 }
+func parameterizedDashboardDefinition() DashboardDefinition {
+	d := dashboardDefinition()
+	d.Parameters = []ParameterDeclaration{
+		{ParameterID: "section", Label: "板块", Type: ParameterString, Operator: "eq"},
+		{ParameterID: "limit", Label: "下限", Type: ParameterNumber, Operator: "gte"},
+	}
+	d.Widgets[0].ParameterBindings = []ParameterBinding{{
+		ParameterID: "section",
+		Field:       analysis.Field{Kind: "property", Key: "section_id", EventKey: "page_opened", SchemaVersion: 1},
+	}}
+	return d
+}
+
+func TestDashboardDefinitionParameterNormalization(t *testing.T) {
+	if _, e := NormalizeDashboardDefinition(parameterizedDashboardDefinition()); e != nil {
+		t.Fatalf("valid parameterized definition rejected: %v", e)
+	}
+	propertyField := analysis.Field{Kind: "property", Key: "section_id", EventKey: "page_opened", SchemaVersion: 1}
+	for _, edit := range []func(*DashboardDefinition){
+		// binding references an undeclared parameter
+		func(d *DashboardDefinition) { d.Parameters = nil },
+		// duplicate parameter identifier
+		func(d *DashboardDefinition) { d.Parameters = append(d.Parameters, d.Parameters[0]) },
+		// operator/type closed set mismatch
+		func(d *DashboardDefinition) { d.Parameters[0].Operator = "regexp" },
+		// same parameter bound twice on one widget
+		func(d *DashboardDefinition) {
+			d.Widgets[0].ParameterBindings = []ParameterBinding{
+				{ParameterID: "section", Field: propertyField},
+				{ParameterID: "section", Field: analysis.Field{Kind: "property", Key: "other_id", EventKey: "page_opened", SchemaVersion: 1}},
+			}
+		},
+		// same field bound by two parameters
+		func(d *DashboardDefinition) {
+			d.Widgets[0].ParameterBindings = []ParameterBinding{
+				{ParameterID: "section", Field: propertyField},
+				{ParameterID: "limit", Field: propertyField},
+			}
+		},
+		// property field missing event pin
+		func(d *DashboardDefinition) {
+			d.Widgets[0].ParameterBindings = []ParameterBinding{{ParameterID: "section", Field: analysis.Field{Kind: "property", Key: "section_id"}}}
+		},
+		// unsupported field kind
+		func(d *DashboardDefinition) {
+			d.Widgets[0].ParameterBindings = []ParameterBinding{{ParameterID: "section", Field: analysis.Field{Kind: "json", Key: "section_id"}}}
+		},
+	} {
+		d := parameterizedDashboardDefinition()
+		edit(&d)
+		if _, e := NormalizeDashboardDefinition(d); e == nil {
+			t.Fatalf("invalid parameter shape accepted: %+v", d)
+		}
+	}
+	tooMany := parameterizedDashboardDefinition()
+	for i := 0; i < MaxParameterDeclarations; i++ {
+		tooMany.Parameters = append(tooMany.Parameters, ParameterDeclaration{
+			ParameterID: "p" + strings.Repeat("x", i+1), Label: "L", Type: ParameterString, Operator: "eq",
+		})
+	}
+	if _, e := NormalizeDashboardDefinition(tooMany); e == nil {
+		t.Fatal("parameter count over cap must be rejected")
+	}
+}
+
+func TestDashboardExecutionParameterValuesBoundary(t *testing.T) {
+	def, e := NormalizeDashboardDefinition(parameterizedDashboardDefinition())
+	if e != nil {
+		t.Fatal(e)
+	}
+	in := dashboardExecution()
+	in.ParameterValues = ParameterValues{"section": "forum", "limit": json.Number("10")}
+	if _, e = NormalizeDashboardExecution(in, def); e != nil {
+		t.Fatalf("valid runtime values rejected: %v", e)
+	}
+	for _, values := range []ParameterValues{
+		{"ghost": "x"},
+		{"section": float64(7)},
+		{"limit": json.Number("NaN")},
+	} {
+		bad := dashboardExecution()
+		bad.ParameterValues = values
+		if _, e = NormalizeDashboardExecution(bad, def); e == nil {
+			t.Fatalf("runtime values %+v must be rejected", values)
+		}
+	}
+}
+
 func TestDashboardRunStatesKeepMixedOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		states []string
