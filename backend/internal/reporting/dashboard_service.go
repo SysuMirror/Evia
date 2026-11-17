@@ -69,7 +69,7 @@ func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environ
 	if e != nil {
 		return nil, e
 	}
-	search, e = NormalizeDashboardSearch(search)
+	search, e = NormalizeCatalogSearch(search)
 	if e != nil {
 		return nil, e
 	}

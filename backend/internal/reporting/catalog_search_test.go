@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestNormalizeDashboardSearch(t *testing.T) {
+func TestNormalizeCatalogSearch(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		input string
@@ -18,7 +18,7 @@ func TestNormalizeDashboardSearch(t *testing.T) {
 		{name: "accepts boundary length", input: strings.Repeat("字", 128), want: strings.Repeat("字", 128)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, e := NormalizeDashboardSearch(tc.input)
+			got, e := NormalizeCatalogSearch(tc.input)
 			if e != nil {
 				t.Fatalf("unexpected error: %v", e)
 			}
@@ -27,7 +27,7 @@ func TestNormalizeDashboardSearch(t *testing.T) {
 			}
 		})
 	}
-	if _, e := NormalizeDashboardSearch(strings.Repeat("字", 129)); e == nil {
+	if _, e := NormalizeCatalogSearch(strings.Repeat("字", 129)); e == nil {
 		t.Fatal("search term over 128 runes must be rejected")
 	}
 }

@@ -240,7 +240,7 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
-	search, e := reporting.NormalizeDashboardSearch(q.Get("q"))
+	search, e := reporting.NormalizeCatalogSearch(q.Get("q"))
 	if e != nil {
 		return e
 	}
