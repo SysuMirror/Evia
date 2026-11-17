@@ -205,7 +205,7 @@ func (s *Store) CreateSavedAnalysis(ctx context.Context, actor, project, key str
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.SavedAnalysis, error) {
+func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]reporting.SavedAnalysis, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -220,12 +220,14 @@ func (s *Store) ListSavedAnalyses(ctx context.Context, actor, project, environme
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "analyses.read"); e != nil {
 		return nil, e
 	}
-	// The predicate is selected from the validated bool, never from request text.
+	// The archive predicate is selected from the validated bool; search is an
+	// escaped LIKE literal passed only as a bound parameter. $5='' disables
+	// the title substring filter.
 	archivePredicate := "archived_at IS NULL"
 	if archivedOnly {
 		archivePredicate = "archived_at IS NOT NULL"
 	}
-	rows, e := tx.Query(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR analysis_id>NULLIF($3,'')::uuid) ORDER BY analysis_id LIMIT $4`, project, environment, after, limit)
+	rows, e := tx.Query(ctx, `SELECT `+savedAnalysisColumns+` FROM saved_analyses WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($5='' OR title ILIKE '%' || $5 || '%' ESCAPE '\') AND ($3='' OR analysis_id>NULLIF($3,'')::uuid) ORDER BY analysis_id LIMIT $4`, project, environment, after, limit, search)
 	if e != nil {
 		return nil, e
 	}

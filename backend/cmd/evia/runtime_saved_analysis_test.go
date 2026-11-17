@@ -26,8 +26,8 @@ type runtimeSavedStore struct {
 	reads int
 }
 
-func (s *runtimeSavedStore) ListSavedAnalyses(_ context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.SavedAnalysis, error) {
-	if actor != runtimeActor || project != runtimeProject || environment != "development" || after != "" || limit < 1 || archivedOnly {
+func (s *runtimeSavedStore) ListSavedAnalyses(_ context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]reporting.SavedAnalysis, error) {
+	if actor != runtimeActor || project != runtimeProject || environment != "development" || after != "" || limit < 1 || archivedOnly || search != "" {
 		panic("saved analysis configuration lost runtime scope")
 	}
 	s.reads++
