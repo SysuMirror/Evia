@@ -273,3 +273,32 @@ button.dashboard-folder-node,
     gap: 4px 8px;
   }
 }
+
+.dashboard-parameter-editor,
+.dashboard-binding-editor {
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dashboard-parameter-editor legend,
+.dashboard-binding-editor legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.dashboard-parameter-row,
+.dashboard-binding-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px;
+  align-items: end;
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 10px;
+  padding: 12px;
+}
+.dashboard-parameter-row .evia-checkbox,
+.dashboard-binding-row .evia-checkbox {
+  align-self: center;
+}

@@ -1,4 +1,5 @@
 import type { DashboardDefinition, DashboardWidget } from '@evia/api-client';
+import { parameterIssues } from './parameter-model';
 export function initialDashboardDefinition(): DashboardDefinition {
   return { title: '', widgets: [] };
 }
@@ -19,6 +20,7 @@ export function dashboardIssues(value: DashboardDefinition): string[] {
       issues.push(`组件 ${widget.title || widget.widget_id} 必须且只能固定一个分析或指标来源。`);
   }
   if ([...(value.description ?? '')].length > 2000) issues.push('描述最多 2000 个字符。');
+  issues.push(...parameterIssues(value));
   return issues;
 }
 export function availableWidgetPosition(widgets: readonly DashboardWidget[]) {

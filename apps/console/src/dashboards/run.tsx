@@ -7,6 +7,7 @@ import {
   type DashboardExecute,
   type DashboardVersion,
   type DashboardWidget,
+  type ParameterValues,
   type QueryJob,
   type QueryResult,
 } from '@evia/api-client';
@@ -36,6 +37,7 @@ import {
 import { displayCell } from '../saved-analysis-run/result-table';
 import { DashboardRuntimeFilters } from './runtime-filters';
 import { ComparisonControls } from './comparison-controls';
+import { DashboardParameterValues } from './parameter-run-values';
 import { widgetSourceLabel } from './model';
 import { activeDashboardRun, useDashboardExecution } from './use-execution';
 export type { SavedRunWork } from '../saved-analysis-run';
@@ -72,13 +74,22 @@ export function DashboardRunView({
     [filterOpen, setFilterOpen] = useState(false),
     [filterPending, setFilterPending] = useState(false),
     [filterBaseline, setFilterBaseline] = useState('[]'),
-    [comparisonSpec, setComparisonSpec] = useState<ComparisonSpec | null>(null);
+    [comparisonSpec, setComparisonSpec] = useState<ComparisonSpec | null>(null),
+    [parameterValues, setParameterValues] = useState<ParameterValues>({}),
+    [parameterOpen, setParameterOpen] = useState(false),
+    [parameterPending, setParameterPending] = useState(false),
+    [parameterBaseline, setParameterBaseline] = useState('{}');
   const controlID = useId();
+  const declaredParameters = version.definition.parameters ?? [];
   useEffect(() => {
     setFilters([]);
     setFilterBaseline('[]');
     setFilterPending(false);
     setFilterOpen(false);
+    setParameterValues({});
+    setParameterBaseline('{}');
+    setParameterPending(false);
+    setParameterOpen(false);
   }, [version.dashboard_id, version.version]);
   // Only analysis-sourced widgets need a saved-analysis version prefetch.
   // Metric-sourced widgets carry metric_ref and are rendered without it.
@@ -167,16 +178,18 @@ export function DashboardRunView({
       }),
     );
     setFilterBaseline(JSON.stringify(body.widget_filters ?? []));
+    setParameterBaseline(JSON.stringify(body.parameter_values ?? {}));
   };
   const execution = useDashboardExecution({
     context,
     version,
     analyses,
-    disabled: disabled || !sourcesReady || filterPending,
+    disabled: disabled || !sourcesReady || filterPending || parameterPending,
     body: () => ({
       ...savedExecutionBody(range, kind),
       ...(filters.length ? { widget_filters: filters } : {}),
       ...(comparisonSpec ? { comparison: comparisonSpec } : {}),
+      ...(Object.keys(parameterValues).length ? { parameter_values: parameterValues } : {}),
     }),
     onInvalid: (message) => {
       setRangeError(message);
@@ -190,7 +203,9 @@ export function DashboardRunView({
     dirty =
       JSON.stringify(range) !== baseline ||
       JSON.stringify(filters) !== filterBaseline ||
+      JSON.stringify(parameterValues) !== parameterBaseline ||
       filterPending ||
+      parameterPending ||
       !!attempt ||
       active;
   useEffect(
@@ -212,7 +227,8 @@ export function DashboardRunView({
     !!snapshot &&
     (snapshot.version.version !== version.version ||
       JSON.stringify(range) !== baseline ||
-      JSON.stringify(filters) !== filterBaseline);
+      JSON.stringify(filters) !== filterBaseline ||
+      JSON.stringify(parameterValues) !== parameterBaseline);
   return (
     <div className="section-stack dashboard-run">
       <Panel label="看板执行条件" className="dashboard-run-controls">
@@ -228,10 +244,20 @@ export function DashboardRunView({
               >
                 组件运行筛选 ({filters.length})
               </Button>
+              {declaredParameters.length > 0 && (
+                <Button
+                  disabled={frozen || active || !sourcesReady}
+                  onClick={() => setParameterOpen(true)}
+                >
+                  运行参数 ({Object.keys(parameterValues).length}/{declaredParameters.length})
+                </Button>
+              )}
               <Button
                 variant="primary"
                 loading={busy && !active}
-                disabled={disabled || busy || active || filterPending || !sourcesReady}
+                disabled={
+                  disabled || busy || active || filterPending || parameterPending || !sourcesReady
+                }
                 onClick={() => void execution.execute()}
               >
                 {attempt ? '重试运行看板' : '运行看板'}
@@ -318,6 +344,16 @@ export function DashboardRunView({
         onApply={setFilters}
         onPendingChange={setFilterPending}
         onDenied={onDenied}
+      />
+      <DashboardParameterValues
+        key={`${version.dashboard_id}:${version.version}:parameters`}
+        declarations={declaredParameters}
+        initial={parameterValues}
+        open={parameterOpen}
+        disabled={frozen}
+        onClose={() => setParameterOpen(false)}
+        onApply={setParameterValues}
+        onPendingChange={setParameterPending}
       />
       {changed && (
         <Alert tone="warning" title="执行条件已修改">

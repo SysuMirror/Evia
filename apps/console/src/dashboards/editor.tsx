@@ -13,6 +13,8 @@ import {
 } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
 import { DashboardWidgetPicker } from './picker';
+import { DashboardParameterEditor } from './parameter-editor';
+import { WidgetParameterBindings } from './parameter-bindings';
 import {
   availableWidgetPosition,
   dashboardIssues,
@@ -144,6 +146,7 @@ export function DashboardEditor({
           />
         </Field>
       </div>
+      <DashboardParameterEditor value={value} frozen={frozen} onChange={onChange} />
       <div className="dashboard-section-actions">
         <span>{value.widgets.length} / 12 个组件</span>
         <Button
@@ -271,6 +274,19 @@ export function DashboardEditor({
             >
               更换引用版本
             </Button>
+            <WidgetParameterBindings
+              context={context}
+              widget={widget}
+              parameters={value.parameters ?? []}
+              value={widget.parameter_bindings ?? []}
+              disabled={frozen}
+              onChange={(parameter_bindings) =>
+                update({
+                  ...widget,
+                  parameter_bindings: parameter_bindings.length ? parameter_bindings : undefined,
+                })
+              }
+            />
             <p className="field-help">
               方向按钮移动一格，尺寸按钮调整一格。位置和尺寸立即应用，碰撞与越界时保留原布局。
             </p>
