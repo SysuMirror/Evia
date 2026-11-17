@@ -90,6 +90,7 @@ export type DashboardChange = components['schemas']['DashboardChange'];
 export type DashboardValidation = components['schemas']['DashboardValidation'];
 export type DashboardCreate = components['schemas']['DashboardCreate'];
 export type DashboardUpdate = components['schemas']['DashboardUpdate'];
+export type DashboardCopy = components['schemas']['DashboardCopy'];
 export type DashboardValidate = components['schemas']['DashboardValidate'];
 export type DashboardPublish = components['schemas']['DashboardPublish'];
 export type DashboardWidgetFilter = components['schemas']['DashboardWidgetFilter'];
@@ -989,6 +990,21 @@ export const api = {
     }),
   getDashboard: (projectID: string, dashboardID: string, signal?: AbortSignal) =>
     request<Dashboard>(dashboardPath(projectID, dashboardID), { signal }),
+  copyDashboard: (
+    projectID: string,
+    dashboardID: string,
+    body: DashboardCopy,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardDraft>(`${dashboardPath(projectID, dashboardID)}/copy`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
   archiveDashboard: (projectID: string, dashboardID: string, csrf: string, signal?: AbortSignal) =>
     request<Dashboard>(`${dashboardPath(projectID, dashboardID)}/archive`, {
       method: 'POST',

@@ -36,6 +36,7 @@ func (a *DashboardsAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/projects/{project_id}/dashboard-runs/{run_id}", a.API.projectAuth(true, a.cancelRun))
 	mux.HandleFunc("POST "+base+"/{dashboard_id}/archive", a.API.projectAuth(true, a.archive))
 	mux.HandleFunc("POST "+base+"/{dashboard_id}/unarchive", a.API.projectAuth(true, a.unarchive))
+	mux.HandleFunc("POST "+base+"/{dashboard_id}/copy", a.API.projectAuth(true, a.copy))
 }
 
 func (a *DashboardsAPI) scope(r *http.Request, s authorizedActor, write bool) (string, error) {
@@ -352,4 +353,27 @@ func (a *DashboardsAPI) unarchive(w http.ResponseWriter, r *http.Request, s auth
 		return e
 	}
 	return a.API.Boundary.JSON(w, 200, "Dashboard", out)
+}
+
+func (a *DashboardsAPI) copy(w http.ResponseWriter, r *http.Request, s authorizedActor) error {
+	p, e := a.scope(r, s, true)
+	if e != nil {
+		return e
+	}
+	if _, e = savedQuery(r, false, false); e != nil {
+		return e
+	}
+	key, e := savedIdempotency(r)
+	if e != nil {
+		return e
+	}
+	var in reporting.DashboardCopy
+	if e = a.API.Boundary.Decode(w, r, "DashboardCopy", &in); e != nil {
+		return e
+	}
+	out, e := a.Service.CopyDashboard(r.Context(), s.ID, p, r.PathValue("dashboard_id"), key, in)
+	if e != nil {
+		return e
+	}
+	return a.draftResponse(w, 201, out)
 }

@@ -696,6 +696,31 @@ test('dashboard archive view encoding and lifecycle calls carry CSRF without bod
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('dashboard copy posts to the copy route with idempotency key and CSRF', async () => {
+  const fetch = respond(201, { dashboard_id: 'new-dashboard' });
+  const controller = new AbortController();
+  await api.copyDashboard(
+    'p/q',
+    'd/r',
+    { title: 'Copied dashboard', folder_id: 'f/1' },
+    'copy-key',
+    'csrf',
+    controller.signal,
+  );
+  const [url, init] = fetch.mock.calls[0]!.arguments as [string, RequestInit];
+  assert.equal(url, '/api/v1/projects/p%2Fq/dashboards/d%2Fr/copy');
+  assert.equal(init.method, 'POST');
+  assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.equal((init.headers as Headers).get('Idempotency-Key'), 'copy-key');
+  assert.deepEqual(JSON.parse(init.body as string), {
+    title: 'Copied dashboard',
+    folder_id: 'f/1',
+  });
+  assert.equal(init.signal?.aborted, false);
+  controller.abort();
+  assert.equal(init.signal?.aborted, true);
+});
+
 test('dashboard folder scope encoding and folder CRUD calls', async () => {
   const fetch = respond(200, { items: [], next_cursor: null });
   const controller = new AbortController();

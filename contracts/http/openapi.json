@@ -8824,6 +8824,209 @@
         "description": "Project-scoped dashboard operation. Unknown or duplicate query parameters are rejected."
       }
     },
+    "/api/v1/projects/{project_id}/dashboards/{dashboard_id}/copy": {
+      "post": {
+        "operationId": "copyDashboard",
+        "summary": "copyDashboard",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "dashboard_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Quoted draft_revision for the next conditional draft save.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\"[1-9][0-9]*\"$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create an independent unpublished copy in the same project/environment with fresh dashboard and widget IDs while retaining pinned references, layout, parameters and bindings. Same-key retries replay the created copy; changed input under the same key conflicts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardCopy"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/dashboards/{dashboard_id}/archive": {
       "post": {
         "operationId": "archiveDashboard",
@@ -24402,6 +24605,26 @@
         "required": [
           "definition"
         ]
+      },
+      "DashboardCopy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional target folder in the source dashboard's project/environment; omitted places the copy at the root."
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "description": "Same-environment copy request. The server creates a new unpublished dashboard with fresh dashboard/widget IDs, retaining pinned immutable references, layout, parameters and bindings; publication state, runs and archive state are never carried over. Cross-environment copies require explicit rebinding and are not supported by this contract."
       },
       "DashboardFolder": {
         "type": "object",

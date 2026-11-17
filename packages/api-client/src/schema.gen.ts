@@ -765,6 +765,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/dashboards/{dashboard_id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * copyDashboard
+         * @description Create an independent unpublished copy in the same project/environment with fresh dashboard and widget IDs while retaining pinned references, layout, parameters and bindings. Same-key retries replay the created copy; changed input under the same key conflicts.
+         */
+        post: operations["copyDashboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/dashboards/{dashboard_id}/archive": {
         parameters: {
             query?: never;
@@ -2793,6 +2813,15 @@ export interface components {
              */
             folder_id?: string;
             definition: components["schemas"]["DashboardDefinition"];
+        };
+        /** @description Same-environment copy request. The server creates a new unpublished dashboard with fresh dashboard/widget IDs, retaining pinned immutable references, layout, parameters and bindings; publication state, runs and archive state are never carried over. Cross-environment copies require explicit rebinding and are not supported by this contract. */
+        DashboardCopy: {
+            title: string;
+            /**
+             * Format: uuid
+             * @description Optional target folder in the source dashboard's project/environment; omitted places the copy at the root.
+             */
+            folder_id?: string;
         };
         /** @description Scoped organization metadata with a bounded depth of 3. Parent and depth are fixed at creation; only the title (and revision) can change. */
         DashboardFolder: {
@@ -10236,6 +10265,139 @@ export interface operations {
             };
             /** @description 请求失败 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    copyDashboard: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                dashboard_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardCopy"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    /** @description Quoted draft_revision for the next conditional draft save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardDraft"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

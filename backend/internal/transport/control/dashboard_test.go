@@ -114,6 +114,13 @@ func (f *dashboardHTTPService) EnqueueDashboardRun(_ context.Context, actor, pro
 	f.id, f.version, f.key = id, version, key
 	return dashboardRunFixture(), f.call(actor, project)
 }
+func (f *dashboardHTTPService) CopyDashboard(_ context.Context, actor, project, id, key string, in reporting.DashboardCopy) (reporting.DashboardDraft, error) {
+	f.id, f.key = id, key
+	out := dashboardDraft()
+	out.Title = in.Title
+	out.FolderID = in.FolderID
+	return out, f.call(actor, project)
+}
 func dashboardHTTP(t *testing.T, f *dashboardHTTPService, access AccessService) (http.Handler, *cursor.Codec) {
 	t.Helper()
 	v, e := contract.New()
@@ -145,6 +152,7 @@ func TestDashboardHTTPRoutesContractsAndRevisions(t *testing.T) {
 		{"POST", dashboardItem + "/versions", `{"draft_revision":1,"expected_published_version":0,"validation_hash":"` + strings.Repeat("d", 64) + `"}`, map[string]string{"Idempotency-Key": "publish-key"}, 201, true},
 		{"GET", dashboardItem + "/versions/1", "", nil, 200, false},
 		{"POST", dashboardItem + "/versions/1/runs", dashboardExecuteBody, map[string]string{"Idempotency-Key": "execute-key"}, 202, false},
+		{"POST", dashboardItem + "/copy", `{"title":"Copied dashboard"}`, map[string]string{"Idempotency-Key": "copy-key"}, 201, true},
 		{"POST", dashboardItem + "/archive", "", nil, 200, true},
 		{"POST", dashboardItem + "/unarchive", "", nil, 200, true},
 	} {
@@ -163,7 +171,7 @@ func TestDashboardHTTPRoutesContractsAndRevisions(t *testing.T) {
 			}
 		})
 	}
-	if f.id != dashboardID || f.version != 1 || f.key != "execute-key" || f.revision != 1 {
+	if f.id != dashboardID || f.version != 1 || f.key != "copy-key" || f.revision != 1 {
 		t.Fatal("scope or precondition not forwarded", f)
 	}
 }
@@ -190,6 +198,9 @@ func TestDashboardHTTPStrictInputs(t *testing.T) {
 		{"unsafe version", "GET", dashboardItem + "/versions/9007199254740992", "", nil, 400},
 		{"create needs key", "POST", dashboardBase, dashboardCreateBody, nil, 400},
 		{"execute needs key", "POST", dashboardItem + "/versions/1/runs", dashboardExecuteBody, nil, 400},
+		{"copy needs key", "POST", dashboardItem + "/copy", `{"title":"Copied"}`, nil, 400},
+		{"copy empty title", "POST", dashboardItem + "/copy", `{"title":""}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
+		{"copy unknown field", "POST", dashboardItem + "/copy", `{"title":"Copied","environment":"production"}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
 		{"invalid key", "POST", dashboardBase, dashboardCreateBody, map[string]string{"Idempotency-Key": "contains space"}, 400},
 		{"PATCH needs revision", "PATCH", dashboardItem + "/draft", `{"definition":` + dashboardDefinition + `}`, nil, 400},
 		{"weak revision", "PATCH", dashboardItem + "/draft", `{"definition":` + dashboardDefinition + `}`, map[string]string{"If-Match": `W/"1"`}, 400},
@@ -203,6 +214,7 @@ func TestDashboardHTTPStrictInputs(t *testing.T) {
 		{"execute env override body", "POST", dashboardItem + "/versions/1/runs", strings.TrimSuffix(dashboardExecuteBody, "}") + `,"environment":"production"}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"CSRF validation", "POST", dashboardItem + "/validations", dashboardValidateBody, map[string]string{"X-CSRF-Token": ""}, 403},
 		{"CSRF execution", "POST", dashboardItem + "/versions/1/runs", dashboardExecuteBody, map[string]string{"X-CSRF-Token": "", "Idempotency-Key": "key"}, 403},
+		{"CSRF copy", "POST", dashboardItem + "/copy", `{"title":"Copied"}`, map[string]string{"X-CSRF-Token": "", "Idempotency-Key": "key"}, 403},
 		{"origin", "POST", dashboardBase, dashboardCreateBody, map[string]string{"Origin": "https://invalid.example", "Idempotency-Key": "key"}, 403},
 		{"wrong method", "DELETE", dashboardItem, "", nil, 405},
 	} {

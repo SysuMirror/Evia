@@ -216,6 +216,11 @@ type DashboardChange struct {
 	After    json.RawMessage `json:"after,omitempty"`
 }
 
+type DashboardCopy struct {
+	Title    string  `json:"title"`
+	FolderID *string `json:"folder_id,omitempty"`
+}
+
 type DashboardCreate struct {
 	Environment string              `json:"environment"`
 	FolderID    *string             `json:"folder_id,omitempty"`
