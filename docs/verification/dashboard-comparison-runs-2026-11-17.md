@@ -49,8 +49,15 @@
 
 完整 `make check` 退出码 0：32 个 Go 包 ok、0 FAIL；Node 18/41/57、gofmt/prettier/命名/契约/codegen 幂等全绿。全量 PG 集成包 `-count=1 -skip TestFailoverBaselineWrite` 新鲜通过（88.37s，0 FAIL）。`TestFailoverBaselineWrite` 属既有多主机环境门控，与本切片无关。
 
+## 控制台接线（同一切片内闭环）
+
+- `comparison-controls.tsx`：运行区比较期选择器（不比较/上一相同长度周期/日/周/月/年，日历单位配 1–12 数量），选择结果纳入 `DashboardExecute.comparison`。
+- `use-execution.ts`：快照增加 `comparisonResults`/`comparisonResultErrors`，轮询对每个 widget 的 current 与 comparison 作业分别拉取结果（`widget_id:comparison` 键），过期处理与 401/403 语义一致；`activeDashboardRun` 把比较期作业计入活跃判定，当前窗先完成时不会提前停止轮询。
+- `run.tsx`：组件卡片在当前窗结果下方渲染「比较期窗口」分区，复用 `MetricWidgetPresentation`/`SavedAnalysisResultPresentation`，与当前窗同口径呈现。
+- 控制台变异两轮（执行体 comparison 类型错配、快照缺比较期结果字段）均触发 tsc TS2322/TS2345，sha256 逐字节还原后回绿；完整 `make check` 退出码 0。
+
 ## 明确未做（边界）
 
-- 控制台尚未提供比较期开关与双窗结果对比渲染（下一切片）；
 - 比较期复用同一时间粒度与过滤，不支持比较期独立参数或独立粒度；
+- 控制台无组件级单测设施，交互以 tsc 类型守卫、构建与后端真实 PG 集成测试为证据；
 - 通用参数绑定、跨请求结果缓存仍为独立缺口。

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import {
   api,
   ApiError,
+  type ComparisonSpec,
   type DashboardExecute,
   type DashboardVersion,
   type DashboardWidget,
@@ -34,6 +35,7 @@ import {
 } from '../saved-analysis-run';
 import { displayCell } from '../saved-analysis-run/result-table';
 import { DashboardRuntimeFilters } from './runtime-filters';
+import { ComparisonControls } from './comparison-controls';
 import { widgetSourceLabel } from './model';
 import { activeDashboardRun, useDashboardExecution } from './use-execution';
 export type { SavedRunWork } from '../saved-analysis-run';
@@ -69,7 +71,9 @@ export function DashboardRunView({
     [filters, setFilters] = useState<NonNullable<DashboardExecute['widget_filters']>>([]),
     [filterOpen, setFilterOpen] = useState(false),
     [filterPending, setFilterPending] = useState(false),
-    [filterBaseline, setFilterBaseline] = useState('[]');
+    [filterBaseline, setFilterBaseline] = useState('[]'),
+    [comparisonSpec, setComparisonSpec] = useState<ComparisonSpec | null>(null);
+  const controlID = useId();
   useEffect(() => {
     setFilters([]);
     setFilterBaseline('[]');
@@ -172,6 +176,7 @@ export function DashboardRunView({
     body: () => ({
       ...savedExecutionBody(range, kind),
       ...(filters.length ? { widget_filters: filters } : {}),
+      ...(comparisonSpec ? { comparison: comparisonSpec } : {}),
     }),
     onInvalid: (message) => {
       setRangeError(message);
@@ -295,6 +300,12 @@ export function DashboardRunView({
         kind={kind}
         onClose={() => setRangeOpen(false)}
       />
+      <ComparisonControls
+        id={controlID}
+        value={comparisonSpec}
+        disabled={frozen}
+        onChange={setComparisonSpec}
+      />
       <DashboardRuntimeFilters
         key={`${version.dashboard_id}:${version.version}`}
         context={context}
@@ -320,6 +331,8 @@ export function DashboardRunView({
           const run = snapshot?.run.widgets.find((r) => r.widget_id === w.widget_id),
             result = snapshot?.results[w.widget_id],
             resultError = snapshot?.resultErrors[w.widget_id],
+            comparisonResult = snapshot?.comparisonResults[`${w.widget_id}:comparison`],
+            comparisonResultError = snapshot?.comparisonResultErrors[`${w.widget_id}:comparison`],
             isMetric = !!w.metric_ref,
             analysis = isMetric
               ? undefined
@@ -385,6 +398,55 @@ export function DashboardRunView({
                 ) : (
                   <div className="dashboard-widget-preview">
                     <p>尚未运行，选择统一时间范围后运行看板。</p>
+                  </div>
+                )}
+                {snapshot && run?.comparison && (
+                  <div className="dashboard-comparison-pane">
+                    <Badge tone="neutral">比较期窗口</Badge>
+                    {isMetric ? (
+                      <>
+                        <MetricWidgetPresentation
+                          body={snapshot.body}
+                          job={run.comparison}
+                          result={comparisonResult}
+                          observing={
+                            observing &&
+                            (['queued', 'running'].includes(run.comparison.state) ||
+                              (run.comparison.state === 'succeeded' && !comparisonResult))
+                          }
+                          onResume={execution.resume}
+                        />
+                        <CatalogError
+                          error={comparisonResultError ?? null}
+                          retry={execution.resume}
+                        />
+                      </>
+                    ) : analysis ? (
+                      <>
+                        <SavedAnalysisResultPresentation
+                          compact
+                          snapshot={{
+                            key: `${snapshot.key}:comparison`,
+                            version: analysis,
+                            body: snapshot.body,
+                            job: run.comparison,
+                            result: comparisonResult,
+                          }}
+                          changed={false}
+                          observing={
+                            observing &&
+                            (['queued', 'running'].includes(run.comparison.state) ||
+                              (run.comparison.state === 'succeeded' && !comparisonResult))
+                          }
+                          notice=""
+                          onResume={execution.resume}
+                        />
+                        <CatalogError
+                          error={comparisonResultError ?? null}
+                          retry={execution.resume}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 )}
               </DashboardCard>

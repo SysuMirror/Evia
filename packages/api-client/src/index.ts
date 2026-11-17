@@ -98,6 +98,7 @@ export type DashboardWidgetRun = components['schemas']['DashboardWidgetRun'];
 export type DashboardRun = components['schemas']['DashboardRun'];
 export type DashboardVersionList = components['schemas']['DashboardVersionList'];
 export type DashboardList = components['schemas']['DashboardList'];
+export type ComparisonSpec = components['schemas']['ComparisonSpec'];
 export type DashboardFolder = components['schemas']['DashboardFolder'];
 export type DashboardFolderCreate = components['schemas']['DashboardFolderCreate'];
 export type DashboardFolderUpdate = components['schemas']['DashboardFolderUpdate'];

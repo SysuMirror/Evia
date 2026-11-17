@@ -21,10 +21,18 @@ export type DashboardExecutionSnapshot = {
   run: DashboardRun;
   results: Record<string, QueryResult>;
   resultErrors: Record<string, Error>;
+  comparisonResults: Record<string, QueryResult>;
+  comparisonResultErrors: Record<string, Error>;
 };
-type Attempt = Omit<DashboardExecutionSnapshot, 'run' | 'results' | 'resultErrors'>;
+const comparisonKey = (widgetID: string) => `${widgetID}:comparison`;
+type Attempt = Omit<
+  DashboardExecutionSnapshot,
+  'run' | 'results' | 'resultErrors' | 'comparisonResults' | 'comparisonResultErrors'
+>;
 export const activeDashboardRun = (run?: DashboardRun) =>
-  run?.widgets.some((w) => w.query.state === 'queued' || w.query.state === 'running') ?? false;
+  run?.widgets.some(
+    (w) => activeQuery(w.query.state) || (w.comparison ? activeQuery(w.comparison.state) : false),
+  ) ?? false;
 const activeQuery = (state: string) => state === 'queued' || state === 'running';
 export function useDashboardExecution({
   context,
@@ -134,7 +142,14 @@ export function useDashboardExecution({
         controller.signal,
       );
       if (!controller.signal.aborted && scope.isCurrent(token)) {
-        setSnapshot({ ...next, run, results: {}, resultErrors: {} });
+        setSnapshot({
+          ...next,
+          run,
+          results: {},
+          resultErrors: {},
+          comparisonResults: {},
+          comparisonResultErrors: {},
+        });
         setAttempt(undefined);
         onExecuted(next.body);
         setObserving(true);
@@ -245,29 +260,56 @@ export function useDashboardExecution({
           local = { ...local, run: refreshed };
           let expiredDuringRead = false;
           const results = { ...local.results },
-            resultErrors = { ...local.resultErrors };
+            resultErrors = { ...local.resultErrors },
+            comparisonResults = { ...local.comparisonResults },
+            comparisonResultErrors = { ...local.comparisonResultErrors };
+          const fetchResult = async (
+            job: { state: string; query_id: string },
+            store: Record<string, QueryResult>,
+            errors: Record<string, Error>,
+            key: string,
+            onExpired: () => void,
+          ) => {
+            if (job.state !== 'succeeded') {
+              delete store[key];
+              return;
+            }
+            if (store[key]) return;
+            try {
+              store[key] = await api.getQueryResult(project.id, job.query_id, {
+                signal: controller.signal,
+              });
+              delete errors[key];
+            } catch (caught) {
+              if (caught instanceof ApiError && [401, 403].includes(caught.status)) throw caught;
+              errors[key] = caught instanceof Error ? caught : new Error('结果读取失败，请重试。');
+              if (caught instanceof ApiError && caught.code === 'QUERY_EXPIRED') onExpired();
+            }
+          };
           await Promise.all(
-            local.run.widgets.map(async (widget) => {
-              const query = widget.query;
-              if (query.state !== 'succeeded') {
-                delete results[widget.widget_id];
-                return;
-              }
-              if (results[widget.widget_id]) return;
-              try {
-                results[widget.widget_id] = await api.getQueryResult(project.id, query.query_id, {
-                  signal: controller.signal,
-                });
-                delete resultErrors[widget.widget_id];
-              } catch (caught) {
-                if (caught instanceof ApiError && [401, 403].includes(caught.status)) throw caught;
-                resultErrors[widget.widget_id] =
-                  caught instanceof Error ? caught : new Error('结果读取失败，请重试。');
-                if (caught instanceof ApiError && caught.code === 'QUERY_EXPIRED') {
-                  widget.query = { ...query, state: 'expired' };
+            local.run.widgets.flatMap((widget) => {
+              const jobs = [
+                fetchResult(widget.query, results, resultErrors, widget.widget_id, () => {
+                  widget.query = { ...widget.query, state: 'expired' };
                   expiredDuringRead = true;
-                }
+                }),
+              ];
+              if (widget.comparison) {
+                const comparisonJob = widget.comparison;
+                jobs.push(
+                  fetchResult(
+                    comparisonJob,
+                    comparisonResults,
+                    comparisonResultErrors,
+                    comparisonKey(widget.widget_id),
+                    () => {
+                      widget.comparison = { ...comparisonJob, state: 'expired' };
+                      expiredDuringRead = true;
+                    },
+                  ),
+                );
               }
+              return jobs;
             }),
           );
           if (!current()) return;
@@ -276,7 +318,7 @@ export function useDashboardExecution({
             if (!current()) return;
             local = { ...local, run };
           }
-          local = { ...local, results, resultErrors };
+          local = { ...local, results, resultErrors, comparisonResults, comparisonResultErrors };
           setSnapshot((previous) =>
             previous?.run.run_id === runID
               ? { ...local, run: retainDashboardProgress(previous.run, local.run) }
