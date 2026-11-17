@@ -13,6 +13,7 @@ import { formatTime } from '../analysis-model';
 import { CatalogError } from '../catalog-helpers';
 import type { DashboardListView } from './use-history';
 import { MoveDashboardModal } from './move-dashboard';
+import { CopyDashboardModal } from './copy-dashboard';
 
 type DashboardsListProps = {
   items: Dashboard[];
@@ -32,6 +33,7 @@ type DashboardsListProps = {
   onArchive: (analysis: Dashboard) => void;
   onUnarchive: (analysis: Dashboard) => void;
   onMove: (analysis: Dashboard, folderID: string) => void;
+  onCopy: (analysis: Dashboard, title: string, folderID: string) => void;
   onRetry: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -54,6 +56,7 @@ export function DashboardsList({
   onArchive,
   onUnarchive,
   onMove,
+  onCopy,
   onRetry,
   onPrevious,
   onNext,
@@ -61,6 +64,7 @@ export function DashboardsList({
   const [pendingArchive, setPendingArchive] = useState<Dashboard | null>(null);
   const [archiveSubmitted, setArchiveSubmitted] = useState(false);
   const [pendingMove, setPendingMove] = useState<Dashboard | null>(null);
+  const [pendingCopy, setPendingCopy] = useState<Dashboard | null>(null);
   const archivedView = view === 'archived';
   useEffect(() => {
     if (archiveSubmitted && busyLabel !== '归档看板') {
@@ -101,9 +105,18 @@ export function DashboardsList({
       header: '操作',
       render: (analysis) =>
         archivedView ? (
-          <Button size="small" disabled={busy || !canWrite} onClick={() => onUnarchive(analysis)}>
-            恢复看板
-          </Button>
+          <span className="dashboard-row-actions">
+            <Button size="small" disabled={busy || !canWrite} onClick={() => onUnarchive(analysis)}>
+              恢复看板
+            </Button>
+            <Button
+              size="small"
+              disabled={busy || !canWrite}
+              onClick={() => setPendingCopy(analysis)}
+            >
+              复制
+            </Button>
+          </span>
         ) : (
           <span className="dashboard-row-actions">
             <Button size="small" disabled={busy} onClick={() => onOpen(analysis)}>
@@ -115,6 +128,13 @@ export function DashboardsList({
               onClick={() => setPendingMove(analysis)}
             >
               移动
+            </Button>
+            <Button
+              size="small"
+              disabled={busy || !canWrite}
+              onClick={() => setPendingCopy(analysis)}
+            >
+              复制
             </Button>
             <Button
               size="small"
@@ -221,6 +241,19 @@ export function DashboardsList({
         onMove={(dashboard, folderID) => {
           onMove(dashboard, folderID);
           setPendingMove(null);
+        }}
+      />
+      <CopyDashboardModal
+        key={pendingCopy?.dashboard_id ?? 'no-copy'}
+        dashboard={pendingCopy}
+        folders={folders}
+        busy={busyLabel === '复制看板'}
+        onClose={() => {
+          if (!busy) setPendingCopy(null);
+        }}
+        onCopy={(dashboard, title, folderID) => {
+          onCopy(dashboard, title, folderID);
+          setPendingCopy(null);
         }}
       />
     </DataSurface>

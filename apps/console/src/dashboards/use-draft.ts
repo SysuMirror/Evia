@@ -211,6 +211,20 @@ export function useDashboardDraft({
     setLatest(undefined);
     setCreateAttempt(undefined);
   }
+  // Opens a draft already returned by the server (e.g. a freshly created copy)
+  // without issuing another GET.
+  function openExisting(next: DashboardDraft) {
+    setWorkspace({
+      scope: identity,
+      draft: next,
+      definition: structuredClone(next.definition),
+      folderID: next.folder_id ?? '',
+    });
+    setLatest(undefined);
+    setCreateAttempt(undefined);
+    setEditorPending(false);
+    setEditorValid(true);
+  }
   return {
     workspace,
     latest,
@@ -222,6 +236,7 @@ export function useDashboardDraft({
     setEditorPending,
     reset,
     open,
+    openExisting,
     create,
     save,
     readLatest,

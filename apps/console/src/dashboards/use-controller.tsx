@@ -162,6 +162,31 @@ export function useDashboardsController(context: CatalogPageProps) {
       },
     );
   }
+  function copyDashboard(dashboard: Dashboard, title: string, folderID: string) {
+    if (request.isPending()) return;
+    guard.requestLeave(() => {
+      void request.perform(
+        '复制看板',
+        (signal) =>
+          api.copyDashboard(
+            project.id,
+            dashboard.dashboard_id,
+            { title, ...(folderID ? { folder_id: folderID } : {}) },
+            crypto.randomUUID(),
+            session.csrf_token,
+            signal,
+          ),
+        (created) => {
+          toast.success(`看板「${dashboard.title}」已复制为「${title}」。`);
+          history.invalidateList();
+          folders.invalidate();
+          draft.openExisting(created);
+          publication.resetReview();
+          setTab('draft');
+        },
+      );
+    });
+  }
   function moveDashboard(dashboard: Dashboard, folderID: string) {
     if (request.isPending()) return;
     // The move rides the draft PATCH, so the current definition and revision
@@ -221,6 +246,7 @@ export function useDashboardsController(context: CatalogPageProps) {
     archive,
     unarchive,
     moveDashboard,
+    copyDashboard,
     rebaseLocal,
     adoptLatest,
     confirmation: guard.confirmation,

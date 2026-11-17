@@ -178,6 +178,7 @@ export function DashboardsPage(props: CatalogPageProps) {
             onArchive={controller.archive}
             onUnarchive={controller.unarchive}
             onMove={controller.moveDashboard}
+            onCopy={controller.copyDashboard}
             onRetry={() => void history.list.refetch()}
             onPrevious={history.previousList}
             onNext={history.nextList}
