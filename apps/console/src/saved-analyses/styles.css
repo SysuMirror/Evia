@@ -1,8 +1,18 @@
+.saved-analysis-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
 .saved-analysis-view-switch {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+}
+.saved-analysis-search-input {
+  width: min(280px, 40%);
+  flex: none;
 }
 .saved-analysis-row-actions {
   display: inline-flex;

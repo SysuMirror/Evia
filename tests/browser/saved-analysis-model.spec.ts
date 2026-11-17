@@ -4,6 +4,10 @@ import type {
   SavedAnalysisDefinition,
 } from '../../apps/console/src/saved-analysis-model';
 import {
+  maxSavedAnalysisSearchRunes,
+  normalizeSavedAnalysisSearch,
+} from '../../apps/console/src/saved-analyses/model';
+import {
   cloneSavedDefinition,
   emptyMetricReference,
   flatSavedFilters,
@@ -355,4 +359,22 @@ test('metric reference summary describes the pinned version', () => {
   const summary = savedDefinitionSummary(picked);
   expect(summary).toContain(metricRef.metric_id);
   expect(summary).toContain('v2');
+});
+
+test('saved analysis search terms trim blanks and clamp to the server rune limit', () => {
+  expect(normalizeSavedAnalysisSearch('  留存 分析 ')).toBe('留存 分析');
+  expect(normalizeSavedAnalysisSearch('   ')).toBe('');
+  expect(normalizeSavedAnalysisSearch('')).toBe('');
+  const atLimit = '字'.repeat(maxSavedAnalysisSearchRunes);
+  expect(normalizeSavedAnalysisSearch(atLimit)).toBe(atLimit);
+  const overLimit = '字'.repeat(maxSavedAnalysisSearchRunes + 1);
+  const clamped = normalizeSavedAnalysisSearch(overLimit);
+  expect([...clamped].length).toBe(maxSavedAnalysisSearchRunes);
+  expect(clamped).toBe(atLimit);
+  const emojiClamped = normalizeSavedAnalysisSearch(
+    ` ${'😀'.repeat(maxSavedAnalysisSearchRunes + 1)} `,
+  );
+  expect([...emojiClamped].length).toBe(maxSavedAnalysisSearchRunes);
+  expect(emojiClamped.startsWith('😀')).toBe(true);
+  expect(normalizeSavedAnalysisSearch('a\tb  c')).toBe('a\tb  c');
 });

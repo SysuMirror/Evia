@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type SavedAnalysisVersion } from '@evia/api-client';
 import type { CatalogPageProps } from '../catalog';
+import { normalizeSavedAnalysisSearch } from './model';
 import { savedAnalysesKey } from './types';
 
 export type SavedAnalysisListView = 'active' | 'archived';
+
+/** Debounce window for the title search box so typing never fires a request per keystroke. */
+const searchDebounceMs = 300;
 type HistoryOptions = {
   context: CatalogPageProps;
   identity: string;
@@ -28,14 +32,35 @@ export function useSavedAnalysisHistory({
   const [cursors, setCursors] = useState<string[]>([]),
     [versionCursors, setVersionCursors] = useState<string[]>([]);
   const [archiveView, setArchiveView] = useState<SavedAnalysisListView>('active');
+  // searchInput mirrors the textbox immediately; search is the debounced,
+  // normalized term actually bound to the request and to any page cursor.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [versionNumber, setVersionNumber] = useState<number>();
   const [displayVersion, setDisplayVersion] = useState<SavedAnalysisVersion>();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = normalizeSavedAnalysisSearch(searchInput);
+      setSearch((previous) => (next === previous ? previous : next));
+    }, searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  // A new predicate invalidates any cursor collected under the previous term.
+  useEffect(() => {
+    setCursors([]);
+  }, [search]);
   const list = useQuery({
-    queryKey: [...prefix, 'list', archiveView, cursors.at(-1) ?? ''],
+    queryKey: [...prefix, 'list', archiveView, search, cursors.at(-1) ?? ''],
     queryFn: ({ signal }) =>
       api.listSavedAnalyses(
         project.id,
-        { environment, view: archiveView, cursor: cursors.at(-1), limit: 20 },
+        {
+          environment,
+          view: archiveView,
+          search: search || undefined,
+          cursor: cursors.at(-1),
+          limit: 20,
+        },
         signal,
       ),
     enabled: canRead && !denied,
@@ -63,6 +88,8 @@ export function useSavedAnalysisHistory({
     setVersionNumber(undefined);
     setDisplayVersion(undefined);
     setArchiveView('active');
+    setSearchInput('');
+    setSearch('');
   }, []);
   useEffect(reset, [identity, reset]);
   useEffect(() => {
@@ -115,6 +142,9 @@ export function useSavedAnalysisHistory({
     setVersionNumber,
     archiveView,
     changeView,
+    searchInput,
+    search,
+    changeSearch: setSearchInput,
     invalidateList,
     listPage: cursors.length + 1,
     previousList: () => setCursors((previous) => previous.slice(0, -1)),

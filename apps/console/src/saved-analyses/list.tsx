@@ -5,6 +5,7 @@ import {
   Button,
   DataSurface,
   DataTable,
+  Input,
   Modal,
   PaginationBar,
   type DataTableColumn,
@@ -27,6 +28,8 @@ type SavedAnalysesListProps = {
   hasNext: boolean;
   view: SavedAnalysisListView;
   onViewChange: (view: SavedAnalysisListView) => void;
+  search: string;
+  onSearchChange: (term: string) => void;
   onOpen: (analysis: SavedAnalysis) => void;
   onArchive: (analysis: SavedAnalysis) => void;
   onUnarchive: (analysis: SavedAnalysis) => void;
@@ -47,6 +50,8 @@ export function SavedAnalysesList({
   hasNext,
   view,
   onViewChange,
+  search,
+  onSearchChange,
   onOpen,
   onArchive,
   onUnarchive,
@@ -126,25 +131,36 @@ export function SavedAnalysesList({
   ];
   return (
     <DataSurface label="保存的分析列表">
-      <div className="saved-analysis-view-switch" role="group" aria-label="分析视图切换">
-        <Button
-          size="small"
-          variant={archivedView ? 'ghost' : 'secondary'}
-          aria-pressed={!archivedView}
-          disabled={busy}
-          onClick={() => onViewChange('active')}
-        >
-          活跃分析
-        </Button>
-        <Button
-          size="small"
-          variant={archivedView ? 'secondary' : 'ghost'}
-          aria-pressed={archivedView}
-          disabled={busy}
-          onClick={() => onViewChange('archived')}
-        >
-          已归档
-        </Button>
+      <div className="saved-analysis-list-toolbar">
+        <div className="saved-analysis-view-switch" role="group" aria-label="分析视图切换">
+          <Button
+            size="small"
+            variant={archivedView ? 'ghost' : 'secondary'}
+            aria-pressed={!archivedView}
+            disabled={busy}
+            onClick={() => onViewChange('active')}
+          >
+            活跃分析
+          </Button>
+          <Button
+            size="small"
+            variant={archivedView ? 'secondary' : 'ghost'}
+            aria-pressed={archivedView}
+            disabled={busy}
+            onClick={() => onViewChange('archived')}
+          >
+            已归档
+          </Button>
+        </div>
+        <Input
+          className="saved-analysis-search-input"
+          type="search"
+          aria-label="搜索分析标题"
+          placeholder="按标题搜索…"
+          maxLength={128}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
       </div>
       <CatalogError error={error} retry={onRetry} />
       <DataTable

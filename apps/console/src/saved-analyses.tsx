@@ -152,6 +152,8 @@ export function SavedAnalysesPage(props: CatalogPageProps) {
           hasNext={!!history.list.data?.next_cursor}
           view={history.archiveView}
           onViewChange={history.changeView}
+          search={history.searchInput}
+          onSearchChange={history.changeSearch}
           onOpen={controller.openDraft}
           onArchive={controller.archive}
           onUnarchive={controller.unarchive}
