@@ -471,7 +471,7 @@ func TestFormulaMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	}
 
 	// Default listing hides archived formula metrics; the archived stream is opt-in.
-	listed, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	listed, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -486,7 +486,7 @@ func TestFormulaMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if len(listed) != 1 || listed[0].ID != keep.ID {
 		t.Fatalf("listing must retain only the active metric: %+v", listed)
 	}
-	archivedList, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	archivedList, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -537,11 +537,11 @@ func TestFormulaMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
 		t.Fatalf("restore must clear archive markers: %+v", restored)
 	}
-	listedAgain, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	listedAgain, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil || len(listedAgain) != 2 {
 		t.Fatalf("restored metric must rejoin the listing: %d %v", len(listedAgain), e)
 	}
-	restoredArchive, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	restoredArchive, e := f.s.ListFormulaMetrics(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil || len(restoredArchive) != 0 {
 		t.Fatalf("restored metric must leave the archived stream: %d %v", len(restoredArchive), e)
 	}
