@@ -135,7 +135,7 @@ func TestDashboardScopeAuthorizationAndPinnedDependencies(t *testing.T) {
 	}
 	_, e = f.s.DashboardValidationSnapshot(ctx, f.viewer, f.project, staging.ID, reporting.DashboardValidate{DraftRevision: 1})
 	faultCode(t, e, "DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH")
-	listed, e := f.s.ListDashboards(ctx, f.viewer, f.project, "staging", "", 2, false, "")
+	listed, e := f.s.ListDashboards(ctx, f.viewer, f.project, "staging", "", 2, false, "", "")
 	if e != nil || len(listed) != 1 || listed[0].ID != staging.ID {
 		t.Fatal(listed, e)
 	}
@@ -734,7 +734,7 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 
 	// The default listing hides archived dashboards but keeps active ones;
 	// direct reads still work and expose the archive marker.
-	listed, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "")
+	listed, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "", "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -750,7 +750,7 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 		t.Fatalf("listing must retain only the active dashboard: %+v", listed)
 	}
 	// The archived stream is opt-in and returns only archived dashboards.
-	archivedList, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "")
+	archivedList, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "", "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -798,11 +798,11 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
 		t.Fatalf("restore must clear archive markers: %+v", restored)
 	}
-	listedAgain, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "")
+	listedAgain, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "", "")
 	if e != nil || len(listedAgain) != 2 {
 		t.Fatalf("restored dashboard must rejoin the listing: %d %v", len(listedAgain), e)
 	}
-	restoredArchive, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "")
+	restoredArchive, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "", "")
 	if e != nil || len(restoredArchive) != 0 {
 		t.Fatalf("restored dashboard must leave the archived stream: %d %v", len(restoredArchive), e)
 	}

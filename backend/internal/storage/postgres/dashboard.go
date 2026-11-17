@@ -149,7 +149,7 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope string) ([]reporting.Dashboard, error) {
+func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope, search string) ([]reporting.Dashboard, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -169,12 +169,13 @@ func (s *Store) ListDashboards(ctx context.Context, actor, project, environment,
 		return nil, e
 	}
 	// The archive predicate is selected from the validated bool; folderScope is
-	// a validated ""/"root"/UUID value passed only as a bound parameter.
+	// a validated ""/"root"/UUID value and search an escaped LIKE literal, both
+	// passed only as bound parameters. $6='' disables the title substring filter.
 	archivePredicate := "archived_at IS NULL"
 	if archivedOnly {
 		archivePredicate = "archived_at IS NOT NULL"
 	}
-	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($5='' OR ($5='root' AND folder_id IS NULL) OR ($5<>'root' AND folder_id=$5::uuid)) AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit, folderScope)
+	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($5='' OR ($5='root' AND folder_id IS NULL) OR ($5<>'root' AND folder_id=$5::uuid)) AND ($6='' OR title ILIKE '%' || $6 || '%' ESCAPE '\') AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit, folderScope, search)
 	if e != nil {
 		return nil, e
 	}

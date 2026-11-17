@@ -159,19 +159,19 @@ func TestDashboardFolderDashboardAssignment(t *testing.T) {
 	faultCode(t, e, "DASHBOARD_FOLDER_NOT_FOUND")
 
 	// Listing filters: UUID scope, root scope and unfiltered all behave distinctly.
-	inFolder, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, nested.ID)
+	inFolder, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, nested.ID, "")
 	if e != nil || len(inFolder) != 1 || inFolder[0].ID != filed.ID {
 		t.Fatalf("folder filter should return exactly the filed dashboard: %+v %v", inFolder, e)
 	}
-	atRoot, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "root")
+	atRoot, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "root", "")
 	if e != nil || len(atRoot) != 1 || atRoot[0].ID != rootDashboard.ID {
 		t.Fatalf("root filter should return exactly the unfiled dashboard: %+v %v", atRoot, e)
 	}
-	all, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "")
+	all, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "", "")
 	if e != nil || len(all) != 2 {
 		t.Fatalf("unfiltered list should return both dashboards: %+v %v", all, e)
 	}
-	if _, e = f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "bogus"); e == nil {
+	if _, e = f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 50, false, "bogus", ""); e == nil {
 		t.Fatal("invalid folder scope should be rejected")
 	}
 
