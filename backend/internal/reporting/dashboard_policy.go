@@ -195,7 +195,13 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 		return out, err
 	}
 	deps := snapshot.Dependencies
-	if deps.ProjectID != d.ProjectID || deps.Environment != d.Environment || len(deps.Analyses) != len(definition.Widgets) {
+	executableWidgets := 0
+	for _, widget := range definition.Widgets {
+		if widget.TextCard == nil {
+			executableWidgets++
+		}
+	}
+	if deps.ProjectID != d.ProjectID || deps.Environment != d.Environment || len(deps.Analyses) != executableWidgets {
 		return out, analysis.Invalid("INVALID_DASHBOARD_DEPENDENCIES", "分析依赖与看板范围不匹配")
 	}
 	deps.Analyses = append([]DashboardDependency(nil), deps.Analyses...)

@@ -302,6 +302,11 @@ func dashboardSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in 
 	}
 	out.Dependencies = reporting.DashboardDependencies{ProjectID: project, Environment: out.Draft.Environment, Analyses: []reporting.DashboardDependency{}}
 	for _, widget := range out.Draft.Definition.Widgets {
+		// Presentation-only text cards have no immutable source and produce
+		// neither dependency witnesses nor child queries.
+		if widget.TextCard != nil {
+			continue
+		}
 		if widget.MetricRef != nil {
 			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
 			if e != nil {

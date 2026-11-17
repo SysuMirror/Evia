@@ -102,7 +102,7 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		current    analysis.Job
 		comparison *analysis.Job
 	}
-	jobs := make([]widgetJobPair, 0, len(requests))
+	jobs := make([]widgetJobPair, len(requests))
 	var expires time.Time
 	enqueueOne := func(request analysis.Request) (analysis.Job, error) {
 		job, e := s.enqueueQueryTx(ctx, tx, actor, project, request)
@@ -118,7 +118,11 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		}
 		return job, nil
 	}
-	for _, request := range requests {
+	for i, request := range requests {
+		// Index-aligned zero entries represent presentation-only text cards.
+		if request.Current.Filter == nil && request.Current.Kind == "" {
+			continue
+		}
 		job, e := enqueueOne(request.Current)
 		if e != nil {
 			return out, e
@@ -131,7 +135,7 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 			}
 			pair.comparison = &comparisonJob
 		}
-		jobs = append(jobs, pair)
+		jobs[i] = pair
 	}
 	filterData, e := json.Marshal(append([]reporting.DashboardWidgetFilter{}, in.WidgetFilters...))
 	if e != nil {
@@ -154,6 +158,10 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		return e
 	}
 	for position, widget := range snapshot.Definition.Widgets {
+		// Text cards have no run witness row; their content lives in the version.
+		if widget.TextCard != nil {
+			continue
+		}
 		pair := jobs[position]
 		if e = insertRunWidget(widget, position, "current", pair.current); e != nil {
 			return out, e
@@ -404,8 +412,13 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 	for _, filter := range in.WidgetFilters {
 		filters[filter.WidgetID] = filter.Filter
 	}
-	requests := make([]dashboardWidgetRequests, 0, len(snapshot.Definition.Widgets))
-	for _, widget := range snapshot.Definition.Widgets {
+	// Index-aligned with the definition: text-card positions stay zero-valued.
+	requests := make([]dashboardWidgetRequests, len(snapshot.Definition.Widgets))
+	for i, widget := range snapshot.Definition.Widgets {
+		// Text cards have no executable source and never enter the query queue.
+		if widget.TextCard != nil {
+			continue
+		}
 		// Parameter predicates compile from the immutable version's
 		// declarations and this widget's own field bindings, then merge ahead
 		// of the local widget filter: fixed AND parameter AND local.
@@ -460,7 +473,7 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 			}
 			pair.Comparison = &comparison
 		}
-		requests = append(requests, pair)
+		requests[i] = pair
 	}
 	return requests, nil
 }
