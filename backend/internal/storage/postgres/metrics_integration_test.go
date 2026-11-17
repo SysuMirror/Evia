@@ -260,11 +260,11 @@ func TestMetricAuthorizationTypesAndAtomicRollback(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	page, e := f.s.ListMetrics(ctx, f.viewer, f.project, "staging", "", 101, false)
+	page, e := f.s.ListMetrics(ctx, f.viewer, f.project, "staging", "", 101, false, "")
 	if e != nil || len(page) != 1 || page[0].ID != staging.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
-	page, e = f.s.ListMetrics(ctx, f.viewer, f.project, "development", "", 101, false)
+	page, e = f.s.ListMetrics(ctx, f.viewer, f.project, "development", "", 101, false, "")
 	if e != nil || len(page) != 1 || page[0].ID != d.ID {
 		t.Fatal("environment summary scope", page, e)
 	}
@@ -417,7 +417,7 @@ func TestMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	}
 
 	// Default listing hides archived metrics; the archived stream is opt-in.
-	listed, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	listed, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -432,7 +432,7 @@ func TestMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if len(listed) != 1 || listed[0].ID != keep.ID {
 		t.Fatalf("listing must retain only the active metric: %+v", listed)
 	}
-	archivedList, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	archivedList, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -485,11 +485,11 @@ func TestMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
 		t.Fatalf("restore must clear archive markers: %+v", restored)
 	}
-	listedAgain, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false)
+	listedAgain, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil || len(listedAgain) != 2 {
 		t.Fatalf("restored metric must rejoin the listing: %d %v", len(listedAgain), e)
 	}
-	restoredArchive, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true)
+	restoredArchive, e := f.s.ListMetrics(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil || len(restoredArchive) != 0 {
 		t.Fatalf("restored metric must leave the archived stream: %d %v", len(restoredArchive), e)
 	}

@@ -191,7 +191,7 @@ func (s *Store) CreateMetric(ctx context.Context, actor, project, key string, in
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.MetricRecord, error) {
+func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]reporting.MetricRecord, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
@@ -206,12 +206,14 @@ func (s *Store) ListMetrics(ctx context.Context, actor, project, environment, af
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "metrics.read"); e != nil {
 		return nil, e
 	}
-	// The predicate is selected from the validated bool, never from request text.
+	// The archive predicate is selected from the validated bool; search is an
+	// escaped LIKE literal passed only as a bound parameter. $5='' disables
+	// the title substring filter.
 	archivePredicate := "archived_at IS NULL"
 	if archivedOnly {
 		archivePredicate = "archived_at IS NOT NULL"
 	}
-	rows, e := tx.Query(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit)
+	rows, e := tx.Query(ctx, `SELECT `+metricColumns+` FROM metrics WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($5='' OR title ILIKE '%' || $5 || '%' ESCAPE '\') AND ($3='' OR metric_id>NULLIF($3,'')::uuid) ORDER BY metric_id LIMIT $4`, project, environment, after, limit, search)
 	if e != nil {
 		return nil, e
 	}

@@ -57,7 +57,7 @@ func TestMetricMachineExactOperationAndStoredEnvironment(t *testing.T) {
 	}
 	_, e = f.s.GetMetric(readerCtx, reader.Principal.ID, f.project, staging.ID)
 	machineForbidden(t, e)
-	_, e = f.s.ListMetrics(readerCtx, reader.Principal.ID, f.project, "production", "", 10, false)
+	_, e = f.s.ListMetrics(readerCtx, reader.Principal.ID, f.project, "production", "", 10, false, "")
 	machineForbidden(t, e)
 	_, e = f.s.GetMetric(readerCtx, reader.Principal.ID, f.otherProject, d.ID)
 	machineForbidden(t, e)

@@ -121,7 +121,7 @@ func TestMetricUpgradePreservesExistingImmutableFactsJobsAndGrants(t *testing.T)
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = s.ListMetrics(access.WithIdentity(ctx, identity), m.Principal.ID, f.project, "development", "", 10, false)
+	_, e = s.ListMetrics(access.WithIdentity(ctx, identity), m.Principal.ID, f.project, "development", "", 10, false, "")
 	machineForbidden(t, e)
 	metric, e := s.CreateMetric(ctx, f.owner, f.project, "after-upgrade", reporting.MetricCreate{Environment: "development", Definition: metricDefinition()})
 	if e != nil {
