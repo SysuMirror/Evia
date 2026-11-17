@@ -24,7 +24,7 @@
 
 | 方法与路径 | 行为 | 机器权限 |
 | --- | --- | --- |
-| `GET P/metrics` | 按必填 `environment` 分页，`limit` 默认 20，最大 100；可选 `view`（`active`/`archived`，默认 `active`） | `metrics.read` |
+| `GET P/metrics` | 按必填 `environment` 分页，`limit` 默认 20，最大 100；可选 `view`（`active`/`archived`，默认 `active`）与 `q` 标题搜索 | `metrics.read` |
 | `POST P/metrics` | 创建草稿，必需 `Idempotency-Key`，返回 201 | `metrics.write` |
 | `GET M`、`GET M/draft` | 读取资源或草稿 | `metrics.read` |
 | `PATCH M/draft` | 替换完整 definition，必需 `If-Match: "revision"` | `metrics.write` |
@@ -39,6 +39,10 @@
 `031_metric_archive.sql` 给 `metrics` 增加可空 `archived_at`/`archived_by` 列、活跃部分索引 `metrics_active_scope` 与标记 soundness CHECK。既有 `metric_preserve_scope` 触发器只保护 project/environment/metric_id/created_at，因此标记更新无需改触发器。`POST M/archive` 设置两个标记并把指标移出默认 `GET P/metrics` 列表；传 `view=archived` 列出已归档指标，`view=active`（或缺省）为默认流。归档可经 `POST M/unarchive` 逆转并清空标记。两个动作都要求 `metrics.write`、无请求体，并写审计 `metric.archived`/`metric.unarchived`。重复归档返回 409 `METRIC_ALREADY_ARCHIVED`，对活跃指标恢复返回 409 `METRIC_NOT_ARCHIVED`。
 
 归档指标按 ID、草稿与不可变版本仍可读；归档期间草稿保存、校验快照、发布与新运行入队统一 409 `METRIC_ARCHIVED` fail-closed，已建查询作业仍可查询/取消。不可变版本是事实：保存分析的 `metric_ref` 与复合公式指标的依赖 DAG 都通过外键哈希见证引用 `metric_versions` 不可变表、从不回读可变父行，因此归档父指标不会破坏既有保存分析/公式指标版本及其运行；标记为可选可空字段，活跃指标省略。列表游标按 actor/project/environment 再绑定 `active`/`archived` 视图，跨视图复用一律 `INVALID_CURSOR`；未知 `view` 值返回 `INVALID_ARCHIVE_VIEW`。
+
+## 标题搜索
+
+指标列表接受可选 `q` 查询参数，按大小写不敏感的标题子串过滤，契约与看板/保存分析完全一致：边界去首尾空白，超过 128 rune 返回 `INVALID_QUERY`（`/q`），省略或空白即不过滤。服务端转义 `\`、`%`、`_` 并在存储侧声明 `ESCAPE '\'`，因此元字符按字面量匹配。搜索与环境、归档谓词合取且不跨环境；归一化词进入签名游标作用域，跨词分页返回 `INVALID_CURSOR`。复合公式指标列表仍不接受 `q`，发送即 `INVALID_QUERY`。控制台提供 300ms 防抖搜索框、镜像 128 rune 钳制、空白省略 `q` 并在换词时回到第一页。
 
 人类 owner/editor 可编辑、校验和发布；viewer 可读取和运行聚合。会话写请求仍需 CSRF。读取查询任务/结果使用现有查询接口和 `queries.read`；涉及身份字段时额外检查 `queries.raw.read`，不能通过指标筛选或分组绕过。机器创建后的权限不可变，原 `analyses.*` 权限不隐含新增的 `metrics.*`。
 
