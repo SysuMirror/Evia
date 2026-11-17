@@ -5,6 +5,8 @@ import {
   defaultRunForm,
   formatFormulaInstant,
   fromFormulaDefinition,
+  maxFormulaMetricSearchRunes,
+  normalizeFormulaMetricSearch,
   toFormulaDefinition,
   type FormulaFormState,
 } from '../../apps/console/src/formula-metrics/model';
@@ -86,4 +88,22 @@ test('run form enforces window and limit budgets', () => {
 test('formats instants without throwing on invalid input', () => {
   expect(formatFormulaInstant('2026-11-10T08:30:00Z')).toMatch(/2026-/);
   expect(formatFormulaInstant('not-a-date')).toBe('not-a-date');
+});
+
+test('formula metric search terms trim blanks and clamp to the server rune limit', () => {
+  expect(normalizeFormulaMetricSearch('  留存 公式 ')).toBe('留存 公式');
+  expect(normalizeFormulaMetricSearch('   ')).toBe('');
+  expect(normalizeFormulaMetricSearch('')).toBe('');
+  const atLimit = '字'.repeat(maxFormulaMetricSearchRunes);
+  expect(normalizeFormulaMetricSearch(atLimit)).toBe(atLimit);
+  const overLimit = '字'.repeat(maxFormulaMetricSearchRunes + 1);
+  const clamped = normalizeFormulaMetricSearch(overLimit);
+  expect([...clamped].length).toBe(maxFormulaMetricSearchRunes);
+  expect(clamped).toBe(atLimit);
+  const emojiClamped = normalizeFormulaMetricSearch(
+    ` ${'😀'.repeat(maxFormulaMetricSearchRunes + 1)} `,
+  );
+  expect([...emojiClamped].length).toBe(maxFormulaMetricSearchRunes);
+  expect(emojiClamped.startsWith('😀')).toBe(true);
+  expect(normalizeFormulaMetricSearch('a\tb  c')).toBe('a\tb  c');
 });

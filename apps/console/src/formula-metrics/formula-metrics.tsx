@@ -44,6 +44,7 @@ import {
   formulaUnitLabels,
   formulaUnits,
   fromFormulaDefinition,
+  normalizeFormulaMetricSearch,
   operatorLabels,
   toFormulaDefinition,
   type FormulaFormState,
@@ -51,6 +52,9 @@ import {
   type OperandState,
 } from './model';
 import './styles.css';
+
+/** Debounce window for the title search box so typing never fires a request per keystroke. */
+const searchDebounceMs = 300;
 
 type PageProps = { project: Project; session: Session; environment: Environment };
 type FormulaMetricListView = 'active' | 'archived';
@@ -75,8 +79,24 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
   const [runVersion, setRunVersion] = useState(0);
   const [cursors, setCursors] = useState<string[]>([]);
   const [archiveView, setArchiveView] = useState<FormulaMetricListView>('active');
+  // searchInput mirrors the textbox immediately; search is the debounced,
+  // normalized term actually bound to the request and to any page cursor.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [pendingArchive, setPendingArchive] = useState<FormulaMetricRecord | null>(null);
   const [archiveSubmitted, setArchiveSubmitted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = normalizeFormulaMetricSearch(searchInput);
+      setSearch((previous) => (next === previous ? previous : next));
+    }, searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  // A new predicate invalidates any cursor collected under the previous term.
+  useEffect(() => {
+    setCursors([]);
+  }, [search]);
 
   const list = useQuery({
     queryKey: [
@@ -86,12 +106,19 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
       environment,
       'list',
       archiveView,
+      search,
       cursors.at(-1) ?? '',
     ],
     queryFn: ({ signal }) =>
       api.listFormulaMetrics(
         project.id,
-        { environment, view: archiveView, limit: 20, cursor: cursors.at(-1) },
+        {
+          environment,
+          view: archiveView,
+          search: search || undefined,
+          limit: 20,
+          cursor: cursors.at(-1),
+        },
         signal,
       ),
     enabled: canRead && !metricID && !creating,
@@ -314,31 +341,42 @@ export function FormulaMetricsPage({ project, session, environment }: PageProps)
         }
       />
       <DataSurface label="复合指标列表">
-        <div className="formula-view-switch" role="group" aria-label="复合指标视图切换">
-          <Button
-            size="small"
-            variant={archivedView ? 'ghost' : 'secondary'}
-            aria-pressed={!archivedView}
-            disabled={!!requests.busy}
-            onClick={() => {
-              setArchiveView('active');
-              setCursors([]);
-            }}
-          >
-            活跃指标
-          </Button>
-          <Button
-            size="small"
-            variant={archivedView ? 'secondary' : 'ghost'}
-            aria-pressed={archivedView}
-            disabled={!!requests.busy}
-            onClick={() => {
-              setArchiveView('archived');
-              setCursors([]);
-            }}
-          >
-            已归档
-          </Button>
+        <div className="formula-list-toolbar">
+          <div className="formula-view-switch" role="group" aria-label="复合指标视图切换">
+            <Button
+              size="small"
+              variant={archivedView ? 'ghost' : 'secondary'}
+              aria-pressed={!archivedView}
+              disabled={!!requests.busy}
+              onClick={() => {
+                setArchiveView('active');
+                setCursors([]);
+              }}
+            >
+              活跃指标
+            </Button>
+            <Button
+              size="small"
+              variant={archivedView ? 'secondary' : 'ghost'}
+              aria-pressed={archivedView}
+              disabled={!!requests.busy}
+              onClick={() => {
+                setArchiveView('archived');
+                setCursors([]);
+              }}
+            >
+              已归档
+            </Button>
+          </div>
+          <Input
+            className="formula-search-input"
+            type="search"
+            aria-label="搜索复合指标标题"
+            placeholder="按标题搜索…"
+            maxLength={128}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
         </div>
         {list.isPending ? (
           <LoadingPanel label="正在加载复合指标" />

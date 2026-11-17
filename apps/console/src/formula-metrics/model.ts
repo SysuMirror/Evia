@@ -1,5 +1,22 @@
 import type { FormulaExpression, FormulaMetricDefinition, MetricReference } from '@evia/api-client';
 
+/** Mirrors the server-side reporting.maxCatalogSearchRunes boundary. */
+export const maxFormulaMetricSearchRunes = 128;
+
+/**
+ * Normalizes the title search box before the term reaches the API: trims
+ * surrounding whitespace and clamps to the server rune limit so an over-long
+ * local input can never trigger a guaranteed 400. A blank result means "no
+ * filter", which the list view encodes by omitting the q parameter.
+ */
+export function normalizeFormulaMetricSearch(input: string): string {
+  const trimmed = input.trim();
+  const runes = [...trimmed];
+  return runes.length > maxFormulaMetricSearchRunes
+    ? runes.slice(0, maxFormulaMetricSearchRunes).join('')
+    : trimmed;
+}
+
 export type FormulaOperator = 'add' | 'subtract' | 'multiply' | 'divide' | 'convert';
 export type ConvertTargetUnit = 'millisecond' | 'second';
 export type OperandKind = 'metric' | 'constant';
