@@ -5,6 +5,7 @@ import {
   type DashboardDefinition,
   type DashboardDraft,
   type DashboardPublish,
+  type DashboardRebinding,
   type MetricRecord,
   type MetricVersion,
   type SavedAnalysisVersion,
@@ -15,6 +16,14 @@ export type DashboardWidgetSource =
   | { kind: 'analysis'; analysis: SavedAnalysisVersion }
   | { kind: 'metric'; metric: MetricRecord; version: MetricVersion }
   | { kind: 'text'; content: string };
+
+/** Copy request carried from the modal through the list to the controller. */
+export type DashboardCopyRequest = {
+  title: string;
+  folderID: string;
+  targetEnvironment?: Environment;
+  rebindings?: DashboardRebinding[];
+};
 
 export type DashboardWorkspace = {
   scope: string;

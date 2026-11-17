@@ -1,8 +1,51 @@
-import type { DashboardDefinition, DashboardWidget } from '@evia/api-client';
+import type { DashboardDefinition, DashboardRebinding, DashboardWidget } from '@evia/api-client';
 import { parameterIssues } from './parameter-model';
 
 /** Mirrors the server-side reporting.MaxTextCardContentRunes boundary. */
 export const maxTextCardContentRunes = 4096;
+
+/** Per-widget target selection captured by the cross-environment copy form. */
+export type CrossCopySelection = { resourceID: string; version: string };
+
+/** Executable widgets only: presentation text cards need no rebinding. */
+export function executableWidgets(widgets: readonly DashboardWidget[]): DashboardWidget[] {
+  return widgets.filter((widget) => !widget.text_card);
+}
+
+/**
+ * Builds the rebinding payload from the form's selections. Returns null when
+ * any executable widget lacks a complete resource+version selection, so the
+ * caller can keep the submit action disabled rather than send a partial body.
+ */
+export function buildRebindings(
+  widgets: readonly DashboardWidget[],
+  selections: Record<string, CrossCopySelection>,
+): DashboardRebinding[] | null {
+  const executable = executableWidgets(widgets);
+  if (
+    !executable.every(
+      (widget) =>
+        !!selections[widget.widget_id]?.resourceID && !!selections[widget.widget_id]?.version,
+    )
+  ) {
+    return null;
+  }
+  return executable.map((widget) => {
+    const selected = selections[widget.widget_id]!;
+    const version = Number(selected.version);
+    return widget.metric_ref
+      ? {
+          widget_id: widget.widget_id,
+          metric_id: selected.resourceID,
+          metric_version: version,
+        }
+      : {
+          widget_id: widget.widget_id,
+          analysis_id: selected.resourceID,
+          analysis_version: version,
+        };
+  });
+}
 
 export function initialDashboardDefinition(): DashboardDefinition {
   return { title: '', widgets: [] };

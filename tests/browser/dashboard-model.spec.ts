@@ -2,10 +2,13 @@ import { expect, test } from '@playwright/test';
 import type { DashboardDefinition, DashboardWidget } from '../../packages/api-client/src/index';
 import {
   availableWidgetPosition,
+  buildRebindings,
   dashboardIssues,
+  executableWidgets,
   maxTextCardContentRunes,
   reorderWidget,
   widgetSourceLabel,
+  type CrossCopySelection,
 } from '../../apps/console/src/dashboards/model';
 import { parseTextCardBlocks } from '../../apps/console/src/dashboards/text-card';
 const widget: DashboardWidget = {
@@ -176,4 +179,55 @@ test('markdown subset parser keeps block structure and degrades unknown markers 
   // An unterminated fence degrades defensively: remaining lines stay inside code.
   const unclosed = parseTextCardBlocks('正文\n\n```\nnever closed');
   expect(unclosed.at(-1)).toMatchObject({ kind: 'code', lines: ['never closed'] });
+});
+
+test('cross-environment rebindings cover every executable widget by source kind', () => {
+  const analysisWidget: DashboardWidget = {
+    widget_id: 'analysis-card',
+    analysis_id: 'source-analysis',
+    analysis_version: 1,
+    title: '分析卡',
+    reading_order: 0,
+    layout: { x: 0, y: 0, width: 6, height: 4 },
+  };
+  const metricWidget: DashboardWidget = {
+    widget_id: 'metric-card',
+    metric_ref: { metric_id: 'source-metric', version: 2 },
+    title: '指标卡',
+    reading_order: 1,
+    layout: { x: 6, y: 0, width: 6, height: 4 },
+  };
+  const textWidget: DashboardWidget = {
+    widget_id: 'text-card',
+    text_card: { content: '# 说明' },
+    title: '文本卡',
+    reading_order: 2,
+    layout: { x: 0, y: 4, width: 12, height: 3 },
+  };
+  const widgets = [analysisWidget, metricWidget, textWidget];
+  expect(executableWidgets(widgets).map((w) => w.widget_id)).toEqual([
+    'analysis-card',
+    'metric-card',
+  ]);
+
+  const selections: Record<string, CrossCopySelection> = {
+    'analysis-card': { resourceID: 'target-analysis', version: '4' },
+    'metric-card': { resourceID: 'target-metric', version: '5' },
+  };
+  expect(buildRebindings(widgets, selections)).toEqual([
+    { widget_id: 'analysis-card', analysis_id: 'target-analysis', analysis_version: 4 },
+    { widget_id: 'metric-card', metric_id: 'target-metric', metric_version: 5 },
+  ]);
+
+  // A text-only board has no executable widgets, so an empty selection is complete.
+  expect(buildRebindings([textWidget], {})).toEqual([]);
+
+  // Incomplete selections keep the submit action disabled rather than emit a partial body.
+  expect(buildRebindings(widgets, { 'analysis-card': selections['analysis-card']! })).toBeNull();
+  expect(
+    buildRebindings(widgets, {
+      ...selections,
+      'metric-card': { resourceID: 'target-metric', version: '' },
+    }),
+  ).toBeNull();
 });
