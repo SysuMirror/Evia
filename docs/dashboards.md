@@ -2,7 +2,7 @@
 
 Dashboards combine explicitly published [saved-analysis versions](saved-analyses.md) in one project and environment. The backend provides mutable drafts, immutable publications, bounded layouts and real multi-widget runs through the existing query queue. Contracts, generated types, domain policy, PostgreSQL migration and HTTP routes are implemented. The console now provides editing, version publication/history and per-widget execution using these same APIs. Actual browser evidence is recorded in the [delivery verification](verification/dashboards-sdk-2026-11-09.md).
 
-The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, hard delete, independently versioned metrics, generic parameter bindings and cross-request result caching remain planned. Scoped machine authentication is implemented.
+The authoritative schemas are in [OpenAPI](../contracts/http/openapi.json). Existing [analysis semantics](analysis.md), query budgets, provisional coverage and current project permissions continue to apply. Dashboard folders, hard delete, generic parameter bindings and cross-request result caching remain planned. Direct immutable metric-version widgets are implemented (migration `034`); scoped machine authentication is implemented.
 
 ## Authentication and scope
 
@@ -37,7 +37,7 @@ Lists end with `next_cursor=null`. Signed cursors bind the actor, project and li
 
 A definition contains `title`, optional `description` and 1–12 widgets. Titles are trimmed and limited to 1–128 characters; descriptions are limited to 2,000 characters. The normalized definition must fit 64 KiB of UTF-8 JSON.
 
-Each widget has a stable UUID `widget_id`, explicit `analysis_id` and `analysis_version`, title, `reading_order` and integer layout. Keep its ID when moving, resizing or renaming it. Rendering configuration belongs to the referenced saved analysis; dashboard definitions contain references and layout, without copied queries or results.
+Each widget has a stable UUID `widget_id`, title, `reading_order` and integer layout, and pins exactly one immutable source: either the `analysis_id`/`analysis_version` pair of a saved-analysis version or a nested `metric_ref` (`metric_id` + `version`) pointing at a published metric version. Providing both or neither is rejected by normalization and a database CHECK constraint. Keep its ID when moving, resizing or renaming it. Rendering configuration belongs to the referenced saved analysis or metric; dashboard definitions contain references and layout, without copied queries or results.
 
 The layout has 12 columns. `x` is 0–11, `y` is 0–999, `width` is 1–12 and `height` is 1–24; `x+width` must be at most 12 and `y+height` at most 1,000. Rectangles cannot overlap. Reading order must be unique and contiguous from zero through the final widget; normalization returns widgets in that order. This gives a stable reading order for narrow layouts and later keyboard layout controls independently of visual coordinates.
 
@@ -83,7 +83,11 @@ Validate the exact draft revision against the current published pointer, using z
 { "draft_revision": 1, "expected_published_version": 0 }
 ```
 
-`POST .../{dashboard_id}/validations` returns `valid=true`, `execution_performed=false`, the normalized definition and a dependency manifest with each widget's saved-analysis ID/version and definition/dependency/validation hashes. It checks the authorized scope and pinned versions without creating query jobs, reserving admission capacity or scanning event facts. Successful validation does not predict actual query cost or execution success.
+`POST .../{dashboard_id}/validations` returns `valid=true`, `execution_performed=false`, the normalized definition and a dependency manifest with each widget's pinned source (saved-analysis ID/version or metric ID/version) and definition/dependency/validation hashes. It checks the authorized scope and pinned versions without creating query jobs, reserving admission capacity or scanning event facts. Successful validation does not predict actual query cost or execution success.
+
+### Dual-target dependency witnesses (migration `034`)
+
+The relational witnesses keep generic identity columns and split into nullable dual-target foreign keys. `dashboard_dependencies` and `dashboard_run_widgets` each carry either the analysis pair (`analysis_id`/`analysis_version`, referencing `saved_analysis_versions`) or the metric pair (`metric_id`/`metric_version`, referencing `metric_versions`), with a soundness CHECK enforcing the exclusive choice. Composite foreign keys use MATCH SIMPLE, so pre-existing analysis-only rows (NULL metric columns) keep matching unchanged; the deferred publication trigger and the immutable `dashboard_definition_valid` shape function were updated to accept either source. No data backfill was required because existing rows already populate only the analysis pair.
 
 The diff separates metadata, widget additions/removals, pinned analysis dependencies, layout and reading-order changes. The first publication adds the whole definition. Its `validation_hash` binds the dashboard scope, draft and publication counters, normalized definition, dependencies and diff. A hash is an acknowledgement of that content, not an authorization credential.
 
@@ -137,7 +141,7 @@ The 202 response acknowledges admitted jobs. Workers execute the children indepe
 
 ## Results, cancellation and expiry
 
-Poll `GET P/dashboard-runs/{run_id}` using `poll_after_ms` while supplied. Each `widgets` item contains `widget_id`, its pinned analysis reference and a nested existing `query` job with `query_id`, state, errors and, after success, `result_url`. Read each successful result through that existing authorized URL. Run/configuration responses do not copy result rows.
+Poll `GET P/dashboard-runs/{run_id}` using `poll_after_ms` while supplied. Each `widgets` item contains `widget_id`, its pinned reference (the analysis pair or `metric_ref`) and a nested existing `query` job with `query_id`, state, errors and, after success, `result_url`. Read each successful result through that existing authorized URL. Run/configuration responses do not copy result rows. A metric widget is expanded to a trend request through the same immutable `MetricTemplate` path as direct metric runs, so it consumes the same project query budget and never resolves an implicit latest version.
 
 Admission is one transaction; results do not share an atomic data snapshot. One widget may finish or fail while others continue. Coverage remains provisional, and separate watermarks do not establish complete or identical data arrival across cards. Preserve the individual result metadata and errors.
 
