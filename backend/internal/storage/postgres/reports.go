@@ -287,7 +287,7 @@ func (s *Store) Get(ctx context.Context, actor, project, id string) (reports.Rep
 	return out, tx.Commit(ctx)
 }
 
-func (s *Store) List(ctx context.Context, actor, project, environment, after string, limit int) ([]reports.Report, error) {
+func (s *Store) List(ctx context.Context, actor, project, environment, after string, limit int, search string) ([]reports.Report, error) {
 	tx, e := s.Pool.Begin(ctx)
 	if e != nil {
 		return nil, e
@@ -296,9 +296,11 @@ func (s *Store) List(ctx context.Context, actor, project, environment, after str
 	if e = reportTx(ctx, tx, actor, project, false); e != nil {
 		return nil, e
 	}
+	// search is an escaped LIKE literal passed only as a bound parameter;
+	// $5='' disables the title substring filter.
 	rows, e := tx.Query(ctx, `SELECT `+reportColumns+` FROM reports
- WHERE project_id=$1 AND environment=$2 AND ($3='' OR report_id>NULLIF($3,'')::uuid)
- ORDER BY report_id LIMIT $4`, project, environment, after, limit)
+ WHERE project_id=$1 AND environment=$2 AND ($5='' OR title ILIKE '%' || $5 || '%' ESCAPE '\') AND ($3='' OR report_id>NULLIF($3,'')::uuid)
+ ORDER BY report_id LIMIT $4`, project, environment, after, limit, search)
 	if e != nil {
 		return nil, e
 	}

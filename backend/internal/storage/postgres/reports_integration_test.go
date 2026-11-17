@@ -212,11 +212,11 @@ func TestReportRevisionLifecycleSectionReplacementPaginationAndDelete(t *testing
 	if e != nil {
 		t.Fatal(third, e)
 	}
-	page, e := svc.List(ctx, f.viewer, f.project, "development", "", 2)
+	page, e := svc.List(ctx, f.viewer, f.project, "development", "", 2, "")
 	if e != nil || len(page) != 2 {
 		t.Fatal(page, e)
 	}
-	rest, e := svc.List(ctx, f.viewer, f.project, "development", page[1].ID, 2)
+	rest, e := svc.List(ctx, f.viewer, f.project, "development", page[1].ID, 2, "")
 	if e != nil || len(rest) != 1 {
 		t.Fatal(rest, e)
 	}
@@ -252,7 +252,7 @@ func TestReportAuthorityIsHumanOnlyAndProjectScoped(t *testing.T) {
 	in := reportInput(f, "development", versions)
 
 	// Viewers retain read access but every write path is owner/editor only.
-	if _, e := svc.List(ctx, f.viewer, f.project, "development", "", 10); e != nil {
+	if _, e := svc.List(ctx, f.viewer, f.project, "development", "", 10, ""); e != nil {
 		t.Fatal(e)
 	}
 	viewerInput := in
