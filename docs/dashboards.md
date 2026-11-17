@@ -55,6 +55,8 @@ Each widget has a stable UUID `widget_id`, title, `reading_order` and integer la
 
 The layout has 12 columns. `x` is 0–11, `y` is 0–999, `width` is 1–12 and `height` is 1–24; `x+width` must be at most 12 and `y+height` at most 1,000. Rectangles cannot overlap. Reading order must be unique and contiguous from zero through the final widget; normalization returns widgets in that order. This gives a stable reading order for narrow layouts and later keyboard layout controls independently of visual coordinates.
 
+A definition may declare at most 12 dashboard-level `parameters`. Each declaration has a stable `parameter_id` (1–64 characters), a 1–128 character `label`, a closed-set `type` (`string`, `number`, `boolean`), an `operator` valid for that type (string: `eq`/`neq`/`in`/`prefix`/`contains`; number: `eq`/`neq`/`in`/`gt`/`gte`/`lt`/`lte`; boolean: `eq`/`neq`), a `required` flag and an optional type-compatible `default`. Identifiers must be unique. A widget may carry at most 12 `parameter_bindings`, each mapping one declared `parameter_id` to a concrete field the widget's own pinned source owns (`system` fields, or `property` fields pinned to an event key and published schema version). Bindings never store a pseudo-global field name: the same display name never auto-binds, a parameter can bind at most once per widget, a field accepts at most one parameter, and a binding to an undeclared parameter is rejected by normalization and the migration `037` database CHECK before publication.
+
 This create body uses synthetic IDs. First publish two real saved analyses in the chosen project/environment, then substitute their actual IDs and versions. For example, the first may count `page_opened@1` and the second count distinct raw UIDs for that same event. The event must already be published; creating a dashboard does not publish or activate events.
 
 ```json
@@ -152,6 +154,26 @@ The backend stores and returns normalized runtime time, timezone and targeted fi
 ### Comparison periods
 
 A run may carry an optional `comparison` spec (`previous_period`, `day`, `week`, `month` or `year`, with an `amount` of 1–12 for the calendar units). When present, every widget fans out a second child query over the same predicates, granularity and unit but a shifted window. Calendar shifts preserve local wall-clock time in the run timezone across DST transitions (they rebuild zoned wall-clock fields rather than subtracting fixed seconds), while `previous_period` mirrors the exact window duration. Migration `036` stores one `dashboard_run_widgets` row per `(widget, period)` with `period` in `current`/`comparison`; the run read model exposes the shifted job as `comparison` on each widget run and echoes the spec on the run. The comparison job is an independent work unit: its failure makes the overall run `partial`/`failed`, and cancelling the run cancels both windows. The comparison window doubles the child-query count (up to 24 jobs for 12 widgets) and stays subject to the same atomic admission and project queue budgets; runs without the spec keep the single-current-row behavior unchanged. The console run view offers a comparison selector (off, previous period, or 1–12 calendar units) and renders each widget's shifted-window result in a labeled "comparison window" pane beneath the current result, polling both jobs until the full run settles.
+
+### Dashboard parameters
+
+A run may carry an optional `parameter_values` object keyed by declared `parameter_id` (at most 12 entries). Each value must be a scalar or a homogeneous 1–20 element array matching the declaration type and operator bounds; strings are at most 1,024 characters and numbers stay within the safe-integer range. Unknown keys (`INVALID_PARAMETER`), type mismatches (`INVALID_PARAMETER_VALUE`) and oversize maps are rejected at admission before any child job is enqueued. A bound `required` parameter without a runtime value and without a default fails closed with `MISSING_PARAMETER_VALUE`; optional parameters with no value and no default compile to no predicate.
+
+```json
+{
+  "time_range": {
+    "from": "2026-11-01T00:00:00Z",
+    "to": "2026-11-02T00:00:00Z"
+  },
+  "timezone": "UTC",
+  "parameter_values": {
+    "section": "forum",
+    "min_lesson": 5
+  }
+}
+```
+
+Per widget, the server compiles each binding into an ordinary query filter AST — no new engine execution path exists — and merges predicates in the mandated order: the pinned metric/analysis fixed filter, then the parameter bindings, then the widget's local `widget_filters` entry. A parameter can never remove a fixed constraint. The compiled field still passes the existing field/type/event-version validation, so a stale binding to a field absent from the pinned source fails the run rather than executing. The run read model echoes `parameter_values`; changing any value changes the request hash, so same-key retries with different values return `IDEMPOTENCY_CONFLICT`. The console editor manages declarations and per-widget bindings, and the run view's parameter dialog collects typed runtime values with required-field and JSON-array hints.
 
 Admission is atomic: all widgets enter the existing project query queue in one transaction, or no run, child jobs, audit entries or successful retry marker are committed. A two-widget run submitted when 31 of 32 queue positions are occupied fails as a whole. Dashboards share the existing project maximum **4 running / 32 queued** with direct and saved-analysis queries. They do not obtain an extra execution budget or reserve simultaneous starts.
 
