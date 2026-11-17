@@ -42,7 +42,7 @@
 
 下表保留这些未实现操作的需求去向。令 `P = /api/v1/projects/{project_id}`；每个列出的 HTTP 方法均代表一项操作，原先共 30 项。设置、成员和审计对应的 6 项早期操作现已由正式接口交付或替代，删除任务的 3 项操作也已由 `erasure-jobs` 正式接口交付，保留策略的读取与写入（`GET`/`PUT P/retention-policy`，以 PUT 替代早期 PATCH）2 项已由正式接口交付，`GET P/diagnostics` 1 项已由正式诊断接口交付，`GET`/`PATCH P/quotas` 2 项已由正式配额管理接口交付，`GET P/releases/{release_id}/artifacts/typescript` 1 项已由正式类型产物接口交付；最后 5 项报告操作（`GET`/`POST P/reports`、`GET`/`PATCH`/`DELETE P/reports/{report_id}`）已由[管理分析报告](reports.md)正式接口交付。原先 30 项规划操作至此全部清零，当前 OpenAPI 中不再存在无运行时的占位操作；所有正式接口均依据真实领域、权限和版本规则重新设计契约，不沿用早期路径和请求模型。
 
-**占位操作已全部清零（30/30 交付）。** 最后交付的报告资源以迁移 `025` 的关系外键钉住已发布分析版本，人类专属治理、乐观修订与幂等账本均已端到端验证，详见 [reports.md](reports.md)。
+**占位操作已全部清零（30/30 交付）。** 最后交付的报告资源以迁移 `025` 的关系外键钉住已发布分析版本，人类专属治理、乐观修订与幂等账本均已端到端验证，详见 [reports.md](reports.md)。报告列表标题搜索已全链路交付（可选 `q` 参数，去空白后大小写不敏感字面量子串、`\`/`%`/`_` LIKE 转义、128 rune fail-closed 且错误码为 `INVALID_REPORT_INPUT`，与环境谓词合取，归一化词进入签名游标作用域，跨词游标报 `INVALID_CURSOR`；reports 包保持精简独立、包内自带搜索 helper 而不反向依赖 reporting 包；控制台 300ms 防抖、128 rune 钳制、换词重置分页，真实 PG 集成、HTTP 边界、api-client 与控制台模型测试及四轮变异红绿通过，见[验证记录](verification/report-search-2026-11-18.md)）。至此看板、保存分析、原子指标、复合公式指标与分析报告五类列表全部具备同一 `q` 标题搜索契约。
 
 看板单独处理：旧 `GET`/`PATCH`/`DELETE P/dashboards/{resource_id}` 已移除，实际新资源读取使用 `{dashboard_id}`。新的草稿、校验、版本发布和运行接口已装配；未实现的通用 PATCH/DELETE 没有保留为可调用操作。
 

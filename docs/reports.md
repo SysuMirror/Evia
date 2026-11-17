@@ -32,19 +32,24 @@
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `GET P/reports?environment=&cursor=&limit=` | 键集分页列表，游标按 `reports:用户:项目:环境` 作用域编码 |
+| `GET P/reports?environment=&cursor=&limit=&q=` | 键集分页列表，游标按 `reports:用户:项目:环境:搜索词` 作用域编码，可选 `q` 标题搜索 |
 | `POST P/reports` | 创建，`If-Match: "0"` + `Idempotency-Key` + CSRF，201 并回 `ETag` |
 | `GET P/reports/{report_id}` | 读取单报告与当前修订 ETag |
 | `PATCH P/reports/{report_id}` | 整体替换定义与章节，正修订 + 幂等键，200 |
 | `DELETE P/reports/{report_id}` | 级联删除，204 |
 
-`P = /api/v1/projects/{project_id}`。错误响应统一使用 Problem 契约，覆盖 400/401/403/404/409/405/413/415/429/500/503。TS 客户端在 `@evia/api-client` 提供五个同名方法，控制台「分析报告」工作区（`apps/console/src/reports/`）支持章节编排、修订编辑、删除确认与只读模式。
+`P = /api/v1/projects/{project_id}`。错误响应统一使用 Problem 契约，覆盖 400/401/403/404/409/405/413/415/429/500/503。TS 客户端在 `@evia/api-client` 提供五个同名方法，控制台「分析报告」工作区（`apps/console/src/reports/`）支持章节编排、修订编辑、删除确认、标题搜索与只读模式。
+
+## 标题搜索
+
+报告列表接受可选 `q` 查询参数，按大小写不敏感的标题子串过滤，与看板/保存分析/指标的 `q` 契约同构：边界去首尾空白，超过 128 rune 返回 `INVALID_REPORT_INPUT`，省略或空白即不过滤。reports 是独立的精简领域包（只依赖 access/fault），刻意不反向依赖 reporting bounded context，因此归一化与 LIKE 转义由包内 `NormalizeTitleSearch`/`EscapeLikePattern` 本地实现，而不是复用 reporting 包的共享内核。服务端转义 `\`、`%`、`_` 并在存储侧声明 `ESCAPE '\'`，元字符按字面量匹配；请求文本只作为绑定参数、永不拼接进 SQL。搜索与环境谓词合取且不跨环境，归一化词进入签名游标作用域（`reports:actor:project:env:term`），跨词分页返回 `INVALID_CURSOR`；查询参数走 `governanceQuery` 闭集白名单（`environment`/`limit`/`cursor`/`q`），未知参数 fail-closed。控制台提供 300ms 防抖搜索框、镜像 128 rune 钳制、空白省略 `q` 并在换词时回到第一页。
 
 ## 证据与测试
 
-- 领域单测 `internal/reports/reports_test.go` 覆盖全部边界与服务端口委托。
+- 领域单测 `internal/reports/reports_test.go` 覆盖全部边界与服务端口委托；`search_test.go` 覆盖搜索词 trim、128 rune 拒绝与 `\`/`%`/`_` 字面量转义。
 - 真实 PostgreSQL 集成 `reports_integration_test.go`：外键钉版与非法引用、环境不匹配、幂等重放/冲突、乐观修订、章节替换、键集分页、级联删除、viewer/outsider/machine 权限与审计计数。联调中捕获并修复了一处真实缺陷：`Store.Update` 曾缺少 `tx.Commit`，事务靠 defer 静默回滚，表现为接口返回成功但修订与审计全部丢失。
-- HTTP 处理器测试覆盖请求映射、创建/更新修订规则、游标分页、204 删除与故障码传播。
+- `report_search_integration_test.go` 覆盖标题子串过滤：中文/拉丁大小写不敏感命中、`%`/`_` 仅按字面量匹配、无匹配返回空页、staging 环境隔离不跨环境。
+- HTTP 处理器测试覆盖请求映射、创建/更新修订规则、游标分页、204 删除与故障码传播，并断言搜索词经 trim 到达服务、游标 scope 绑定搜索词、未知参数与超长词 400。
 - 全栈冒烟（真实会话 + 真实已发布分析）20 个断言全部通过：201 创建、`REPORT_REFERENCE_INVALID` 外键拒绝、幂等重放与 409、`REPORT_REVISION_CONFLICT`、PATCH 重放不增修订、405/404/401/400/204，并在数据库直接核验三类审计各一条、删除后报告与章节均为零残留。
 
 ## 已知限制
