@@ -3,6 +3,7 @@ import { ApiError, api, type Dashboard, type DashboardDefinition } from '@evia/a
 import { useToast } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
 import type { SavedRunWork } from './run';
+import type { DashboardCopyRequest } from './types';
 import { useUnsavedWork } from '../use-unsaved-work';
 import { useDashboardRequest } from './use-scoped-request';
 import { useDashboardDraft } from './use-draft';
@@ -162,7 +163,7 @@ export function useDashboardsController(context: CatalogPageProps) {
       },
     );
   }
-  function copyDashboard(dashboard: Dashboard, title: string, folderID: string) {
+  function copyDashboard(dashboard: Dashboard, copyRequest: DashboardCopyRequest) {
     if (request.isPending()) return;
     guard.requestLeave(() => {
       void request.perform(
@@ -171,13 +172,22 @@ export function useDashboardsController(context: CatalogPageProps) {
           api.copyDashboard(
             project.id,
             dashboard.dashboard_id,
-            { title, ...(folderID ? { folder_id: folderID } : {}) },
+            {
+              title: copyRequest.title,
+              ...(copyRequest.folderID ? { folder_id: copyRequest.folderID } : {}),
+              ...(copyRequest.targetEnvironment
+                ? {
+                    target_environment: copyRequest.targetEnvironment,
+                    rebindings: copyRequest.rebindings ?? [],
+                  }
+                : {}),
+            },
             crypto.randomUUID(),
             session.csrf_token,
             signal,
           ),
         (created) => {
-          toast.success(`看板「${dashboard.title}」已复制为「${title}」。`);
+          toast.success(`看板「${dashboard.title}」已复制为「${copyRequest.title}」。`);
           history.invalidateList();
           folders.invalidate();
           draft.openExisting(created);

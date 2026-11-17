@@ -163,6 +163,8 @@ export function DashboardsPage(props: CatalogPageProps) {
           <DashboardsList
             items={history.list.data?.items ?? []}
             folders={controller.folders.items}
+            context={props}
+            sourceEnvironment={environment}
             error={history.list.error}
             loading={history.list.isPending}
             fetching={history.list.isFetching}

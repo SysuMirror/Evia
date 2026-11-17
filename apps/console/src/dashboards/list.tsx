@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Dashboard, DashboardFolder } from '@evia/api-client';
+import type { Dashboard, DashboardFolder, Environment } from '@evia/api-client';
 import {
   Badge,
   Button,
@@ -9,15 +9,19 @@ import {
   PaginationBar,
   type DataTableColumn,
 } from '@evia/design-system';
+import type { CatalogPageProps } from '../catalog';
 import { formatTime } from '../analysis-model';
 import { CatalogError } from '../catalog-helpers';
 import type { DashboardListView } from './use-history';
 import { MoveDashboardModal } from './move-dashboard';
 import { CopyDashboardModal } from './copy-dashboard';
+import type { DashboardCopyRequest } from './types';
 
 type DashboardsListProps = {
   items: Dashboard[];
   folders: DashboardFolder[];
+  context: CatalogPageProps;
+  sourceEnvironment: Environment;
   error: Error | null;
   loading: boolean;
   fetching: boolean;
@@ -33,7 +37,7 @@ type DashboardsListProps = {
   onArchive: (analysis: Dashboard) => void;
   onUnarchive: (analysis: Dashboard) => void;
   onMove: (analysis: Dashboard, folderID: string) => void;
-  onCopy: (analysis: Dashboard, title: string, folderID: string) => void;
+  onCopy: (analysis: Dashboard, request: DashboardCopyRequest) => void;
   onRetry: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -41,6 +45,8 @@ type DashboardsListProps = {
 export function DashboardsList({
   items,
   folders,
+  context,
+  sourceEnvironment,
   error,
   loading,
   fetching,
@@ -247,12 +253,14 @@ export function DashboardsList({
         key={pendingCopy?.dashboard_id ?? 'no-copy'}
         dashboard={pendingCopy}
         folders={folders}
+        context={context}
+        sourceEnvironment={sourceEnvironment}
         busy={busyLabel === '复制看板'}
         onClose={() => {
           if (!busy) setPendingCopy(null);
         }}
-        onCopy={(dashboard, title, folderID) => {
-          onCopy(dashboard, title, folderID);
+        onSubmit={(dashboard, request) => {
+          onCopy(dashboard, request);
           setPendingCopy(null);
         }}
       />

@@ -398,3 +398,27 @@ button.dashboard-folder-node,
 .text-card-md-quote p {
   margin: 0;
 }
+
+.cross-copy-widgets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 12px;
+}
+.cross-copy-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr);
+  gap: 8px 12px;
+  align-items: end;
+}
+.cross-copy-row .field-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .cross-copy-row {
+    grid-template-columns: 1fr;
+  }
+}
