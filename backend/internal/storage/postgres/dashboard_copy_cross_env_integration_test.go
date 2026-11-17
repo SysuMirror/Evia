@@ -59,7 +59,7 @@ func publishedMetricInEnvironment(t *testing.T, f catalogFixture, environment, n
 		t.Fatal(e)
 	}
 	snapshot, e := f.s.MetricValidationSnapshot(ctx, f.owner, f.project, created.ID, reporting.MetricValidate{
-		DraftRevision: created.DraftRevision,
+		DraftRevision:            created.DraftRevision,
 		ExpectedPublishedVersion: 0,
 	})
 	if e != nil {
@@ -70,9 +70,9 @@ func publishedMetricInEnvironment(t *testing.T, f catalogFixture, environment, n
 		t.Fatal(e)
 	}
 	if _, e = f.s.PublishMetric(ctx, f.owner, f.project, created.ID, ids.New(), reporting.MetricPublish{
-		DraftRevision: created.DraftRevision,
+		DraftRevision:            created.DraftRevision,
 		ExpectedPublishedVersion: 0,
-		ValidationHash: validation.ValidationHash,
+		ValidationHash:           validation.ValidationHash,
 	}); e != nil {
 		t.Fatal(e)
 	}
@@ -271,7 +271,7 @@ func TestDashboardCrossEnvironmentCopyRebindsMetric(t *testing.T) {
 	_, e = f.s.CopyDashboard(ctx, f.owner, f.project, draft.ID, ids.New(), reporting.DashboardCopy{
 		Title: "Kind mismatch", TargetEnvironment: "staging",
 		Rebindings: []reporting.DashboardRebinding{{
-			WidgetID: sourceDefinition.Widgets[0].ID,
+			WidgetID:   sourceDefinition.Widgets[0].ID,
 			AnalysisID: stagingMetric.ID, AnalysisVersion: stagingMetric.PublishedVersion,
 		}},
 	})
