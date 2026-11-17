@@ -8848,6 +8848,8 @@ export interface operations {
                 environment: "development" | "staging" | "production";
                 /** @description active 仅返回活跃保存分析（默认），archived 仅返回已归档保存分析；游标与视图绑定不可跨视图使用。 */
                 view?: "active" | "archived";
+                /** @description 可选标题子串搜索，去首尾空白后按大小写不敏感的字面量子串匹配（% 与 _ 等 LIKE 元字符按字面量处理），最长 128 个字符；省略或空白表示不过滤。游标与该搜索词绑定。 */
+                q?: string;
                 limit?: number;
                 cursor?: string;
             };

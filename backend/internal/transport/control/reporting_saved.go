@@ -72,6 +72,12 @@ func savedArchiveQuery(r *http.Request) (url.Values, error) {
 func savedDashboardListQuery(r *http.Request) (url.Values, error) {
 	return savedQueryWith(r, true, true, true, "folder_id", "q")
 }
+
+// savedAnalysisListQuery additionally allows the optional title substring
+// search term q; the shared archive allowlist stays q-free for metrics.
+func savedAnalysisListQuery(r *http.Request) (url.Values, error) {
+	return savedQueryWith(r, true, true, true, "q")
+}
 func savedQueryWith(r *http.Request, list, environment, archiveView bool, extra ...string) (url.Values, error) {
 	if len(r.URL.RawQuery) > 8192 {
 		return nil, analysis.Invalid("INVALID_QUERY", "查询参数过长")
@@ -283,7 +289,7 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s author
 	if e != nil {
 		return e
 	}
-	q, e := savedArchiveQuery(r)
+	q, e := savedAnalysisListQuery(r)
 	if e != nil {
 		return e
 	}
@@ -296,12 +302,17 @@ func (a *SavedAnalysesAPI) list(w http.ResponseWriter, r *http.Request, s author
 		view = "active"
 	}
 	archivedOnly := view == "archived"
-	scope := strings.Join([]string{"saved_analyses", s.ID, p, q.Get("environment"), view}, ":")
+	search, e := reporting.NormalizeCatalogSearch(q.Get("q"))
+	if e != nil {
+		return e
+	}
+	// The cursor is bound to every list predicate, including the search term.
+	scope := strings.Join([]string{"saved_analyses", s.ID, p, q.Get("environment"), view, search}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListSavedAnalyses(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly)
+	items, e := a.Service.ListSavedAnalyses(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly, search)
 	if e != nil {
 		return e
 	}

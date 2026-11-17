@@ -294,6 +294,8 @@ func TestMetricHTTPArchiveViewSelector(t *testing.T) {
 		metricBase + "?environment=development&view=bogus",
 		metricBase + "?environment=development&view=archived&view=active",
 		metricItem + "?view=archived",
+		// Title search is not enabled for the metrics listing.
+		metricBase + "?environment=development&q=x",
 	} {
 		before := f.calls
 		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)

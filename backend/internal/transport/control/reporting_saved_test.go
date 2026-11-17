@@ -39,6 +39,7 @@ type savedHTTPService struct {
 	revision, version           int64
 	limit                       int
 	archivedOnly                bool
+	search                      string
 	items                       []reporting.SavedAnalysis
 	versions                    []reporting.SavedAnalysisVersion
 }
@@ -67,8 +68,8 @@ func (f *savedHTTPService) CreateSavedAnalysis(_ context.Context, actor, project
 	f.key, f.environment = key, in.Environment
 	return savedDraft(), f.call(actor, project)
 }
-func (f *savedHTTPService) ListSavedAnalyses(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.SavedAnalysis, error) {
-	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
+func (f *savedHTTPService) ListSavedAnalyses(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, search string) ([]reporting.SavedAnalysis, error) {
+	f.environment, f.after, f.limit, f.archivedOnly, f.search = env, after, limit, archivedOnly, search
 	return f.items, f.call(actor, project)
 }
 func (f *savedHTTPService) GetSavedAnalysis(_ context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
@@ -227,7 +228,7 @@ func TestSavedAnalysisHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{savedBase + "?environment=development&limit=1", "saved_analyses:" + userID + ":" + projectID + ":development:active", savedID, false},
+		{savedBase + "?environment=development&limit=1", "saved_analyses:" + userID + ":" + projectID + ":development:active:", savedID, false},
 		{savedItem + "/versions?limit=1", "saved_analysis_versions:" + userID + ":" + projectID + ":" + savedID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -299,8 +300,8 @@ func TestSavedAnalysisHTTPArchiveViewSelector(t *testing.T) {
 			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
 		}
 	}
-	activeScope := "saved_analyses:" + userID + ":" + projectID + ":development:active"
-	archivedScope := "saved_analyses:" + userID + ":" + projectID + ":development:archived"
+	activeScope := "saved_analyses:" + userID + ":" + projectID + ":development:active:"
+	archivedScope := "saved_analyses:" + userID + ":" + projectID + ":development:archived:"
 	archivedPage := catalogStatus(t, catalogRequest(h, "GET", savedBase+"?environment=development&view=archived&limit=1", "", nil), 200)
 	next, ok := archivedPage["next_cursor"].(string)
 	if !ok || next == "" {
@@ -316,6 +317,36 @@ func TestSavedAnalysisHTTPArchiveViewSelector(t *testing.T) {
 	}
 	if _, e := codec.Decode(activeScope, next); e == nil {
 		t.Fatal("archived cursor decoded under the active scope")
+	}
+}
+
+func TestSavedAnalysisHTTPListSearchTerm(t *testing.T) {
+	f := &savedHTTPService{items: []reporting.SavedAnalysis{savedResource(), savedResource()}}
+	h, codec := savedHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	// A bounded search term is trimmed, forwarded and bound to the cursor scope.
+	page := catalogStatus(
+		t,
+		catalogRequest(h, "GET", savedBase+"?environment=development&limit=1&q=%20%E7%95%99%E5%AD%98%20", "", nil),
+		200,
+	)
+	if f.search != "留存" {
+		t.Fatalf("search term must be trimmed and forwarded, got %q", f.search)
+	}
+	next, ok := page["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing continuation cursor", page)
+	}
+	searchScope := "saved_analyses:" + userID + ":" + projectID + ":development:active:留存"
+	if decoded, e := codec.Decode(searchScope, next); e != nil || decoded != savedID {
+		t.Fatal("cursor must be bound to the search scope", decoded, e)
+	}
+	// Unknown query parameters stay rejected even though q is now allowlisted.
+	catalogStatus(t, catalogRequest(h, "GET", savedBase+"?environment=development&q=x&unexpected=1", "", nil), 400)
+	// An overlong term is rejected at the boundary without dispatching.
+	before := f.calls
+	catalogStatus(t, catalogRequest(h, "GET", savedBase+"?environment=development&q="+url.QueryEscape(strings.Repeat("字", 129)), "", nil), 400)
+	if f.calls != before {
+		t.Fatal("overlong search term reached the service")
 	}
 }
 func TestSavedAnalysisHTTPAuthRolesAndSafeFailures(t *testing.T) {
