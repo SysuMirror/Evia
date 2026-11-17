@@ -8,6 +8,8 @@ import {
   formatMetricInstant,
   fromDefinition,
   isNumericOp,
+  maxMetricSearchRunes,
+  normalizeMetricSearch,
   supportsApproximate,
   toDefinition,
   type MetricFormState,
@@ -161,4 +163,20 @@ test('change labels and instant formatting stay bounded', () => {
   ).toContain('聚合');
   expect(formatMetricInstant('2026-11-10T20:30:00Z')).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   expect(formatMetricInstant('bad')).toBe('bad');
+});
+
+test('metric search terms trim blanks and clamp to the server rune limit', () => {
+  expect(normalizeMetricSearch('  留存 指标 ')).toBe('留存 指标');
+  expect(normalizeMetricSearch('   ')).toBe('');
+  expect(normalizeMetricSearch('')).toBe('');
+  const atLimit = '字'.repeat(maxMetricSearchRunes);
+  expect(normalizeMetricSearch(atLimit)).toBe(atLimit);
+  const overLimit = '字'.repeat(maxMetricSearchRunes + 1);
+  const clamped = normalizeMetricSearch(overLimit);
+  expect([...clamped].length).toBe(maxMetricSearchRunes);
+  expect(clamped).toBe(atLimit);
+  const emojiClamped = normalizeMetricSearch(` ${'😀'.repeat(maxMetricSearchRunes + 1)} `);
+  expect([...emojiClamped].length).toBe(maxMetricSearchRunes);
+  expect(emojiClamped.startsWith('😀')).toBe(true);
+  expect(normalizeMetricSearch('a\tb  c')).toBe('a\tb  c');
 });

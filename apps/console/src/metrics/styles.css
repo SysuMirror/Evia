@@ -2,11 +2,21 @@
   display: grid;
   gap: 20px;
 }
+.metric-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
 .metric-view-switch {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+}
+.metric-search-input {
+  width: min(280px, 40%);
+  flex: none;
 }
 .metric-form {
   display: grid;

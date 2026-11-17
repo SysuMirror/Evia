@@ -3,6 +3,23 @@ import type { MetricChange, MetricDefinition } from '@evia/api-client';
 export const metricSubjects = ['uid', 'anonymous'] as const;
 export type MetricSubject = (typeof metricSubjects)[number];
 
+/** Mirrors the server-side reporting.maxCatalogSearchRunes boundary. */
+export const maxMetricSearchRunes = 128;
+
+/**
+ * Normalizes the title search box before the term reaches the API: trims
+ * surrounding whitespace and clamps to the server rune limit so an over-long
+ * local input can never trigger a guaranteed 400. A blank result means "no
+ * filter", which the list view encodes by omitting the q parameter.
+ */
+export function normalizeMetricSearch(input: string): string {
+  const trimmed = input.trim();
+  const runes = [...trimmed];
+  return runes.length > maxMetricSearchRunes
+    ? runes.slice(0, maxMetricSearchRunes).join('')
+    : trimmed;
+}
+
 export const metricOps = ['count', 'unique', 'sum', 'avg', 'min', 'max', 'p95'] as const;
 export type MetricOp = (typeof metricOps)[number];
 

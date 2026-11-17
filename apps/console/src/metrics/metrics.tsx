@@ -15,6 +15,7 @@ import {
   DataTable,
   EmptyPanel,
   ErrorPanel,
+  Input,
   LoadingPanel,
   Modal,
   PageHeading,
@@ -28,11 +29,14 @@ import { MetricEditor } from './editor';
 import { MetricVersionsPanel } from './versions';
 import { MetricRunPanel } from './run';
 import { useMetricsRequest } from './use-metrics-request';
-import { formatMetricInstant } from './model';
+import { formatMetricInstant, normalizeMetricSearch } from './model';
 import './styles.css';
 
 type PageProps = { project: Project; session: Session; environment: Environment };
 type MetricListView = 'active' | 'archived';
+
+/** Debounce window for the title search box so typing never fires a request per keystroke. */
+const searchDebounceMs = 300;
 
 export function MetricsPage({ project, session, environment }: PageProps) {
   const canRead = project.permissions.includes('metrics.read');
@@ -53,8 +57,24 @@ export function MetricsPage({ project, session, environment }: PageProps) {
   const [runVersion, setRunVersion] = useState(0);
   const [cursors, setCursors] = useState<string[]>([]);
   const [archiveView, setArchiveView] = useState<MetricListView>('active');
+  // searchInput mirrors the textbox immediately; search is the debounced,
+  // normalized term actually bound to the request and to any page cursor.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [pendingArchive, setPendingArchive] = useState<MetricRecord | null>(null);
   const [archiveSubmitted, setArchiveSubmitted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = normalizeMetricSearch(searchInput);
+      setSearch((previous) => (next === previous ? previous : next));
+    }, searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  // A new predicate invalidates any cursor collected under the previous term.
+  useEffect(() => {
+    setCursors([]);
+  }, [search]);
 
   const list = useQuery({
     queryKey: [
@@ -64,12 +84,19 @@ export function MetricsPage({ project, session, environment }: PageProps) {
       environment,
       'list',
       archiveView,
+      search,
       cursors.at(-1) ?? '',
     ],
     queryFn: ({ signal }) =>
       api.listMetrics(
         project.id,
-        { environment, view: archiveView, limit: 20, cursor: cursors.at(-1) },
+        {
+          environment,
+          view: archiveView,
+          search: search || undefined,
+          limit: 20,
+          cursor: cursors.at(-1),
+        },
         signal,
       ),
     enabled: canRead && !metricID && !creating,
@@ -297,31 +324,42 @@ export function MetricsPage({ project, session, environment }: PageProps) {
         }
       />
       <DataSurface label="指标列表">
-        <div className="metric-view-switch" role="group" aria-label="指标视图切换">
-          <Button
-            size="small"
-            variant={archivedView ? 'ghost' : 'secondary'}
-            aria-pressed={!archivedView}
-            disabled={!!requests.busy}
-            onClick={() => {
-              setArchiveView('active');
-              setCursors([]);
-            }}
-          >
-            活跃指标
-          </Button>
-          <Button
-            size="small"
-            variant={archivedView ? 'secondary' : 'ghost'}
-            aria-pressed={archivedView}
-            disabled={!!requests.busy}
-            onClick={() => {
-              setArchiveView('archived');
-              setCursors([]);
-            }}
-          >
-            已归档
-          </Button>
+        <div className="metric-list-toolbar">
+          <div className="metric-view-switch" role="group" aria-label="指标视图切换">
+            <Button
+              size="small"
+              variant={archivedView ? 'ghost' : 'secondary'}
+              aria-pressed={!archivedView}
+              disabled={!!requests.busy}
+              onClick={() => {
+                setArchiveView('active');
+                setCursors([]);
+              }}
+            >
+              活跃指标
+            </Button>
+            <Button
+              size="small"
+              variant={archivedView ? 'secondary' : 'ghost'}
+              aria-pressed={archivedView}
+              disabled={!!requests.busy}
+              onClick={() => {
+                setArchiveView('archived');
+                setCursors([]);
+              }}
+            >
+              已归档
+            </Button>
+          </div>
+          <Input
+            className="metric-search-input"
+            type="search"
+            aria-label="搜索指标标题"
+            placeholder="按标题搜索…"
+            maxLength={128}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
         </div>
         {list.isPending ? (
           <LoadingPanel label="正在加载指标" />
