@@ -4,6 +4,7 @@ import { CatalogError } from './catalog-helpers';
 import { DashboardsList } from './dashboards/list';
 import { DashboardDraftView } from './dashboards/draft';
 import { DashboardDraftRecovery } from './dashboards/draft-recovery';
+import { DashboardFolderTree } from './dashboards/folder-tree';
 import { DashboardHistory } from './dashboards/history';
 import { DashboardPublicationReview } from './dashboards/publication-review';
 import { useDashboardsController } from './dashboards/use-controller';
@@ -31,6 +32,7 @@ export function DashboardsPage(props: CatalogPageProps) {
   const draftContent = workspace && (
     <DashboardDraftView
       workspace={workspace}
+      folders={controller.folders.items}
       context={props}
       onDenied={request.deny}
       projectID={project.id}
@@ -45,6 +47,7 @@ export function DashboardsPage(props: CatalogPageProps) {
       editorRevision={draft.latest && !draft.dirty ? draft.latest.draft_revision : ''}
       publicationPending={!!publication.attempt}
       onDefinitionChange={controller.changeDefinition}
+      onFolderChange={draft.changeFolder}
       onValidityChange={draft.setEditorValid}
       onPendingChange={draft.setEditorPending}
       onSave={controller.save}
@@ -142,26 +145,44 @@ export function DashboardsPage(props: CatalogPageProps) {
           />
         </Panel>
       ) : (
-        <DashboardsList
-          items={history.list.data?.items ?? []}
-          error={history.list.error}
-          loading={history.list.isPending}
-          fetching={history.list.isFetching}
-          busy={!!request.busy}
-          busyLabel={request.busy}
-          canWrite={controller.canWrite}
-          timezone={project.timezone}
-          page={history.listPage}
-          hasNext={!!history.list.data?.next_cursor}
-          view={history.archiveView}
-          onViewChange={history.changeView}
-          onOpen={controller.openDraft}
-          onArchive={controller.archive}
-          onUnarchive={controller.unarchive}
-          onRetry={() => void history.list.refetch()}
-          onPrevious={history.previousList}
-          onNext={history.nextList}
-        />
+        <div className="dashboard-folder-layout">
+          <DashboardFolderTree
+            items={controller.folders.items}
+            loading={controller.folders.folders.isPending}
+            fetching={controller.folders.folders.isFetching}
+            error={controller.folders.folders.error}
+            canWrite={controller.canWrite}
+            busy={!!request.busy}
+            scope={history.folderScope}
+            onScopeChange={history.changeFolderScope}
+            onCreate={controller.folders.createFolder}
+            onRename={controller.folders.renameFolder}
+            onDelete={controller.folders.deleteFolder}
+            onRetry={() => void controller.folders.folders.refetch()}
+          />
+          <DashboardsList
+            items={history.list.data?.items ?? []}
+            folders={controller.folders.items}
+            error={history.list.error}
+            loading={history.list.isPending}
+            fetching={history.list.isFetching}
+            busy={!!request.busy}
+            busyLabel={request.busy}
+            canWrite={controller.canWrite}
+            timezone={project.timezone}
+            page={history.listPage}
+            hasNext={!!history.list.data?.next_cursor}
+            view={history.archiveView}
+            onViewChange={history.changeView}
+            onOpen={controller.openDraft}
+            onArchive={controller.archive}
+            onUnarchive={controller.unarchive}
+            onMove={controller.moveDashboard}
+            onRetry={() => void history.list.refetch()}
+            onPrevious={history.previousList}
+            onNext={history.nextList}
+          />
+        </div>
       )}
       <DashboardPublicationReview
         open={publication.open}

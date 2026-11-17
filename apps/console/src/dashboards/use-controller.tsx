@@ -6,6 +6,7 @@ import type { SavedRunWork } from './run';
 import { useUnsavedWork } from '../use-unsaved-work';
 import { useDashboardRequest } from './use-scoped-request';
 import { useDashboardDraft } from './use-draft';
+import { useDashboardFolders } from './use-dashboard-folders';
 import { useDashboardHistory } from './use-history';
 import { useDashboardPublication } from './use-publication';
 
@@ -57,6 +58,12 @@ export function useDashboardsController(context: CatalogPageProps) {
       setTab('versions');
     },
   });
+  const folders = useDashboardFolders({
+    context,
+    canRead,
+    denied: request.denied,
+    perform: request.perform,
+  });
   const guard = useUnsavedWork({
     dirty: draft.dirty || !!draft.createAttempt || !!publication.attempt || runWork.dirty,
     busy: !!request.busy || runWork.busy,
@@ -94,8 +101,12 @@ export function useDashboardsController(context: CatalogPageProps) {
   }
   function create() {
     if (request.isPending()) return;
+    // A specific folder selected in the sidebar pre-fills the new dashboard's
+    // location; "all" and "root" both start at the root.
+    const initialFolder =
+      history.folderScope && history.folderScope !== 'root' ? history.folderScope : '';
     guard.requestLeave(() => {
-      draft.create();
+      draft.create(initialFolder);
       setTab('draft');
       history.create();
       publication.resetReview();
@@ -151,6 +162,30 @@ export function useDashboardsController(context: CatalogPageProps) {
       },
     );
   }
+  function moveDashboard(dashboard: Dashboard, folderID: string) {
+    if (request.isPending()) return;
+    // The move rides the draft PATCH, so the current definition and revision
+    // must be read before applying the full-replacement folder assignment.
+    void request.perform(
+      '移动看板',
+      async (signal) => {
+        const current = await api.getDashboardDraft(project.id, dashboard.dashboard_id, signal);
+        return api.updateDashboardDraft(
+          project.id,
+          dashboard.dashboard_id,
+          current.draft_revision,
+          { definition: current.definition, folder_id: folderID || undefined },
+          session.csrf_token,
+          signal,
+        );
+      },
+      () => {
+        toast.success(`看板「${dashboard.title}」已移动。`);
+        history.invalidateList();
+        folders.invalidate();
+      },
+    );
+  }
   function rebaseLocal() {
     draft.rebaseLocal();
     publication.resetReview();
@@ -173,6 +208,7 @@ export function useDashboardsController(context: CatalogPageProps) {
     draft,
     history,
     publication,
+    folders,
     frozen,
     onRunWork,
     openDraft,
@@ -184,6 +220,7 @@ export function useDashboardsController(context: CatalogPageProps) {
     readLatest,
     archive,
     unarchive,
+    moveDashboard,
     rebaseLocal,
     adoptLatest,
     confirmation: guard.confirmation,

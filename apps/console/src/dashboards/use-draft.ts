@@ -49,6 +49,7 @@ export function useDashboardDraft({
     !!workspace &&
     (!workspace.draft ||
       JSON.stringify(workspace.definition) !== JSON.stringify(workspace.draft.definition) ||
+      workspace.folderID !== (workspace.draft.folder_id ?? '') ||
       editorPending);
   const reset = useCallback(() => {
     setWorkspace(undefined);
@@ -63,7 +64,12 @@ export function useDashboardDraft({
       '读取草稿',
       (signal) => api.getDashboardDraft(project.id, analysis.dashboard_id, signal),
       (draft) => {
-        setWorkspace({ scope: identity, draft, definition: structuredClone(draft.definition) });
+        setWorkspace({
+          scope: identity,
+          draft,
+          definition: structuredClone(draft.definition),
+          folderID: draft.folder_id ?? '',
+        });
         setLatest(undefined);
         setCreateAttempt(undefined);
         setEditorPending(false);
@@ -72,8 +78,8 @@ export function useDashboardDraft({
       },
     );
   }
-  function create() {
-    setWorkspace({ scope: identity, definition: initialDashboardDefinition() });
+  function create(folderID = '') {
+    setWorkspace({ scope: identity, definition: initialDashboardDefinition(), folderID });
     setLatest(undefined);
     setCreateAttempt(undefined);
     setEditorValid(true);
@@ -99,7 +105,11 @@ export function useDashboardDraft({
     if (!workspace.draft) {
       const next = createAttempt ?? {
         key: crypto.randomUUID(),
-        body: { environment, definition: structuredClone(workspace.definition) },
+        body: {
+          environment,
+          folder_id: workspace.folderID || undefined,
+          definition: structuredClone(workspace.definition),
+        },
       };
       setCreateAttempt(next);
       void perform(
@@ -107,7 +117,12 @@ export function useDashboardDraft({
         (signal) =>
           api.createDashboard(project.id, next.body, next.key, session.csrf_token, signal),
         (draft) => {
-          setWorkspace({ scope: identity, draft, definition: structuredClone(draft.definition) });
+          setWorkspace({
+            scope: identity,
+            draft,
+            definition: structuredClone(draft.definition),
+            folderID: draft.folder_id ?? '',
+          });
           setCreateAttempt(undefined);
           invalidateReview();
           afterCreate();
@@ -128,7 +143,7 @@ export function useDashboardDraft({
             project.id,
             draft.dashboard_id,
             draft.draft_revision,
-            { definition },
+            { definition, folder_id: workspace.folderID || undefined },
             session.csrf_token,
             signal,
           ),
@@ -137,6 +152,7 @@ export function useDashboardDraft({
             scope: identity,
             draft: saved,
             definition: structuredClone(saved.definition),
+            folderID: saved.folder_id ?? '',
           });
           setLatest(undefined);
           invalidateReview();
@@ -163,6 +179,9 @@ export function useDashboardDraft({
   function changeDefinition(definition: DashboardDefinition) {
     setWorkspace((previous) => (previous ? { ...previous, definition } : previous));
   }
+  function changeFolder(folderID: string) {
+    setWorkspace((previous) => (previous ? { ...previous, folderID } : previous));
+  }
   function rebaseLocal() {
     if (!latest) return;
     setWorkspace((previous) => (previous ? { ...previous, draft: latest } : previous));
@@ -170,11 +189,12 @@ export function useDashboardDraft({
   }
   function adoptLatest() {
     if (!latest) return;
-    setWorkspace({
+    setWorkspace((previous) => ({
       scope: identity,
       draft: latest,
       definition: structuredClone(latest.definition),
-    });
+      folderID: latest.folder_id ?? previous?.folderID ?? '',
+    }));
     setLatest(undefined);
     setEditorPending(false);
     setEditorValid(true);
@@ -206,6 +226,7 @@ export function useDashboardDraft({
     save,
     readLatest,
     changeDefinition,
+    changeFolder,
     rebaseLocal,
     adoptLatest,
     markPublished,

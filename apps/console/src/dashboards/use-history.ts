@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type DashboardVersion } from '@evia/api-client';
 import type { CatalogPageProps } from '../catalog';
-import { dashboardsKey } from './types';
+import { dashboardsKey, type DashboardFolderScope } from './types';
 
 export type DashboardListView = 'active' | 'archived';
 type HistoryOptions = {
@@ -28,14 +28,21 @@ export function useDashboardHistory({
   const [cursors, setCursors] = useState<string[]>([]),
     [versionCursors, setVersionCursors] = useState<string[]>([]);
   const [archiveView, setArchiveView] = useState<DashboardListView>('active');
+  const [folderScope, setFolderScope] = useState<DashboardFolderScope>('');
   const [versionNumber, setVersionNumber] = useState<number>();
   const [displayVersion, setDisplayVersion] = useState<DashboardVersion>();
   const list = useQuery({
-    queryKey: [...prefix, 'list', archiveView, cursors.at(-1) ?? ''],
+    queryKey: [...prefix, 'list', archiveView, folderScope, cursors.at(-1) ?? ''],
     queryFn: ({ signal }) =>
       api.listDashboards(
         project.id,
-        { environment, view: archiveView, cursor: cursors.at(-1), limit: 20 },
+        {
+          environment,
+          view: archiveView,
+          folderId: folderScope || undefined,
+          cursor: cursors.at(-1),
+          limit: 20,
+        },
         signal,
       ),
     enabled: canRead && !denied,
@@ -63,6 +70,7 @@ export function useDashboardHistory({
     setVersionNumber(undefined);
     setDisplayVersion(undefined);
     setArchiveView('active');
+    setFolderScope('');
   }, []);
   useEffect(reset, [identity, reset]);
   useEffect(() => {
@@ -94,6 +102,11 @@ export function useDashboardHistory({
     setArchiveView(next);
     setCursors([]);
   }
+  function changeFolderScope(next: DashboardFolderScope) {
+    if (next === folderScope) return;
+    setFolderScope(next);
+    setCursors([]);
+  }
   function invalidateList() {
     void cache.invalidateQueries({ queryKey: prefix });
   }
@@ -115,6 +128,8 @@ export function useDashboardHistory({
     setVersionNumber,
     archiveView,
     changeView,
+    folderScope,
+    changeFolderScope,
     invalidateList,
     listPage: cursors.length + 1,
     previousList: () => setCursors((previous) => previous.slice(0, -1)),

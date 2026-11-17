@@ -1,11 +1,12 @@
 import { useId, type ReactNode } from 'react';
-import type { Environment, DashboardDefinition } from '@evia/api-client';
-import { Badge, Button, CodeBlock, CopyButton, Toolbar } from '@evia/design-system';
+import type { DashboardFolder, DashboardDefinition, Environment } from '@evia/api-client';
+import { Badge, Button, CodeBlock, CopyButton, Field, Select, Toolbar } from '@evia/design-system';
 import { DashboardEditor } from './editor';
 import type { CatalogPageProps } from '../catalog';
 import type { DashboardWorkspace } from './types';
 type DashboardDraftProps = {
   workspace: DashboardWorkspace;
+  folders: DashboardFolder[];
   context: CatalogPageProps;
   onDenied: (error: Error) => void;
   projectID: string;
@@ -20,6 +21,7 @@ type DashboardDraftProps = {
   editorRevision: number | '';
   publicationPending: boolean;
   onDefinitionChange: (definition: DashboardDefinition) => void;
+  onFolderChange: (folderID: string) => void;
   onValidityChange: (valid: boolean) => void;
   onPendingChange: (pending: boolean) => void;
   onSave: () => void;
@@ -29,6 +31,7 @@ type DashboardDraftProps = {
 };
 export function DashboardDraftView({
   workspace,
+  folders,
   context,
   onDenied,
   projectID,
@@ -43,6 +46,7 @@ export function DashboardDraftView({
   editorRevision,
   publicationPending,
   onDefinitionChange,
+  onFolderChange,
   onValidityChange,
   onPendingChange,
   onSave,
@@ -51,8 +55,28 @@ export function DashboardDraftView({
   recovery,
 }: DashboardDraftProps) {
   const id = useId();
+  const sortedFolders = [...folders].sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
   return (
     <div className="section-stack dashboard-detail">
+      <Field
+        label="所属文件夹"
+        htmlFor={`${id}-folder`}
+        hint={canWrite ? '保存草稿后生效；根级表示不属于任何文件夹。' : '仅可查看，无写入权限。'}
+      >
+        <Select
+          id={`${id}-folder`}
+          value={workspace.folderID}
+          disabled={!canWrite || frozen}
+          onChange={(event) => onFolderChange(event.target.value)}
+          options={[
+            { value: '', label: '根级（不属于任何文件夹）' },
+            ...sortedFolders.map((folder) => ({
+              value: folder.folder_id,
+              label: `${'　'.repeat(folder.depth - 1)}${folder.title}`,
+            })),
+          ]}
+        />
+      </Field>
       {workspace.draft && (
         <Toolbar
           actions={

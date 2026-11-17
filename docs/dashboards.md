@@ -43,6 +43,10 @@ A folder's `parent_id` and `depth` are fixed at creation and protected by an imm
 
 Dashboards carry an optional `folder_id` on create and on every draft PATCH (full-replacement semantics: omitted or empty moves the dashboard back to the root). A missing or cross-scope folder fails with `DASHBOARD_FOLDER_NOT_FOUND` before insertion. The dashboard list accepts `folder_id=<uuid>` to list one folder or `folder_id=root` for unfiled dashboards; omitting the parameter applies no folder filter, preserving the previous flat listing behavior. Folders reuse `dashboards.read`/`dashboards.write` for sessions and the matching machine grants; no new permission is introduced.
 
+### Console workflow
+
+The console renders a folder sidebar next to the dashboard list: virtual nodes cover "all dashboards" (no filter) and "root-level" (`folder_id=root`), while stored folders appear indented by depth. Write members can create root/child folders (the parent selector only offers nodes below depth 3), rename with the current revision in `If-Match`, and delete empty folders through a confirmation modal; a non-empty delete surfaces the 409 `DASHBOARD_FOLDER_NOT_EMPTY` problem. The draft editor contains a folder selector whose assignment is part of the dirty state and is saved with the create or draft PATCH. An existing dashboard moves folders through a row action that first reads its current draft, then submits the same definition with the replacement `folder_id`, so the definition can never be overwritten by a stale client.
+
 ## Define a draft
 
 A definition contains `title`, optional `description` and 1–12 widgets. Titles are trimmed and limited to 1–128 characters; descriptions are limited to 2,000 characters. The normalized definition must fit 64 KiB of UTF-8 JSON.

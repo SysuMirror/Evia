@@ -19,6 +19,8 @@ export type DashboardWorkspace = {
   scope: string;
   draft?: DashboardDraft;
   definition: DashboardDefinition;
+  /** Target folder for create/save; empty string means the project root. */
+  folderID: string;
 };
 export type CreateAttempt = { key: string; body: DashboardCreate };
 export type PublishAttempt = { key: string; dashboardID: string; body: DashboardPublish };
@@ -31,6 +33,9 @@ export type ScopedRequest = <T>(
 
 export const dashboardsKey = (projectID: string, environment: Environment, actorID: string) =>
   ['dashboards', projectID, environment, actorID] as const;
+
+/** List scope for the dashboard listing: '' = all, 'root' = unfiled, UUID = one folder. */
+export type DashboardFolderScope = '' | 'root' | string;
 export const uncertain = (error: unknown) =>
   error instanceof ApiError && (error.status === 0 || error.status >= 500 || error.status === 408);
 export const revisionConflict = (error: unknown) =>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Dashboard } from '@evia/api-client';
+import type { Dashboard, DashboardFolder } from '@evia/api-client';
 import {
   Badge,
   Button,
@@ -12,9 +12,11 @@ import {
 import { formatTime } from '../analysis-model';
 import { CatalogError } from '../catalog-helpers';
 import type { DashboardListView } from './use-history';
+import { MoveDashboardModal } from './move-dashboard';
 
 type DashboardsListProps = {
   items: Dashboard[];
+  folders: DashboardFolder[];
   error: Error | null;
   loading: boolean;
   fetching: boolean;
@@ -29,12 +31,14 @@ type DashboardsListProps = {
   onOpen: (analysis: Dashboard) => void;
   onArchive: (analysis: Dashboard) => void;
   onUnarchive: (analysis: Dashboard) => void;
+  onMove: (analysis: Dashboard, folderID: string) => void;
   onRetry: () => void;
   onPrevious: () => void;
   onNext: () => void;
 };
 export function DashboardsList({
   items,
+  folders,
   error,
   loading,
   fetching,
@@ -49,12 +53,14 @@ export function DashboardsList({
   onOpen,
   onArchive,
   onUnarchive,
+  onMove,
   onRetry,
   onPrevious,
   onNext,
 }: DashboardsListProps) {
   const [pendingArchive, setPendingArchive] = useState<Dashboard | null>(null);
   const [archiveSubmitted, setArchiveSubmitted] = useState(false);
+  const [pendingMove, setPendingMove] = useState<Dashboard | null>(null);
   const archivedView = view === 'archived';
   useEffect(() => {
     if (archiveSubmitted && busyLabel !== '归档看板') {
@@ -102,6 +108,13 @@ export function DashboardsList({
           <span className="dashboard-row-actions">
             <Button size="small" disabled={busy} onClick={() => onOpen(analysis)}>
               打开看板
+            </Button>
+            <Button
+              size="small"
+              disabled={busy || !canWrite}
+              onClick={() => setPendingMove(analysis)}
+            >
+              移动
             </Button>
             <Button
               size="small"
@@ -198,6 +211,18 @@ export function DashboardsList({
           」将从默认列表隐藏，且草稿保存、发布与运行入口全部关闭；已发布版本与审计记录保留，可在「已归档」视图中恢复。
         </p>
       </Modal>
+      <MoveDashboardModal
+        dashboard={pendingMove}
+        folders={folders}
+        busy={busy}
+        onClose={() => {
+          if (!busy) setPendingMove(null);
+        }}
+        onMove={(dashboard, folderID) => {
+          onMove(dashboard, folderID);
+          setPendingMove(null);
+        }}
+      />
     </DataSurface>
   );
 }
