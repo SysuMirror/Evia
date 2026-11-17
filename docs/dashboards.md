@@ -16,7 +16,7 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 
 | Method and path                                            | Input                                                      | Result                                                      |
 | ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
-| `GET P/dashboards`                                         | Required `environment`; optional `view` (`active`/`archived`, default `active`), `limit`, `cursor` | `{items,next_cursor}`, UUID order; default 20, maximum 100  |
+| `GET P/dashboards`                                         | Required `environment`; optional `view` (`active`/`archived`, default `active`), `folder_id`, `q` title search, `limit`, `cursor` | `{items,next_cursor}`, UUID order; default 20, maximum 100  |
 | `POST P/dashboards`                                        | `{environment,definition}`; `Idempotency-Key`              | 201 draft with `ETag`                                       |
 | `GET P/dashboards/{dashboard_id}`                          | No query parameters                                        | Current resource summary                                    |
 | `GET P/dashboards/{dashboard_id}/draft`                    | No query parameters                                        | Draft with `ETag`                                           |
@@ -33,7 +33,11 @@ Creation fixes the dashboard's environment to `development`, `staging` or `produ
 | `GET/POST P/dashboard-folders`                             | GET: required `environment`, optional `limit`/`cursor`; POST: `{environment,title,parent_id?}` + `Idempotency-Key` | GET 200 `{items,next_cursor}`; POST 201 folder with ETag; unknown parent 404, depth over 3 400 |
 | `GET/PATCH/DELETE P/dashboard-folders/{folder_id}`         | PATCH `{title}` with quoted `If-Match`; DELETE has no body  | GET/PATCH 200 folder; DELETE 204 only when empty, else 409 `DASHBOARD_FOLDER_NOT_EMPTY`; stale revision 409 |
 
-Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope, including the `active`/`archived` view and any `folder_id` filter, so a cursor from one scope cannot page another; they are not cross-page snapshots. Unknown/repeated query parameters (an unknown `view` value returns `INVALID_ARCHIVE_VIEW`), unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
+Lists end with `next_cursor=null`. Signed cursors bind the actor, project and list scope, including the `active`/`archived` view, any `folder_id` filter and the normalized `q` search term, so a cursor from one scope cannot page another; they are not cross-page snapshots. Unknown/repeated query parameters (an unknown `view` value returns `INVALID_ARCHIVE_VIEW`), unknown JSON properties, duplicate JSON keys and trailing JSON values reject. IDs are UUID strings; counters are bounded JavaScript-safe integers. Errors use the shared `{code,message,request_id,details?}` representation and `X-Request-ID` response header.
+
+## Title search
+
+The dashboard list accepts an optional `q` query parameter for case-insensitive title substring filtering. The boundary trims surrounding whitespace and rejects terms longer than 128 runes with `INVALID_QUERY` (`/q`); an omitted or blank `q` disables the filter. The term is matched as a **literal**: the service escapes the LIKE meta-characters `\`, `%` and `_` and the store declares `ESCAPE '\'`, so a percent sign or underscore in the query never acts as a wildcard. Search composes by conjunction with the environment, archive view and folder scope predicates, and stays inside the selected environment. The normalized term is part of the signed cursor scope, so paging with a cursor produced under a different search term returns `INVALID_CURSOR`. The console exposes a debounced search box (300 ms) above the list; the client mirrors the 128-rune cap and omits `q` when the normalized box is blank, and any term change resets pagination to the first page.
 
 ## Folder hierarchy
 
