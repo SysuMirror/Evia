@@ -193,6 +193,7 @@ type CredentialRotation struct {
 type Dashboard struct {
 	ProjectID        string  `json:"project_id"`
 	Environment      string  `json:"environment"`
+	FolderID         *string `json:"folder_id,omitempty"`
 	Title            string  `json:"title"`
 	DraftRevision    int64   `json:"draft_revision"`
 	PublishedVersion int64   `json:"published_version"`
@@ -212,6 +213,7 @@ type DashboardChange struct {
 
 type DashboardCreate struct {
 	Environment string              `json:"environment"`
+	FolderID    *string             `json:"folder_id,omitempty"`
 	Definition  DashboardDefinition `json:"definition"`
 }
 
@@ -241,6 +243,7 @@ type DashboardDependency struct {
 type DashboardDraft struct {
 	ProjectID        string              `json:"project_id"`
 	Environment      string              `json:"environment"`
+	FolderID         *string             `json:"folder_id,omitempty"`
 	Title            string              `json:"title"`
 	DraftRevision    int64               `json:"draft_revision"`
 	PublishedVersion int64               `json:"published_version"`
@@ -254,6 +257,34 @@ type DashboardExecute struct {
 	TimeRange     json.RawMessage         `json:"time_range"`
 	Timezone      json.RawMessage         `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+}
+
+type DashboardFolder struct {
+	FolderID    string  `json:"folder_id"`
+	ProjectID   string  `json:"project_id"`
+	Environment string  `json:"environment"`
+	ParentID    *string `json:"parent_id,omitempty"`
+	Depth       int64   `json:"depth"`
+	Title       string  `json:"title"`
+	Revision    int64   `json:"revision"`
+	CreatedBy   string  `json:"created_by"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+type DashboardFolderCreate struct {
+	Environment string  `json:"environment"`
+	ParentID    *string `json:"parent_id,omitempty"`
+	Title       string  `json:"title"`
+}
+
+type DashboardFolderList struct {
+	Items      []DashboardFolder `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+type DashboardFolderUpdate struct {
+	Title string `json:"title"`
 }
 
 type DashboardInput struct {
@@ -298,6 +329,7 @@ type DashboardRun struct {
 }
 
 type DashboardUpdate struct {
+	FolderID   *string             `json:"folder_id,omitempty"`
 	Definition DashboardDefinition `json:"definition"`
 }
 

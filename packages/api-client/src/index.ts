@@ -98,6 +98,10 @@ export type DashboardWidgetRun = components['schemas']['DashboardWidgetRun'];
 export type DashboardRun = components['schemas']['DashboardRun'];
 export type DashboardVersionList = components['schemas']['DashboardVersionList'];
 export type DashboardList = components['schemas']['DashboardList'];
+export type DashboardFolder = components['schemas']['DashboardFolder'];
+export type DashboardFolderCreate = components['schemas']['DashboardFolderCreate'];
+export type DashboardFolderUpdate = components['schemas']['DashboardFolderUpdate'];
+export type DashboardFolderList = components['schemas']['DashboardFolderList'];
 export type ProjectSettings = components['schemas']['ProjectSettings'];
 export type ProjectSettingsUpdate = components['schemas']['ProjectSettingsUpdate'];
 export type ProjectMember = components['schemas']['ProjectMember'];
@@ -165,6 +169,9 @@ export type CatalogPage = {
   cursor?: string;
   limit?: number;
   view?: 'active' | 'archived';
+  // Dashboard folder scope: 'root' matches unfiled dashboards, a UUID matches
+  // one folder; undefined applies no folder filter.
+  folderId?: string;
 };
 export type SavedAnalysisPage = {
   environment: Environment;
@@ -300,6 +307,7 @@ function catalogQuery(page: CatalogPage): string {
   if (page.cursor !== undefined) query.set('cursor', page.cursor);
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   if (page.view !== undefined) query.set('view', page.view);
+  if (page.folderId !== undefined) query.set('folder_id', page.folderId);
   return query.size ? `?${query.toString()}` : '';
 }
 function queryResultQuery(page: QueryResultPage): string {
@@ -1079,6 +1087,59 @@ export const api = {
     }),
   cancelDashboardRun: (projectID: string, runID: string, csrf: string, signal?: AbortSignal) =>
     request<DashboardRun>(`${projectPath(projectID)}/dashboard-runs/${encodeURIComponent(runID)}`, {
+      method: 'DELETE',
+      csrf,
+      signal,
+    }),
+  listDashboardFolders: (projectID: string, page: CatalogPage, signal?: AbortSignal) =>
+    request<DashboardFolderList>(
+      `${projectPath(projectID)}/dashboard-folders${catalogQuery(page)}`,
+      { signal },
+    ),
+  createDashboardFolder: (
+    projectID: string,
+    body: DashboardFolderCreate,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardFolder>(`${projectPath(projectID)}/dashboard-folders`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
+  getDashboardFolder: (projectID: string, folderID: string, signal?: AbortSignal) =>
+    request<DashboardFolder>(
+      `${projectPath(projectID)}/dashboard-folders/${encodeURIComponent(folderID)}`,
+      { signal },
+    ),
+  updateDashboardFolder: (
+    projectID: string,
+    folderID: string,
+    revision: number,
+    body: DashboardFolderUpdate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<DashboardFolder>(
+      `${projectPath(projectID)}/dashboard-folders/${encodeURIComponent(folderID)}`,
+      {
+        method: 'PATCH',
+        body,
+        csrf,
+        signal,
+        headers: { 'If-Match': `"${revision}"` },
+      },
+    ),
+  deleteDashboardFolder: (
+    projectID: string,
+    folderID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<void>(`${projectPath(projectID)}/dashboard-folders/${encodeURIComponent(folderID)}`, {
       method: 'DELETE',
       csrf,
       signal,
