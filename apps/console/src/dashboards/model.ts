@@ -4,6 +4,23 @@ import { parameterIssues } from './parameter-model';
 /** Mirrors the server-side reporting.MaxTextCardContentRunes boundary. */
 export const maxTextCardContentRunes = 4096;
 
+/** Mirrors the server-side reporting.maxDashboardSearchRunes boundary. */
+export const maxDashboardSearchRunes = 128;
+
+/**
+ * Normalizes the title search box before the term reaches the API: trims
+ * surrounding whitespace and clamps to the server rune limit so an over-long
+ * local input can never trigger a guaranteed 400. A blank result means "no
+ * filter", which the history hook encodes by omitting the q parameter.
+ */
+export function normalizeDashboardSearch(input: string): string {
+  const trimmed = input.trim();
+  const runes = [...trimmed];
+  return runes.length > maxDashboardSearchRunes
+    ? runes.slice(0, maxDashboardSearchRunes).join('')
+    : trimmed;
+}
+
 /** Per-widget target selection captured by the cross-environment copy form. */
 export type CrossCopySelection = { resourceID: string; version: string };
 

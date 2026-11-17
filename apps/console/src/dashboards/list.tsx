@@ -5,6 +5,7 @@ import {
   Button,
   DataSurface,
   DataTable,
+  Input,
   Modal,
   PaginationBar,
   type DataTableColumn,
@@ -33,6 +34,8 @@ type DashboardsListProps = {
   hasNext: boolean;
   view: DashboardListView;
   onViewChange: (view: DashboardListView) => void;
+  search: string;
+  onSearchChange: (term: string) => void;
   onOpen: (analysis: Dashboard) => void;
   onArchive: (analysis: Dashboard) => void;
   onUnarchive: (analysis: Dashboard) => void;
@@ -58,6 +61,8 @@ export function DashboardsList({
   hasNext,
   view,
   onViewChange,
+  search,
+  onSearchChange,
   onOpen,
   onArchive,
   onUnarchive,
@@ -159,25 +164,36 @@ export function DashboardsList({
   ];
   return (
     <DataSurface label="保存的看板列表">
-      <div className="dashboard-view-switch" role="group" aria-label="看板视图切换">
-        <Button
-          size="small"
-          variant={archivedView ? 'ghost' : 'secondary'}
-          aria-pressed={!archivedView}
-          disabled={busy}
-          onClick={() => onViewChange('active')}
-        >
-          活跃看板
-        </Button>
-        <Button
-          size="small"
-          variant={archivedView ? 'secondary' : 'ghost'}
-          aria-pressed={archivedView}
-          disabled={busy}
-          onClick={() => onViewChange('archived')}
-        >
-          已归档
-        </Button>
+      <div className="dashboard-list-toolbar">
+        <div className="dashboard-view-switch" role="group" aria-label="看板视图切换">
+          <Button
+            size="small"
+            variant={archivedView ? 'ghost' : 'secondary'}
+            aria-pressed={!archivedView}
+            disabled={busy}
+            onClick={() => onViewChange('active')}
+          >
+            活跃看板
+          </Button>
+          <Button
+            size="small"
+            variant={archivedView ? 'secondary' : 'ghost'}
+            aria-pressed={archivedView}
+            disabled={busy}
+            onClick={() => onViewChange('archived')}
+          >
+            已归档
+          </Button>
+        </div>
+        <Input
+          className="dashboard-search-input"
+          type="search"
+          aria-label="搜索看板标题"
+          placeholder="按标题搜索…"
+          maxLength={128}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
       </div>
       <CatalogError error={error} retry={onRetry} />
       <DataTable

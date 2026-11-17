@@ -5,7 +5,9 @@ import {
   buildRebindings,
   dashboardIssues,
   executableWidgets,
+  maxDashboardSearchRunes,
   maxTextCardContentRunes,
+  normalizeDashboardSearch,
   reorderWidget,
   widgetSourceLabel,
   type CrossCopySelection,
@@ -19,6 +21,25 @@ const widget: DashboardWidget = {
   reading_order: 0,
   layout: { x: 0, y: 0, width: 6, height: 5 },
 };
+test('dashboard search terms trim blanks and clamp to the server rune limit', () => {
+  expect(normalizeDashboardSearch('  营收 看板 ')).toBe('营收 看板');
+  expect(normalizeDashboardSearch('   ')).toBe('');
+  expect(normalizeDashboardSearch('')).toBe('');
+  const atLimit = '字'.repeat(maxDashboardSearchRunes);
+  expect(normalizeDashboardSearch(atLimit)).toBe(atLimit);
+  const overLimit = '字'.repeat(maxDashboardSearchRunes + 1);
+  const clamped = normalizeDashboardSearch(overLimit);
+  expect([...clamped].length).toBe(maxDashboardSearchRunes);
+  expect(clamped).toBe(atLimit);
+  // Code points, not UTF-16 code units, define the limit and are preserved.
+  const emojiTerm = ` ${'😀'.repeat(maxDashboardSearchRunes + 1)} `;
+  const emojiClamped = normalizeDashboardSearch(emojiTerm);
+  expect([...emojiClamped].length).toBe(maxDashboardSearchRunes);
+  expect(emojiClamped.startsWith('😀')).toBe(true);
+  // Inner whitespace is lexical data and must survive normalization.
+  expect(normalizeDashboardSearch('a\tb  c')).toBe('a\tb  c');
+});
+
 test('dashboard titles follow Unicode contract and require real widgets', () => {
   const definition: DashboardDefinition = { title: '😀'.repeat(128), widgets: [widget] };
   expect(dashboardIssues(definition)).toEqual([]);

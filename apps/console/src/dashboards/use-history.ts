@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type DashboardVersion } from '@evia/api-client';
 import type { CatalogPageProps } from '../catalog';
+import { normalizeDashboardSearch } from './model';
 import { dashboardsKey, type DashboardFolderScope } from './types';
+
+/** Debounce window for the title search box so typing never fires a request per keystroke. */
+const searchDebounceMs = 300;
 
 export type DashboardListView = 'active' | 'archived';
 type HistoryOptions = {
@@ -29,10 +33,25 @@ export function useDashboardHistory({
     [versionCursors, setVersionCursors] = useState<string[]>([]);
   const [archiveView, setArchiveView] = useState<DashboardListView>('active');
   const [folderScope, setFolderScope] = useState<DashboardFolderScope>('');
+  // searchInput mirrors the textbox immediately; search is the debounced,
+  // normalized term actually bound to the request and to any page cursor.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [versionNumber, setVersionNumber] = useState<number>();
   const [displayVersion, setDisplayVersion] = useState<DashboardVersion>();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = normalizeDashboardSearch(searchInput);
+      setSearch((previous) => (next === previous ? previous : next));
+    }, searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  // A new predicate invalidates any cursor collected under the previous term.
+  useEffect(() => {
+    setCursors([]);
+  }, [search]);
   const list = useQuery({
-    queryKey: [...prefix, 'list', archiveView, folderScope, cursors.at(-1) ?? ''],
+    queryKey: [...prefix, 'list', archiveView, folderScope, search, cursors.at(-1) ?? ''],
     queryFn: ({ signal }) =>
       api.listDashboards(
         project.id,
@@ -40,6 +59,7 @@ export function useDashboardHistory({
           environment,
           view: archiveView,
           folderId: folderScope || undefined,
+          search: search || undefined,
           cursor: cursors.at(-1),
           limit: 20,
         },
@@ -71,6 +91,8 @@ export function useDashboardHistory({
     setDisplayVersion(undefined);
     setArchiveView('active');
     setFolderScope('');
+    setSearchInput('');
+    setSearch('');
   }, []);
   useEffect(reset, [identity, reset]);
   useEffect(() => {
@@ -130,6 +152,9 @@ export function useDashboardHistory({
     changeView,
     folderScope,
     changeFolderScope,
+    searchInput,
+    search,
+    changeSearch: setSearchInput,
     invalidateList,
     listPage: cursors.length + 1,
     previousList: () => setCursors((previous) => previous.slice(0, -1)),
