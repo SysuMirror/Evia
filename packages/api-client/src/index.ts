@@ -179,6 +179,8 @@ export type CatalogPage = {
   // Dashboard folder scope: 'root' matches unfiled dashboards, a UUID matches
   // one folder; undefined applies no folder filter.
   folderId?: string;
+  // Dashboard title substring search; only the dashboards listing honors it.
+  search?: string;
 };
 export type SavedAnalysisPage = {
   environment: Environment;
@@ -191,6 +193,9 @@ export type DashboardPage = SavedAnalysisPage & {
   // 'root' matches unfiled dashboards, a UUID matches one folder; undefined
   // applies no folder filter.
   folderId?: string;
+  // Optional case-insensitive title substring filter; empty/undefined means
+  // no filtering and the server binds any cursor to this term.
+  search?: string;
 };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
@@ -320,6 +325,7 @@ function catalogQuery(page: CatalogPage): string {
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   if (page.view !== undefined) query.set('view', page.view);
   if (page.folderId !== undefined) query.set('folder_id', page.folderId);
+  if (page.search !== undefined) query.set('q', page.search);
   return query.size ? `?${query.toString()}` : '';
 }
 function queryResultQuery(page: QueryResultPage): string {

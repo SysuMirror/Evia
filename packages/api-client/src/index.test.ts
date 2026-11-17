@@ -859,6 +859,31 @@ test('dashboard folder scope encoding and folder CRUD calls', async () => {
   controller.abort();
 });
 
+test('dashboard search term encodes as q alongside other list predicates', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', search: '营收 看板', limit: 20 },
+    controller.signal,
+  );
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', view: 'archived', folderId: 'root', search: '100%_done' },
+    controller.signal,
+  );
+  await api.listDashboards('p/q', { environment: 'production' }, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&limit=20&q=%E8%90%A5%E6%94%B6+%E7%9C%8B%E6%9D%BF',
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&view=archived&folder_id=root&q=100%25_done',
+      '/api/v1/projects/p%2Fq/dashboards?environment=production',
+    ],
+  );
+  controller.abort();
+});
+
 test('dashboard create and draft update carry the folder assignment', async () => {
   const fetch = respond();
   const controller = new AbortController();
