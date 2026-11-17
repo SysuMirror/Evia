@@ -23822,6 +23822,152 @@
           "height"
         ]
       },
+      "ParameterDeclaration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parameter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "neq",
+              "in",
+              "prefix",
+              "contains",
+              "gt",
+              "gte",
+              "lt",
+              "lte"
+            ],
+            "description": "The server enforces the per-type operator closed set: string allows eq/neq/in/prefix/contains, number allows eq/neq/in/gt/gte/lt/lte, boolean allows eq/neq."
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "default": {
+            "description": "Optional default used when a run omits the parameter; must match the declared type and operator bounds.",
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 20,
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "parameter_id",
+          "label",
+          "type",
+          "operator",
+          "required"
+        ],
+        "description": "Dashboard-level reusable runtime value. Declarations never store field names; widgets bind each parameter to their own pinned event fields through ParameterBinding."
+      },
+      "ParameterBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parameter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "field": {
+            "$ref": "../query/query-request.schema.json#/$defs/field"
+          }
+        },
+        "required": [
+          "parameter_id",
+          "field"
+        ],
+        "description": "Binds one declared dashboard parameter to a concrete pinned event field owned by the widget's source. Same display names never auto-bind; missing or malformed mappings fail closed."
+      },
+      "ParameterValues": {
+        "type": "object",
+        "maxProperties": 12,
+        "propertyNames": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "description": "Runtime parameter values keyed by declared parameter_id. Unknown keys, type mismatches and missing required values fail closed at run admission."
+      },
       "DashboardWidget": {
         "type": "object",
         "additionalProperties": false,
@@ -23852,6 +23998,14 @@
             "minimum": 0,
             "maximum": 11
           },
+          "parameter_bindings": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/ParameterBinding"
+            },
+            "description": "Optional bindings from dashboard parameters to this widget's own pinned event fields. Each parameter binds at most once per widget and each field accepts at most one parameter."
+          },
           "layout": {
             "$ref": "#/components/schemas/DashboardLayout"
           }
@@ -23876,6 +24030,14 @@
           "description": {
             "type": "string",
             "maxLength": 2000
+          },
+          "parameters": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/ParameterDeclaration"
+            },
+            "description": "Optional dashboard-level reusable runtime values with unique stable parameter_id values."
           },
           "widgets": {
             "type": "array",
@@ -24482,6 +24644,9 @@
               "$ref": "#/components/schemas/DashboardWidgetFilter"
             }
           },
+          "parameter_values": {
+            "$ref": "#/components/schemas/ParameterValues"
+          },
           "comparison": {
             "$ref": "#/components/schemas/ComparisonSpec"
           }
@@ -24490,7 +24655,7 @@
           "time_range",
           "timezone"
         ],
-        "description": "Bind required global time/timezone to every pinned analysis. Optional runtime widget_filters explicitly target distinct existing widget IDs and are ANDed with immutable fixed filters. Existing query field/type/version and resource budgets apply. All child jobs are admitted atomically or no run is created. Same-key retries return the original run; changed input conflicts, expired runs require a new key."
+        "description": "Bind required global time/timezone to every pinned analysis. Optional runtime widget_filters explicitly target distinct existing widget IDs and are ANDed with immutable fixed filters. Optional parameter_values feed declared dashboard parameters through each widget's own bindings. Existing query field/type/version and resource budgets apply. All child jobs are admitted atomically or no run is created. Same-key retries return the original run; changed input conflicts, expired runs require a new key."
       },
       "DashboardWidgetRun": {
         "type": "object",
@@ -24572,6 +24737,9 @@
             "items": {
               "$ref": "#/components/schemas/DashboardWidgetFilter"
             }
+          },
+          "parameter_values": {
+            "$ref": "#/components/schemas/ParameterValues"
           },
           "comparison": {
             "$ref": "#/components/schemas/ComparisonSpec"

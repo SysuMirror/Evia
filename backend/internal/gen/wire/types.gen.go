@@ -223,9 +223,10 @@ type DashboardCreate struct {
 }
 
 type DashboardDefinition struct {
-	Title       string            `json:"title"`
-	Description *string           `json:"description,omitempty"`
-	Widgets     []DashboardWidget `json:"widgets"`
+	Title       string                 `json:"title"`
+	Description *string                `json:"description,omitempty"`
+	Parameters  []ParameterDeclaration `json:"parameters,omitzero"`
+	Widgets     []DashboardWidget      `json:"widgets"`
 }
 
 type DashboardDependencies struct {
@@ -259,10 +260,11 @@ type DashboardDraft struct {
 }
 
 type DashboardExecute struct {
-	TimeRange     json.RawMessage         `json:"time_range"`
-	Timezone      json.RawMessage         `json:"timezone"`
-	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
-	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
+	TimeRange       json.RawMessage         `json:"time_range"`
+	Timezone        json.RawMessage         `json:"timezone"`
+	WidgetFilters   []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	ParameterValues *ParameterValues        `json:"parameter_values,omitempty"`
+	Comparison      *ComparisonSpec         `json:"comparison,omitempty"`
 }
 
 type DashboardFolder struct {
@@ -318,21 +320,22 @@ type DashboardPublish struct {
 }
 
 type DashboardRun struct {
-	RunID         string                  `json:"run_id"`
-	DashboardID   string                  `json:"dashboard_id"`
-	ProjectID     string                  `json:"project_id"`
-	Environment   string                  `json:"environment"`
-	Version       int64                   `json:"version"`
-	CreatedBy     string                  `json:"created_by"`
-	TimeRange     json.RawMessage         `json:"time_range"`
-	Timezone      json.RawMessage         `json:"timezone"`
-	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
-	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
-	State         string                  `json:"state"`
-	CreatedAt     string                  `json:"created_at"`
-	ExpiresAt     string                  `json:"expires_at"`
-	PollAfterMs   *int64                  `json:"poll_after_ms,omitempty"`
-	Widgets       []DashboardWidgetRun    `json:"widgets"`
+	RunID           string                  `json:"run_id"`
+	DashboardID     string                  `json:"dashboard_id"`
+	ProjectID       string                  `json:"project_id"`
+	Environment     string                  `json:"environment"`
+	Version         int64                   `json:"version"`
+	CreatedBy       string                  `json:"created_by"`
+	TimeRange       json.RawMessage         `json:"time_range"`
+	Timezone        json.RawMessage         `json:"timezone"`
+	WidgetFilters   []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	ParameterValues *ParameterValues        `json:"parameter_values,omitempty"`
+	Comparison      *ComparisonSpec         `json:"comparison,omitempty"`
+	State           string                  `json:"state"`
+	CreatedAt       string                  `json:"created_at"`
+	ExpiresAt       string                  `json:"expires_at"`
+	PollAfterMs     *int64                  `json:"poll_after_ms,omitempty"`
+	Widgets         []DashboardWidgetRun    `json:"widgets"`
 }
 
 type DashboardUpdate struct {
@@ -379,13 +382,14 @@ type DashboardVersionList struct {
 }
 
 type DashboardWidget struct {
-	WidgetID        string           `json:"widget_id"`
-	AnalysisID      *string          `json:"analysis_id,omitempty"`
-	AnalysisVersion *int64           `json:"analysis_version,omitempty"`
-	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
-	Title           string           `json:"title"`
-	ReadingOrder    int64            `json:"reading_order"`
-	Layout          DashboardLayout  `json:"layout"`
+	WidgetID          string             `json:"widget_id"`
+	AnalysisID        *string            `json:"analysis_id,omitempty"`
+	AnalysisVersion   *int64             `json:"analysis_version,omitempty"`
+	MetricRef         *MetricReference   `json:"metric_ref,omitempty"`
+	Title             string             `json:"title"`
+	ReadingOrder      int64              `json:"reading_order"`
+	ParameterBindings []ParameterBinding `json:"parameter_bindings,omitzero"`
+	Layout            DashboardLayout    `json:"layout"`
 }
 
 type DashboardWidgetFilter struct {
@@ -982,6 +986,22 @@ type MetricVersionList struct {
 	Items      []MetricVersion `json:"items"`
 	NextCursor *string         `json:"next_cursor"`
 }
+
+type ParameterBinding struct {
+	ParameterID string          `json:"parameter_id"`
+	Field       json.RawMessage `json:"field"`
+}
+
+type ParameterDeclaration struct {
+	ParameterID string          `json:"parameter_id"`
+	Label       string          `json:"label"`
+	Type        string          `json:"type"`
+	Operator    string          `json:"operator"`
+	Required    bool            `json:"required"`
+	Default     json.RawMessage `json:"default,omitempty"`
+}
+
+type ParameterValues map[string]any
 
 type Problem struct {
 	Code      string          `json:"code"`

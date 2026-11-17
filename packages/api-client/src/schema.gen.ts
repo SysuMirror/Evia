@@ -2646,6 +2646,31 @@ export interface components {
             width: number;
             height: number;
         };
+        /** @description Dashboard-level reusable runtime value. Declarations never store field names; widgets bind each parameter to their own pinned event fields through ParameterBinding. */
+        ParameterDeclaration: {
+            parameter_id: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "number" | "boolean";
+            /**
+             * @description The server enforces the per-type operator closed set: string allows eq/neq/in/prefix/contains, number allows eq/neq/in/gt/gte/lt/lte, boolean allows eq/neq.
+             * @enum {string}
+             */
+            operator: "eq" | "neq" | "in" | "prefix" | "contains" | "gt" | "gte" | "lt" | "lte";
+            /** @default false */
+            required: boolean;
+            /** @description Optional default used when a run omits the parameter; must match the declared type and operator bounds. */
+            default?: string | number | boolean | (string | number | boolean)[];
+        };
+        /** @description Binds one declared dashboard parameter to a concrete pinned event field owned by the widget's source. Same display names never auto-bind; missing or malformed mappings fail closed. */
+        ParameterBinding: {
+            parameter_id: string;
+            field: components["schemas"]["field"];
+        };
+        /** @description Runtime parameter values keyed by declared parameter_id. Unknown keys, type mismatches and missing required values fail closed at run admission. */
+        ParameterValues: {
+            [key: string]: string | number | boolean | (string | number | boolean)[];
+        };
         /** @description A widget pins exactly one immutable source: either the analysis_id/analysis_version pair or metric_ref, never both and never neither. The server and a database CHECK constraint enforce the exclusive choice. */
         DashboardWidget: {
             /** Format: uuid */
@@ -2656,12 +2681,16 @@ export interface components {
             metric_ref?: components["schemas"]["MetricReference"];
             title: string;
             reading_order: number;
+            /** @description Optional bindings from dashboard parameters to this widget's own pinned event fields. Each parameter binds at most once per widget and each field accepts at most one parameter. */
+            parameter_bindings?: components["schemas"]["ParameterBinding"][];
             layout: components["schemas"]["DashboardLayout"];
         };
         /** @description At most 65536 UTF-8 JSON bytes. Stable widget UUIDs, unique contiguous reading_order starting at zero, nonoverlapping integer layout within 12 columns and 1000 rows. Each widget pins an immutable saved-analysis version in this project/environment. Definitions contain configuration only. */
         DashboardDefinition: {
             title: string;
             description?: string;
+            /** @description Optional dashboard-level reusable runtime values with unique stable parameter_id values. */
+            parameters?: components["schemas"]["ParameterDeclaration"][];
             widgets: components["schemas"]["DashboardWidget"][];
         };
         DashboardDraft: {
@@ -2826,11 +2855,12 @@ export interface components {
             /** @description Calendar units to shift backwards; ignored for previous_period. */
             amount?: number;
         };
-        /** @description Bind required global time/timezone to every pinned analysis. Optional runtime widget_filters explicitly target distinct existing widget IDs and are ANDed with immutable fixed filters. Existing query field/type/version and resource budgets apply. All child jobs are admitted atomically or no run is created. Same-key retries return the original run; changed input conflicts, expired runs require a new key. */
+        /** @description Bind required global time/timezone to every pinned analysis. Optional runtime widget_filters explicitly target distinct existing widget IDs and are ANDed with immutable fixed filters. Optional parameter_values feed declared dashboard parameters through each widget's own bindings. Existing query field/type/version and resource budgets apply. All child jobs are admitted atomically or no run is created. Same-key retries return the original run; changed input conflicts, expired runs require a new key. */
         DashboardExecute: {
             time_range: components["schemas"]["time_range"];
             timezone: components["schemas"]["timezone"];
             widget_filters?: components["schemas"]["DashboardWidgetFilter"][];
+            parameter_values?: components["schemas"]["ParameterValues"];
             comparison?: components["schemas"]["ComparisonSpec"];
         };
         /** @description Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source, plus an optional comparison job over the shifted window. */
@@ -2861,6 +2891,7 @@ export interface components {
             time_range: components["schemas"]["time_range"];
             timezone: components["schemas"]["timezone"];
             widget_filters?: components["schemas"]["DashboardWidgetFilter"][];
+            parameter_values?: components["schemas"]["ParameterValues"];
             comparison?: components["schemas"]["ComparisonSpec"];
             /** @enum {string} */
             state: "queued" | "running" | "succeeded" | "partial" | "failed" | "canceled" | "expired";
@@ -3448,6 +3479,18 @@ export interface components {
                 schema_version: number;
             }[];
             $defs: {
+                field: {
+                    /** @constant */
+                    kind: "system";
+                    /** @enum {unknown} */
+                    key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
+                } | {
+                    /** @constant */
+                    kind: "property";
+                    event_key: string;
+                    schema_version: number;
+                    key: string;
+                };
                 retention_step: {
                     event_key: string;
                     schema_version: number;
@@ -3558,6 +3601,18 @@ export interface components {
                 /** Format: date-time */
                 generated_at: string;
             };
+        };
+        field: {
+            /** @constant */
+            kind: "system";
+            /** @enum {unknown} */
+            key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
+        } | {
+            /** @constant */
+            kind: "property";
+            event_key: string;
+            schema_version: number;
+            key: string;
         };
         "event-envelope.schema": {
             /** Format: uuid */

@@ -518,6 +518,63 @@
     "timezone"
   ],
   "$defs": {
+    "field": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "system"
+            },
+            "key": {
+              "enum": [
+                "event_key",
+                "uid",
+                "anonymous_id",
+                "session_id",
+                "page_view_id",
+                "event_time",
+                "operation_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "key"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "property"
+            },
+            "event_key": {
+              "type": "string",
+              "pattern": "^(sys\\.)?[a-z][a-z0-9_]{0,63}$",
+              "maxLength": 68
+            },
+            "schema_version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            }
+          },
+          "required": [
+            "kind",
+            "event_key",
+            "schema_version",
+            "key"
+          ]
+        }
+      ]
+    },
     "retention_step": {
       "type": "object",
       "additionalProperties": false,

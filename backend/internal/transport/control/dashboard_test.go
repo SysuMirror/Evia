@@ -482,3 +482,34 @@ func TestDashboardHTTPRunReadAndCancel(t *testing.T) {
 		t.Fatal(f)
 	}
 }
+
+const parameterizedDashboardDefinition = `{"title":"Daily opens","description":"","parameters":[{"parameter_id":"section","label":"板块","type":"string","operator":"eq","required":false}],"widgets":[{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":1,"title":"Daily opens","reading_order":0,"layout":{"x":0,"y":0,"width":12,"height":4},"parameter_bindings":[{"parameter_id":"section","field":{"kind":"property","key":"section_id","event_key":"page_opened","schema_version":1}}]}]}`
+
+func TestDashboardHTTPParameterContracts(t *testing.T) {
+	// Valid parameterized definition and run values pass the boundary.
+	f := &dashboardHTTPService{}
+	h, _ := dashboardHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	catalogStatus(t, catalogRequest(h, "POST", dashboardBase, `{"environment":"development","definition":`+parameterizedDashboardDefinition+`}`, map[string]string{"Idempotency-Key": "parameter-create"}), 201)
+	runBody := `{"time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-02T00:00:00Z"},"timezone":"UTC","parameter_values":{"section":"forum","limit":3,"vip":true}}`
+	catalogStatus(t, catalogRequest(h, "POST", dashboardItem+"/versions/1/runs", runBody, map[string]string{"Idempotency-Key": "parameter-run"}), 202)
+
+	for _, tc := range []struct {
+		name, method, path, body string
+		headers                  map[string]string
+	}{
+		{"null parameter value", "POST", dashboardItem + "/versions/1/runs", `{"time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-02T00:00:00Z"},"timezone":"UTC","parameter_values":{"section":null}}`, map[string]string{"Idempotency-Key": "k1"}},
+		{"object parameter value", "POST", dashboardItem + "/versions/1/runs", `{"time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-02T00:00:00Z"},"timezone":"UTC","parameter_values":{"section":{"nested":1}}}`, map[string]string{"Idempotency-Key": "k2"}},
+		{"unknown declaration type", "POST", dashboardBase, `{"environment":"development","definition":` + strings.Replace(parameterizedDashboardDefinition, `"type":"string"`, `"type":"json"`, 1) + `}`, map[string]string{"Idempotency-Key": "k3"}},
+		{"unknown binding field kind", "POST", dashboardBase, `{"environment":"development","definition":` + strings.Replace(parameterizedDashboardDefinition, `"kind":"property"`, `"kind":"json"`, 1) + `}`, map[string]string{"Idempotency-Key": "k4"}},
+		{"unknown declaration property", "POST", dashboardBase, `{"environment":"development","definition":` + strings.Replace(parameterizedDashboardDefinition, `"required":false`, `"required":false,"extra":1`, 1) + `}`, map[string]string{"Idempotency-Key": "k5"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := &dashboardHTTPService{}
+			badH, _ := dashboardHTTP(t, bad, &catalogAccess{fakeAccess: &fakeAccess{}})
+			catalogStatus(t, catalogRequest(badH, tc.method, tc.path, tc.body, tc.headers), 400)
+			if bad.calls != 0 {
+				t.Fatal("invalid parameter contract reached service")
+			}
+		})
+	}
+}
