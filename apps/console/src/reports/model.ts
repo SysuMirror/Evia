@@ -10,6 +10,23 @@ export const REPORT_DESCRIPTION_MAX = 2000;
 export const REPORT_SECTION_TITLE_MAX = 128;
 export const REPORT_MAX_SECTIONS = 50;
 
+/** Mirrors the server-side reports.MaxTitleLength rune boundary for the q term. */
+export const maxReportSearchRunes = 128;
+
+/**
+ * Normalizes the title search box before the term reaches the API: trims
+ * surrounding whitespace and clamps to the server rune limit so an over-long
+ * local input can never trigger a guaranteed 400. A blank result means "no
+ * filter", which the list view encodes by omitting the q parameter.
+ */
+export function normalizeReportSearch(input: string): string {
+  const trimmed = input.trim();
+  const runes = [...trimmed];
+  return runes.length > maxReportSearchRunes
+    ? runes.slice(0, maxReportSearchRunes).join('')
+    : trimmed;
+}
+
 /** One editor row. reading_order is derived from the row position on submit. */
 export interface SectionForm {
   sectionTitle: string;

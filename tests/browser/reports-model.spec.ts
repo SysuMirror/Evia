@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import {
   addSection,
   emptyReportForm,
+  maxReportSearchRunes,
+  normalizeReportSearch,
   patchSection,
   removeSection,
   reportFormFrom,
@@ -139,4 +141,20 @@ test('reportFormFrom round-trips the persisted wire shape', () => {
   ]);
   const rebuilt = toReportInput('production', form);
   expect(rebuilt.input!.definition.sections[0]!.reading_order).toBe(1);
+});
+
+test('report search terms trim blanks and clamp to the server rune limit', () => {
+  expect(normalizeReportSearch('  留存 周报 ')).toBe('留存 周报');
+  expect(normalizeReportSearch('   ')).toBe('');
+  expect(normalizeReportSearch('')).toBe('');
+  const atLimit = '字'.repeat(maxReportSearchRunes);
+  expect(normalizeReportSearch(atLimit)).toBe(atLimit);
+  const overLimit = '字'.repeat(maxReportSearchRunes + 1);
+  const clamped = normalizeReportSearch(overLimit);
+  expect([...clamped].length).toBe(maxReportSearchRunes);
+  expect(clamped).toBe(atLimit);
+  const emojiClamped = normalizeReportSearch(` ${'😀'.repeat(maxReportSearchRunes + 1)} `);
+  expect([...emojiClamped].length).toBe(maxReportSearchRunes);
+  expect(emojiClamped.startsWith('😀')).toBe(true);
+  expect(normalizeReportSearch('a\tb  c')).toBe('a\tb  c');
 });

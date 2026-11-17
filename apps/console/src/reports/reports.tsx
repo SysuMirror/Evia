@@ -31,6 +31,7 @@ import {
   addSection,
   emptyReportForm,
   formatInstant,
+  normalizeReportSearch,
   patchSection,
   removeSection,
   reportFormFrom,
@@ -47,6 +48,9 @@ import './styles.css';
 
 type PageProps = { project: Project; session: Session; environment: Environment };
 const PAGE_LIMIT = 20;
+
+/** Debounce window for the title search box so typing never fires a request per keystroke. */
+const searchDebounceMs = 300;
 
 function shortID(id: string): string {
   return id.length > 13 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
@@ -321,14 +325,30 @@ export function ReportsPage({ project, session, environment }: PageProps) {
   const [editor, setEditor] = useState<EditorMode | null>(null);
   const [deleting, setDeleting] = useState<Report | null>(null);
   const [notice, setNotice] = useState('');
+  // searchInput mirrors the textbox immediately; search is the debounced,
+  // normalized term actually bound to the request and to any page cursor.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = normalizeReportSearch(searchInput);
+      setSearch((previous) => (next === previous ? previous : next));
+    }, searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  // A new predicate invalidates any cursor collected under the previous term.
+  useEffect(() => {
+    setCursors([]);
+  }, [search]);
 
   const reportsQuery = useQuery({
-    queryKey: ['reports', project.id, environment, cursors.at(-1) ?? ''],
+    queryKey: ['reports', project.id, environment, search, cursors.at(-1) ?? ''],
     queryFn: ({ signal }) =>
       api.listReports(
         project.id,
         environment,
-        { cursor: cursors.at(-1), limit: PAGE_LIMIT },
+        { cursor: cursors.at(-1), limit: PAGE_LIMIT, search: search || undefined },
         signal,
       ),
   });
@@ -452,7 +472,20 @@ export function ReportsPage({ project, session, environment }: PageProps) {
       </div>
       {notice && <Alert tone="error" title={notice} />}
       <DataSurface label={`${environment} 环境报告`}>
-        <Toolbar label="报告列表">
+        <Toolbar
+          label="报告列表"
+          actions={
+            <Input
+              className="report-search-input"
+              type="search"
+              aria-label="搜索报告标题"
+              placeholder="按标题搜索…"
+              maxLength={128}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+          }
+        >
           {canWrite && (
             <Button
               variant="primary"
