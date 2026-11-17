@@ -113,7 +113,9 @@ type FormulaMetricSnapshot struct {
 // with the query worker integration in a later vertical.
 type FormulaMetricStore interface {
 	CreateFormulaMetric(context.Context, string, string, string, FormulaMetricCreate) (FormulaMetricDraft, error)
-	ListFormulaMetrics(context.Context, string, string, string, string, int, bool) ([]FormulaMetricRecord, error)
+	// search is a normalized, LIKE-escaped literal title substring or "" for
+	// no filter.
+	ListFormulaMetrics(context.Context, string, string, string, string, int, bool, string) ([]FormulaMetricRecord, error)
 	GetFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 	GetFormulaMetricDraft(context.Context, string, string, string) (FormulaMetricDraft, error)
 	SaveFormulaMetricDraft(context.Context, string, string, string, int64, FormulaMetricDefinition) (FormulaMetricDraft, error)

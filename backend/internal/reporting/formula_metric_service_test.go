@@ -22,7 +22,7 @@ func (f *fakeFormulaMetricStore) CreateFormulaMetric(_ context.Context, _, _, _ 
 	f.created = in
 	return FormulaMetricDraft{FormulaMetricRecord: FormulaMetricRecord{ID: "formula-one", ProjectID: "project-one", Environment: in.Environment, DraftRevision: 1}}, nil
 }
-func (f *fakeFormulaMetricStore) ListFormulaMetrics(_ context.Context, _, _, _, _ string, limit int, _ bool) ([]FormulaMetricRecord, error) {
+func (f *fakeFormulaMetricStore) ListFormulaMetrics(_ context.Context, _, _, _, _ string, limit int, _ bool, _ string) ([]FormulaMetricRecord, error) {
 	f.listLimit = limit
 	return []FormulaMetricRecord{}, nil
 }
@@ -110,10 +110,10 @@ func TestFormulaMetricServiceSaveRejectsRevisionAndContract(t *testing.T) {
 
 func TestFormulaMetricServiceListRejectsLimit(t *testing.T) {
 	svc := NewFormulaMetrics(&fakeFormulaMetricStore{}, savedValidator(t))
-	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "development", "", 0, false); e == nil {
+	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "development", "", 0, false, ""); e == nil {
 		t.Fatal("expected limit rejection")
 	}
-	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "nope", "", 10, false); e == nil {
+	if _, e := svc.ListFormulaMetrics(context.Background(), "actor", "project-one", "nope", "", 10, false, ""); e == nil {
 		t.Fatal("expected environment rejection")
 	}
 }

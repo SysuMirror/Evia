@@ -24,7 +24,7 @@ var _ FormulaMetricService = (*FormulaMetrics)(nil)
 // FormulaMetricService is the management surface of composite formula metrics.
 type FormulaMetricService interface {
 	CreateFormulaMetric(context.Context, string, string, string, FormulaMetricCreate) (FormulaMetricDraft, error)
-	ListFormulaMetrics(context.Context, string, string, string, string, int, bool) ([]FormulaMetricRecord, error)
+	ListFormulaMetrics(context.Context, string, string, string, string, int, bool, string) ([]FormulaMetricRecord, error)
 	GetFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error)
 	GetFormulaMetricDraft(context.Context, string, string, string) (FormulaMetricDraft, error)
 	SaveFormulaMetricDraft(context.Context, string, string, string, int64, FormulaMetricDefinition) (FormulaMetricDraft, error)
@@ -77,14 +77,18 @@ func (s *FormulaMetrics) CreateFormulaMetric(ctx context.Context, actor, project
 	return s.store.CreateFormulaMetric(ctx, actor, project, key, in)
 }
 
-func (s *FormulaMetrics) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]FormulaMetricRecord, error) {
+func (s *FormulaMetrics) ListFormulaMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]FormulaMetricRecord, error) {
 	if !metricEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListFormulaMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly)
+	search, e := NormalizeCatalogSearch(search)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.ListFormulaMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly, EscapeLikePattern(search))
 }
 
 func (s *FormulaMetrics) GetFormulaMetric(ctx context.Context, actor, project, id string) (FormulaMetricRecord, error) {
