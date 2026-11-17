@@ -100,6 +100,52 @@ func TestCalendarShiftSurvivesDSTTransition(t *testing.T) {
 	}
 }
 
+func TestNormalizeExecutionRejectsBadComparison(t *testing.T) {
+	runner := utcRange(t, "2026-11-10T00:00:00Z", "2026-11-17T00:00:00Z")
+	def := DashboardDefinition{
+		Title:   "D",
+		Widgets: []DashboardWidget{{ID: dashboardWidgetOne, AnalysisID: dashboardAnalysisID, AnalysisVersion: 1, Title: "C", Layout: DashboardLayout{Width: 12, Height: 2}}},
+	}
+	valid := DashboardExecute{TimeRange: runner, Timezone: "UTC", Comparison: &ComparisonSpec{Unit: ComparisonWeek, Amount: 1}}
+	if _, e := NormalizeDashboardExecution(valid, def); e != nil {
+		t.Fatalf("valid comparison should normalize: %v", e)
+	}
+	bad := valid
+	bad.Comparison = &ComparisonSpec{Unit: "bogus", Amount: 1}
+	if _, e := NormalizeDashboardExecution(bad, def); e == nil {
+		t.Fatal("invalid comparison unit must be rejected")
+	}
+	bad.Comparison = &ComparisonSpec{Unit: ComparisonMonth, Amount: 99}
+	if _, e := NormalizeDashboardExecution(bad, def); e == nil {
+		t.Fatal("out-of-range comparison amount must be rejected")
+	}
+}
+
+func TestDashboardRunStateCountsComparisonJobs(t *testing.T) {
+	job := func(state string) analysis.Job {
+		return analysis.Job{ID: "j", State: state}
+	}
+	widgets := []DashboardWidgetRun{
+		{WidgetID: "a", Query: job("succeeded")},
+		{WidgetID: "b", Query: job("succeeded"), Comparison: ptrJob(job("failed"))},
+	}
+	if got := DashboardRunState(widgets); got != "partial" {
+		t.Fatalf("failed comparison must make the run partial, got %s", got)
+	}
+	widgets[1].Comparison = ptrJob(job("succeeded"))
+	if got := DashboardRunState(widgets); got != "succeeded" {
+		t.Fatalf("all jobs succeeded should be succeeded, got %s", got)
+	}
+	widgets[0].Query = job("queued")
+	widgets[1].Query = job("queued")
+	widgets[1].Comparison = ptrJob(job("queued"))
+	if got := DashboardRunState(widgets); got != "queued" {
+		t.Fatalf("all queued jobs should be queued, got %s", got)
+	}
+}
+
+func ptrJob(job analysis.Job) *analysis.Job { return &job }
+
 func TestShiftRejectsInvalidInput(t *testing.T) {
 	runner := utcRange(t, "2026-11-10T00:00:00Z", "2026-11-17T00:00:00Z")
 	if _, e := ShiftTimeRange(runner, "UTC", ComparisonSpec{Unit: "bogus", Amount: 1}); e == nil {

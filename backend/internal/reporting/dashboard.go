@@ -124,6 +124,9 @@ type DashboardExecute struct {
 	TimeRange     analysis.TimeRange      `json:"time_range"`
 	Timezone      string                  `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitempty"`
+	// Comparison, when set, adds one shifted-window query per widget using the
+	// DST-safe ShiftTimeRange derivation; nil runs the current window only.
+	Comparison *ComparisonSpec `json:"comparison,omitempty"`
 }
 type DashboardSnapshot struct {
 	Draft        DashboardDraft
@@ -136,6 +139,9 @@ type DashboardWidgetRun struct {
 	AnalysisVersion int64            `json:"analysis_version,omitempty"`
 	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
 	Query           analysis.Job     `json:"query"`
+	// Comparison is present only when the run requested a comparison window;
+	// its job uses the same filters and granularity over the shifted range.
+	Comparison *analysis.Job `json:"comparison,omitempty"`
 }
 type DashboardRun struct {
 	ID            string                  `json:"run_id"`
@@ -147,6 +153,7 @@ type DashboardRun struct {
 	TimeRange     analysis.TimeRange      `json:"time_range"`
 	Timezone      string                  `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitempty"`
+	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
 	State         string                  `json:"state"`
 	CreatedAt     time.Time               `json:"created_at"`
 	ExpiresAt     time.Time               `json:"expires_at"`

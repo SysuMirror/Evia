@@ -182,6 +182,9 @@ func NormalizeDashboardExecution(in DashboardExecute, definition DashboardDefini
 	if len(out.WidgetFilters) > len(definition.Widgets) {
 		return out, analysis.Invalid("INVALID_WIDGET_FILTER", "组件筛选数量超过组件数量", "/widget_filters")
 	}
+	if out.Comparison != nil && !out.Comparison.Valid() {
+		return out, analysis.Invalid("INVALID_COMPARISON_SPEC", "比较期单位或数量无效", "/comparison")
+	}
 	ids := map[string]bool{}
 	for _, w := range definition.Widgets {
 		ids[w.ID] = true
@@ -216,25 +219,33 @@ func DashboardRunState(widgets []DashboardWidgetRun) string {
 		return "expired"
 	}
 	counts := map[string]int{}
+	total := 0
 	for _, w := range widgets {
 		counts[w.Query.State]++
+		total++
+		// Comparison jobs are independent work units: a failed comparison makes
+		// the run partial/failed even when the current window succeeded.
+		if w.Comparison != nil {
+			counts[w.Comparison.State]++
+			total++
+		}
 	}
-	if counts["queued"] == len(widgets) {
+	if counts["queued"] == total {
 		return "queued"
 	}
 	if counts["queued"]+counts["running"] > 0 {
 		return "running"
 	}
-	if counts["succeeded"] == len(widgets) {
+	if counts["succeeded"] == total {
 		return "succeeded"
 	}
 	if counts["succeeded"] > 0 {
 		return "partial"
 	}
-	if counts["expired"] == len(widgets) {
+	if counts["expired"] == total {
 		return "expired"
 	}
-	if counts["canceled"] == len(widgets) {
+	if counts["canceled"] == total {
 		return "canceled"
 	}
 	return "failed"
