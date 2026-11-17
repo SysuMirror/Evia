@@ -217,8 +217,10 @@ type DashboardChange struct {
 }
 
 type DashboardCopy struct {
-	Title    string  `json:"title"`
-	FolderID *string `json:"folder_id,omitempty"`
+	Title             string               `json:"title"`
+	FolderID          *string              `json:"folder_id,omitempty"`
+	TargetEnvironment *string              `json:"target_environment,omitempty"`
+	Rebindings        []DashboardRebinding `json:"rebindings,omitzero"`
 }
 
 type DashboardCreate struct {
@@ -322,6 +324,14 @@ type DashboardPublish struct {
 	DraftRevision            int64  `json:"draft_revision"`
 	ExpectedPublishedVersion int64  `json:"expected_published_version"`
 	ValidationHash           string `json:"validation_hash"`
+}
+
+type DashboardRebinding struct {
+	WidgetID        string  `json:"widget_id"`
+	AnalysisID      *string `json:"analysis_id,omitempty"`
+	AnalysisVersion *int64  `json:"analysis_version,omitempty"`
+	MetricID        *string `json:"metric_id,omitempty"`
+	MetricVersion   *int64  `json:"metric_version,omitempty"`
 }
 
 type DashboardRun struct {

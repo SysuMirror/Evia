@@ -722,6 +722,51 @@ test('dashboard copy posts to the copy route with idempotency key and CSRF', asy
   assert.equal(init.signal?.aborted, true);
 });
 
+test('dashboard cross-environment copy carries the target environment and rebindings', async () => {
+  const fetch = respond(201, { dashboard_id: 'staging-dashboard' });
+  await api.copyDashboard(
+    'p/q',
+    'd/r',
+    {
+      title: 'Staging copy',
+      target_environment: 'staging',
+      rebindings: [
+        {
+          widget_id: '11111111-1111-4111-8111-111111111111',
+          analysis_id: '77777777-7777-4777-8777-777777777777',
+          analysis_version: 4,
+        },
+        {
+          widget_id: '22222222-2222-4222-8222-222222222222',
+          metric_id: '88888888-8888-4888-8888-888888888888',
+          metric_version: 5,
+        },
+      ],
+    },
+    'cross-key',
+    'csrf',
+  );
+  const [url, init] = fetch.mock.calls[0]!.arguments as [string, RequestInit];
+  assert.equal(url, '/api/v1/projects/p%2Fq/dashboards/d%2Fr/copy');
+  assert.equal(init.method, 'POST');
+  assert.deepEqual(JSON.parse(init.body as string), {
+    title: 'Staging copy',
+    target_environment: 'staging',
+    rebindings: [
+      {
+        widget_id: '11111111-1111-4111-8111-111111111111',
+        analysis_id: '77777777-7777-4777-8777-777777777777',
+        analysis_version: 4,
+      },
+      {
+        widget_id: '22222222-2222-4222-8222-222222222222',
+        metric_id: '88888888-8888-4888-8888-888888888888',
+        metric_version: 5,
+      },
+    ],
+  });
+});
+
 test('dashboard text-card definitions ride draft payloads without an executable source', async () => {
   const fetch = respond(201, {});
   const controller = new AbortController();

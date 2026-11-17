@@ -2819,14 +2819,31 @@ export interface components {
             folder_id?: string;
             definition: components["schemas"]["DashboardDefinition"];
         };
-        /** @description Same-environment copy request. The server creates a new unpublished dashboard with fresh dashboard/widget IDs, retaining pinned immutable references, layout, parameters and bindings; publication state, runs and archive state are never carried over. Cross-environment copies require explicit rebinding and are not supported by this contract. */
+        /** @description Explicit target for one executable widget during a cross-environment copy. Exactly one of the analysis pair (analysis_id + analysis_version) or metric pair (metric_id + metric_version) must be present, matching the source widget's kind; the referenced version must be published in the target environment. */
+        DashboardRebinding: {
+            /** Format: uuid */
+            widget_id: string;
+            /** Format: uuid */
+            analysis_id?: string;
+            analysis_version?: number;
+            /** Format: uuid */
+            metric_id?: string;
+            metric_version?: number;
+        };
+        /** @description Copy request. Without target_environment the server creates a same-environment unpublished dashboard with fresh dashboard/widget IDs, retaining pinned references, layout, parameters and bindings. With a different target_environment every executable widget is rebound to the supplied target versions, which must exist and be published in that environment; publication state, runs and archive state are never carried over. */
         DashboardCopy: {
             title: string;
             /**
              * Format: uuid
-             * @description Optional target folder in the source dashboard's project/environment; omitted places the copy at the root.
+             * @description Optional target folder in the destination project/environment; omitted places the copy at the root.
              */
             folder_id?: string;
+            /**
+             * @description Omitted to copy within the source environment. A different environment requires exhaustive rebindings for every executable widget; text cards carry over without an entry.
+             * @enum {string}
+             */
+            target_environment?: "development" | "staging" | "production";
+            rebindings?: components["schemas"]["DashboardRebinding"][];
         };
         /** @description Scoped organization metadata with a bounded depth of 3. Parent and depth are fixed at creation; only the title (and revision) can change. */
         DashboardFolder: {

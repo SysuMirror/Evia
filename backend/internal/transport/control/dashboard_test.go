@@ -42,6 +42,8 @@ type dashboardHTTPService struct {
 	limit                       int
 	archivedOnly                bool
 	folderScope, folderID       string
+	targetEnvironment           string
+	rebindings                  []reporting.DashboardRebinding
 	items                       []reporting.Dashboard
 	versions                    []reporting.DashboardVersion
 }
@@ -118,6 +120,8 @@ func (f *dashboardHTTPService) EnqueueDashboardRun(_ context.Context, actor, pro
 }
 func (f *dashboardHTTPService) CopyDashboard(_ context.Context, actor, project, id, key string, in reporting.DashboardCopy) (reporting.DashboardDraft, error) {
 	f.id, f.key = id, key
+	f.targetEnvironment = in.TargetEnvironment
+	f.rebindings = in.Rebindings
 	out := dashboardDraft()
 	out.Title = in.Title
 	out.FolderID = in.FolderID
@@ -177,6 +181,26 @@ func TestDashboardHTTPRoutesContractsAndRevisions(t *testing.T) {
 		t.Fatal("scope or precondition not forwarded", f)
 	}
 }
+
+func TestDashboardHTTPCrossEnvironmentCopy(t *testing.T) {
+	f := &dashboardHTTPService{}
+	access := &catalogAccess{fakeAccess: &fakeAccess{}}
+	h, _ := dashboardHTTP(t, f, access)
+	body := `{"title":"Staging copy","target_environment":"staging","rebindings":[` +
+		`{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":4},` +
+		`{"widget_id":"22222222-2222-4222-8222-222222222222","metric_id":"55555555-5555-4555-8555-555555555555","metric_version":5}]}`
+	w := catalogRequest(h, "POST", dashboardItem+"/copy", body, map[string]string{"Idempotency-Key": "cross-key"})
+	catalogStatus(t, w, 201)
+	if f.targetEnvironment != "staging" || len(f.rebindings) != 2 {
+		t.Fatalf("cross-env copy not decoded to the service: env=%q rebindings=%d", f.targetEnvironment, len(f.rebindings))
+	}
+	if f.rebindings[0].AnalysisID != "33333333-3333-4333-8333-333333333333" || f.rebindings[0].AnalysisVersion != 4 {
+		t.Fatalf("analysis rebinding not forwarded: %+v", f.rebindings[0])
+	}
+	if f.rebindings[1].MetricID != "55555555-5555-4555-8555-555555555555" || f.rebindings[1].MetricVersion != 5 {
+		t.Fatalf("metric rebinding not forwarded: %+v", f.rebindings[1])
+	}
+}
 func TestDashboardHTTPStrictInputs(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body string
@@ -203,6 +227,9 @@ func TestDashboardHTTPStrictInputs(t *testing.T) {
 		{"copy needs key", "POST", dashboardItem + "/copy", `{"title":"Copied"}`, nil, 400},
 		{"copy empty title", "POST", dashboardItem + "/copy", `{"title":""}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
 		{"copy unknown field", "POST", dashboardItem + "/copy", `{"title":"Copied","environment":"production"}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
+		{"copy bad target environment", "POST", dashboardItem + "/copy", `{"title":"Copied","target_environment":"sandbox"}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
+		{"copy rebinding unknown field", "POST", dashboardItem + "/copy", `{"title":"Copied","target_environment":"staging","rebindings":[{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":1,"extra":true}]}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
+		{"copy rebinding bad version", "POST", dashboardItem + "/copy", `{"title":"Copied","target_environment":"staging","rebindings":[{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":0}]}`, map[string]string{"Idempotency-Key": "copy-bad"}, 400},
 		{"invalid key", "POST", dashboardBase, dashboardCreateBody, map[string]string{"Idempotency-Key": "contains space"}, 400},
 		{"PATCH needs revision", "PATCH", dashboardItem + "/draft", `{"definition":` + dashboardDefinition + `}`, nil, 400},
 		{"weak revision", "PATCH", dashboardItem + "/draft", `{"definition":` + dashboardDefinition + `}`, map[string]string{"If-Match": `W/"1"`}, 400},

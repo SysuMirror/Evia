@@ -92,6 +92,7 @@ export type DashboardValidation = components['schemas']['DashboardValidation'];
 export type DashboardCreate = components['schemas']['DashboardCreate'];
 export type DashboardUpdate = components['schemas']['DashboardUpdate'];
 export type DashboardCopy = components['schemas']['DashboardCopy'];
+export type DashboardRebinding = components['schemas']['DashboardRebinding'];
 export type DashboardValidate = components['schemas']['DashboardValidate'];
 export type DashboardPublish = components['schemas']['DashboardPublish'];
 export type DashboardWidgetFilter = components['schemas']['DashboardWidgetFilter'];
