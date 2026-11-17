@@ -38,6 +38,8 @@ import { displayCell } from '../saved-analysis-run/result-table';
 import { DashboardRuntimeFilters } from './runtime-filters';
 import { ComparisonControls } from './comparison-controls';
 import { DashboardParameterValues } from './parameter-run-values';
+import { AutoRefreshControls } from './auto-refresh-controls';
+import { useDashboardAutoRefresh } from './use-auto-refresh';
 import { widgetSourceLabel } from './model';
 import { activeDashboardRun, useDashboardExecution } from './use-execution';
 export type { SavedRunWork } from '../saved-analysis-run';
@@ -78,7 +80,8 @@ export function DashboardRunView({
     [parameterValues, setParameterValues] = useState<ParameterValues>({}),
     [parameterOpen, setParameterOpen] = useState(false),
     [parameterPending, setParameterPending] = useState(false),
-    [parameterBaseline, setParameterBaseline] = useState('{}');
+    [parameterBaseline, setParameterBaseline] = useState('{}'),
+    [autoRefreshSeconds, setAutoRefreshSeconds] = useState(0);
   const controlID = useId();
   const declaredParameters = version.definition.parameters ?? [];
   useEffect(() => {
@@ -90,6 +93,7 @@ export function DashboardRunView({
     setParameterBaseline('{}');
     setParameterPending(false);
     setParameterOpen(false);
+    setAutoRefreshSeconds(0);
   }, [version.dashboard_id, version.version]);
   // Only analysis-sourced widgets need a saved-analysis version prefetch.
   // Metric-sourced widgets carry metric_ref and are rendered without it.
@@ -223,6 +227,11 @@ export function DashboardRunView({
     onDenied,
   ]);
   const frozen = disabled || busy || !!attempt;
+  const { nextAt: nextRefreshAt } = useDashboardAutoRefresh({
+    intervalSeconds: autoRefreshSeconds,
+    blocked: frozen || active,
+    onRefresh: () => void execution.execute(),
+  });
   const changed =
     !!snapshot &&
     (snapshot.version.version !== version.version ||
@@ -331,6 +340,14 @@ export function DashboardRunView({
         value={comparisonSpec}
         disabled={frozen}
         onChange={setComparisonSpec}
+      />
+      <AutoRefreshControls
+        id={controlID}
+        intervalSeconds={autoRefreshSeconds}
+        nextAt={nextRefreshAt}
+        disabled={disabled || !sourcesReady}
+        timezone={range.timezone}
+        onChange={setAutoRefreshSeconds}
       />
       <DashboardRuntimeFilters
         key={`${version.dashboard_id}:${version.version}`}
