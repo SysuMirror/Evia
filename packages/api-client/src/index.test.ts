@@ -1827,6 +1827,23 @@ test('reports lifecycle encodes scope, revision, idempotency and cursor', async 
   assert.equal(updated.report_id, report.report_id);
 });
 
+test('report search term encodes as q and omits when blank', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listReports('p/q', 'production', { limit: 20, search: '留存 报告' }, controller.signal);
+  await api.listReports('p/q', 'production', { search: '100%_done' }, controller.signal);
+  await api.listReports('p/q', 'production', {}, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/reports?environment=production&limit=20&q=%E7%95%99%E5%AD%98+%E6%8A%A5%E5%91%8A',
+      '/api/v1/projects/p%2Fq/reports?environment=production&q=100%25_done',
+      '/api/v1/projects/p%2Fq/reports?environment=production',
+    ],
+  );
+  controller.abort();
+});
+
 test('report delete sends CSRF and accepts an empty 204 body', async () => {
   const fetch = mock.method(
     globalThis,

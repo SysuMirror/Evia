@@ -1412,7 +1412,7 @@ export const api = {
   listReports: (
     projectID: string,
     environment: ReportInput['environment'],
-    page: { cursor?: string; limit?: number } = {},
+    page: { cursor?: string; limit?: number; search?: string } = {},
     signal?: AbortSignal,
   ) =>
     request<ReportList>(
@@ -1420,6 +1420,7 @@ export const api = {
         environment,
         cursor: page.cursor,
         limit: page.limit,
+        search: page.search,
       })}`,
       { signal },
     ),
