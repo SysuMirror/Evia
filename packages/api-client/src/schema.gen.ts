@@ -2691,7 +2691,7 @@ export interface components {
         ParameterValues: {
             [key: string]: string | number | boolean | (string | number | boolean)[];
         };
-        /** @description A widget pins exactly one immutable source: either the analysis_id/analysis_version pair or metric_ref, never both and never neither. The server and a database CHECK constraint enforce the exclusive choice. */
+        /** @description A widget pins exactly one source kind: the analysis_id/analysis_version pair, metric_ref, or a presentation-only text_card — never several and never none. The server and a database CHECK enforce the exclusive choice. */
         DashboardWidget: {
             /** Format: uuid */
             widget_id: string;
@@ -2699,11 +2699,16 @@ export interface components {
             analysis_id?: string;
             analysis_version?: number;
             metric_ref?: components["schemas"]["MetricReference"];
+            text_card?: components["schemas"]["DashboardTextCard"];
             title: string;
             reading_order: number;
             /** @description Optional bindings from dashboard parameters to this widget's own pinned event fields. Each parameter binds at most once per widget and each field accepts at most one parameter. */
             parameter_bindings?: components["schemas"]["ParameterBinding"][];
             layout: components["schemas"]["DashboardLayout"];
+        };
+        DashboardTextCard: {
+            /** @description Bounded Markdown subset. Raw HTML/comments, images, non-http(s) link schemes (javascript/vbscript/data) and unclosed fenced code blocks are rejected; the console renders through a safe subset renderer without raw HTML. */
+            content: string;
         };
         /** @description At most 65536 UTF-8 JSON bytes. Stable widget UUIDs, unique contiguous reading_order starting at zero, nonoverlapping integer layout within 12 columns and 1000 rows. Each widget pins an immutable saved-analysis version in this project/environment. Definitions contain configuration only. */
         DashboardDefinition: {

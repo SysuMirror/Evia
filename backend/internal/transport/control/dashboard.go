@@ -69,6 +69,11 @@ func (a *DashboardsAPI) create(w http.ResponseWriter, r *http.Request, s authori
 	if e = a.API.Boundary.Decode(w, r, "DashboardCreate", &in); e != nil {
 		return e
 	}
+	// Markdown safety rules are not OpenAPI-expressible; reject unsafe text
+	// cards at the boundary so no service implementation can admit them.
+	if e = reporting.ValidateDashboardTextCards(in.Definition); e != nil {
+		return e
+	}
 	out, e := a.Service.CreateDashboard(r.Context(), s.ID, p, key, in)
 	if e != nil {
 		return e
@@ -124,6 +129,9 @@ func (a *DashboardsAPI) save(w http.ResponseWriter, r *http.Request, s authorize
 	}
 	var in reporting.DashboardUpdate
 	if e = a.API.Boundary.Decode(w, r, "DashboardUpdate", &in); e != nil {
+		return e
+	}
+	if e = reporting.ValidateDashboardTextCards(in.Definition); e != nil {
 		return e
 	}
 	out, e := a.Service.SaveDashboardDraft(r.Context(), s.ID, p, r.PathValue("dashboard_id"), revision, in.Definition, in.FolderID)

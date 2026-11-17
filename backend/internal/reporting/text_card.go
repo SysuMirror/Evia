@@ -61,3 +61,19 @@ func ValidateTextCardMarkdown(content string) error {
 	}
 	return nil
 }
+
+// ValidateDashboardTextCards applies the bounded Markdown subset to every
+// text-card widget in a decoded definition. OpenAPI can only express shape and
+// length; the content safety rules are domain-owned. The HTTP boundary invokes
+// this before service dispatch, and NormalizeDashboardDefinition re-checks the
+// same rules on every admission path so no caller can persist unsafe content.
+func ValidateDashboardTextCards(def DashboardDefinition) error {
+	for i := range def.Widgets {
+		if card := def.Widgets[i].TextCard; card != nil {
+			if e := ValidateTextCardMarkdown(card.Content); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
+}

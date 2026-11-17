@@ -5,6 +5,7 @@ import {
   ApiError,
   subscribeUnauthorized,
   subscribeProjectAccessDenied,
+  type DashboardTextCard,
   type ErasureInput,
   type ExportInput,
   type MachineIssued,
@@ -719,6 +720,42 @@ test('dashboard copy posts to the copy route with idempotency key and CSRF', asy
   assert.equal(init.signal?.aborted, false);
   controller.abort();
   assert.equal(init.signal?.aborted, true);
+});
+
+test('dashboard text-card definitions ride draft payloads without an executable source', async () => {
+  const fetch = respond(201, {});
+  const controller = new AbortController();
+  const textCard: DashboardTextCard = {
+    content: '# 标题\n\n[文档](https://example.com)',
+  };
+  const definition = {
+    title: '文本卡看板',
+    widgets: [
+      {
+        widget_id: '11111111-1111-4111-8111-111111111111',
+        title: '说明',
+        reading_order: 0,
+        layout: { x: 0, y: 0, width: 12, height: 3 },
+        text_card: textCard,
+      },
+    ],
+  };
+  await api.createDashboard(
+    'p/q',
+    { environment: 'development', definition },
+    'text-card-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.updateDashboardDraft('p/q', 'd/r', 1, { definition }, 'csrf', controller.signal);
+  assert.deepEqual(JSON.parse((fetch.mock.calls[0]!.arguments[1] as RequestInit).body as string), {
+    environment: 'development',
+    definition,
+  });
+  assert.deepEqual(JSON.parse((fetch.mock.calls[1]!.arguments[1] as RequestInit).body as string), {
+    definition,
+  });
+  controller.abort();
 });
 
 test('dashboard folder scope encoding and folder CRUD calls', async () => {

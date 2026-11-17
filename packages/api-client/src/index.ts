@@ -81,6 +81,7 @@ export type SavedAnalysisChange = components['schemas']['SavedAnalysisChange'];
 export type Dashboard = components['schemas']['Dashboard'];
 export type DashboardDefinition = components['schemas']['DashboardDefinition'];
 export type DashboardWidget = components['schemas']['DashboardWidget'];
+export type DashboardTextCard = components['schemas']['DashboardTextCard'];
 export type DashboardLayout = components['schemas']['DashboardLayout'];
 export type DashboardDraft = components['schemas']['DashboardDraft'];
 export type DashboardDependency = components['schemas']['DashboardDependency'];

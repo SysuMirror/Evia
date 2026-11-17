@@ -343,6 +343,10 @@ type DashboardRun struct {
 	Widgets         []DashboardWidgetRun    `json:"widgets"`
 }
 
+type DashboardTextCard struct {
+	Content string `json:"content"`
+}
+
 type DashboardUpdate struct {
 	FolderID   *string             `json:"folder_id,omitempty"`
 	Definition DashboardDefinition `json:"definition"`
@@ -391,6 +395,7 @@ type DashboardWidget struct {
 	AnalysisID        *string            `json:"analysis_id,omitempty"`
 	AnalysisVersion   *int64             `json:"analysis_version,omitempty"`
 	MetricRef         *MetricReference   `json:"metric_ref,omitempty"`
+	TextCard          *DashboardTextCard `json:"text_card,omitempty"`
 	Title             string             `json:"title"`
 	ReadingOrder      int64              `json:"reading_order"`
 	ParameterBindings []ParameterBinding `json:"parameter_bindings,omitzero"`

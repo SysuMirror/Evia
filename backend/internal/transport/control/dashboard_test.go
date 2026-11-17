@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 )
 
 const dashboardID = "55555555-5555-4555-8555-555555555555"
+const dashboardWidgetOne = "11111111-1111-4111-8111-111111111111"
 const dashboardBase = "/api/v1/projects/" + projectID + "/dashboards"
 const dashboardItem = dashboardBase + "/" + dashboardID
 const dashboardDefinition = `{"title":"Daily opens","description":"","widgets":[{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":1,"title":"Daily opens","reading_order":0,"layout":{"x":0,"y":0,"width":12,"height":4}}]}`
@@ -496,6 +498,43 @@ func TestDashboardHTTPRunReadAndCancel(t *testing.T) {
 }
 
 const parameterizedDashboardDefinition = `{"title":"Daily opens","description":"","parameters":[{"parameter_id":"section","label":"板块","type":"string","operator":"eq","required":false}],"widgets":[{"widget_id":"11111111-1111-4111-8111-111111111111","analysis_id":"33333333-3333-4333-8333-333333333333","analysis_version":1,"title":"Daily opens","reading_order":0,"layout":{"x":0,"y":0,"width":12,"height":4},"parameter_bindings":[{"parameter_id":"section","field":{"kind":"property","key":"section_id","event_key":"page_opened","schema_version":1}}]}]}`
+
+func TestDashboardHTTPTextCardContracts(t *testing.T) {
+	textCardDefinition := func(content string) string {
+		return `{"title":"文本卡","description":"","widgets":[{"widget_id":"` + dashboardWidgetOne + `","title":"说明","reading_order":0,"layout":{"x":0,"y":0,"width":12,"height":3},"text_card":{"content":` + strconv.Quote(content) + `}}]}`
+	}
+	createBody := func(content string) string {
+		return `{"environment":"development","definition":` + textCardDefinition(content) + `}`
+	}
+	updateBody := func(content string) string {
+		return `{"definition":` + textCardDefinition(content) + `}`
+	}
+	validMarkdown := "# 标题\n\n[文档](https://example.com)"
+	// A valid bounded Markdown text card passes the boundary on both admission
+	// routes (create and draft save) and reaches the service.
+	validService := &dashboardHTTPService{}
+	validH, _ := dashboardHTTP(t, validService, &catalogAccess{fakeAccess: &fakeAccess{}})
+	catalogStatus(t, catalogRequest(validH, "POST", dashboardBase, createBody(validMarkdown), map[string]string{"Idempotency-Key": "text-card-key"}), 201)
+	catalogStatus(t, catalogRequest(validH, "PATCH", dashboardItem+"/draft", updateBody(validMarkdown), map[string]string{"If-Match": `"1"`}), 200)
+	if validService.calls != 2 {
+		t.Fatal("valid text card must dispatch once per admission route")
+	}
+
+	// Unsafe payloads are rejected before service dispatch on both routes.
+	blockedService := &dashboardHTTPService{}
+	blockedH, _ := dashboardHTTP(t, blockedService, &catalogAccess{fakeAccess: &fakeAccess{}})
+	for _, content := range []string{
+		`<script>alert(1)</script>`,
+		`[x](javascript:alert(1))`,
+		"![img](https://example.com/a.png)",
+	} {
+		catalogStatus(t, catalogRequest(blockedH, "POST", dashboardBase, createBody(content), map[string]string{"Idempotency-Key": "text-card-bad"}), 400)
+		catalogStatus(t, catalogRequest(blockedH, "PATCH", dashboardItem+"/draft", updateBody(content), map[string]string{"If-Match": `"1"`}), 400)
+	}
+	if blockedService.calls != 0 {
+		t.Fatal("unsafe text card reached service")
+	}
+}
 
 func TestDashboardHTTPParameterContracts(t *testing.T) {
 	// Valid parameterized definition and run values pass the boundary.
