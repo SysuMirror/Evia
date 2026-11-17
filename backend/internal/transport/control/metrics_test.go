@@ -40,6 +40,7 @@ type metricHTTPService struct {
 	revision, version           int64
 	limit                       int
 	archivedOnly                bool
+	search                      string
 	execution                   reporting.MetricExecute
 	items                       []reporting.MetricRecord
 	versions                    []reporting.MetricVersion
@@ -69,8 +70,8 @@ func (f *metricHTTPService) CreateMetric(_ context.Context, actor, project, key 
 	f.key, f.environment = key, in.Environment
 	return metricDraft(), f.call(actor, project)
 }
-func (f *metricHTTPService) ListMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.MetricRecord, error) {
-	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
+func (f *metricHTTPService) ListMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, search string) ([]reporting.MetricRecord, error) {
+	f.environment, f.after, f.limit, f.archivedOnly, f.search = env, after, limit, archivedOnly, search
 	return f.items, f.call(actor, project)
 }
 func (f *metricHTTPService) ArchiveMetric(_ context.Context, actor, project, id string) (reporting.MetricRecord, error) {
@@ -235,7 +236,7 @@ func TestMetricHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{metricBase + "?environment=development&limit=1", "metrics:" + userID + ":" + projectID + ":development:active", metricID, false},
+		{metricBase + "?environment=development&limit=1", "metrics:" + userID + ":" + projectID + ":development:active:", metricID, false},
 		{metricItem + "/versions?limit=1", "metric_versions:" + userID + ":" + projectID + ":" + metricID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -294,8 +295,6 @@ func TestMetricHTTPArchiveViewSelector(t *testing.T) {
 		metricBase + "?environment=development&view=bogus",
 		metricBase + "?environment=development&view=archived&view=active",
 		metricItem + "?view=archived",
-		// Title search is not enabled for the metrics listing.
-		metricBase + "?environment=development&q=x",
 	} {
 		before := f.calls
 		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
@@ -309,8 +308,8 @@ func TestMetricHTTPArchiveViewSelector(t *testing.T) {
 			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
 		}
 	}
-	activeScope := "metrics:" + userID + ":" + projectID + ":development:active"
-	archivedScope := "metrics:" + userID + ":" + projectID + ":development:archived"
+	activeScope := "metrics:" + userID + ":" + projectID + ":development:active:"
+	archivedScope := "metrics:" + userID + ":" + projectID + ":development:archived:"
 	archivedPage := catalogStatus(t, catalogRequest(h, "GET", metricBase+"?environment=development&view=archived&limit=1", "", nil), 200)
 	next, ok := archivedPage["next_cursor"].(string)
 	if !ok || next == "" {
@@ -326,6 +325,36 @@ func TestMetricHTTPArchiveViewSelector(t *testing.T) {
 	}
 	if _, e := codec.Decode(activeScope, next); e == nil {
 		t.Fatal("archived cursor decoded under the active scope")
+	}
+}
+
+func TestMetricHTTPListSearchTerm(t *testing.T) {
+	f := &metricHTTPService{items: []reporting.MetricRecord{metricResource(), metricResource()}}
+	h, codec := metricHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	// A bounded search term is trimmed, forwarded and bound to the cursor scope.
+	page := catalogStatus(
+		t,
+		catalogRequest(h, "GET", metricBase+"?environment=development&limit=1&q=%20%E7%95%99%E5%AD%98%20", "", nil),
+		200,
+	)
+	if f.search != "留存" {
+		t.Fatalf("search term must be trimmed and forwarded, got %q", f.search)
+	}
+	next, ok := page["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing continuation cursor", page)
+	}
+	searchScope := "metrics:" + userID + ":" + projectID + ":development:active:留存"
+	if decoded, e := codec.Decode(searchScope, next); e != nil || decoded != metricID {
+		t.Fatal("cursor must be bound to the search scope", decoded, e)
+	}
+	// Unknown query parameters stay rejected even though q is now allowlisted.
+	catalogStatus(t, catalogRequest(h, "GET", metricBase+"?environment=development&q=x&unexpected=1", "", nil), 400)
+	// An overlong term is rejected at the boundary without dispatching.
+	before := f.calls
+	catalogStatus(t, catalogRequest(h, "GET", metricBase+"?environment=development&q="+url.QueryEscape(strings.Repeat("字", 129)), "", nil), 400)
+	if f.calls != before {
+		t.Fatal("overlong search term reached the service")
 	}
 }
 func TestMetricHTTPAuthRolesAndSafeFailures(t *testing.T) {

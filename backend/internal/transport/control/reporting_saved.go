@@ -74,8 +74,15 @@ func savedDashboardListQuery(r *http.Request) (url.Values, error) {
 }
 
 // savedAnalysisListQuery additionally allows the optional title substring
-// search term q; the shared archive allowlist stays q-free for metrics.
+// search term q; the shared archive allowlist stays q-free for formula metrics.
 func savedAnalysisListQuery(r *http.Request) (url.Values, error) {
+	return savedQueryWith(r, true, true, true, "q")
+}
+
+// metricListQuery is the metrics-specific listing allowlist with the optional
+// title substring search term q; the shared archive allowlist stays q-free for
+// formula metrics.
+func metricListQuery(r *http.Request) (url.Values, error) {
 	return savedQueryWith(r, true, true, true, "q")
 }
 func savedQueryWith(r *http.Request, list, environment, archiveView bool, extra ...string) (url.Values, error) {

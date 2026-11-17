@@ -237,6 +237,8 @@ func TestFormulaMetricHTTPArchiveViewSelector(t *testing.T) {
 		formulaBase + "?environment=development&view=bogus",
 		formulaBase + "?environment=development&view=archived&view=active",
 		formulaItem + "?view=archived",
+		// Title search stays disabled for the formula-metric listing.
+		formulaBase + "?environment=development&q=x",
 	} {
 		before := f.calls
 		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
