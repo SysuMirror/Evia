@@ -22,12 +22,16 @@ type DashboardWidget struct {
 	AnalysisID      string           `json:"analysis_id,omitempty"`
 	AnalysisVersion int64            `json:"analysis_version,omitempty"`
 	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
-	Title           string           `json:"title"`
-	ReadingOrder    int              `json:"reading_order"`
-	Layout          DashboardLayout  `json:"layout"`
+	// TextCard is the third, presentation-only option: mutually exclusive with
+	// both executable sources and excluded from run fanout.
+	TextCard     *TextCard       `json:"text_card,omitempty"`
+	Title        string          `json:"title"`
+	ReadingOrder int             `json:"reading_order"`
+	Layout       DashboardLayout `json:"layout"`
 	// ParameterBindings maps dashboard-level parameters to this widget's own
 	// pinned event fields. It never stores a pseudo-global field name: each
-	// binding carries the concrete field the widget's source owns.
+	// binding carries the concrete field the widget's source owns. It is
+	// forbidden on presentation-only text cards.
 	ParameterBindings []ParameterBinding `json:"parameter_bindings,omitempty"`
 }
 type DashboardDefinition struct {

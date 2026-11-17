@@ -40,10 +40,30 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 		w.Title = strings.TrimSpace(w.Title)
 		hasAnalysis := dashboardUUID.MatchString(w.AnalysisID) && w.AnalysisVersion >= 1 && w.AnalysisVersion <= analysis.MaxSafeInteger
 		hasMetric := w.MetricRef != nil && dashboardUUID.MatchString(w.MetricRef.MetricID) && w.MetricRef.Version >= 1 && w.MetricRef.Version <= analysis.MaxSafeInteger
-		// Exactly one immutable source is allowed; providing both or neither
-		// is rejected before any layout or dependency processing.
-		if hasAnalysis == hasMetric || !dashboardUUID.MatchString(w.ID) || ids[w.ID] || !dashboardText(w.Title, 128, false) {
+		hasTextCard := w.TextCard != nil
+		// Exactly one source kind is allowed: analysis version, metric version
+		// or a presentation-only text card. Providing none or several is
+		// rejected before any layout or dependency processing.
+		sourceKinds := 0
+		if hasAnalysis {
+			sourceKinds++
+		}
+		if hasMetric {
+			sourceKinds++
+		}
+		if hasTextCard {
+			sourceKinds++
+		}
+		if sourceKinds != 1 || !dashboardUUID.MatchString(w.ID) || ids[w.ID] || !dashboardText(w.Title, 128, false) {
 			return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "组件标识、标题或固定引用版本无效", "/widgets")
+		}
+		if hasTextCard {
+			if e := ValidateTextCardMarkdown(w.TextCard.Content); e != nil {
+				return out, e
+			}
+			if len(w.ParameterBindings) != 0 {
+				return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "文本卡组件不能绑定参数", "/widgets")
+			}
 		}
 		ids[w.ID] = true
 		if w.ReadingOrder < 0 || w.ReadingOrder >= len(out.Widgets) || orders[w.ReadingOrder] {
@@ -155,6 +175,10 @@ func CloneDashboardDefinition(source DashboardDefinition, title string, widgetID
 	for i, widget := range source.Widgets {
 		widget.ID = widgetIDs[i]
 		widget.ParameterBindings = append([]ParameterBinding(nil), widget.ParameterBindings...)
+		if widget.TextCard != nil {
+			textCard := *widget.TextCard
+			widget.TextCard = &textCard
+		}
 		out.Widgets[i] = widget
 	}
 	return NormalizeDashboardDefinition(out)
