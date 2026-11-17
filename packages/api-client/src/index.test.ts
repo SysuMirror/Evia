@@ -445,6 +445,31 @@ test('saved analysis archive view encoding and lifecycle calls carry CSRF withou
   }
 });
 
+test('saved analysis search term encodes as q alongside view and omits when blank', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listSavedAnalyses(
+    'p/q',
+    { environment: 'production', view: 'archived', search: '留存 分析', limit: 20 },
+    controller.signal,
+  );
+  await api.listSavedAnalyses(
+    'p/q',
+    { environment: 'production', search: '100%_done' },
+    controller.signal,
+  );
+  await api.listSavedAnalyses('p/q', { environment: 'production' }, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=production&limit=20&view=archived&q=%E7%95%99%E5%AD%98+%E5%88%86%E6%9E%90',
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=production&q=100%25_done',
+      '/api/v1/projects/p%2Fq/saved-analyses?environment=production',
+    ],
+  );
+  controller.abort();
+});
+
 const savedDefinition = {
   title: 'Daily opens',
   description: '',

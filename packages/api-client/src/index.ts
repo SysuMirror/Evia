@@ -187,6 +187,9 @@ export type SavedAnalysisPage = {
   cursor?: string;
   limit?: number;
   view?: 'active' | 'archived';
+  // Optional case-insensitive title substring filter; empty/undefined means
+  // no filtering and the server binds any cursor to this term.
+  search?: string;
 };
 export type DashboardPage = SavedAnalysisPage & {
   view?: 'active' | 'archived';
