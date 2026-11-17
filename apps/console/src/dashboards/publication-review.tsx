@@ -4,7 +4,7 @@ import { CatalogError } from '../catalog-helpers';
 const categories: Record<string, string> = {
   definition: '初始定义',
   widgets: '组件',
-  dependencies: '固定分析依赖',
+  dependencies: '固定组件依赖',
   layout: '组件布局',
   metadata: '标题与描述',
   kind: '分析类型',
@@ -85,9 +85,9 @@ export function DashboardPublicationReview({
           <p className="field-help">
             校验未执行查询。发布后配置与依赖不可修改，实际运行仍受权限与查询预算约束。
           </p>
-          <h3>固定分析依赖</h3>
+          <h3>固定组件依赖</h3>
           <DataTable
-            caption="本次发布的精确分析版本"
+            caption="本次发布的精确组件来源版本"
             rows={validation.dependencies.analyses}
             columns={[
               {
@@ -101,7 +101,10 @@ export function DashboardPublicationReview({
               {
                 key: 'version',
                 header: '固定版本',
-                render: (dependency) => `v${dependency.analysis_version}`,
+                render: (dependency) =>
+                  dependency.metric_id
+                    ? `指标 v${dependency.metric_version}`
+                    : `分析 v${dependency.analysis_version}`,
               },
               {
                 key: 'hash',
@@ -156,7 +159,7 @@ export function DashboardPublicationReview({
               disabled={!!busy || !!retryPending}
               onChange={(event) => onAcknowledge(event.target.checked)}
             >
-              已核对语义差异与固定分析版本
+              已核对语义差异与固定组件版本
             </Checkbox>
           )}
           {retryPending && !busy && (

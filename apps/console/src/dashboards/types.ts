@@ -5,7 +5,15 @@ import {
   type DashboardDefinition,
   type DashboardDraft,
   type DashboardPublish,
+  type MetricRecord,
+  type MetricVersion,
+  type SavedAnalysisVersion,
 } from '@evia/api-client';
+
+/** A picker selection that pins exactly one immutable widget source. */
+export type DashboardWidgetSource =
+  | { kind: 'analysis'; analysis: SavedAnalysisVersion }
+  | { kind: 'metric'; metric: MetricRecord; version: MetricVersion };
 
 export type DashboardWorkspace = {
   scope: string;

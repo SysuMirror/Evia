@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { DashboardDefinition, DashboardWidget, SavedAnalysisVersion } from '@evia/api-client';
+import type { DashboardDefinition, DashboardWidget } from '@evia/api-client';
 import {
   Badge,
   Button,
@@ -13,7 +13,13 @@ import {
 } from '@evia/design-system';
 import type { CatalogPageProps } from '../catalog';
 import { DashboardWidgetPicker } from './picker';
-import { availableWidgetPosition, dashboardIssues, reorderWidget } from './model';
+import {
+  availableWidgetPosition,
+  dashboardIssues,
+  reorderWidget,
+  widgetSourceLabel,
+} from './model';
+import type { DashboardWidgetSource } from './types';
 
 export function DashboardEditor({
   context,
@@ -72,21 +78,42 @@ export function DashboardEditor({
       `布局已调整，第 ${next.y + 1} 行，第 ${next.x + 1} 列，宽 ${next.width} 列，高 ${next.height} 行。`,
     );
   }
-  function add(version: SavedAnalysisVersion, title: string) {
+  function add(source: DashboardWidgetSource, title: string) {
+    const pinned =
+      source.kind === 'analysis'
+        ? {
+            analysis_id: source.analysis.analysis_id,
+            analysis_version: source.analysis.version,
+          }
+        : {
+            metric_ref: {
+              metric_id: source.version.metric_id,
+              version: source.version.version,
+            },
+          };
     if (replacing) {
       const current = value.widgets.find((w) => w.widget_id === replacing);
-      if (current)
-        update({ ...current, analysis_id: version.analysis_id, analysis_version: version.version });
+      if (current) {
+        // Switching source kind replaces the old reference entirely; layout and
+        // identity are preserved, and exactly one source remains on the widget.
+        const next: DashboardWidget = {
+          widget_id: current.widget_id,
+          title,
+          reading_order: current.reading_order,
+          layout: current.layout,
+          ...pinned,
+        };
+        update(next);
+      }
       setReplacing(undefined);
       return;
     }
     const w: DashboardWidget = {
       widget_id: crypto.randomUUID(),
-      analysis_id: version.analysis_id,
-      analysis_version: version.version,
       title,
       reading_order: value.widgets.length,
       layout: availableWidgetPosition(value.widgets),
+      ...pinned,
     };
     onChange({ ...value, widgets: [...value.widgets, w] });
     setNotice(`已添加组件 ${title}`);
@@ -127,7 +154,7 @@ export function DashboardEditor({
             setPicker(true);
           }}
         >
-          添加分析组件
+          添加组件
         </Button>
       </div>
       {issues.length > 0 && (
@@ -142,8 +169,8 @@ export function DashboardEditor({
       </p>
       {value.widgets.length === 0 ? (
         <div className="dashboard-empty">
-          <h3>添加第一个分析组件</h3>
-          <p>选择已发布分析的精确版本，再设置布局。可并排展示趋势、指标和完整结果表。</p>
+          <h3>添加第一个组件</h3>
+          <p>选择已发布分析或独立指标的精确版本，再设置布局。可并排展示趋势、指标和完整结果表。</p>
         </div>
       ) : (
         <DashboardGrid
@@ -155,7 +182,7 @@ export function DashboardEditor({
             content: (
               <DashboardCard
                 title={w.title}
-                summary={`分析 v${w.analysis_version}，阅读顺序 ${w.reading_order + 1}`}
+                summary={`${widgetSourceLabel(w)}，阅读顺序 ${w.reading_order + 1}`}
                 action={
                   <Button
                     disabled={frozen}
@@ -172,7 +199,7 @@ export function DashboardEditor({
                 }
               >
                 <div className="dashboard-widget-preview">
-                  <span>已固定发布分析 v{w.analysis_version}</span>
+                  <span>{widgetSourceLabel(w)}</span>
                   <dl>
                     <div>
                       <dt>位置</dt>
@@ -242,7 +269,7 @@ export function DashboardEditor({
                 setPicker(true);
               }}
             >
-              更换分析版本
+              更换引用版本
             </Button>
             <p className="field-help">
               方向按钮移动一格，尺寸按钮调整一格。位置和尺寸立即应用，碰撞与越界时保留原布局。

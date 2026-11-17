@@ -4,6 +4,7 @@ import {
   api,
   type DashboardExecute,
   type DashboardVersion,
+  type MetricVersion,
   type SavedAnalysisVersion,
 } from '@evia/api-client';
 import { Alert, Button, Field, Input, Modal, Select } from '@evia/design-system';
@@ -24,6 +25,7 @@ export function DashboardRuntimeFilters({
   context,
   version,
   analyses,
+  metrics,
   open,
   disabled,
   onClose,
@@ -34,6 +36,7 @@ export function DashboardRuntimeFilters({
   context: CatalogPageProps;
   version: DashboardVersion;
   analyses: ReadonlyMap<string, SavedAnalysisVersion>;
+  metrics: ReadonlyMap<string, MetricVersion>;
   open: boolean;
   disabled: boolean;
   onClose: () => void;
@@ -45,11 +48,14 @@ export function DashboardRuntimeFilters({
     [rows, setRows] = useState<Rule[]>([]),
     [baseline, setBaseline] = useState('[]'),
     [error, setError] = useState('');
+  // Pinned event versions come from both saved-analysis queries and atomic
+  // metric definitions; runtime filters may only target those immutable pins.
   const pins = [
     ...new Map(
-      [...analyses.values()]
-        .flatMap((a) => savedPins(a.definition.query))
-        .map((p) => [`${p.event_key}:${p.schema_version}`, p]),
+      [
+        ...[...analyses.values()].flatMap((a) => savedPins(a.definition.query)),
+        ...[...metrics.values()].flatMap((m) => m.definition.event_versions),
+      ].map((p) => [`${p.event_key}:${p.schema_version}`, p]),
     ).values(),
   ];
   const catalog = useQueries({
@@ -97,11 +103,17 @@ export function DashboardRuntimeFilters({
         onDenied(result.error);
   }, [catalog.map((c) => c.error).join(), onDenied]);
   function fields(widgetID: string) {
-    const w = version.definition.widgets.find((w) => w.widget_id === widgetID),
-      a = w && analyses.get(`${w.analysis_id}:${w.analysis_version}`),
-      allowed = new Set(
-        a ? savedPins(a.definition.query).map((p) => `${p.event_key}:${p.schema_version}`) : [],
-      );
+    const w = version.definition.widgets.find((w) => w.widget_id === widgetID);
+    let sourcePins: { event_key: string; schema_version: number }[] = [];
+    if (w?.metric_ref) {
+      sourcePins =
+        metrics.get(`${w.metric_ref.metric_id}:${w.metric_ref.version}`)?.definition
+          .event_versions ?? [];
+    } else if (w) {
+      const analysis = analyses.get(`${w.analysis_id}:${w.analysis_version}`);
+      if (analysis) sourcePins = savedPins(analysis.definition.query);
+    }
+    const allowed = new Set(sourcePins.map((p) => `${p.event_key}:${p.schema_version}`));
     return allFields.filter(
       (f) =>
         f.reference.kind === 'system' ||
@@ -175,7 +187,7 @@ export function DashboardRuntimeFilters({
         }}
       >
         <p className="field-help">
-          每条条件只作用于选定组件，同组件条件同时满足，并与固定分析筛选同时生效。调整不会执行查询。
+          每条条件只作用于选定组件，同组件条件同时满足，并与组件自身的固定筛选同时生效。调整不会执行查询。
         </p>
         {error && <Alert tone="error" title={error} />}
         {catalog.map((r, i) => (
@@ -199,7 +211,7 @@ export function DashboardRuntimeFilters({
                     { value: '', label: '选择目标组件' },
                     ...version.definition.widgets.map((w) => ({
                       value: w.widget_id,
-                      label: w.title,
+                      label: `${w.title}（${w.metric_ref ? '指标' : '分析'}）`,
                     })),
                   ]}
                   onChange={(e) =>
