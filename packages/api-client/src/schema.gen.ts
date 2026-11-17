@@ -2819,13 +2819,21 @@ export interface components {
             widget_id: string;
             filter: components["schemas"]["filter"];
         };
+        /** @description Backwards comparison window. Calendar units preserve local wall-clock time across DST in the run timezone; previous_period mirrors the exact window duration. */
+        ComparisonSpec: {
+            /** @enum {string} */
+            unit: "previous_period" | "day" | "week" | "month" | "year";
+            /** @description Calendar units to shift backwards; ignored for previous_period. */
+            amount?: number;
+        };
         /** @description Bind required global time/timezone to every pinned analysis. Optional runtime widget_filters explicitly target distinct existing widget IDs and are ANDed with immutable fixed filters. Existing query field/type/version and resource budgets apply. All child jobs are admitted atomically or no run is created. Same-key retries return the original run; changed input conflicts, expired runs require a new key. */
         DashboardExecute: {
             time_range: components["schemas"]["time_range"];
             timezone: components["schemas"]["timezone"];
             widget_filters?: components["schemas"]["DashboardWidgetFilter"][];
+            comparison?: components["schemas"]["ComparisonSpec"];
         };
-        /** @description Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source. */
+        /** @description Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source, plus an optional comparison job over the shifted window. */
         DashboardWidgetRun: {
             /** Format: uuid */
             widget_id: string;
@@ -2834,6 +2842,8 @@ export interface components {
             analysis_version?: number;
             metric_ref?: components["schemas"]["MetricReference"];
             query: components["schemas"]["query-job.schema"];
+            /** @description Shifted-window comparison job; present only when the run requested a comparison spec. */
+            comparison?: components["schemas"]["query-job.schema"];
         };
         /** @description Per-widget query jobs and existing authorized result URLs. No result copies or shared child queries. Current project authorization is checked on each read/cancel/result request. Terminal outcomes with both successful and unsuccessful widgets are partial; runs without successful widgets are failed unless all children are canceled or all are expired; expiration follows child result lifetimes. Coverage remains provisional and widgets do not share an atomic data snapshot. Runtime bounds retain nanosecond precision, timezone and normalized targeted filters exactly; timestamp storage projections do not replace the execution input. */
         DashboardRun: {
@@ -2851,6 +2861,7 @@ export interface components {
             time_range: components["schemas"]["time_range"];
             timezone: components["schemas"]["timezone"];
             widget_filters?: components["schemas"]["DashboardWidgetFilter"][];
+            comparison?: components["schemas"]["ComparisonSpec"];
             /** @enum {string} */
             state: "queued" | "running" | "succeeded" | "partial" | "failed" | "canceled" | "expired";
             /** Format: date-time */

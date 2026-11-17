@@ -186,6 +186,11 @@ type CollectionQuotaInput struct {
 	Burst         int64   `json:"burst"`
 }
 
+type ComparisonSpec struct {
+	Unit   string `json:"unit"`
+	Amount *int64 `json:"amount,omitempty"`
+}
+
 type CredentialRotation struct {
 	OverlapSeconds int64 `json:"overlap_seconds"`
 }
@@ -257,6 +262,7 @@ type DashboardExecute struct {
 	TimeRange     json.RawMessage         `json:"time_range"`
 	Timezone      json.RawMessage         `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
 }
 
 type DashboardFolder struct {
@@ -321,6 +327,7 @@ type DashboardRun struct {
 	TimeRange     json.RawMessage         `json:"time_range"`
 	Timezone      json.RawMessage         `json:"timezone"`
 	WidgetFilters []DashboardWidgetFilter `json:"widget_filters,omitzero"`
+	Comparison    *ComparisonSpec         `json:"comparison,omitempty"`
 	State         string                  `json:"state"`
 	CreatedAt     string                  `json:"created_at"`
 	ExpiresAt     string                  `json:"expires_at"`
@@ -392,6 +399,7 @@ type DashboardWidgetRun struct {
 	AnalysisVersion *int64           `json:"analysis_version,omitempty"`
 	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
 	Query           QueryJob         `json:"query"`
+	Comparison      *QueryJob        `json:"comparison,omitempty"`
 }
 
 type Diagnostic struct {

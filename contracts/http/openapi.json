@@ -24438,6 +24438,32 @@
           "filter"
         ]
       },
+      "ComparisonSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "unit": {
+            "type": "string",
+            "enum": [
+              "previous_period",
+              "day",
+              "week",
+              "month",
+              "year"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Calendar units to shift backwards; ignored for previous_period."
+          }
+        },
+        "required": [
+          "unit"
+        ],
+        "description": "Backwards comparison window. Calendar units preserve local wall-clock time across DST in the run timezone; previous_period mirrors the exact window duration."
+      },
       "DashboardExecute": {
         "type": "object",
         "additionalProperties": false,
@@ -24455,6 +24481,9 @@
             "items": {
               "$ref": "#/components/schemas/DashboardWidgetFilter"
             }
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/ComparisonSpec"
           }
         },
         "required": [
@@ -24485,13 +24514,17 @@
           },
           "query": {
             "$ref": "../query/query-job.schema.json"
+          },
+          "comparison": {
+            "$ref": "../query/query-job.schema.json",
+            "description": "Shifted-window comparison job; present only when the run requested a comparison spec."
           }
         },
         "required": [
           "widget_id",
           "query"
         ],
-        "description": "Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source."
+        "description": "Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source, plus an optional comparison job over the shifted window."
       },
       "DashboardRun": {
         "type": "object",
@@ -24539,6 +24572,9 @@
             "items": {
               "$ref": "#/components/schemas/DashboardWidgetFilter"
             }
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/ComparisonSpec"
           },
           "state": {
             "type": "string",
