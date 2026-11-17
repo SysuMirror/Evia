@@ -58,7 +58,7 @@ func (s *Dashboards) CreateDashboard(ctx context.Context, actor, project, key st
 	in.Definition = definition
 	return s.store.CreateDashboard(ctx, actor, project, key, in)
 }
-func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope string) ([]Dashboard, error) {
+func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope, search string) ([]Dashboard, error) {
 	if !savedEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
@@ -69,7 +69,11 @@ func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environ
 	if e != nil {
 		return nil, e
 	}
-	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1, archivedOnly, folderScope)
+	search, e = NormalizeDashboardSearch(search)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1, archivedOnly, folderScope, EscapeLikePattern(search))
 }
 func (s *Dashboards) GetDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
 	return s.store.GetDashboard(ctx, actor, project, id)

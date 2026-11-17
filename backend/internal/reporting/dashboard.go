@@ -214,8 +214,9 @@ type DashboardRun struct {
 type DashboardStore interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
 	// folderScope is "" for no folder filter, "root" for unfiled dashboards or
-	// a folder UUID; it is validated before reaching the store.
-	ListDashboards(context.Context, string, string, string, string, int, bool, string) ([]Dashboard, error)
+	// a folder UUID; it is validated before reaching the store. search is a
+	// normalized, LIKE-escaped literal title substring or "" for no filter.
+	ListDashboards(context.Context, string, string, string, string, int, bool, string, string) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
 	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition, string) (DashboardDraft, error)
@@ -232,7 +233,7 @@ type DashboardStore interface {
 }
 type DashboardService interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
-	ListDashboards(context.Context, string, string, string, string, int, bool, string) ([]Dashboard, error)
+	ListDashboards(context.Context, string, string, string, string, int, bool, string, string) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
 	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition, string) (DashboardDraft, error)
