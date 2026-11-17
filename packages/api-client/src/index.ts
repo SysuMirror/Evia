@@ -179,7 +179,12 @@ export type SavedAnalysisPage = {
   limit?: number;
   view?: 'active' | 'archived';
 };
-export type DashboardPage = SavedAnalysisPage & { view?: 'active' | 'archived' };
+export type DashboardPage = SavedAnalysisPage & {
+  view?: 'active' | 'archived';
+  // 'root' matches unfiled dashboards, a UUID matches one folder; undefined
+  // applies no folder filter.
+  folderId?: string;
+};
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
 export type QueryResultPage = { cursor?: string; limit?: number };

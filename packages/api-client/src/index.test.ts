@@ -696,6 +696,105 @@ test('dashboard archive view encoding and lifecycle calls carry CSRF without bod
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('dashboard folder scope encoding and folder CRUD calls', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', folderId: 'root', limit: 20 },
+    controller.signal,
+  );
+  await api.listDashboards(
+    'p/q',
+    { environment: 'production', folderId: '66666666-6666-4666-8666-666666666666' },
+    controller.signal,
+  );
+  await api.listDashboardFolders('p/q', { environment: 'production' }, controller.signal);
+  await api.createDashboardFolder(
+    'p/q',
+    {
+      environment: 'production',
+      title: 'Forum',
+      parent_id: '11111111-1111-4111-8111-111111111111',
+    },
+    'folder-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.getDashboardFolder('p/q', 'f/r', controller.signal);
+  await api.updateDashboardFolder('p/q', 'f/r', 2, { title: 'Renamed' }, 'csrf', controller.signal);
+  await api.deleteDashboardFolder('p/q', 'f/r', 'csrf', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&limit=20&folder_id=root',
+      '/api/v1/projects/p%2Fq/dashboards?environment=production&folder_id=66666666-6666-4666-8666-666666666666',
+      '/api/v1/projects/p%2Fq/dashboard-folders?environment=production',
+      '/api/v1/projects/p%2Fq/dashboard-folders',
+      '/api/v1/projects/p%2Fq/dashboard-folders/f%2Fr',
+      '/api/v1/projects/p%2Fq/dashboard-folders/f%2Fr',
+      '/api/v1/projects/p%2Fq/dashboard-folders/f%2Fr',
+    ],
+  );
+  const createInit = fetch.mock.calls[3]!.arguments[1] as RequestInit;
+  assert.equal((createInit.headers as Headers).get('Idempotency-Key'), 'folder-key');
+  assert.deepEqual(JSON.parse(createInit.body as string), {
+    environment: 'production',
+    title: 'Forum',
+    parent_id: '11111111-1111-4111-8111-111111111111',
+  });
+  const renameInit = fetch.mock.calls[5]!.arguments[1] as RequestInit;
+  assert.equal((renameInit.headers as Headers).get('If-Match'), '"2"');
+  assert.equal(renameInit.method, 'PATCH');
+  const deleteInit = fetch.mock.calls[6]!.arguments[1] as RequestInit;
+  assert.equal(deleteInit.method, 'DELETE');
+  assert.equal(deleteInit.body, undefined);
+  controller.abort();
+});
+
+test('dashboard create and draft update carry the folder assignment', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const definition = {
+    title: 'Folded',
+    description: '',
+    widgets: [
+      {
+        widget_id: '11111111-1111-4111-8111-111111111111',
+        analysis_id: '33333333-3333-4333-8333-333333333333',
+        analysis_version: 1,
+        title: 'Card',
+        reading_order: 0,
+        layout: { x: 0, y: 0, width: 12, height: 2 },
+      },
+    ],
+  };
+  await api.createDashboard(
+    'p/q',
+    { environment: 'production', folder_id: '66666666-6666-4666-8666-666666666666', definition },
+    'create-key',
+    'csrf',
+    controller.signal,
+  );
+  await api.updateDashboardDraft(
+    'p/q',
+    'd/r',
+    1,
+    { definition, folder_id: undefined },
+    'csrf',
+    controller.signal,
+  );
+  assert.deepEqual(JSON.parse((fetch.mock.calls[0]!.arguments[1] as RequestInit).body as string), {
+    environment: 'production',
+    folder_id: '66666666-6666-4666-8666-666666666666',
+    definition,
+  });
+  // Moving back to the root omits folder_id instead of sending null.
+  assert.deepEqual(JSON.parse((fetch.mock.calls[1]!.arguments[1] as RequestInit).body as string), {
+    definition,
+  });
+});
+
 test('machine administration reads encode scope and allow only cursor and limit', async () => {
   const fetch = respond();
   const controller = new AbortController();
