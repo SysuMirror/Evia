@@ -471,7 +471,7 @@ func (f *savedStoreFake) SavedAnalysisValidationSnapshot(context.Context, string
 	f.calls++
 	return f.snapshot, nil
 }
-func (f *savedStoreFake) ListSavedAnalyses(_ context.Context, _, _, _, _ string, limit int, _ bool) ([]SavedAnalysis, error) {
+func (f *savedStoreFake) ListSavedAnalyses(_ context.Context, _, _, _, _ string, limit int, _ bool, _ string) ([]SavedAnalysis, error) {
 	f.calls++
 	f.limit = limit
 	return nil, nil
@@ -500,14 +500,14 @@ func TestSavedServiceValidatesBeforePersistenceAndPreservesBoundedLookahead(t *t
 	if _, e := service.CreateSavedAnalysis(ctx, "actor", "project", "key", in); e == nil || store.calls != 1 {
 		t.Fatal("invalid definition reached store")
 	}
-	if _, e := service.ListSavedAnalyses(ctx, "actor", "project", "development", "", 100, false); e != nil || store.limit != 101 {
+	if _, e := service.ListSavedAnalyses(ctx, "actor", "project", "development", "", 100, false, ""); e != nil || store.limit != 101 {
 		t.Fatal(store.limit, e)
 	}
 	if _, e := service.ListSavedAnalysisVersions(ctx, "actor", "project", "id", 0, 50); e != nil || store.limit != 51 {
 		t.Fatal(store.limit, e)
 	}
 	before := store.calls
-	if _, e := service.ListSavedAnalyses(ctx, "actor", "project", "development", "", 101, false); e == nil || store.calls != before {
+	if _, e := service.ListSavedAnalyses(ctx, "actor", "project", "development", "", 101, false, ""); e == nil || store.calls != before {
 		t.Fatal("unbounded page admitted")
 	}
 	from := time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)

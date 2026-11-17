@@ -74,14 +74,18 @@ func (s *SavedAnalyses) CreateSavedAnalysis(ctx context.Context, actor, project,
 	in.Definition = definition
 	return s.store.CreateSavedAnalysis(ctx, actor, project, key, in)
 }
-func (s *SavedAnalyses) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]SavedAnalysis, error) {
+func (s *SavedAnalyses) ListSavedAnalyses(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]SavedAnalysis, error) {
 	if !savedEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListSavedAnalyses(ctx, actor, project, environment, after, limit+1, archivedOnly)
+	search, e := NormalizeCatalogSearch(search)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.ListSavedAnalyses(ctx, actor, project, environment, after, limit+1, archivedOnly, EscapeLikePattern(search))
 }
 func (s *SavedAnalyses) GetSavedAnalysis(ctx context.Context, actor, project, id string) (SavedAnalysis, error) {
 	return s.store.GetSavedAnalysis(ctx, actor, project, id)

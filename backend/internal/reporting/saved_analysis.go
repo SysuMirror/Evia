@@ -138,7 +138,9 @@ type SavedAnalysisSnapshot struct {
 // under the same transaction that writes immutable content, audit and idempotency.
 type SavedAnalysisStore interface {
 	CreateSavedAnalysis(context.Context, string, string, string, SavedAnalysisCreate) (SavedAnalysisDraft, error)
-	ListSavedAnalyses(context.Context, string, string, string, string, int, bool) ([]SavedAnalysis, error)
+	// search is a normalized, LIKE-escaped literal title substring or "" for
+	// no filter.
+	ListSavedAnalyses(context.Context, string, string, string, string, int, bool, string) ([]SavedAnalysis, error)
 	GetSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 	GetSavedAnalysisDraft(context.Context, string, string, string) (SavedAnalysisDraft, error)
 	SaveSavedAnalysisDraft(context.Context, string, string, string, int64, SavedAnalysisDefinition) (SavedAnalysisDraft, error)
@@ -152,7 +154,7 @@ type SavedAnalysisStore interface {
 }
 type SavedAnalysisService interface {
 	CreateSavedAnalysis(context.Context, string, string, string, SavedAnalysisCreate) (SavedAnalysisDraft, error)
-	ListSavedAnalyses(context.Context, string, string, string, string, int, bool) ([]SavedAnalysis, error)
+	ListSavedAnalyses(context.Context, string, string, string, string, int, bool, string) ([]SavedAnalysis, error)
 	GetSavedAnalysis(context.Context, string, string, string) (SavedAnalysis, error)
 	GetSavedAnalysisDraft(context.Context, string, string, string) (SavedAnalysisDraft, error)
 	SaveSavedAnalysisDraft(context.Context, string, string, string, int64, SavedAnalysisDefinition) (SavedAnalysisDraft, error)
