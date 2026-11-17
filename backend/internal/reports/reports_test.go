@@ -14,7 +14,7 @@ type reportStoreStub struct {
 }
 
 func (s *reportStoreStub) Create(context.Context, Input) (Report, error) { return s.created, s.err }
-func (s *reportStoreStub) List(context.Context, string, string, string, string, int) ([]Report, error) {
+func (s *reportStoreStub) List(context.Context, string, string, string, string, int, string) ([]Report, error) {
 	return nil, s.err
 }
 func (s *reportStoreStub) Get(context.Context, string, string, string) (Report, error) {

@@ -64,7 +64,9 @@ type Input struct {
 // Store is the persistence contract implemented by PostgreSQL.
 type Store interface {
 	Create(ctx context.Context, in Input) (Report, error)
-	List(ctx context.Context, actor, project, environment, after string, limit int) ([]Report, error)
+	// search is a normalized, LIKE-escaped literal title substring or "" for
+	// no filter.
+	List(ctx context.Context, actor, project, environment, after string, limit int, search string) ([]Report, error)
 	Get(ctx context.Context, actor, project, id string) (Report, error)
 	Update(ctx context.Context, in Input, expectedRevision int64) (Report, error)
 	Delete(ctx context.Context, actor, project, id string) error
@@ -182,7 +184,7 @@ func (s *Service) Create(ctx context.Context, in Input, expectedRevision int64) 
 	return s.store.Create(ctx, in)
 }
 
-func (s *Service) List(ctx context.Context, actor, project, environment, after string, limit int) ([]Report, error) {
+func (s *Service) List(ctx context.Context, actor, project, environment, after string, limit int, search string) ([]Report, error) {
 	if e := s.caller(ctx, actor, project); e != nil {
 		return nil, e
 	}
@@ -192,7 +194,11 @@ func (s *Service) List(ctx context.Context, actor, project, environment, after s
 	if limit < 1 || limit > 200 {
 		return nil, fault.New(fault.Invalid, "INVALID_REPORT_INPUT", "分页大小超出范围")
 	}
-	return s.store.List(ctx, actor, project, environment, after, limit)
+	search, e := NormalizeTitleSearch(search)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.List(ctx, actor, project, environment, after, limit, EscapeLikePattern(search))
 }
 
 func (s *Service) Get(ctx context.Context, actor, project, id string) (Report, error) {
