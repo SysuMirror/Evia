@@ -117,18 +117,41 @@ type DashboardUpdate struct {
 	Definition DashboardDefinition `json:"definition"`
 }
 
-// DashboardCopy creates a new unpublished dashboard from an existing one in
-// the same project/environment. The copy receives fresh dashboard and widget
-// IDs while retaining the pinned immutable references, layout, parameters and
-// bindings. Publication state, runs, idempotency history and archive state are
-// never carried over. Cross-environment copies require explicit rebinding and
-// are not part of this contract.
+// DashboardRebinding maps one executable widget to an immutable source that
+// exists in the copy's target environment. Exactly one of the analysis pair or
+// metric pair must be present, and it must match the source widget's kind.
+// Presentation-only text cards need no entry.
+type DashboardRebinding struct {
+	WidgetID string `json:"widget_id"`
+	// AnalysisID/AnalysisVersion identify a published saved-analysis version in
+	// the target environment; both stay zero for a metric-sourced widget.
+	AnalysisID      string `json:"analysis_id,omitempty"`
+	AnalysisVersion int64  `json:"analysis_version,omitempty"`
+	// MetricID/MetricVersion identify a published metric version in the target
+	// environment; both stay zero for an analysis-sourced widget.
+	MetricID      string `json:"metric_id,omitempty"`
+	MetricVersion int64  `json:"metric_version,omitempty"`
+}
+
+// DashboardCopy creates a new unpublished dashboard from an existing one. With
+// no TargetEnvironment it reproduces the current same-environment behavior
+// (fresh dashboard/widget IDs, retained references, layout, parameters and
+// bindings). When TargetEnvironment names a different closed-set environment,
+// Rebindings must cover every executable widget; each target reference is
+// validated against that environment by the store. Publication state, runs,
+// idempotency history and archive state are never carried over.
 type DashboardCopy struct {
 	// Title is required so the new resource is distinguishable in listings.
 	Title string `json:"title"`
 	// FolderID empty places the copy at the project root; a non-empty value
-	// must reference an existing folder in the source environment.
+	// must reference an existing folder in the target environment.
 	FolderID string `json:"folder_id,omitempty"`
+	// TargetEnvironment empty means the source environment. A different value
+	// switches the copy to that environment and requires explicit rebinding.
+	TargetEnvironment string `json:"target_environment,omitempty"`
+	// Rebindings is required and exhaustive for executable widgets only when
+	// crossing environments; it must be empty for a same-environment copy.
+	Rebindings []DashboardRebinding `json:"rebindings,omitempty"`
 }
 type DashboardValidate struct {
 	DraftRevision            int64 `json:"draft_revision"`

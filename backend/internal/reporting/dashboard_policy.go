@@ -184,6 +184,82 @@ func CloneDashboardDefinition(source DashboardDefinition, title string, widgetID
 	return NormalizeDashboardDefinition(out)
 }
 
+// RebindDashboardDefinition builds a cross-environment copy definition. Every
+// executable widget must have exactly one rebinding whose kind matches the
+// source (analysis stays analysis, metric stays metric); presentation-only text
+// cards carry over untouched. The store independently verifies that each target
+// reference exists, is published and belongs to the target environment, so this
+// function enforces only structural coverage and shape. Parameter declarations
+// and bindings are retained structurally; target-side publish validation rejects
+// any binding whose field does not resolve on the rebound sources.
+func RebindDashboardDefinition(
+	source DashboardDefinition,
+	title string,
+	widgetIDs []string,
+	rebindings []DashboardRebinding,
+) (DashboardDefinition, error) {
+	if len(widgetIDs) != len(source.Widgets) {
+		return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD", "复制组件标识数量不匹配")
+	}
+	byWidget := map[string]DashboardRebinding{}
+	for _, rebinding := range rebindings {
+		if !dashboardUUID.MatchString(rebinding.WidgetID) {
+			return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "重绑定组件标识无效", "/rebindings")
+		}
+		if _, exists := byWidget[rebinding.WidgetID]; exists {
+			return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "同一组件不能重复重绑定", "/rebindings")
+		}
+		hasAnalysis := dashboardUUID.MatchString(rebinding.AnalysisID) &&
+			rebinding.AnalysisVersion >= 1 && rebinding.AnalysisVersion <= analysis.MaxSafeInteger
+		hasMetric := dashboardUUID.MatchString(rebinding.MetricID) &&
+			rebinding.MetricVersion >= 1 && rebinding.MetricVersion <= analysis.MaxSafeInteger
+		if hasAnalysis == hasMetric {
+			return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "重绑定必须且只能指定分析或指标中的一种来源", "/rebindings")
+		}
+		byWidget[rebinding.WidgetID] = rebinding
+	}
+	out := source
+	out.Title = title
+	out.Parameters = append([]ParameterDeclaration(nil), source.Parameters...)
+	out.Widgets = make([]DashboardWidget, len(source.Widgets))
+	executable := 0
+	for i, widget := range source.Widgets {
+		sourceID := widget.ID
+		widget.ID = widgetIDs[i]
+		widget.ParameterBindings = append([]ParameterBinding(nil), widget.ParameterBindings...)
+		if widget.TextCard != nil {
+			textCard := *widget.TextCard
+			widget.TextCard = &textCard
+		} else {
+			executable++
+			rebinding, ok := byWidget[sourceID]
+			if !ok {
+				return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "每个可执行组件都必须提供目标环境重绑定", "/rebindings")
+			}
+			if widget.MetricRef != nil {
+				if rebinding.MetricID == "" {
+					return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "指标组件只能重绑定到目标环境的指标版本", "/rebindings")
+				}
+				widget.MetricRef = &MetricReference{MetricID: rebinding.MetricID, Version: rebinding.MetricVersion}
+				widget.AnalysisID, widget.AnalysisVersion = "", 0
+			} else {
+				if rebinding.AnalysisID == "" {
+					return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "分析组件只能重绑定到目标环境的保存分析版本", "/rebindings")
+				}
+				widget.AnalysisID, widget.AnalysisVersion = rebinding.AnalysisID, rebinding.AnalysisVersion
+				widget.MetricRef = nil
+			}
+		}
+		out.Widgets[i] = widget
+	}
+	// Coverage must be exact: this rejects both missing entries (handled above)
+	// and entries for unknown or text-card widgets.
+	if len(byWidget) != executable {
+		return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "重绑定必须且只能覆盖全部可执行组件", "/rebindings")
+	}
+	return NormalizeDashboardDefinition(out)
+}
+
 func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, error) {
 	var out DashboardValidation
 	d := snapshot.Draft

@@ -190,6 +190,12 @@ func (s *Dashboards) CopyDashboard(ctx context.Context, actor, project, id, key 
 	if in.FolderID != "" && !dashboardUUID.MatchString(in.FolderID) {
 		return DashboardDraft{}, analysis.Invalid("INVALID_DASHBOARD_FOLDER", "文件夹标识无效", "/folder_id")
 	}
+	if in.TargetEnvironment != "" && !savedEnvironment(in.TargetEnvironment) {
+		return DashboardDraft{}, analysis.Invalid("INVALID_ENVIRONMENT", "目标环境无效", "/target_environment")
+	}
+	if in.TargetEnvironment == "" && len(in.Rebindings) != 0 {
+		return DashboardDraft{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "同环境复制不接受重绑定", "/rebindings")
+	}
 	return s.store.CopyDashboard(ctx, actor, project, id, key, in)
 }
 func (s *Dashboards) ArchiveDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {

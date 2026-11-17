@@ -265,6 +265,127 @@ func TestCloneDashboardDefinitionFreshIdentityAndRetainedPins(t *testing.T) {
 	}
 }
 
+func rebindSourceDefinition() DashboardDefinition {
+	return DashboardDefinition{
+		Title: "Mixed",
+		Widgets: []DashboardWidget{
+			{
+				ID: dashboardWidgetOne, AnalysisID: dashboardAnalysisID, AnalysisVersion: 1,
+				Title: "Analysis card", Layout: DashboardLayout{Width: 6, Height: 3},
+			},
+			{
+				ID: dashboardWidgetTwo, MetricRef: &MetricReference{MetricID: "55555555-5555-4555-8555-555555555555", Version: 2},
+				Title: "Metric card", ReadingOrder: 1, Layout: DashboardLayout{X: 6, Width: 6, Height: 3},
+			},
+			{
+				ID: "66666666-6666-4666-8666-666666666666", TextCard: &TextCard{Content: "# Note"},
+				Title: "Text card", ReadingOrder: 2, Layout: DashboardLayout{Y: 3, Width: 12, Height: 3},
+			},
+		},
+	}
+}
+
+func TestRebindDashboardDefinitionSwapsExecutableSourcesAndKeepsTextCard(t *testing.T) {
+	source, e := NormalizeDashboardDefinition(rebindSourceDefinition())
+	if e != nil {
+		t.Fatal(e)
+	}
+	newIDs := []string{
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+	}
+	targetAnalysis := "77777777-7777-4777-8777-777777777777"
+	targetMetric := "88888888-8888-4888-8888-888888888888"
+	rebound, e := RebindDashboardDefinition(source, "Rebound", newIDs, []DashboardRebinding{
+		{WidgetID: dashboardWidgetOne, AnalysisID: targetAnalysis, AnalysisVersion: 4},
+		{WidgetID: dashboardWidgetTwo, MetricID: targetMetric, MetricVersion: 5},
+	})
+	if e != nil {
+		t.Fatalf("valid rebinding rejected: %v", e)
+	}
+	if rebound.Title != "Rebound" || len(rebound.Widgets) != 3 {
+		t.Fatalf("rebound shape mismatch: %+v", rebound)
+	}
+	for i, widget := range rebound.Widgets {
+		if widget.ID != newIDs[i] {
+			t.Fatalf("widget %d must receive a fresh ID", i)
+		}
+	}
+	analysisCard := rebound.Widgets[0]
+	if analysisCard.AnalysisID != targetAnalysis || analysisCard.AnalysisVersion != 4 || analysisCard.MetricRef != nil {
+		t.Fatalf("analysis widget not rebound: %+v", analysisCard)
+	}
+	metricCard := rebound.Widgets[1]
+	if metricCard.MetricRef == nil || metricCard.MetricRef.MetricID != targetMetric || metricCard.MetricRef.Version != 5 || metricCard.AnalysisID != "" {
+		t.Fatalf("metric widget not rebound: %+v", metricCard)
+	}
+	textCard := rebound.Widgets[2]
+	if textCard.TextCard == nil || textCard.TextCard.Content != "# Note" {
+		t.Fatalf("text card must carry over untouched: %+v", textCard)
+	}
+}
+
+func TestRebindDashboardDefinitionRejectsCoverageAndKindFailures(t *testing.T) {
+	source, e := NormalizeDashboardDefinition(rebindSourceDefinition())
+	if e != nil {
+		t.Fatal(e)
+	}
+	newIDs := []string{
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+	}
+	targetAnalysis := "77777777-7777-4777-8777-777777777777"
+	targetMetric := "88888888-8888-4888-8888-888888888888"
+	base := []DashboardRebinding{
+		{WidgetID: dashboardWidgetOne, AnalysisID: targetAnalysis, AnalysisVersion: 4},
+		{WidgetID: dashboardWidgetTwo, MetricID: targetMetric, MetricVersion: 5},
+	}
+	for name, mutate := range map[string]func([]DashboardRebinding) []DashboardRebinding{
+		"missing executable coverage": func(r []DashboardRebinding) []DashboardRebinding {
+			return r[:1]
+		},
+		"unknown widget entry": func(r []DashboardRebinding) []DashboardRebinding {
+			return append(r, DashboardRebinding{
+				WidgetID: "99999999-9999-4999-8999-999999999999", AnalysisID: targetAnalysis, AnalysisVersion: 1,
+			})
+		},
+		"text card entry": func(r []DashboardRebinding) []DashboardRebinding {
+			return append(r, DashboardRebinding{
+				WidgetID: "66666666-6666-4666-8666-666666666666", AnalysisID: targetAnalysis, AnalysisVersion: 1,
+			})
+		},
+		"duplicate widget entry": func(r []DashboardRebinding) []DashboardRebinding {
+			return append(r, r[0])
+		},
+		"kind mismatch on metric widget": func(r []DashboardRebinding) []DashboardRebinding {
+			withKind := append([]DashboardRebinding(nil), r...)
+			withKind[1] = DashboardRebinding{WidgetID: dashboardWidgetTwo, AnalysisID: targetAnalysis, AnalysisVersion: 4}
+			return withKind
+		},
+		"both source pairs": func(r []DashboardRebinding) []DashboardRebinding {
+			withBoth := append([]DashboardRebinding(nil), r...)
+			withBoth[0] = DashboardRebinding{
+				WidgetID: dashboardWidgetOne, AnalysisID: targetAnalysis, AnalysisVersion: 4,
+				MetricID: targetMetric, MetricVersion: 5,
+			}
+			return withBoth
+		},
+		"neither source pair": func(r []DashboardRebinding) []DashboardRebinding {
+			empty := append([]DashboardRebinding(nil), r...)
+			empty[0] = DashboardRebinding{WidgetID: dashboardWidgetOne}
+			return empty
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, e := RebindDashboardDefinition(source, "Rebound", newIDs, mutate(append([]DashboardRebinding(nil), base...))); e == nil {
+				t.Fatalf("%s must be rejected", name)
+			}
+		})
+	}
+}
+
 func TestDashboardRunStatesKeepMixedOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		states []string
