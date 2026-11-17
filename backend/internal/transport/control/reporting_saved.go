@@ -67,9 +67,10 @@ func savedArchiveQuery(r *http.Request) (url.Values, error) {
 }
 
 // savedDashboardListQuery additionally allows the folder_id scope, which is
-// meaningful only for dashboard listing ("root" or a folder UUID).
+// meaningful only for dashboard listing ("root" or a folder UUID), and the
+// optional title substring search term q.
 func savedDashboardListQuery(r *http.Request) (url.Values, error) {
-	return savedQueryWith(r, true, true, true, "folder_id")
+	return savedQueryWith(r, true, true, true, "folder_id", "q")
 }
 func savedQueryWith(r *http.Request, list, environment, archiveView bool, extra ...string) (url.Values, error) {
 	if len(r.URL.RawQuery) > 8192 {

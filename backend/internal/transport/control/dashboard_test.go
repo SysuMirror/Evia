@@ -42,6 +42,7 @@ type dashboardHTTPService struct {
 	limit                       int
 	archivedOnly                bool
 	folderScope, folderID       string
+	search                      string
 	targetEnvironment           string
 	rebindings                  []reporting.DashboardRebinding
 	items                       []reporting.Dashboard
@@ -78,8 +79,8 @@ func (f *dashboardHTTPService) CreateDashboard(_ context.Context, actor, project
 	f.key, f.environment = key, in.Environment
 	return dashboardDraft(), f.call(actor, project)
 }
-func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, folderScope string) ([]reporting.Dashboard, error) {
-	f.environment, f.after, f.limit, f.archivedOnly, f.folderScope = env, after, limit, archivedOnly, folderScope
+func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, folderScope, search string) ([]reporting.Dashboard, error) {
+	f.environment, f.after, f.limit, f.archivedOnly, f.folderScope, f.search = env, after, limit, archivedOnly, folderScope, search
 	return f.items, f.call(actor, project)
 }
 func (f *dashboardHTTPService) GetDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
@@ -264,7 +265,7 @@ func TestDashboardHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development:active:", dashboardID, false},
+		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development:active::", dashboardID, false},
 		{dashboardItem + "/versions?limit=1", "dashboard_versions:" + userID + ":" + projectID + ":" + dashboardID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -471,8 +472,8 @@ func TestDashboardHTTPArchiveViewSelector(t *testing.T) {
 		}
 	}
 	// Cursors are bound to the view stream: an archived cursor cannot page active rows.
-	activeScope := "dashboards:" + userID + ":" + projectID + ":development:active:"
-	archivedScope := "dashboards:" + userID + ":" + projectID + ":development:archived:"
+	activeScope := "dashboards:" + userID + ":" + projectID + ":development:active::"
+	archivedScope := "dashboards:" + userID + ":" + projectID + ":development:archived::"
 	archivedPage := catalogStatus(
 		t,
 		catalogRequest(h, "GET", dashboardBase+"?environment=development&view=archived&limit=1", "", nil),
@@ -496,6 +497,36 @@ func TestDashboardHTTPArchiveViewSelector(t *testing.T) {
 	}
 	if _, e := codec.Decode(activeScope, next); e == nil {
 		t.Fatal("archived cursor decoded under the active scope")
+	}
+}
+
+func TestDashboardHTTPListSearchTerm(t *testing.T) {
+	f := &dashboardHTTPService{items: []reporting.Dashboard{dashboardResource(), dashboardResource()}}
+	h, codec := dashboardHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	// A bounded search term reaches the service and binds the cursor scope.
+	page := catalogStatus(
+		t,
+		catalogRequest(h, "GET", dashboardBase+"?environment=development&limit=1&q=%20%E7%95%99%E5%AD%98%20", "", nil),
+		200,
+	)
+	if f.search != "留存" {
+		t.Fatalf("search term must be trimmed and forwarded, got %q", f.search)
+	}
+	next, ok := page["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing continuation cursor", page)
+	}
+	searchScope := "dashboards:" + userID + ":" + projectID + ":development:active::留存"
+	if decoded, e := codec.Decode(searchScope, next); e != nil || decoded != dashboardID {
+		t.Fatal("cursor must be bound to the search scope", decoded, e)
+	}
+	// Unknown query parameters stay rejected even though q is now allowlisted.
+	catalogStatus(t, catalogRequest(h, "GET", dashboardBase+"?environment=development&q=x&unexpected=1", "", nil), 400)
+	// An overlong term is rejected at the boundary without dispatching.
+	before := f.calls
+	catalogStatus(t, catalogRequest(h, "GET", dashboardBase+"?environment=development&q="+url.QueryEscape(strings.Repeat("字", 129)), "", nil), 400)
+	if f.calls != before {
+		t.Fatal("overlong search term reached the service")
 	}
 }
 func (f *dashboardHTTPService) ArchiveDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {

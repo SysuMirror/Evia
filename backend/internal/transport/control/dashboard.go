@@ -240,12 +240,18 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
-	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment"), view, folderScope}, ":")
+	search, e := reporting.NormalizeDashboardSearch(q.Get("q"))
+	if e != nil {
+		return e
+	}
+	// The cursor is bound to every list predicate, including the search term,
+	// so a stale cursor from a different query is rejected by the codec.
+	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment"), view, folderScope, search}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly, folderScope)
+	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly, folderScope, search)
 	if e != nil {
 		return e
 	}
