@@ -35,6 +35,7 @@ type formulaHTTPService struct {
 	revision, version           int64
 	limit                       int
 	archivedOnly                bool
+	search                      string
 	items                       []reporting.FormulaMetricRecord
 	versions                    []reporting.FormulaMetricVersion
 }
@@ -67,8 +68,8 @@ func (f *formulaHTTPService) CreateFormulaMetric(_ context.Context, actor, proje
 	f.key, f.environment = key, in.Environment
 	return formulaDraft(), f.call(actor, project)
 }
-func (f *formulaHTTPService) ListFormulaMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.FormulaMetricRecord, error) {
-	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
+func (f *formulaHTTPService) ListFormulaMetrics(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, search string) ([]reporting.FormulaMetricRecord, error) {
+	f.environment, f.after, f.limit, f.archivedOnly, f.search = env, after, limit, archivedOnly, search
 	return f.items, f.call(actor, project)
 }
 func (f *formulaHTTPService) ArchiveFormulaMetric(_ context.Context, actor, project, id string) (reporting.FormulaMetricRecord, error) {
@@ -237,8 +238,6 @@ func TestFormulaMetricHTTPArchiveViewSelector(t *testing.T) {
 		formulaBase + "?environment=development&view=bogus",
 		formulaBase + "?environment=development&view=archived&view=active",
 		formulaItem + "?view=archived",
-		// Title search stays disabled for the formula-metric listing.
-		formulaBase + "?environment=development&q=x",
 	} {
 		before := f.calls
 		out := catalogStatus(t, catalogRequest(h, "GET", path, "", nil), 400)
@@ -252,8 +251,8 @@ func TestFormulaMetricHTTPArchiveViewSelector(t *testing.T) {
 			t.Fatal("closed-set view must fail with INVALID_ARCHIVE_VIEW", out)
 		}
 	}
-	activeScope := "formula_metrics:" + userID + ":" + projectID + ":development:active"
-	archivedScope := "formula_metrics:" + userID + ":" + projectID + ":development:archived"
+	activeScope := "formula_metrics:" + userID + ":" + projectID + ":development:active:"
+	archivedScope := "formula_metrics:" + userID + ":" + projectID + ":development:archived:"
 	archivedPage := catalogStatus(t, catalogRequest(h, "GET", formulaBase+"?environment=development&view=archived&limit=1", "", nil), 200)
 	next, ok := archivedPage["next_cursor"].(string)
 	if !ok || next == "" {
@@ -269,5 +268,35 @@ func TestFormulaMetricHTTPArchiveViewSelector(t *testing.T) {
 	}
 	if _, e := codec.Decode(activeScope, next); e == nil {
 		t.Fatal("archived cursor decoded under the active scope")
+	}
+}
+
+func TestFormulaMetricHTTPListSearchTerm(t *testing.T) {
+	f := &formulaHTTPService{items: []reporting.FormulaMetricRecord{formulaRecord(), formulaRecord()}}
+	h, codec := formulaHTTP(t, f, &catalogAccess{fakeAccess: &fakeAccess{}})
+	// A bounded search term is trimmed, forwarded and bound to the cursor scope.
+	page := catalogStatus(
+		t,
+		catalogRequest(h, "GET", formulaBase+"?environment=development&limit=1&q=%20%E7%95%99%E5%AD%98%20", "", nil),
+		200,
+	)
+	if f.search != "留存" {
+		t.Fatalf("search term must be trimmed and forwarded, got %q", f.search)
+	}
+	next, ok := page["next_cursor"].(string)
+	if !ok || next == "" {
+		t.Fatal("missing continuation cursor", page)
+	}
+	searchScope := "formula_metrics:" + userID + ":" + projectID + ":development:active:留存"
+	if decoded, e := codec.Decode(searchScope, next); e != nil || decoded != formulaID {
+		t.Fatal("cursor must be bound to the search scope", decoded, e)
+	}
+	// Unknown query parameters stay rejected even though q is now allowlisted.
+	catalogStatus(t, catalogRequest(h, "GET", formulaBase+"?environment=development&q=x&unexpected=1", "", nil), 400)
+	// An overlong term is rejected at the boundary without dispatching.
+	before := f.calls
+	catalogStatus(t, catalogRequest(h, "GET", formulaBase+"?environment=development&q="+url.QueryEscape(strings.Repeat("字", 129)), "", nil), 400)
+	if f.calls != before {
+		t.Fatal("overlong search term reached the service")
 	}
 }
