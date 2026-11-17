@@ -119,6 +119,12 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 	}
 	for position, widget := range snapshot.Definition.Widgets {
 		job := jobs[position]
+		if widget.MetricRef != nil {
+			if _, e = tx.Exec(ctx, `INSERT INTO dashboard_run_widgets(project_id,environment,dashboard_id,version,run_id,widget_id,metric_id,metric_version,position,query_id,original_query_id,query_created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11)`, project, snapshot.Environment, id, version, runID, widget.ID, widget.MetricRef.MetricID, widget.MetricRef.Version, position, job.ID, job.CreatedAt); e != nil {
+				return out, e
+			}
+			continue
+		}
 		if _, e = tx.Exec(ctx, `INSERT INTO dashboard_run_widgets(project_id,environment,dashboard_id,version,run_id,widget_id,analysis_id,analysis_version,position,query_id,original_query_id,query_created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11)`, project, snapshot.Environment, id, version, runID, widget.ID, widget.AnalysisID, widget.AnalysisVersion, position, job.ID, job.CreatedAt); e != nil {
 			return out, e
 		}
@@ -169,16 +175,27 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 		return out, e
 	}
 
-	rows, e := tx.Query(ctx, `SELECT widget_id::text,analysis_id::text,analysis_version,query_id::text,original_query_id::text,query_created_at FROM dashboard_run_widgets WHERE project_id=$1 AND run_id=$2 ORDER BY position`, project, id)
+	rows, e := tx.Query(ctx, `SELECT widget_id::text,COALESCE(analysis_id::text,''),analysis_version,COALESCE(metric_id::text,''),metric_version,query_id::text,original_query_id::text,query_created_at FROM dashboard_run_widgets WHERE project_id=$1 AND run_id=$2 ORDER BY position`, project, id)
 	if e != nil {
 		return out, e
 	}
 	refs := []dashboardRunReference{}
 	for rows.Next() {
 		var ref dashboardRunReference
-		if e = rows.Scan(&ref.widget.WidgetID, &ref.widget.AnalysisID, &ref.widget.AnalysisVersion, &ref.queryID, &ref.originalID, &ref.created); e != nil {
+		var analysisID string
+		var analysisVersion *int64
+		var metricID string
+		var metricVersion *int64
+		if e = rows.Scan(&ref.widget.WidgetID, &analysisID, &analysisVersion, &metricID, &metricVersion, &ref.queryID, &ref.originalID, &ref.created); e != nil {
 			rows.Close()
 			return out, e
+		}
+		if analysisVersion != nil {
+			ref.widget.AnalysisID = analysisID
+			ref.widget.AnalysisVersion = *analysisVersion
+		}
+		if metricID != "" && metricVersion != nil {
+			ref.widget.MetricRef = &reporting.MetricReference{MetricID: metricID, Version: *metricVersion}
 		}
 		refs = append(refs, ref)
 	}
@@ -302,18 +319,42 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 	}
 	requests := make([]analysis.Request, 0, len(snapshot.Definition.Widgets))
 	for _, widget := range snapshot.Definition.Widgets {
-		v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)
-		if e != nil {
-			return nil, e
+		var request analysis.Request
+		if widget.MetricRef != nil {
+			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
+			if e != nil {
+				return nil, e
+			}
+			if mv.Environment != snapshot.Environment {
+				return nil, analysis.Invalid("DASHBOARD_METRIC_ENVIRONMENT_MISMATCH", "看板组件指标版本不属于当前环境")
+			}
+			execute := reporting.MetricExecute{
+				TimeRange: in.TimeRange,
+				Timezone:  in.Timezone,
+				Filter:    filters[widget.ID],
+			}
+			template, e := reporting.MetricTemplate(mv.Definition, execute)
+			if e != nil {
+				return nil, e
+			}
+			request, e = template.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
+			if e != nil {
+				return nil, e
+			}
+		} else {
+			v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)
+			if e != nil {
+				return nil, e
+			}
+			if v.Environment != snapshot.Environment {
+				return nil, analysis.Invalid("DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH", "看板组件分析版本不属于当前环境")
+			}
+			request, e = reporting.BindDashboardWidget(v, filters[widget.ID], in)
+			if e != nil {
+				return nil, e
+			}
 		}
-		if v.Environment != snapshot.Environment {
-			return nil, analysis.Invalid("DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH", "看板组件分析版本不属于当前环境")
-		}
-		request, e := reporting.BindDashboardWidget(v, filters[widget.ID], in)
-		if e != nil {
-			return nil, e
-		}
-		if e = s.authorizeQuery(ctx, tx, actor, project, request.Environment, permission, analysis.RequiresRawAccess(request)); e != nil {
+		if e := s.authorizeQuery(ctx, tx, actor, project, request.Environment, permission, analysis.RequiresRawAccess(request)); e != nil {
 			return nil, e
 		}
 		requests = append(requests, request)

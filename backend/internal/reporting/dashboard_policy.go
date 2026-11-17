@@ -34,8 +34,12 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 	for i := range out.Widgets {
 		w := &out.Widgets[i]
 		w.Title = strings.TrimSpace(w.Title)
-		if !dashboardUUID.MatchString(w.ID) || !dashboardUUID.MatchString(w.AnalysisID) || w.AnalysisVersion < 1 || w.AnalysisVersion > analysis.MaxSafeInteger || ids[w.ID] || !dashboardText(w.Title, 128, false) {
-			return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "组件标识、标题或固定分析版本无效", "/widgets")
+		hasAnalysis := dashboardUUID.MatchString(w.AnalysisID) && w.AnalysisVersion >= 1 && w.AnalysisVersion <= analysis.MaxSafeInteger
+		hasMetric := w.MetricRef != nil && dashboardUUID.MatchString(w.MetricRef.MetricID) && w.MetricRef.Version >= 1 && w.MetricRef.Version <= analysis.MaxSafeInteger
+		// Exactly one immutable source is allowed; providing both or neither
+		// is rejected before any layout or dependency processing.
+		if hasAnalysis == hasMetric || !dashboardUUID.MatchString(w.ID) || ids[w.ID] || !dashboardText(w.Title, 128, false) {
+			return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "组件标识、标题或固定引用版本无效", "/widgets")
 		}
 		ids[w.ID] = true
 		if w.ReadingOrder < 0 || w.ReadingOrder >= len(out.Widgets) || orders[w.ReadingOrder] {
@@ -79,7 +83,12 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 	for _, dep := range deps.Analyses {
 		found := false
 		for _, w := range definition.Widgets {
-			if w.ID == dep.WidgetID && w.AnalysisID == dep.AnalysisID && w.AnalysisVersion == dep.AnalysisVersion {
+			if w.ID != dep.WidgetID {
+				continue
+			}
+			analysisMatch := w.AnalysisID == dep.AnalysisID && w.AnalysisVersion == dep.AnalysisVersion && w.MetricRef == nil && dep.MetricID == ""
+			metricMatch := w.MetricRef != nil && w.MetricRef.MetricID == dep.MetricID && w.MetricRef.Version == dep.MetricVersion && w.AnalysisID == "" && dep.AnalysisID == ""
+			if analysisMatch || metricMatch {
 				found = true
 				break
 			}

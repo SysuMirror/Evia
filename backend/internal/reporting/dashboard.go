@@ -16,12 +16,15 @@ type DashboardLayout struct {
 	Height int `json:"height"`
 }
 type DashboardWidget struct {
-	ID              string          `json:"widget_id"`
-	AnalysisID      string          `json:"analysis_id"`
-	AnalysisVersion int64           `json:"analysis_version"`
-	Title           string          `json:"title"`
-	ReadingOrder    int             `json:"reading_order"`
-	Layout          DashboardLayout `json:"layout"`
+	ID string `json:"widget_id"`
+	// A widget pins exactly one immutable source: either a saved-analysis
+	// version (AnalysisID/AnalysisVersion) or a metric version (MetricRef).
+	AnalysisID      string           `json:"analysis_id,omitempty"`
+	AnalysisVersion int64            `json:"analysis_version,omitempty"`
+	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
+	Title           string           `json:"title"`
+	ReadingOrder    int              `json:"reading_order"`
+	Layout          DashboardLayout  `json:"layout"`
 }
 type DashboardDefinition struct {
 	Title       string            `json:"title"`
@@ -45,12 +48,16 @@ type DashboardDraft struct {
 	Definition DashboardDefinition `json:"definition"`
 }
 type DashboardDependency struct {
-	WidgetID        string `json:"widget_id"`
-	AnalysisID      string `json:"analysis_id"`
-	AnalysisVersion int64  `json:"analysis_version"`
-	DefinitionHash  string `json:"definition_hash"`
-	DependencyHash  string `json:"dependency_hash"`
-	ValidationHash  string `json:"validation_hash"`
+	WidgetID string `json:"widget_id"`
+	// AnalysisID/AnalysisVersion are empty for a metric-sourced widget.
+	AnalysisID      string `json:"analysis_id,omitempty"`
+	AnalysisVersion int64  `json:"analysis_version,omitempty"`
+	// MetricID/MetricVersion are empty for an analysis-sourced widget.
+	MetricID       string `json:"metric_id,omitempty"`
+	MetricVersion  int64  `json:"metric_version,omitempty"`
+	DefinitionHash string `json:"definition_hash"`
+	DependencyHash string `json:"dependency_hash"`
+	ValidationHash string `json:"validation_hash"`
 }
 type DashboardDependencies struct {
 	ProjectID   string                `json:"project_id"`
@@ -116,10 +123,11 @@ type DashboardSnapshot struct {
 	Dependencies DashboardDependencies
 }
 type DashboardWidgetRun struct {
-	WidgetID        string       `json:"widget_id"`
-	AnalysisID      string       `json:"analysis_id"`
-	AnalysisVersion int64        `json:"analysis_version"`
-	Query           analysis.Job `json:"query"`
+	WidgetID        string           `json:"widget_id"`
+	AnalysisID      string           `json:"analysis_id,omitempty"`
+	AnalysisVersion int64            `json:"analysis_version,omitempty"`
+	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
+	Query           analysis.Job     `json:"query"`
 }
 type DashboardRun struct {
 	ID            string                  `json:"run_id"`
