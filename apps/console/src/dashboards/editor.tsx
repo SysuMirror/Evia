@@ -18,9 +18,11 @@ import { WidgetParameterBindings } from './parameter-bindings';
 import {
   availableWidgetPosition,
   dashboardIssues,
+  maxTextCardContentRunes,
   reorderWidget,
   widgetSourceLabel,
 } from './model';
+import { TextCardMarkdown } from './text-card';
 import type { DashboardWidgetSource } from './types';
 
 export function DashboardEditor({
@@ -87,17 +89,21 @@ export function DashboardEditor({
             analysis_id: source.analysis.analysis_id,
             analysis_version: source.analysis.version,
           }
-        : {
-            metric_ref: {
-              metric_id: source.version.metric_id,
-              version: source.version.version,
-            },
-          };
+        : source.kind === 'metric'
+          ? {
+              metric_ref: {
+                metric_id: source.version.metric_id,
+                version: source.version.version,
+              },
+            }
+          : { text_card: { content: source.content } };
     if (replacing) {
       const current = value.widgets.find((w) => w.widget_id === replacing);
       if (current) {
         // Switching source kind replaces the old reference entirely; layout and
         // identity are preserved, and exactly one source remains on the widget.
+        // A fresh object also drops parameter bindings that only executable
+        // sources may carry.
         const next: DashboardWidget = {
           widget_id: current.widget_id,
           title,
@@ -173,7 +179,10 @@ export function DashboardEditor({
       {value.widgets.length === 0 ? (
         <div className="dashboard-empty">
           <h3>添加第一个组件</h3>
-          <p>选择已发布分析或独立指标的精确版本，再设置布局。可并排展示趋势、指标和完整结果表。</p>
+          <p>
+            选择已发布分析、独立指标的精确版本或 Markdown
+            文本卡，再设置布局。可并排展示趋势、指标、说明与完整结果表。
+          </p>
         </div>
       ) : (
         <DashboardGrid
@@ -217,7 +226,11 @@ export function DashboardEditor({
                       </dd>
                     </div>
                   </dl>
-                  <p>发布后可按统一时间运行真实查询。</p>
+                  {w.text_card ? (
+                    <p>文本卡仅展示 Markdown 说明，不产生查询。</p>
+                  ) : (
+                    <p>发布后可按统一时间运行真实查询。</p>
+                  )}
                 </div>
               </DashboardCard>
             ),
@@ -265,28 +278,56 @@ export function DashboardEditor({
                 onChange={(e) => update({ ...widget, title: e.target.value })}
               />
             </Field>
-            <Button
-              disabled={frozen}
-              onClick={() => {
-                setReplacing(widget.widget_id);
-                setPicker(true);
-              }}
-            >
-              更换引用版本
-            </Button>
-            <WidgetParameterBindings
-              context={context}
-              widget={widget}
-              parameters={value.parameters ?? []}
-              value={widget.parameter_bindings ?? []}
-              disabled={frozen}
-              onChange={(parameter_bindings) =>
-                update({
-                  ...widget,
-                  parameter_bindings: parameter_bindings.length ? parameter_bindings : undefined,
-                })
-              }
-            />
+            {widget.text_card ? (
+              <>
+                <Field label="文本卡内容（Markdown 子集）" htmlFor={`${id}-text-content`}>
+                  <Textarea
+                    id={`${id}-text-content`}
+                    rows={8}
+                    maxLength={maxTextCardContentRunes}
+                    required
+                    disabled={frozen}
+                    value={widget.text_card.content}
+                    onChange={(e) => update({ ...widget, text_card: { content: e.target.value } })}
+                  />
+                </Field>
+                <p className="field-help">
+                  {[...widget.text_card.content].length}/{maxTextCardContentRunes} 字符；不支持原始
+                  HTML、图片与非 http(s) 链接。
+                </p>
+                <div className="text-card-preview">
+                  <p className="field-help">预览</p>
+                  <TextCardMarkdown content={widget.text_card.content} />
+                </div>
+              </>
+            ) : (
+              <>
+                <Button
+                  disabled={frozen}
+                  onClick={() => {
+                    setReplacing(widget.widget_id);
+                    setPicker(true);
+                  }}
+                >
+                  更换组件来源
+                </Button>
+                <WidgetParameterBindings
+                  context={context}
+                  widget={widget}
+                  parameters={value.parameters ?? []}
+                  value={widget.parameter_bindings ?? []}
+                  disabled={frozen}
+                  onChange={(parameter_bindings) =>
+                    update({
+                      ...widget,
+                      parameter_bindings: parameter_bindings.length
+                        ? parameter_bindings
+                        : undefined,
+                    })
+                  }
+                />
+              </>
+            )}
             <p className="field-help">
               方向按钮移动一格，尺寸按钮调整一格。位置和尺寸立即应用，碰撞与越界时保留原布局。
             </p>

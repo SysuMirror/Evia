@@ -41,6 +41,7 @@ import { DashboardParameterValues } from './parameter-run-values';
 import { AutoRefreshControls } from './auto-refresh-controls';
 import { useDashboardAutoRefresh } from './use-auto-refresh';
 import { widgetSourceLabel } from './model';
+import { TextCardMarkdown } from './text-card';
 import { activeDashboardRun, useDashboardExecution } from './use-execution';
 export type { SavedRunWork } from '../saved-analysis-run';
 const labels = {
@@ -173,6 +174,9 @@ export function DashboardRunView({
     : 'trend';
   const sourcesReady =
     definitions.every((d) => d.data) && metricDefinitionQueries.every((d) => d.data);
+  // Text cards produce no child query; a presentation-only board has nothing to run.
+  const executableWidgetCount = version.definition.widgets.filter((w) => !w.text_card).length;
+  const runnable = executableWidgetCount > 0;
   const onExecuted = (body: DashboardExecute) => {
     setBaseline(
       JSON.stringify({
@@ -265,7 +269,13 @@ export function DashboardRunView({
                 variant="primary"
                 loading={busy && !active}
                 disabled={
-                  disabled || busy || active || filterPending || parameterPending || !sourcesReady
+                  disabled ||
+                  busy ||
+                  active ||
+                  filterPending ||
+                  parameterPending ||
+                  !sourcesReady ||
+                  !runnable
                 }
                 onClick={() => void execution.execute()}
               >
@@ -377,10 +387,27 @@ export function DashboardRunView({
           下方保留上次运行的固定版本与结果，运行后更新。
         </Alert>
       )}
+      {!runnable && (
+        <p className="field-help">
+          该看板仅包含文本卡，没有可运行的查询组件；文本卡直接展示下方内容。
+        </p>
+      )}
       <p className="field-help">各组件独立执行并报告精度与覆盖，同次运行不代表原子数据快照。</p>
       <DashboardGrid
         label="看板查询结果"
         items={(snapshot?.version.definition.widgets ?? version.definition.widgets).map((w) => {
+          if (w.text_card) {
+            return {
+              id: w.widget_id,
+              reading_order: w.reading_order,
+              layout: w.layout,
+              content: (
+                <DashboardCard title={w.title} summary="文本卡">
+                  <TextCardMarkdown content={w.text_card.content} />
+                </DashboardCard>
+              ),
+            };
+          }
           const run = snapshot?.run.widgets.find((r) => r.widget_id === w.widget_id),
             result = snapshot?.results[w.widget_id],
             resultError = snapshot?.resultErrors[w.widget_id],

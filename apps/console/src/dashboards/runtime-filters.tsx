@@ -209,10 +209,13 @@ export function DashboardRuntimeFilters({
                   value={row.widget_id}
                   options={[
                     { value: '', label: '选择目标组件' },
-                    ...version.definition.widgets.map((w) => ({
-                      value: w.widget_id,
-                      label: `${w.title}（${w.metric_ref ? '指标' : '分析'}）`,
-                    })),
+                    ...version.definition.widgets
+                      // Presentation-only text cards have no query fields to filter.
+                      .filter((w) => !w.text_card)
+                      .map((w) => ({
+                        value: w.widget_id,
+                        label: `${w.title}（${w.metric_ref ? '指标' : '分析'}）`,
+                      })),
                   ]}
                   onChange={(e) =>
                     patch(index, { widget_id: e.target.value, field: '', op: 'eq', text: '' })
