@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -124,5 +125,29 @@ func TestDashboardTextCardPublishAndRunFanout(t *testing.T) {
 	card := version.Definition.Widgets[0]
 	if card.TextCard == nil || card.TextCard.Content == "" {
 		t.Fatal("text card must survive publication in the immutable version")
+	}
+}
+
+func TestDashboardTextCardOnlyRunRejected(t *testing.T) {
+	f, d, execute := dashboardFixture(t, 1)
+	ctx := context.Background()
+	next, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, textOnlyDashboard(), "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	dashboardPublish(t, f, next)
+	_, e = f.s.EnqueueDashboardRun(ctx, f.owner, f.project, d.ID, 1, "text-only-run", reporting.DashboardExecute{
+		TimeRange: execute.TimeRange,
+		Timezone:  execute.Timezone,
+	})
+	if e == nil || fault.Public(e).Code != "DASHBOARD_NO_EXECUTABLE_WIDGET" {
+		t.Fatalf("expected DASHBOARD_NO_EXECUTABLE_WIDGET, got %v", e)
+	}
+	var runRows int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM dashboard_runs WHERE dashboard_id=$1`, d.ID).Scan(&runRows); e != nil {
+		t.Fatal(e)
+	}
+	if runRows != 0 {
+		t.Fatalf("rejected admission must not persist a ghost run, got %d rows", runRows)
 	}
 }

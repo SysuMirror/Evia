@@ -46,6 +46,18 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 	if e != nil {
 		return out, e
 	}
+	// A presentation-only board has no query to enqueue. Reject it explicitly
+	// instead of inserting a zero-widget run whose zero expires_at would violate
+	// the dashboard_runs CHECK and surface as an internal constraint failure.
+	executableWidgets := 0
+	for _, widget := range snapshot.Definition.Widgets {
+		if widget.TextCard == nil {
+			executableWidgets++
+		}
+	}
+	if executableWidgets == 0 {
+		return out, analysis.Invalid("DASHBOARD_NO_EXECUTABLE_WIDGET", "看板仅包含文本卡，没有可运行的查询组件")
+	}
 	in, e = reporting.NormalizeDashboardExecution(in, snapshot.Definition)
 	if e != nil {
 		return out, e
