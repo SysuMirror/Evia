@@ -1366,6 +1366,31 @@ test('formula metric archive view encoding and lifecycle calls carry CSRF withou
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('formula metric search term encodes as q alongside view and omits when blank', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listFormulaMetrics(
+    'p/q',
+    { environment: 'production', view: 'archived', search: '留存 公式', limit: 20 },
+    controller.signal,
+  );
+  await api.listFormulaMetrics(
+    'p/q',
+    { environment: 'production', search: '100%_done' },
+    controller.signal,
+  );
+  await api.listFormulaMetrics('p/q', { environment: 'production' }, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/formula-metrics?environment=production&limit=20&view=archived&q=%E7%95%99%E5%AD%98+%E5%85%AC%E5%BC%8F',
+      '/api/v1/projects/p%2Fq/formula-metrics?environment=production&q=100%25_done',
+      '/api/v1/projects/p%2Fq/formula-metrics?environment=production',
+    ],
+  );
+  controller.abort();
+});
+
 test('erasure jobs encode scope, idempotency keys and signed cursors', async () => {
   const fetch = respond(200, { items: [], next_cursor: null });
   const controller = new AbortController();

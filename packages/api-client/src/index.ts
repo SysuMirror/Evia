@@ -162,6 +162,9 @@ export type FormulaMetricPage = {
   cursor?: string;
   limit?: number;
   view?: 'active' | 'archived';
+  // Optional case-insensitive title substring filter; empty/undefined means
+  // no filtering and the server binds any cursor to this term.
+  search?: string;
 };
 export type FormulaMetricVersionPage = { cursor?: string; limit?: number };
 export type ProjectMemberPage = { cursor?: string; limit?: number };
