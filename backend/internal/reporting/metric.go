@@ -101,7 +101,9 @@ type MetricSnapshot struct {
 // under the same transaction that writes immutable content, audit and idempotency.
 type MetricStore interface {
 	CreateMetric(context.Context, string, string, string, MetricCreate) (MetricDraft, error)
-	ListMetrics(context.Context, string, string, string, string, int, bool) ([]MetricRecord, error)
+	// search is a normalized, LIKE-escaped literal title substring or "" for
+	// no filter.
+	ListMetrics(context.Context, string, string, string, string, int, bool, string) ([]MetricRecord, error)
 	GetMetric(context.Context, string, string, string) (MetricRecord, error)
 	GetMetricDraft(context.Context, string, string, string) (MetricDraft, error)
 	SaveMetricDraft(context.Context, string, string, string, int64, MetricDefinition) (MetricDraft, error)
@@ -115,7 +117,7 @@ type MetricStore interface {
 }
 type MetricService interface {
 	CreateMetric(context.Context, string, string, string, MetricCreate) (MetricDraft, error)
-	ListMetrics(context.Context, string, string, string, string, int, bool) ([]MetricRecord, error)
+	ListMetrics(context.Context, string, string, string, string, int, bool, string) ([]MetricRecord, error)
 	GetMetric(context.Context, string, string, string) (MetricRecord, error)
 	GetMetricDraft(context.Context, string, string, string) (MetricDraft, error)
 	SaveMetricDraft(context.Context, string, string, string, int64, MetricDefinition) (MetricDraft, error)

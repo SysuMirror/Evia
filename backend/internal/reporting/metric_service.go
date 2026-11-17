@@ -74,14 +74,18 @@ func (s *Metrics) CreateMetric(ctx context.Context, actor, project, key string, 
 	in.Definition = definition
 	return s.store.CreateMetric(ctx, actor, project, key, in)
 }
-func (s *Metrics) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]MetricRecord, error) {
+func (s *Metrics) ListMetrics(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, search string) ([]MetricRecord, error) {
 	if !metricEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly)
+	search, e := NormalizeCatalogSearch(search)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.ListMetrics(ctx, actor, project, environment, after, limit+1, archivedOnly, EscapeLikePattern(search))
 }
 func (s *Metrics) GetMetric(ctx context.Context, actor, project, id string) (MetricRecord, error) {
 	return s.store.GetMetric(ctx, actor, project, id)

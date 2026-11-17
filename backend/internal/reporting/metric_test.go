@@ -184,7 +184,7 @@ func (s *metricServiceStore) CreateMetric(_ context.Context, _, _, _ string, in 
 	s.calls++
 	return MetricDraft{Definition: in.Definition}, nil
 }
-func (s *metricServiceStore) ListMetrics(_ context.Context, _, _, _, _ string, limit int, _ bool) ([]MetricRecord, error) {
+func (s *metricServiceStore) ListMetrics(_ context.Context, _, _, _, _ string, limit int, _ bool, _ string) ([]MetricRecord, error) {
 	s.calls++
 	s.limit = limit
 	return nil, nil
@@ -200,7 +200,7 @@ func TestMetricServiceBoundsAndAvailabilityBeforeWrites(t *testing.T) {
 	if err != nil || created.Definition.Title != "Visits" {
 		t.Fatalf("create %+v %v", created, err)
 	}
-	_, err = service.ListMetrics(context.Background(), "actor", "project", "development", "", 100, false)
+	_, err = service.ListMetrics(context.Background(), "actor", "project", "development", "", 100, false, "")
 	if err != nil || store.limit != 101 {
 		t.Fatalf("pagination %d %v", store.limit, err)
 	}
