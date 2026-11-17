@@ -112,6 +112,20 @@ type DashboardUpdate struct {
 	FolderID   string              `json:"folder_id,omitempty"`
 	Definition DashboardDefinition `json:"definition"`
 }
+
+// DashboardCopy creates a new unpublished dashboard from an existing one in
+// the same project/environment. The copy receives fresh dashboard and widget
+// IDs while retaining the pinned immutable references, layout, parameters and
+// bindings. Publication state, runs, idempotency history and archive state are
+// never carried over. Cross-environment copies require explicit rebinding and
+// are not part of this contract.
+type DashboardCopy struct {
+	// Title is required so the new resource is distinguishable in listings.
+	Title string `json:"title"`
+	// FolderID empty places the copy at the project root; a non-empty value
+	// must reference an existing folder in the source environment.
+	FolderID string `json:"folder_id,omitempty"`
+}
 type DashboardValidate struct {
 	DraftRevision            int64 `json:"draft_revision"`
 	ExpectedPublishedVersion int64 `json:"expected_published_version"`
@@ -185,6 +199,7 @@ type DashboardStore interface {
 	EnqueueDashboardRun(context.Context, string, string, string, int64, string, DashboardExecute) (DashboardRun, error)
 	GetDashboardRun(context.Context, string, string, string) (DashboardRun, error)
 	CancelDashboardRun(context.Context, string, string, string) (DashboardRun, error)
+	CopyDashboard(context.Context, string, string, string, string, DashboardCopy) (DashboardDraft, error)
 	ArchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 	UnarchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 }
@@ -201,6 +216,7 @@ type DashboardService interface {
 	EnqueueDashboardRun(context.Context, string, string, string, int64, string, DashboardExecute) (DashboardRun, error)
 	GetDashboardRun(context.Context, string, string, string) (DashboardRun, error)
 	CancelDashboardRun(context.Context, string, string, string) (DashboardRun, error)
+	CopyDashboard(context.Context, string, string, string, string, DashboardCopy) (DashboardDraft, error)
 	ArchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 	UnarchiveDashboard(context.Context, string, string, string) (Dashboard, error)
 }

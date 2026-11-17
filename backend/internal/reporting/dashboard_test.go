@@ -222,6 +222,49 @@ func TestDashboardExecutionParameterValuesBoundary(t *testing.T) {
 	}
 }
 
+func TestCloneDashboardDefinitionFreshIdentityAndRetainedPins(t *testing.T) {
+	source, e := NormalizeDashboardDefinition(parameterizedDashboardDefinition())
+	if e != nil {
+		t.Fatal(e)
+	}
+	newIDs := []string{"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}
+	clone, e := CloneDashboardDefinition(source, "Copied dashboard", newIDs)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if clone.Title != "Copied dashboard" {
+		t.Fatal("copy title not applied")
+	}
+	if len(clone.Widgets) != 2 {
+		t.Fatalf("expected two widgets, got %d", len(clone.Widgets))
+	}
+	for i, widget := range clone.Widgets {
+		if widget.ID != newIDs[i] {
+			t.Fatalf("widget %d must receive the fresh ID %s, got %s", i, newIDs[i], widget.ID)
+		}
+		if source.Widgets[i].ID == widget.ID {
+			t.Fatal("copy must not retain source widget IDs")
+		}
+		if widget.AnalysisID != source.Widgets[i].AnalysisID || widget.AnalysisVersion != source.Widgets[i].AnalysisVersion {
+			t.Fatal("pinned immutable references must be retained")
+		}
+	}
+	if len(clone.Parameters) != len(source.Parameters) {
+		t.Fatal("parameter declarations must be retained")
+	}
+	if len(clone.Widgets[0].ParameterBindings) != 1 {
+		t.Fatal("parameter bindings must be retained")
+	}
+	// Mutating the clone must not bleed into the source definition.
+	clone.Widgets[0].ParameterBindings[0].ParameterID = "changed"
+	if source.Widgets[0].ParameterBindings[0].ParameterID != "section" {
+		t.Fatal("clone shares binding storage with the source")
+	}
+	if _, e = CloneDashboardDefinition(source, "Broken", []string{"only-one"}); e == nil {
+		t.Fatal("widget ID count mismatch must be rejected")
+	}
+}
+
 func TestDashboardRunStatesKeepMixedOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		states []string

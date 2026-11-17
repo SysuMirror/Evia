@@ -139,6 +139,27 @@ func dashboardText(s string, max int, empty bool) bool {
 	return utf8.ValidString(s) && (empty || s != "") && utf8.RuneCountInString(s) <= max && !strings.ContainsRune(s, 0)
 }
 
+// CloneDashboardDefinition builds an independent copy definition: the title is
+// replaced and every widget receives a fresh ID, while pinned sources, layout,
+// reading order, parameter declarations and bindings are retained. The caller
+// supplies the new widget IDs in widget order, keeping the domain free of ID
+// plumbing. The result is re-normalized so the copy passes every current rule.
+func CloneDashboardDefinition(source DashboardDefinition, title string, widgetIDs []string) (DashboardDefinition, error) {
+	if len(widgetIDs) != len(source.Widgets) {
+		return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD", "复制组件标识数量不匹配")
+	}
+	out := source
+	out.Title = title
+	out.Parameters = append([]ParameterDeclaration(nil), source.Parameters...)
+	out.Widgets = make([]DashboardWidget, len(source.Widgets))
+	for i, widget := range source.Widgets {
+		widget.ID = widgetIDs[i]
+		widget.ParameterBindings = append([]ParameterBinding(nil), widget.ParameterBindings...)
+		out.Widgets[i] = widget
+	}
+	return NormalizeDashboardDefinition(out)
+}
+
 func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, error) {
 	var out DashboardValidation
 	d := snapshot.Draft

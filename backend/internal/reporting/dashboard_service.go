@@ -180,6 +180,18 @@ func (s *Dashboards) GetDashboardRun(ctx context.Context, actor, project, id str
 func (s *Dashboards) CancelDashboardRun(ctx context.Context, actor, project, id string) (DashboardRun, error) {
 	return s.store.CancelDashboardRun(ctx, actor, project, id)
 }
+func (s *Dashboards) CopyDashboard(ctx context.Context, actor, project, id, key string, in DashboardCopy) (DashboardDraft, error) {
+	if e := savedIdempotencyKey(key); e != nil {
+		return DashboardDraft{}, e
+	}
+	if e := s.checkInput("DashboardCopy", in); e != nil {
+		return DashboardDraft{}, e
+	}
+	if in.FolderID != "" && !dashboardUUID.MatchString(in.FolderID) {
+		return DashboardDraft{}, analysis.Invalid("INVALID_DASHBOARD_FOLDER", "文件夹标识无效", "/folder_id")
+	}
+	return s.store.CopyDashboard(ctx, actor, project, id, key, in)
+}
 func (s *Dashboards) ArchiveDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
 	return s.store.ArchiveDashboard(ctx, actor, project, id)
 }
