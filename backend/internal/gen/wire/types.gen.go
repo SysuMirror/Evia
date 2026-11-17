@@ -228,12 +228,14 @@ type DashboardDependencies struct {
 }
 
 type DashboardDependency struct {
-	WidgetID        string `json:"widget_id"`
-	AnalysisID      string `json:"analysis_id"`
-	AnalysisVersion int64  `json:"analysis_version"`
-	DefinitionHash  string `json:"definition_hash"`
-	DependencyHash  string `json:"dependency_hash"`
-	ValidationHash  string `json:"validation_hash"`
+	WidgetID        string  `json:"widget_id"`
+	AnalysisID      *string `json:"analysis_id,omitempty"`
+	AnalysisVersion *int64  `json:"analysis_version,omitempty"`
+	MetricID        *string `json:"metric_id,omitempty"`
+	MetricVersion   *int64  `json:"metric_version,omitempty"`
+	DefinitionHash  string  `json:"definition_hash"`
+	DependencyHash  string  `json:"dependency_hash"`
+	ValidationHash  string  `json:"validation_hash"`
 }
 
 type DashboardDraft struct {
@@ -338,12 +340,13 @@ type DashboardVersionList struct {
 }
 
 type DashboardWidget struct {
-	WidgetID        string          `json:"widget_id"`
-	AnalysisID      string          `json:"analysis_id"`
-	AnalysisVersion int64           `json:"analysis_version"`
-	Title           string          `json:"title"`
-	ReadingOrder    int64           `json:"reading_order"`
-	Layout          DashboardLayout `json:"layout"`
+	WidgetID        string           `json:"widget_id"`
+	AnalysisID      *string          `json:"analysis_id,omitempty"`
+	AnalysisVersion *int64           `json:"analysis_version,omitempty"`
+	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
+	Title           string           `json:"title"`
+	ReadingOrder    int64            `json:"reading_order"`
+	Layout          DashboardLayout  `json:"layout"`
 }
 
 type DashboardWidgetFilter struct {
@@ -352,10 +355,11 @@ type DashboardWidgetFilter struct {
 }
 
 type DashboardWidgetRun struct {
-	WidgetID        string   `json:"widget_id"`
-	AnalysisID      string   `json:"analysis_id"`
-	AnalysisVersion int64    `json:"analysis_version"`
-	Query           QueryJob `json:"query"`
+	WidgetID        string           `json:"widget_id"`
+	AnalysisID      *string          `json:"analysis_id,omitempty"`
+	AnalysisVersion *int64           `json:"analysis_version,omitempty"`
+	MetricRef       *MetricReference `json:"metric_ref,omitempty"`
+	Query           QueryJob         `json:"query"`
 }
 
 type Diagnostic struct {

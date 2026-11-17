@@ -23177,6 +23177,9 @@
             "minimum": 1,
             "maximum": 9007199254740991
           },
+          "metric_ref": {
+            "$ref": "#/components/schemas/MetricReference"
+          },
           "title": {
             "type": "string",
             "minLength": 1,
@@ -23193,12 +23196,11 @@
         },
         "required": [
           "widget_id",
-          "analysis_id",
-          "analysis_version",
           "title",
           "reading_order",
           "layout"
-        ]
+        ],
+        "description": "A widget pins exactly one immutable source: either the analysis_id/analysis_version pair or metric_ref, never both and never neither. The server and a database CHECK constraint enforce the exclusive choice."
       },
       "DashboardDefinition": {
         "type": "object",
@@ -23306,6 +23308,15 @@
             "minimum": 1,
             "maximum": 9007199254740991
           },
+          "metric_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metric_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
           "definition_hash": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
@@ -23321,12 +23332,11 @@
         },
         "required": [
           "widget_id",
-          "analysis_id",
-          "analysis_version",
           "definition_hash",
           "dependency_hash",
           "validation_hash"
-        ]
+        ],
+        "description": "Witness for one widget source. Exactly one of the analysis pair or metric pair is populated."
       },
       "DashboardDependencies": {
         "type": "object",
@@ -23658,16 +23668,18 @@
             "minimum": 1,
             "maximum": 9007199254740991
           },
+          "metric_ref": {
+            "$ref": "#/components/schemas/MetricReference"
+          },
           "query": {
             "$ref": "../query/query-job.schema.json"
           }
         },
         "required": [
           "widget_id",
-          "analysis_id",
-          "analysis_version",
           "query"
-        ]
+        ],
+        "description": "Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source."
       },
       "DashboardRun": {
         "type": "object",

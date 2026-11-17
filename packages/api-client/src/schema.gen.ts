@@ -2592,12 +2592,14 @@ export interface components {
             width: number;
             height: number;
         };
+        /** @description A widget pins exactly one immutable source: either the analysis_id/analysis_version pair or metric_ref, never both and never neither. The server and a database CHECK constraint enforce the exclusive choice. */
         DashboardWidget: {
             /** Format: uuid */
             widget_id: string;
             /** Format: uuid */
-            analysis_id: string;
-            analysis_version: number;
+            analysis_id?: string;
+            analysis_version?: number;
+            metric_ref?: components["schemas"]["MetricReference"];
             title: string;
             reading_order: number;
             layout: components["schemas"]["DashboardLayout"];
@@ -2624,12 +2626,16 @@ export interface components {
             dashboard_id: string;
             definition: components["schemas"]["DashboardDefinition"];
         };
+        /** @description Witness for one widget source. Exactly one of the analysis pair or metric pair is populated. */
         DashboardDependency: {
             /** Format: uuid */
             widget_id: string;
             /** Format: uuid */
-            analysis_id: string;
-            analysis_version: number;
+            analysis_id?: string;
+            analysis_version?: number;
+            /** Format: uuid */
+            metric_id?: string;
+            metric_version?: number;
             definition_hash: string;
             dependency_hash: string;
             validation_hash: string;
@@ -2710,12 +2716,14 @@ export interface components {
             timezone: components["schemas"]["timezone"];
             widget_filters?: components["schemas"]["DashboardWidgetFilter"][];
         };
+        /** @description Runtime view of one widget. It carries either the analysis pair or metric_ref matching the published widget source. */
         DashboardWidgetRun: {
             /** Format: uuid */
             widget_id: string;
             /** Format: uuid */
-            analysis_id: string;
-            analysis_version: number;
+            analysis_id?: string;
+            analysis_version?: number;
+            metric_ref?: components["schemas"]["MetricReference"];
             query: components["schemas"]["query-job.schema"];
         };
         /** @description Per-widget query jobs and existing authorized result URLs. No result copies or shared child queries. Current project authorization is checked on each read/cancel/result request. Terminal outcomes with both successful and unsuccessful widgets are partial; runs without successful widgets are failed unless all children are canceled or all are expired; expiration follows child result lifetimes. Coverage remains provisional and widgets do not share an atomic data snapshot. Runtime bounds retain nanosecond precision, timezone and normalized targeted filters exactly; timestamp storage projections do not replace the execution input. */

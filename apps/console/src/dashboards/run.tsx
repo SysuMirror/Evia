@@ -62,9 +62,16 @@ export function DashboardRunView({
     setFilterPending(false);
     setFilterOpen(false);
   }, [version.dashboard_id, version.version]);
+  // Only analysis-sourced widgets need a saved-analysis version prefetch.
+  // Metric-sourced widgets carry metric_ref and are rendered without it.
   const refs = [
     ...new Map(
-      version.definition.widgets.map((w) => [`${w.analysis_id}:${w.analysis_version}`, w]),
+      version.definition.widgets
+        .filter(
+          (w): w is typeof w & { analysis_id: string; analysis_version: number } =>
+            w.analysis_id !== undefined && w.analysis_version !== undefined,
+        )
+        .map((w) => [`${w.analysis_id}:${w.analysis_version}`, w]),
     ).values(),
   ];
   const definitions = useQueries({
