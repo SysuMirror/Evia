@@ -316,3 +316,85 @@ button.dashboard-folder-node,
   min-width: 220px;
   flex: 1 1 220px;
 }
+
+.text-card-preview {
+  padding: 12px 16px;
+  border: 1px solid var(--color-border, #dce1e9);
+  border-radius: 12px;
+  background: var(--color-surface-subtle, #f6f7fa);
+}
+.text-card-md {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--color-text, #292d35);
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.text-card-md > :first-child {
+  margin-top: 0;
+}
+.text-card-md h3,
+.text-card-md h4,
+.text-card-md h5 {
+  margin: 8px 0 0;
+  line-height: 1.35;
+}
+.text-card-md h3 {
+  font-size: 17px;
+}
+.text-card-md h4 {
+  font-size: 15px;
+}
+.text-card-md h5 {
+  font-size: 14px;
+}
+.text-card-md p {
+  margin: 0;
+}
+.text-card-md ul,
+.text-card-md ol {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.text-card-md a {
+  color: var(--color-accent, #315bd6);
+  text-decoration: underline;
+}
+.text-card-md code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--color-surface-subtle, #f6f7fa);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.text-card-md-code {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--color-sidebar, #f7f8fa);
+  border: 1px solid var(--color-border, #e7e9ed);
+  overflow-x: auto;
+}
+.text-card-md-code code {
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+.text-card-md-quote {
+  margin: 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--color-accent, #315bd6);
+  color: var(--color-muted, #6b7280);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.text-card-md-quote p {
+  margin: 0;
+}

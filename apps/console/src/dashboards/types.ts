@@ -13,7 +13,8 @@ import {
 /** A picker selection that pins exactly one immutable widget source. */
 export type DashboardWidgetSource =
   | { kind: 'analysis'; analysis: SavedAnalysisVersion }
-  | { kind: 'metric'; metric: MetricRecord; version: MetricVersion };
+  | { kind: 'metric'; metric: MetricRecord; version: MetricVersion }
+  | { kind: 'text'; content: string };
 
 export type DashboardWorkspace = {
   scope: string;
