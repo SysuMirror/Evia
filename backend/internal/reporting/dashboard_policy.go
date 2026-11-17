@@ -204,7 +204,11 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 	if deps.ProjectID != d.ProjectID || deps.Environment != d.Environment || len(deps.Analyses) != executableWidgets {
 		return out, analysis.Invalid("INVALID_DASHBOARD_DEPENDENCIES", "分析依赖与看板范围不匹配")
 	}
-	deps.Analyses = append([]DashboardDependency(nil), deps.Analyses...)
+	// A non-nil seed keeps the manifest shape stable for presentation-only
+	// boards: a text-only dashboard legitimately has zero witnesses and must
+	// still serialize analyses as [], never null (the DB trigger requires an
+	// array and the response contract marks analyses non-nullable).
+	deps.Analyses = append([]DashboardDependency{}, deps.Analyses...)
 	seen := map[string]bool{}
 	for _, dep := range deps.Analyses {
 		found := false
