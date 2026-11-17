@@ -136,6 +136,9 @@ export type MetricPage = {
   cursor?: string;
   limit?: number;
   view?: 'active' | 'archived';
+  // Optional case-insensitive title substring filter; empty/undefined means
+  // no filtering and the server binds any cursor to this term.
+  search?: string;
 };
 export type MetricVersionPage = { cursor?: string; limit?: number };
 export type FormulaExpression = components['schemas']['FormulaExpression'];

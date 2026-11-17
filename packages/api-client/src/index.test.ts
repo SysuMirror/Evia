@@ -1304,6 +1304,31 @@ test('metric archive view encoding and lifecycle calls carry CSRF without body o
     assert.equal((call.arguments[1] as RequestInit).signal?.aborted, true);
 });
 
+test('metric search term encodes as q alongside view and omits when blank', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listMetrics(
+    'p/q',
+    { environment: 'production', view: 'archived', search: '留存 指标', limit: 20 },
+    controller.signal,
+  );
+  await api.listMetrics(
+    'p/q',
+    { environment: 'production', search: '100%_done' },
+    controller.signal,
+  );
+  await api.listMetrics('p/q', { environment: 'production' }, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/metrics?environment=production&limit=20&view=archived&q=%E7%95%99%E5%AD%98+%E6%8C%87%E6%A0%87',
+      '/api/v1/projects/p%2Fq/metrics?environment=production&q=100%25_done',
+      '/api/v1/projects/p%2Fq/metrics?environment=production',
+    ],
+  );
+  controller.abort();
+});
+
 test('formula metric archive view encoding and lifecycle calls carry CSRF without body or key', async () => {
   const fetch = respond();
   const controller = new AbortController();
