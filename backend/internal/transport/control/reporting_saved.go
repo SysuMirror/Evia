@@ -65,7 +65,13 @@ func savedQuery(r *http.Request, list, environment bool) (url.Values, error) {
 func savedArchiveQuery(r *http.Request) (url.Values, error) {
 	return savedQueryWith(r, true, true, true)
 }
-func savedQueryWith(r *http.Request, list, environment, archiveView bool) (url.Values, error) {
+
+// savedDashboardListQuery additionally allows the folder_id scope, which is
+// meaningful only for dashboard listing ("root" or a folder UUID).
+func savedDashboardListQuery(r *http.Request) (url.Values, error) {
+	return savedQueryWith(r, true, true, true, "folder_id")
+}
+func savedQueryWith(r *http.Request, list, environment, archiveView bool, extra ...string) (url.Values, error) {
 	if len(r.URL.RawQuery) > 8192 {
 		return nil, analysis.Invalid("INVALID_QUERY", "查询参数过长")
 	}
@@ -75,6 +81,11 @@ func savedQueryWith(r *http.Request, list, environment, archiveView bool) (url.V
 	}
 	for k, v := range q {
 		allowed := k == "limit" || k == "cursor" || (environment && k == "environment") || (archiveView && k == "view")
+		for _, name := range extra {
+			if k == name {
+				allowed = true
+			}
+		}
 		if !list || len(v) != 1 || !allowed || k == "limit" && v[0] == "" {
 			return nil, analysis.Invalid("INVALID_QUERY", "查询参数不符合接口定义")
 		}

@@ -28,37 +28,38 @@ type AccessService interface {
 	Authorize(context.Context, string, string, bool) error
 }
 type API struct {
-	Boundary        *httpapi.Boundary
-	Access          AccessService
-	Machines        MachineService
-	Memberships     MembershipService
-	Settings        SettingsService
-	AuditLogs       AuditService
-	Catalog         CatalogService
-	Sources         SourceService
-	Analysis        AnalysisService
-	Discovery       reporting.DiscoveryService
-	SavedAnalyses   reporting.SavedAnalysisService
-	Metrics         reporting.MetricService
-	FormulaMetrics  reporting.FormulaMetricService
-	Dashboards      reporting.DashboardService
-	Delivery        DeliveryService
-	Erasure         ErasureService
-	Exports         ExportService
-	ExportDownloads exporting.ArtifactStore
-	ExportValidator analysis.Validator
-	Retention       RetentionService
-	RetentionSweeps RetentionSweepService
-	Archives        ArchiveService
-	Backfills       BackfillService
-	Diagnostics     DiagnosticsService
-	Quotas          QuotaService
-	QuotaRuntime    QuotaRuntime
-	Artifacts       ArtifactService
-	Reports         ReportService
-	Cursor          *cursor.Codec
-	Origin          string
-	SecureCookies   bool
+	Boundary         *httpapi.Boundary
+	Access           AccessService
+	Machines         MachineService
+	Memberships      MembershipService
+	Settings         SettingsService
+	AuditLogs        AuditService
+	Catalog          CatalogService
+	Sources          SourceService
+	Analysis         AnalysisService
+	Discovery        reporting.DiscoveryService
+	SavedAnalyses    reporting.SavedAnalysisService
+	Metrics          reporting.MetricService
+	FormulaMetrics   reporting.FormulaMetricService
+	Dashboards       reporting.DashboardService
+	DashboardFolders reporting.DashboardFolderService
+	Delivery         DeliveryService
+	Erasure          ErasureService
+	Exports          ExportService
+	ExportDownloads  exporting.ArtifactStore
+	ExportValidator  analysis.Validator
+	Retention        RetentionService
+	RetentionSweeps  RetentionSweepService
+	Archives         ArchiveService
+	Backfills        BackfillService
+	Diagnostics      DiagnosticsService
+	Quotas           QuotaService
+	QuotaRuntime     QuotaRuntime
+	Artifacts        ArtifactService
+	Reports          ReportService
+	Cursor           *cursor.Codec
+	Origin           string
+	SecureCookies    bool
 }
 type authorizedActor struct {
 	ID      string
@@ -86,6 +87,7 @@ func (a *API) Handler() http.Handler {
 	(&MetricsAPI{API: a, Service: a.Metrics}).Register(mux)
 	(&FormulaMetricsAPI{API: a, Service: a.FormulaMetrics}).Register(mux)
 	(&DashboardsAPI{API: a, Service: a.Dashboards}).Register(mux)
+	(&DashboardFoldersAPI{API: a, Service: a.DashboardFolders}).Register(mux)
 	(&ErasureAPI{API: a, Service: a.Erasure}).Register(mux)
 	(&ExportAPI{API: a, Service: a.Exports, Validator: a.ExportValidator, Downloads: a.ExportDownloads}).Register(mux)
 	(&RetentionAPI{API: a, Service: a.Retention, Sweeps: a.RetentionSweeps}).Register(mux)

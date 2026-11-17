@@ -32,9 +32,11 @@ type DashboardDefinition struct {
 	Widgets     []DashboardWidget `json:"widgets"`
 }
 type Dashboard struct {
-	ID               string     `json:"dashboard_id"`
-	ProjectID        string     `json:"project_id"`
-	Environment      string     `json:"environment"`
+	ID          string `json:"dashboard_id"`
+	ProjectID   string `json:"project_id"`
+	Environment string `json:"environment"`
+	// FolderID empty means the dashboard stays at the project/environment root.
+	FolderID         string     `json:"folder_id,omitempty"`
 	Title            string     `json:"title"`
 	DraftRevision    int64      `json:"draft_revision"`
 	PublishedVersion int64      `json:"published_version"`
@@ -93,10 +95,16 @@ type DashboardValidation struct {
 	ValidationHash       string                `json:"validation_hash"`
 }
 type DashboardCreate struct {
-	Environment string              `json:"environment"`
-	Definition  DashboardDefinition `json:"definition"`
+	Environment string `json:"environment"`
+	// FolderID empty creates the dashboard at the root; a non-empty value must
+	// reference an existing folder in the same project/environment.
+	FolderID   string              `json:"folder_id,omitempty"`
+	Definition DashboardDefinition `json:"definition"`
 }
 type DashboardUpdate struct {
+	// FolderID is a full-replacement field: omitted or empty moves the
+	// dashboard back to the root, a UUID moves it into that folder.
+	FolderID   string              `json:"folder_id,omitempty"`
 	Definition DashboardDefinition `json:"definition"`
 }
 type DashboardValidate struct {
@@ -148,10 +156,12 @@ type DashboardRun struct {
 
 type DashboardStore interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
-	ListDashboards(context.Context, string, string, string, string, int, bool) ([]Dashboard, error)
+	// folderScope is "" for no folder filter, "root" for unfiled dashboards or
+	// a folder UUID; it is validated before reaching the store.
+	ListDashboards(context.Context, string, string, string, string, int, bool, string) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
-	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition) (DashboardDraft, error)
+	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition, string) (DashboardDraft, error)
 	DashboardValidationSnapshot(context.Context, string, string, string, DashboardValidate) (DashboardSnapshot, error)
 	PublishDashboard(context.Context, string, string, string, string, DashboardPublish) (DashboardVersion, error)
 	ListDashboardVersions(context.Context, string, string, string, int64, int) ([]DashboardVersion, error)
@@ -164,10 +174,10 @@ type DashboardStore interface {
 }
 type DashboardService interface {
 	CreateDashboard(context.Context, string, string, string, DashboardCreate) (DashboardDraft, error)
-	ListDashboards(context.Context, string, string, string, string, int, bool) ([]Dashboard, error)
+	ListDashboards(context.Context, string, string, string, string, int, bool, string) ([]Dashboard, error)
 	GetDashboard(context.Context, string, string, string) (Dashboard, error)
 	GetDashboardDraft(context.Context, string, string, string) (DashboardDraft, error)
-	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition) (DashboardDraft, error)
+	SaveDashboardDraft(context.Context, string, string, string, int64, DashboardDefinition, string) (DashboardDraft, error)
 	ValidateDashboard(context.Context, string, string, string, DashboardValidate) (DashboardValidation, error)
 	PublishDashboard(context.Context, string, string, string, string, DashboardPublish) (DashboardVersion, error)
 	ListDashboardVersions(context.Context, string, string, string, int64, int) ([]DashboardVersion, error)

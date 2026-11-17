@@ -39,6 +39,7 @@ type dashboardHTTPService struct {
 	revision, version           int64
 	limit                       int
 	archivedOnly                bool
+	folderScope, folderID       string
 	items                       []reporting.Dashboard
 	versions                    []reporting.DashboardVersion
 }
@@ -73,8 +74,8 @@ func (f *dashboardHTTPService) CreateDashboard(_ context.Context, actor, project
 	f.key, f.environment = key, in.Environment
 	return dashboardDraft(), f.call(actor, project)
 }
-func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool) ([]reporting.Dashboard, error) {
-	f.environment, f.after, f.limit, f.archivedOnly = env, after, limit, archivedOnly
+func (f *dashboardHTTPService) ListDashboards(_ context.Context, actor, project, env, after string, limit int, archivedOnly bool, folderScope string) ([]reporting.Dashboard, error) {
+	f.environment, f.after, f.limit, f.archivedOnly, f.folderScope = env, after, limit, archivedOnly, folderScope
 	return f.items, f.call(actor, project)
 }
 func (f *dashboardHTTPService) GetDashboard(_ context.Context, actor, project, id string) (reporting.Dashboard, error) {
@@ -85,8 +86,8 @@ func (f *dashboardHTTPService) GetDashboardDraft(_ context.Context, actor, proje
 	f.id = id
 	return dashboardDraft(), f.call(actor, project)
 }
-func (f *dashboardHTTPService) SaveDashboardDraft(_ context.Context, actor, project, id string, revision int64, def reporting.DashboardDefinition) (reporting.DashboardDraft, error) {
-	f.id, f.revision = id, revision
+func (f *dashboardHTTPService) SaveDashboardDraft(_ context.Context, actor, project, id string, revision int64, def reporting.DashboardDefinition, folderID string) (reporting.DashboardDraft, error) {
+	f.id, f.revision, f.folderID = id, revision, folderID
 	out := dashboardDraft()
 	out.DraftRevision = revision + 1
 	out.Definition = def
@@ -222,7 +223,7 @@ func TestDashboardHTTPCursorsBoundScopeAndPosition(t *testing.T) {
 		path, scope, position string
 		versions              bool
 	}{
-		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development:active", dashboardID, false},
+		{dashboardBase + "?environment=development&limit=1", "dashboards:" + userID + ":" + projectID + ":development:active:", dashboardID, false},
 		{dashboardItem + "/versions?limit=1", "dashboard_versions:" + userID + ":" + projectID + ":" + dashboardID, "1", true},
 	} {
 		page := catalogStatus(t, catalogRequest(h, "GET", tc.path, "", nil), 200)
@@ -429,8 +430,8 @@ func TestDashboardHTTPArchiveViewSelector(t *testing.T) {
 		}
 	}
 	// Cursors are bound to the view stream: an archived cursor cannot page active rows.
-	activeScope := "dashboards:" + userID + ":" + projectID + ":development:active"
-	archivedScope := "dashboards:" + userID + ":" + projectID + ":development:archived"
+	activeScope := "dashboards:" + userID + ":" + projectID + ":development:active:"
+	archivedScope := "dashboards:" + userID + ":" + projectID + ":development:archived:"
 	archivedPage := catalogStatus(
 		t,
 		catalogRequest(h, "GET", dashboardBase+"?environment=development&view=archived&limit=1", "", nil),

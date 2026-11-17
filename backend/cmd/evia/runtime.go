@@ -215,6 +215,9 @@ func configureAnalysis(api *control.API, store analysisServicesStore, validator 
 	if dashboards, ok := store.(reporting.DashboardStore); ok {
 		api.Dashboards = reporting.NewDashboards(dashboards, validator, engine != nil)
 	}
+	if folders, ok := store.(reporting.DashboardFolderStore); ok {
+		api.DashboardFolders = reporting.NewDashboardFolders(folders, validator)
+	}
 	if engine != nil {
 		api.Analysis = analysis.New(store, engine, validator)
 	}

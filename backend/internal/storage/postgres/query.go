@@ -308,6 +308,8 @@ func (s *Store) authorizeReportingResource(ctx context.Context, tx pgx.Tx, actor
 			return savedVersionMissing()
 		case "dashboard_versions":
 			return dashboardVersionMissing()
+		case "dashboard_folders":
+			return dashboardFolderMissing()
 		default:
 			return savedMissing()
 		}

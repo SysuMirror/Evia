@@ -16,7 +16,7 @@ import (
 
 var _ reporting.DashboardStore = (*Store)(nil)
 
-const dashboardColumns = `dashboard_id::text,project_id::text,environment,title,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
+const dashboardColumns = `dashboard_id::text,project_id::text,environment,COALESCE(folder_id::text,''),title,draft_revision,COALESCE(published_version,0),created_at,updated_at,archived_at,COALESCE(archived_by::text,'')`
 const dashboardVersionColumns = `dashboard_id::text,project_id::text,environment,version,draft_revision,definition,dependencies,definition_hash,dependency_hash,validation_hash,created_at,created_by::text`
 
 func dashboardMissing() error {
@@ -30,7 +30,7 @@ func dashboardConflict(code string) error {
 }
 func scanDashboard(row pgx.Row) (reporting.Dashboard, error) {
 	var out reporting.Dashboard
-	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
+	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.FolderID, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = dashboardMissing()
 	}
@@ -39,7 +39,7 @@ func scanDashboard(row pgx.Row) (reporting.Dashboard, error) {
 func readDashboardDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (reporting.DashboardDraft, error) {
 	var out reporting.DashboardDraft
 	var data []byte
-	e := tx.QueryRow(ctx, `SELECT `+dashboardColumns+`,definition FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
+	e := tx.QueryRow(ctx, `SELECT `+dashboardColumns+`,definition FROM dashboards WHERE project_id=$1 AND dashboard_id=$2`, project, id).Scan(&out.ID, &out.ProjectID, &out.Environment, &out.FolderID, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy, &data)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return out, dashboardMissing()
 	}
@@ -114,6 +114,9 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 	if e != nil {
 		return out, e
 	}
+	if e = assertDashboardFolderTx(ctx, tx, project, in.Environment, in.FolderID); e != nil {
+		return out, e
+	}
 	hash, e := canonical.Hash(in)
 	if e != nil {
 		return out, e
@@ -130,7 +133,7 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 		return out, e
 	}
 	id := ids.New()
-	_, e = tx.Exec(ctx, `INSERT INTO dashboards(project_id,dashboard_id,environment,title,definition) VALUES($1,$2,$3,$4,$5)`, project, id, in.Environment, in.Definition.Title, data)
+	_, e = tx.Exec(ctx, `INSERT INTO dashboards(project_id,dashboard_id,environment,folder_id,title,definition) VALUES($1,$2,$3,NULLIF($4,'')::uuid,$5,$6)`, project, id, in.Environment, in.FolderID, in.Definition.Title, data)
 	if e != nil {
 		return out, e
 	}
@@ -146,12 +149,16 @@ func (s *Store) CreateDashboard(ctx context.Context, actor, project, key string,
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]reporting.Dashboard, error) {
+func (s *Store) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope string) ([]reporting.Dashboard, error) {
 	if e := savedEnvironment(environment); e != nil {
 		return nil, e
 	}
 	if limit < 1 || limit > 101 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
+	}
+	var e error
+	if folderScope, e = reporting.NormalizeDashboardFolderScope(folderScope); e != nil {
+		return nil, e
 	}
 	tx, e := s.catalogTx(ctx, actor, project, false)
 	if e != nil {
@@ -161,12 +168,13 @@ func (s *Store) ListDashboards(ctx context.Context, actor, project, environment,
 	if e = s.authorizeOperation(ctx, tx, actor, project, environment, "dashboards.read"); e != nil {
 		return nil, e
 	}
-	// The predicate is selected from the validated bool, never from request text.
+	// The archive predicate is selected from the validated bool; folderScope is
+	// a validated ""/"root"/UUID value passed only as a bound parameter.
 	archivePredicate := "archived_at IS NULL"
 	if archivedOnly {
 		archivePredicate = "archived_at IS NOT NULL"
 	}
-	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit)
+	rows, e := tx.Query(ctx, `SELECT `+dashboardColumns+` FROM dashboards WHERE project_id=$1 AND environment=$2 AND `+archivePredicate+` AND ($5='' OR ($5='root' AND folder_id IS NULL) OR ($5<>'root' AND folder_id=$5::uuid)) AND ($3='' OR dashboard_id>NULLIF($3,'')::uuid) ORDER BY dashboard_id LIMIT $4`, project, environment, after, limit, folderScope)
 	if e != nil {
 		return nil, e
 	}
@@ -215,7 +223,7 @@ func (s *Store) GetDashboardDraft(ctx context.Context, actor, project, id string
 	}
 	return out, tx.Commit(ctx)
 }
-func (s *Store) SaveDashboardDraft(ctx context.Context, actor, project, id string, revision int64, in reporting.DashboardDefinition) (reporting.DashboardDraft, error) {
+func (s *Store) SaveDashboardDraft(ctx context.Context, actor, project, id string, revision int64, in reporting.DashboardDefinition, folderID string) (reporting.DashboardDraft, error) {
 	var out reporting.DashboardDraft
 	tx, e := s.catalogTx(ctx, actor, project, true)
 	if e != nil {
@@ -245,11 +253,14 @@ func (s *Store) SaveDashboardDraft(ctx context.Context, actor, project, id strin
 	if e != nil {
 		return out, e
 	}
+	if e = assertDashboardFolderTx(ctx, tx, project, old.Environment, folderID); e != nil {
+		return out, e
+	}
 	data, e := json.Marshal(in)
 	if e != nil {
 		return out, e
 	}
-	if _, e = tx.Exec(ctx, `UPDATE dashboards SET definition=$3,title=$4,draft_revision=draft_revision+1,updated_at=clock_timestamp() WHERE project_id=$1 AND dashboard_id=$2`, project, id, data, in.Title); e != nil {
+	if _, e = tx.Exec(ctx, `UPDATE dashboards SET definition=$3,title=$4,folder_id=NULLIF($5,'')::uuid,draft_revision=draft_revision+1,updated_at=clock_timestamp() WHERE project_id=$1 AND dashboard_id=$2`, project, id, data, in.Title, folderID); e != nil {
 		return out, e
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key) VALUES($1,$2,'dashboard.draft_saved',$3)`, project, actor, id); e != nil {

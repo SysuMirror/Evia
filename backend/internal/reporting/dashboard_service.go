@@ -52,17 +52,24 @@ func (s *Dashboards) CreateDashboard(ctx context.Context, actor, project, key st
 	if e != nil {
 		return DashboardDraft{}, e
 	}
+	if in.FolderID != "" && !dashboardUUID.MatchString(in.FolderID) {
+		return DashboardDraft{}, analysis.Invalid("INVALID_DASHBOARD_FOLDER", "文件夹标识无效", "/folder_id")
+	}
 	in.Definition = definition
 	return s.store.CreateDashboard(ctx, actor, project, key, in)
 }
-func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool) ([]Dashboard, error) {
+func (s *Dashboards) ListDashboards(ctx context.Context, actor, project, environment, after string, limit int, archivedOnly bool, folderScope string) ([]Dashboard, error) {
 	if !savedEnvironment(environment) {
 		return nil, analysis.Invalid("INVALID_ENVIRONMENT", "请选择环境", "/environment")
 	}
 	if limit < 1 || limit > 100 {
 		return nil, analysis.Invalid("INVALID_LIMIT", "分页大小超出范围", "/limit")
 	}
-	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1, archivedOnly)
+	folderScope, e := NormalizeDashboardFolderScope(folderScope)
+	if e != nil {
+		return nil, e
+	}
+	return s.store.ListDashboards(ctx, actor, project, environment, after, limit+1, archivedOnly, folderScope)
 }
 func (s *Dashboards) GetDashboard(ctx context.Context, actor, project, id string) (Dashboard, error) {
 	return s.store.GetDashboard(ctx, actor, project, id)
@@ -70,18 +77,21 @@ func (s *Dashboards) GetDashboard(ctx context.Context, actor, project, id string
 func (s *Dashboards) GetDashboardDraft(ctx context.Context, actor, project, id string) (DashboardDraft, error) {
 	return s.store.GetDashboardDraft(ctx, actor, project, id)
 }
-func (s *Dashboards) SaveDashboardDraft(ctx context.Context, actor, project, id string, revision int64, definition DashboardDefinition) (DashboardDraft, error) {
+func (s *Dashboards) SaveDashboardDraft(ctx context.Context, actor, project, id string, revision int64, definition DashboardDefinition, folderID string) (DashboardDraft, error) {
 	if e := savedCounters(revision, 0); e != nil {
 		return DashboardDraft{}, e
 	}
-	if e := s.checkInput("DashboardUpdate", DashboardUpdate{Definition: definition}); e != nil {
+	if e := s.checkInput("DashboardUpdate", DashboardUpdate{Definition: definition, FolderID: folderID}); e != nil {
 		return DashboardDraft{}, e
 	}
 	normalized, e := NormalizeDashboardDefinition(definition)
 	if e != nil {
 		return DashboardDraft{}, e
 	}
-	return s.store.SaveDashboardDraft(ctx, actor, project, id, revision, normalized)
+	if folderID != "" && !dashboardUUID.MatchString(folderID) {
+		return DashboardDraft{}, analysis.Invalid("INVALID_DASHBOARD_FOLDER", "文件夹标识无效", "/folder_id")
+	}
+	return s.store.SaveDashboardDraft(ctx, actor, project, id, revision, normalized, folderID)
 }
 func (s *Dashboards) ValidateDashboard(ctx context.Context, actor, project, id string, in DashboardValidate) (DashboardValidation, error) {
 	if e := s.checkInput("DashboardValidate", in); e != nil {

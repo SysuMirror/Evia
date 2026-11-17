@@ -86,7 +86,7 @@ func TestDashboardPublicationRevisionIdempotencyAndImmutability(t *testing.T) {
 	}
 	changed := d.Definition
 	changed.Title = "Changed dashboard"
-	current, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, changed)
+	current, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, changed, "")
 	if e != nil || current.DraftRevision != 2 || current.PublishedVersion != 1 {
 		t.Fatal(current, e)
 	}
@@ -94,7 +94,7 @@ func TestDashboardPublicationRevisionIdempotencyAndImmutability(t *testing.T) {
 	if e != nil || !savedWireEqual(one, replay) {
 		t.Fatal("publication replay changed", replay, e)
 	}
-	_, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, changed)
+	_, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, changed, "")
 	faultCode(t, e, "DASHBOARD_REVISION_CONFLICT")
 	_, e = f.s.PublishDashboard(ctx, f.owner, f.project, d.ID, "stale", in)
 	faultCode(t, e, "DASHBOARD_REVISION_CONFLICT")
@@ -124,7 +124,7 @@ func TestDashboardScopeAuthorizationAndPinnedDependencies(t *testing.T) {
 	faultCode(t, e, "DASHBOARD_NOT_FOUND")
 	_, e = f.s.CreateDashboard(ctx, f.viewer, f.project, "denied", reporting.DashboardCreate{Environment: "development", Definition: d.Definition})
 	faultCode(t, e, "PROJECT_FORBIDDEN")
-	_, e = f.s.SaveDashboardDraft(ctx, f.viewer, f.project, d.ID, 1, d.Definition)
+	_, e = f.s.SaveDashboardDraft(ctx, f.viewer, f.project, d.ID, 1, d.Definition, "")
 	faultCode(t, e, "PROJECT_FORBIDDEN")
 	check := dashboardValidate(t, f, d)
 	_, e = f.s.PublishDashboard(ctx, f.viewer, f.project, d.ID, "denied", reporting.DashboardPublish{DraftRevision: 1, ValidationHash: check.ValidationHash})
@@ -135,14 +135,14 @@ func TestDashboardScopeAuthorizationAndPinnedDependencies(t *testing.T) {
 	}
 	_, e = f.s.DashboardValidationSnapshot(ctx, f.viewer, f.project, staging.ID, reporting.DashboardValidate{DraftRevision: 1})
 	faultCode(t, e, "DASHBOARD_ANALYSIS_ENVIRONMENT_MISMATCH")
-	listed, e := f.s.ListDashboards(ctx, f.viewer, f.project, "staging", "", 2, false)
+	listed, e := f.s.ListDashboards(ctx, f.viewer, f.project, "staging", "", 2, false, "")
 	if e != nil || len(listed) != 1 || listed[0].ID != staging.ID {
 		t.Fatal(listed, e)
 	}
 	bad := d.Definition
 	bad.Widgets = append([]reporting.DashboardWidget(nil), bad.Widgets...)
 	bad.Widgets[0].AnalysisVersion = 99
-	saved, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, bad)
+	saved, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, bad, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -161,7 +161,7 @@ func TestDashboardConcurrentDraftPublishAndRunReplay(t *testing.T) {
 	var saved atomic.Int32
 	for range 8 {
 		wg.Go(func() {
-			_, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, d.Definition)
+			_, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, d.Definition, "")
 			if e == nil {
 				saved.Add(1)
 			} else {
@@ -532,7 +532,7 @@ func TestDashboardMutationAuditFailuresRollbackAndScopeWitnesses(t *testing.T) {
 	if _, e := f.s.CreateDashboard(ctx, f.owner, f.project, "rolled-back", reporting.DashboardCreate{Environment: "development", Definition: d.Definition}); e == nil {
 		t.Fatal("create ignored audit failure")
 	}
-	if _, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, d.Definition); e == nil {
+	if _, e := f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, d.Definition, ""); e == nil {
 		t.Fatal("save ignored audit failure")
 	}
 	if _, e := f.s.PublishDashboard(ctx, f.owner, f.project, d.ID, "rolled-back", in); e == nil {
@@ -598,7 +598,7 @@ func TestDashboardVersionsRunExactPinnedAnalysisSnapshots(t *testing.T) {
 	definition.Widgets = append([]reporting.DashboardWidget(nil), definition.Widgets...)
 	definition.Widgets[0].AnalysisVersion = published.Version
 	definition.Title = "New dashboard"
-	d, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, definition)
+	d, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, 1, definition, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -734,7 +734,7 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 
 	// The default listing hides archived dashboards but keeps active ones;
 	// direct reads still work and expose the archive marker.
-	listed, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false)
+	listed, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -750,7 +750,7 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 		t.Fatalf("listing must retain only the active dashboard: %+v", listed)
 	}
 	// The archived stream is opt-in and returns only archived dashboards.
-	archivedList, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true)
+	archivedList, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -767,7 +767,7 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 	}
 
 	// Every mutating path fails closed while archived.
-	if _, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, d.Definition); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
+	if _, e = f.s.SaveDashboardDraft(ctx, f.owner, f.project, d.ID, d.DraftRevision, d.Definition, ""); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
 		t.Fatalf("draft save must reject archived dashboard: %v", e)
 	}
 	if _, e = f.s.DashboardValidationSnapshot(ctx, f.owner, f.project, d.ID, reporting.DashboardValidate{DraftRevision: d.DraftRevision}); e == nil || fault.Public(e).Code != "DASHBOARD_ARCHIVED" {
@@ -798,11 +798,11 @@ func TestDashboardArchiveLifecycleAndMutationGuards(t *testing.T) {
 	if restored.ArchivedAt != nil || restored.ArchivedBy != "" {
 		t.Fatalf("restore must clear archive markers: %+v", restored)
 	}
-	listedAgain, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false)
+	listedAgain, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, false, "")
 	if e != nil || len(listedAgain) != 2 {
 		t.Fatalf("restored dashboard must rejoin the listing: %d %v", len(listedAgain), e)
 	}
-	restoredArchive, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true)
+	restoredArchive, e := f.s.ListDashboards(ctx, f.owner, f.project, "development", "", 100, true, "")
 	if e != nil || len(restoredArchive) != 0 {
 		t.Fatalf("restored dashboard must leave the archived stream: %d %v", len(restoredArchive), e)
 	}

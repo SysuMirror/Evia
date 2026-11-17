@@ -125,7 +125,7 @@ func (a *DashboardsAPI) save(w http.ResponseWriter, r *http.Request, s authorize
 	if e = a.API.Boundary.Decode(w, r, "DashboardUpdate", &in); e != nil {
 		return e
 	}
-	out, e := a.Service.SaveDashboardDraft(r.Context(), s.ID, p, r.PathValue("dashboard_id"), revision, in.Definition)
+	out, e := a.Service.SaveDashboardDraft(r.Context(), s.ID, p, r.PathValue("dashboard_id"), revision, in.Definition, in.FolderID)
 	if e != nil {
 		return e
 	}
@@ -214,7 +214,7 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
-	q, e := savedArchiveQuery(r)
+	q, e := savedDashboardListQuery(r)
 	if e != nil {
 		return e
 	}
@@ -227,12 +227,16 @@ func (a *DashboardsAPI) list(w http.ResponseWriter, r *http.Request, s authorize
 		view = "active"
 	}
 	archivedOnly := view == "archived"
-	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment"), view}, ":")
+	folderScope, e := reporting.NormalizeDashboardFolderScope(q.Get("folder_id"))
+	if e != nil {
+		return e
+	}
+	scope := strings.Join([]string{"dashboards", s.ID, p, q.Get("environment"), view, folderScope}, ":")
 	after, e := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if e != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
-	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly)
+	items, e := a.Service.ListDashboards(r.Context(), s.ID, p, q.Get("environment"), after, limit, archivedOnly, folderScope)
 	if e != nil {
 		return e
 	}
