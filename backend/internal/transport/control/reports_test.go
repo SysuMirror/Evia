@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -28,6 +29,7 @@ type fakeReportService struct {
 	listCall         struct {
 		actor, project, environment, after string
 		limit                              int
+		search                             string
 	}
 	deletedID string
 }
@@ -41,8 +43,8 @@ func (s *fakeReportService) Create(_ context.Context, in reports.Input, expected
 	return s.out, nil
 }
 
-func (s *fakeReportService) List(_ context.Context, actor, project, environment, after string, limit int) ([]reports.Report, error) {
-	s.listCall.actor, s.listCall.project, s.listCall.environment, s.listCall.after, s.listCall.limit = actor, project, environment, after, limit
+func (s *fakeReportService) List(_ context.Context, actor, project, environment, after string, limit int, search string) ([]reports.Report, error) {
+	s.listCall.actor, s.listCall.project, s.listCall.environment, s.listCall.after, s.listCall.limit, s.listCall.search = actor, project, environment, after, limit, search
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -211,7 +213,7 @@ func TestReportListEncodesCursorAndRejectsBadQuery(t *testing.T) {
 		t.Fatalf("first page wrong: %s", w.Body.String())
 	}
 	// The cursor must resolve back to the keyset position under the same scope.
-	scope := "reports:" + userID + ":" + projectID + ":development"
+	scope := "reports:" + userID + ":" + projectID + ":development:"
 	after, err := a.Cursor.Decode(scope, *out.NextCursor)
 	if err != nil || after == "" {
 		t.Fatalf("cursor not decodable: %v %s", err, *out.NextCursor)
@@ -230,6 +232,53 @@ func TestReportListEncodesCursorAndRejectsBadQuery(t *testing.T) {
 	governanceStatus(t, w, http.StatusBadRequest)
 	w = reportRequest(handler, http.MethodGet, "/api/v1/projects/"+projectID+"/reports?environment=development&unexpected=1", "", "")
 	governanceStatus(t, w, http.StatusBadRequest)
+}
+
+func TestReportListSearchTerm(t *testing.T) {
+	svc := &fakeReportService{list: []reports.Report{sampleReport(), sampleReport()}}
+	a, handler := reportsAPI(t, svc)
+	// A bounded search term is trimmed, forwarded and bound to the cursor scope.
+	w := reportRequest(
+		handler,
+		http.MethodGet,
+		"/api/v1/projects/"+projectID+"/reports?environment=development&limit=1&q=%20%E5%91%A8%E6%8A%A5%20",
+		"",
+		"",
+	)
+	governanceStatus(t, w, http.StatusOK)
+	if svc.listCall.search != "周报" {
+		t.Fatalf("search term must be trimmed and forwarded, got %q", svc.listCall.search)
+	}
+	var out wire.ReportList
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.NextCursor == nil {
+		t.Fatalf("missing continuation cursor: %s", w.Body.String())
+	}
+	searchScope := "reports:" + userID + ":" + projectID + ":development:周报"
+	if decoded, err := a.Cursor.Decode(searchScope, *out.NextCursor); err != nil || decoded != sampleReport().ID {
+		t.Fatal("cursor must be bound to the search scope")
+	}
+	// Unknown query parameters stay rejected even though q is now allowlisted.
+	w = reportRequest(
+		handler,
+		http.MethodGet,
+		"/api/v1/projects/"+projectID+"/reports?environment=development&q=x&unexpected=1",
+		"",
+		"",
+	)
+	governanceStatus(t, w, http.StatusBadRequest)
+	// An overlong term is rejected at the boundary without dispatching.
+	before := len(svc.list)
+	w = reportRequest(
+		handler,
+		http.MethodGet,
+		"/api/v1/projects/"+projectID+"/reports?environment=development&q="+url.QueryEscape(strings.Repeat("字", 129)),
+		"",
+		"",
+	)
+	governanceStatus(t, w, http.StatusBadRequest)
+	if len(svc.list) != before {
+		t.Fatal("overlong search term changed service state")
+	}
 }
 
 func TestReportPropagatesDomainFaults(t *testing.T) {

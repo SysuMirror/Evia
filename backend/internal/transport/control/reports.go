@@ -14,7 +14,7 @@ import (
 // ReportService is the domain port the reports HTTP surface depends on.
 type ReportService interface {
 	Create(ctx context.Context, in reports.Input, expectedRevision int64) (reports.Report, error)
-	List(ctx context.Context, actor, project, environment, after string, limit int) ([]reports.Report, error)
+	List(ctx context.Context, actor, project, environment, after string, limit int, search string) ([]reports.Report, error)
 	Get(ctx context.Context, actor, project, id string) (reports.Report, error)
 	Update(ctx context.Context, in reports.Input, expectedRevision int64) (reports.Report, error)
 	Delete(ctx context.Context, actor, project, id string) error
@@ -109,7 +109,7 @@ func (a *ReportsAPI) list(w http.ResponseWriter, r *http.Request, actor authoriz
 	if err != nil {
 		return err
 	}
-	q, err := governanceQuery(r, "environment", "limit", "cursor")
+	q, err := governanceQuery(r, "environment", "limit", "cursor", "q")
 	if err != nil {
 		return err
 	}
@@ -117,17 +117,22 @@ func (a *ReportsAPI) list(w http.ResponseWriter, r *http.Request, actor authoriz
 	if environment == "" {
 		return fault.New(fault.Invalid, "INVALID_QUERY", "查询参数不符合接口定义")
 	}
+	search, err := reports.NormalizeTitleSearch(q.Get("q"))
+	if err != nil {
+		return err
+	}
 	limit, err := governanceLimit(q)
 	if err != nil {
 		return err
 	}
-	scope := "reports:" + actor.ID + ":" + project + ":" + environment
+	// The cursor is bound to every list predicate, including the search term.
+	scope := "reports:" + actor.ID + ":" + project + ":" + environment + ":" + search
 	after, err := a.API.Cursor.Decode(scope, q.Get("cursor"))
 	if err != nil || after != "" && !catalogUUID.MatchString(after) {
 		return analysis.Invalid("INVALID_CURSOR", "分页游标已失效，请重新加载", "/cursor")
 	}
 	// Request one extra row to decide whether another page exists.
-	items, err := a.Service.List(r.Context(), actor.ID, project, environment, after, limit+1)
+	items, err := a.Service.List(r.Context(), actor.ID, project, environment, after, limit+1, search)
 	if err != nil {
 		return err
 	}
