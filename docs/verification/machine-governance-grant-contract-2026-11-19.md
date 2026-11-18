@@ -22,6 +22,7 @@
 
 - 新增 HTTP 用例修复后 201 通过；`TestMachineCredentialAdministrationContract` 整组通过。
 - 真实 PG 新增 `TestMachineGovernanceGrantsPersistAndAuthenticate`：携带双治理授权创建主体并认证，断言权限集合精确保留；`TestMachine*` 整组真实 PG 集成通过。
+- 新增常驻防漂移守卫 `TestMachinePermissionContractStaysAlignedWithClosedSet`（`access` 包）：机械比对嵌入 bundle 的 `MachinePermission` 枚举与 Go `machinePermissions` 闭集，并校验三个主体 schema 的 `maxItems` 等于闭集大小；临时注入第 27 个权限实测变红（26≠27）、移除后复绿，防止此类契约滞后复发。
 - Playwright model 全套 114/114（含机器权限契约对齐用例转绿），临时 `playwright.model.config.ts` 用完即删。
 - `pnpm typecheck` 通过；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。
 
