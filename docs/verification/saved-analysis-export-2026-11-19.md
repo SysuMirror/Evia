@@ -49,6 +49,9 @@
 3. 复合分支条件反转为 `false` → marker 用例如期变红（Bind marker shell 报 `INVALID_EVENT_SELECTION`），还原复绿。
 每轮还原后哈希全部 OK，最终 `-count=1` 全绿。
 
+### HTTP 边界（`transport/control`）
+`TestSavedAnalysisExportCreateValidatesAndMaps` 断言版本路由参数映射、幂等头透传、64 位请求摘要、时间窗解析与 `ExportJob` 来源见证输出；`TestSavedAnalysisExportRejectsBadVersionAndBody` 覆盖 0/非数字版本与缺时间窗请求体在到达 service 前即 400。
+
 ### 前端与门禁
 `tsc --noEmit` 通过；Playwright model 规格 114/114（`export-model.spec.ts` 新增 5 条：来源标签、版本导出构建、名称边界、时间窗预算、默认名称），临时 `playwright.model.config.ts` 用完即删；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 50、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/saved-export/make-check.log`。
 

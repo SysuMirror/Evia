@@ -140,6 +140,55 @@ func TestExportCreateRejectsInvalidQuery(t *testing.T) {
 	governanceStatus(t, w, http.StatusBadRequest)
 }
 
+const savedAnalysisID = "77777777-7777-4777-8777-777777777777"
+
+const validSavedExportBody = `{"name":"version export","format":"csv",
+ "time_range":{"from":"2026-11-07T10:00:00Z","to":"2026-11-07T11:00:00Z"},"timezone":"UTC"}`
+
+func TestSavedAnalysisExportCreateValidatesAndMaps(t *testing.T) {
+	job := sampleExportJob()
+	job.Source = &exporting.SavedAnalysisSource{AnalysisID: savedAnalysisID, Version: 3}
+	svc := &fakeExportService{created: true, job: job}
+	_, handler := exportAPI(t, svc, nil)
+	path := "/api/v1/projects/" + projectID + "/saved-analyses/" + savedAnalysisID + "/versions/3/exports"
+	w := exportRequest(handler, http.MethodPost, path, validSavedExportBody)
+	governanceStatus(t, w, http.StatusCreated)
+	var out wire.ExportJob
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.JobID != exportJobID {
+		t.Fatalf("bad response: %v body=%s", err, w.Body.String())
+	}
+	if out.SourceAnalysisID == nil || *out.SourceAnalysisID != savedAnalysisID ||
+		out.SourceAnalysisVersion == nil || *out.SourceAnalysisVersion != 3 {
+		t.Fatalf("source witness missing from response: %+v", out)
+	}
+	if svc.savedAnalysisID != savedAnalysisID || svc.savedVersion != 3 {
+		t.Fatalf("route params not mapped: %s %d", svc.savedAnalysisID, svc.savedVersion)
+	}
+	in := svc.savedCreateInput
+	if in.Name != "version export" || in.Format != exporting.FormatCSV || in.Timezone != "UTC" ||
+		in.IdempotencyKey != "export-http-key" || len(in.RequestHash) != 64 ||
+		in.TimeRange.From.IsZero() || in.TimeRange.To.IsZero() {
+		t.Fatalf("saved export input mapping wrong: %+v", in)
+	}
+}
+
+func TestSavedAnalysisExportRejectsBadVersionAndBody(t *testing.T) {
+	svc := &fakeExportService{created: true, job: sampleExportJob()}
+	_, handler := exportAPI(t, svc, nil)
+	base := "/api/v1/projects/" + projectID + "/saved-analyses/" + savedAnalysisID + "/versions/"
+	// Zero/non-numeric versions are rejected before the service is touched.
+	w := exportRequest(handler, http.MethodPost, base+"0/exports", validSavedExportBody)
+	governanceStatus(t, w, http.StatusBadRequest)
+	w = exportRequest(handler, http.MethodPost, base+"abc/exports", validSavedExportBody)
+	governanceStatus(t, w, http.StatusBadRequest)
+	// The schema requires the bounded time range and timezone.
+	w = exportRequest(handler, http.MethodPost, base+"1/exports", `{"name":"missing range"}`)
+	governanceStatus(t, w, http.StatusBadRequest)
+	if svc.savedCreateInput.Name != "" {
+		t.Fatal("rejected request must not reach the service")
+	}
+}
+
 func TestExportListGetAndCancel(t *testing.T) {
 	svc := &fakeExportService{job: sampleExportJob()}
 	_, handler := exportAPI(t, svc, nil)
