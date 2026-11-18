@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/backfilling"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/jackc/pgx/v5"
@@ -49,7 +50,7 @@ func validateBackfillInput(in backfilling.Input) error {
 		return backfillInvalid("归档清单标识格式不正确")
 	}
 	switch in.Environment {
-	case "development", "staging", "production":
+	case env.Development, env.Staging, env.Production:
 	default:
 		return backfillInvalid("环境标识无效")
 	}

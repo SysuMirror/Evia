@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -80,7 +81,7 @@ type Service struct {
 func NewService(store Store) *Service { return &Service{store: store} }
 
 func validEnvironment(environment string) bool {
-	return environment == "development" || environment == "staging" || environment == "production"
+	return env.Valid(environment)
 }
 
 // Validate enforces the bounded report shape and unique reading positions.

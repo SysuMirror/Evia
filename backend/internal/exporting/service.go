@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -45,7 +46,7 @@ func ValidateInput(in Input) error {
 		return invalid("项目或操作主体标识格式不正确")
 	}
 	switch in.Environment {
-	case "development", "staging", "production":
+	case env.Development, env.Staging, env.Production:
 	default:
 		return invalid("环境标识无效")
 	}

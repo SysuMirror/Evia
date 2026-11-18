@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -78,7 +79,7 @@ func caller(ctx context.Context, actor, project string) error {
 }
 
 func validEnvironment(environment string) bool {
-	return environment == "development" || environment == "staging" || environment == "production"
+	return env.Valid(environment)
 }
 
 func validate(in Input, expectedRevision int64) error {

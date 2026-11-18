@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 )
 
 const (
@@ -68,7 +70,7 @@ var (
 		}
 		return out
 	}()
-	environments = []string{"development", "staging", "production"}
+	environments = env.Environments
 )
 
 // Config configures the independent Redis connection pool for rejection stats.
@@ -333,7 +335,7 @@ func (r *Recorder) DroppedWrites() int64 { return r.dropped.Load() }
 
 func validScope(projectID, environment string) bool {
 	return projectPattern.MatchString(projectID) &&
-		(environment == "development" || environment == "staging" || environment == "production")
+		env.Valid(environment)
 }
 
 func (r *Recorder) key(projectID, environment string, bucket time.Time) string {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/archiving"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/jackc/pgx/v5"
 )
@@ -106,7 +107,7 @@ func (s *Store) ListManifests(ctx context.Context, actor, project string, filter
 		return archiving.Page{}, archiveInvalid("分页游标已失效")
 	}
 	switch filter.Environment {
-	case "", "development", "staging", "production":
+	case "", env.Development, env.Staging, env.Production:
 	default:
 		return archiving.Page{}, archiveInvalid("环境标识无效")
 	}

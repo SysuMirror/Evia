@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
@@ -134,7 +135,7 @@ type ScopePolicy struct {
 }
 
 func validScope(scope Scope) bool {
-	return projectPattern.MatchString(scope.ProjectID) && (scope.Environment == "development" || scope.Environment == "staging" || scope.Environment == "production")
+	return projectPattern.MatchString(scope.ProjectID) && env.Valid(scope.Environment)
 }
 
 func normalize(p Policy, maxBatch int) (policy, error) {
@@ -439,7 +440,7 @@ func (l *Limiter) SnapshotPolicies(projectID string) []ScopePolicy {
 	}
 	state := l.state.Load()
 	out := make([]ScopePolicy, 0, 3)
-	for _, environment := range []string{"development", "staging", "production"} {
+	for _, environment := range env.Environments {
 		scope := Scope{ProjectID: projectID, Environment: environment}
 		entry := ScopePolicy{ProjectID: projectID, Environment: environment, Rate: state.defaultCfg.Rate, Burst: state.defaultCfg.Burst}
 		if configured, ok := state.overrideCfgs[scope]; ok {

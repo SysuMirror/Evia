@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -96,7 +97,7 @@ func RevisionConflict() error {
 	return fault.New(fault.Conflict, "DRAFT_REVISION_CONFLICT", "草稿已更新，请重新加载后重试")
 }
 func ValidEnvironment(e string) bool {
-	return e == "development" || e == "staging" || e == "production"
+	return env.Valid(e)
 }
 func (s *Service) CreateEvent(ctx context.Context, actor, project string, in EventInput) (Event, error) {
 	in.DisplayName = strings.TrimSpace(in.DisplayName)

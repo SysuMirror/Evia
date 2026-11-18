@@ -14,6 +14,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -81,7 +82,7 @@ func (c *ProbeClient) Verify(ctx context.Context, request delivery.ProbeRequest)
 	}
 }
 func validProbe(r delivery.ProbeRequest, now time.Time) bool {
-	return uuidPattern.MatchString(r.ProjectID) && uuidPattern.MatchString(r.ReleaseID) && uuidPattern.MatchString(r.Nonce) && r.Revision > 0 && r.Revision <= maxInteger && len(r.ManifestHash) == 64 && strings.Trim(r.ManifestHash, "abcdef0123456789") == "" && (r.Environment == "development" || r.Environment == "staging" || r.Environment == "production") && !r.IssuedAt.Before(now.Add(-20*time.Second)) && !r.IssuedAt.After(now.Add(time.Second)) && r.ExpiresAt.After(now) && r.ExpiresAt.Sub(r.IssuedAt) <= 20*time.Second
+	return uuidPattern.MatchString(r.ProjectID) && uuidPattern.MatchString(r.ReleaseID) && uuidPattern.MatchString(r.Nonce) && r.Revision > 0 && r.Revision <= maxInteger && len(r.ManifestHash) == 64 && strings.Trim(r.ManifestHash, "abcdef0123456789") == "" && env.Valid(r.Environment) && !r.IssuedAt.Before(now.Add(-20*time.Second)) && !r.IssuedAt.After(now.Add(time.Second)) && r.ExpiresAt.After(now) && r.ExpiresAt.Sub(r.IssuedAt) <= 20*time.Second
 }
 func decodeProbe(raw []byte) (delivery.ProbeRequest, error) {
 	var message probeMessage

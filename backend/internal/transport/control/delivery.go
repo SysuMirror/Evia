@@ -9,6 +9,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -200,7 +201,7 @@ func (a *API) getActivation(w http.ResponseWriter, r *http.Request, s authorized
 		}
 	}
 	environment := q.Get("environment")
-	if environment != "development" && environment != "staging" && environment != "production" {
+	if !env.Valid(environment) {
 		return delivery.Invalid("INVALID_ENVIRONMENT", "请提供有效环境")
 	}
 	out, e := a.Delivery.GetActivation(r.Context(), s.ID, project, environment)

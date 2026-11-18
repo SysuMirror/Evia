@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
@@ -133,7 +134,7 @@ func (s *Machines) CreatePrincipal(ctx context.Context, actor, project, key stri
 	if !utf8.ValidString(in.Name) || strings.ContainsRune(in.Name, 0) || utf8.RuneCountInString(in.Name) < 1 || utf8.RuneCountInString(in.Name) > 128 {
 		return MachineIssued{}, machineInvalid("INVALID_MACHINE_NAME", "机器主体名称必须为 1 到 128 个字符")
 	}
-	if in.Environment != "development" && in.Environment != "staging" && in.Environment != "production" {
+	if !env.Valid(in.Environment) {
 		return MachineIssued{}, machineInvalid("INVALID_ENVIRONMENT", "环境无效")
 	}
 	if len(in.Permissions) < 1 || len(in.Permissions) > len(machinePermissions) {

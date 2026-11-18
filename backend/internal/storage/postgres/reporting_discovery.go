@@ -7,6 +7,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/jackc/pgx/v5"
 )
@@ -35,7 +36,7 @@ func discoveryRevision(ctx context.Context, tx pgx.Tx, project, environment stri
 	return revision, e
 }
 func (s *Store) ListAnalysisCatalog(ctx context.Context, actor, project, environment, afterKey string, afterVersion int64, limit int) (reporting.CatalogSnapshot, error) {
-	if environment != "development" && environment != "staging" && environment != "production" {
+	if !env.Valid(environment) {
 		return reporting.CatalogSnapshot{}, analysis.Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 	}
 	if limit < 1 || limit > 201 {

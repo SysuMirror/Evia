@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
@@ -23,7 +24,7 @@ func Unavailable(code string) error {
 	return fault.New(fault.Unavailable, code, "发布配置暂不可用，请稍后重试")
 }
 func validEnvironment(v string) bool {
-	return v == "development" || v == "staging" || v == "production"
+	return env.Valid(v)
 }
 func validKey(key string) bool {
 	if len(key) < 1 || len(key) > 128 {

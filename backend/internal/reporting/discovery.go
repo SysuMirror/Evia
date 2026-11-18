@@ -13,6 +13,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -240,7 +241,7 @@ func (s *Discovery) Capabilities(ctx context.Context, actor, project string) (Ca
 var catalogPropertyKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func (s *Discovery) Catalog(ctx context.Context, actor, project, environment, afterKey string, afterVersion int64, limit int) (CatalogSnapshot, error) {
-	if environment != "development" && environment != "staging" && environment != "production" {
+	if !env.Valid(environment) {
 		return CatalogSnapshot{}, analysis.Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 	}
 	if limit < 1 || limit > 200 {

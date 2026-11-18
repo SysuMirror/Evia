@@ -10,6 +10,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/exporting"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/jackc/pgx/v5"
@@ -48,7 +49,7 @@ func validateExportInput(in exporting.Input) (exporting.Input, error) {
 	}
 	in.Format = normalized
 	switch in.Environment {
-	case "development", "staging", "production":
+	case env.Development, env.Staging, env.Production:
 	default:
 		return in, exportInvalid("环境标识无效")
 	}

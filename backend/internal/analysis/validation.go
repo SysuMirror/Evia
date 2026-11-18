@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -53,7 +54,7 @@ func Validate(r *Request) error {
 	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
-	if r.Environment != "development" && r.Environment != "staging" && r.Environment != "production" {
+	if !env.Valid(r.Environment) {
 		return Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 	}
 	if r.IdentityRevision != nil || r.Subject == "resolved_person" {

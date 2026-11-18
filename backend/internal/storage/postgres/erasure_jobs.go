@@ -9,6 +9,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/jackc/pgx/v5"
@@ -61,7 +62,7 @@ func validateErasureInput(in erasure.Input) error {
 		return erasureInvalid("项目或操作主体标识格式不正确")
 	}
 	switch in.Environment {
-	case "development", "staging", "production":
+	case env.Development, env.Staging, env.Production:
 	default:
 		return erasureInvalid("环境标识无效")
 	}

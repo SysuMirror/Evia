@@ -11,6 +11,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
@@ -509,7 +510,7 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 	return changes
 }
 func savedEnvironment(value string) bool {
-	return value == "development" || value == "staging" || value == "production"
+	return env.Valid(value)
 }
 func savedDigest(value string) bool {
 	return len(value) == 64 && strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' && r < 'a' || r > 'f' }) < 0

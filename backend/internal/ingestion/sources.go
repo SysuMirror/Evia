@@ -14,6 +14,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
@@ -22,7 +23,7 @@ const MaxRevision int64 = 9007199254740991
 
 func Invalid(code, message string) error { return fault.New(fault.Invalid, code, message) }
 func ValidEnvironment(s string) bool {
-	return s == "development" || s == "staging" || s == "production"
+	return env.Valid(s)
 }
 func MissingSource() error {
 	return fault.New(fault.NotFound, "SOURCE_NOT_FOUND", "来源不存在或不可见")

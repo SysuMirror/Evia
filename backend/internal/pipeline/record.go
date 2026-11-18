@@ -17,6 +17,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 )
 
 const MaxRecordBytes = 64 * 1024
@@ -64,7 +65,7 @@ func DecodeRecord(raw []byte) (ingestion.Record, error) {
 	return normalizeRecord(message.Record)
 }
 func normalizeRecord(r ingestion.Record) (ingestion.Record, error) {
-	if (r.SourceKind != "browser" && r.SourceKind != "server") || !uuidPattern.MatchString(r.ProjectID) || !uuidPattern.MatchString(r.SourceID) || !uuidPattern.MatchString(r.EventID) || !eventPattern.MatchString(r.EventKey) || (r.Environment != "development" && r.Environment != "staging" && r.Environment != "production") || r.SchemaVersion < 1 || r.SchemaVersion > maxInteger || r.ReleaseRevision < 1 || r.ReleaseRevision > maxInteger {
+	if (r.SourceKind != "browser" && r.SourceKind != "server") || !uuidPattern.MatchString(r.ProjectID) || !uuidPattern.MatchString(r.SourceID) || !uuidPattern.MatchString(r.EventID) || !eventPattern.MatchString(r.EventKey) || !env.Valid(r.Environment) || r.SchemaVersion < 1 || r.SchemaVersion > maxInteger || r.ReleaseRevision < 1 || r.ReleaseRevision > maxInteger {
 		return r, errInvalidRecord
 	}
 	if !validTime(r.OccurredAt) || !validTime(r.ReceivedAt) || r.ReceivedAt.Before(time.Unix(0, 0)) || utf8.RuneCountInString(r.UID) > 128 || (r.UID == "" && r.AnonymousID == "") || (r.AnonymousID != "" && !uuidPattern.MatchString(r.AnonymousID)) || r.SDKName == "" || utf8.RuneCountInString(r.SDKName) > 128 || r.SDKVersion == "" || utf8.RuneCountInString(r.SDKVersion) > 128 {

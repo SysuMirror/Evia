@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
@@ -25,7 +26,7 @@ func ValidateScope(scope Scope) error {
 		return invalid("项目标识格式不正确")
 	}
 	switch scope.Environment {
-	case "development", "staging", "production":
+	case env.Development, env.Staging, env.Production:
 	default:
 		return invalid("环境标识无效")
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
@@ -121,8 +122,7 @@ func savedKey(key string) error {
 	return nil
 }
 func savedEnvironment(environment string) error {
-	switch environment {
-	case "development", "staging", "production":
+	if env.Valid(environment) {
 		return nil
 	}
 	return analysis.Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")

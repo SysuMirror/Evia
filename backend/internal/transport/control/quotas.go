@@ -7,6 +7,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/quotas"
 )
@@ -68,7 +69,7 @@ func (a *QuotaAPI) get(w http.ResponseWriter, r *http.Request, actor authorizedA
 		return err
 	}
 	environment := q.Get("environment")
-	if environment != "development" && environment != "staging" && environment != "production" {
+	if !env.Valid(environment) {
 		return fault.New(fault.Invalid, "INVALID_QUERY", "查询参数不符合接口定义")
 	}
 	policy, configured, err := a.Service.Get(r.Context(), actor.ID, project, environment)
