@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createEviaClient, EviaSDKError } from '../src/index.js';
-import type { ClientOptions, Clock, PublicConfig, ScrollHost } from '../src/index.js';
+import type { ClientOptions, Clock, PublicConfig, ScrollHost, StoragePort } from '../src/index.js';
 
 const projectId = '00000000-0000-4000-8000-000000000001';
 const receiptId = '00000000-0000-4000-8000-000000000002';
@@ -1565,5 +1565,199 @@ test('reserved sys events in public config are transmitted with the project rele
   // as provenance even though the collector resolves sys.* via the system catalog.
   assert.equal(event.release_revision, 4);
   assert.equal(event.schema_version, 1);
+  client.destroy();
+});
+
+class MapStorage implements StoragePort {
+  private map = new Map<string, string>();
+  getItem = (key: string): string | null => this.map.get(key) ?? null;
+  setItem = (key: string, value: string): void => {
+    this.map.set(key, value);
+  };
+  keys = (): string[] => [...this.map.keys()];
+  read = (key: string): string | null => this.map.get(key) ?? null;
+}
+const queueStorageKey = `evia:${projectId}:development:public-example:queue`;
+function durableDraft(eventId: string) {
+  const base = Date.parse('2026-11-09T12:00:00Z');
+  return {
+    event_id: eventId,
+    event_key: 'page_opened',
+    occurred_at: new Date(base).toISOString(),
+    identity: { anonymous_id: '00000000-0000-4000-8000-0000000000bb' },
+    context: {
+      session_id: 's',
+      tab_id: 't',
+      sequence: 1,
+      page_view_id: 'p',
+      navigation_id: 'n',
+      navigation_type: 'initial' as const,
+    },
+    sdk: { name: 'evia-browser' as const, version: '0.1.0' },
+    properties: {},
+  };
+}
+
+test('opt-in persistent queue survives reload and redelivers the stable event id', async () => {
+  const storage = new MapStorage();
+  const delivered: Body[] = [];
+  const handler = (body: Body) => {
+    delivered.push(body);
+    return receipt(body);
+  };
+  // First page load: the event is durably mirrored but never flushed.
+  const first = setup(handler, { storage, persistQueue: true });
+  await first.client.init();
+  const emission = first.client.emit('page_opened');
+  await pump();
+  assert.equal(first.client.pending, 1);
+  const snapshot = JSON.parse(storage.read(queueStorageKey)!);
+  assert.equal(snapshot.format, 'evia.queue.v1');
+  assert.equal(snapshot.entries[0].eventId, emission.eventId);
+  // Simulate abrupt unload: neither destroy() nor flush() runs, yet the snapshot survives.
+
+  // A second page load over the same storage rehydrates and delivers the same event.
+  const second = setup(handler, { storage, persistQueue: true });
+  assert.equal(second.client.pending, 1);
+  await second.client.init();
+  await pump();
+  await second.client.flush();
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0]!.events.length, 1);
+  assert.equal(delivered[0]!.events[0]!.event_id, emission.eventId);
+  const emptied = JSON.parse(storage.read(queueStorageKey)!);
+  assert.equal(emptied.entries.length, 0);
+  second.client.destroy();
+});
+
+test('queue persistence is opt-in and writes no queue key by default', async () => {
+  const storage = new MapStorage();
+  const { client } = setup((body) => receipt(body), { storage });
+  await client.init();
+  const emission = client.emit('page_opened');
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  assert.equal(
+    storage.keys().some((key) => key.endsWith(':queue')),
+    false,
+  );
+  client.destroy();
+});
+
+test('rehydration prunes expired and malformed snapshot entries', async () => {
+  const storage = new MapStorage();
+  const base = Date.parse('2026-11-09T12:00:00Z');
+  const draft = durableDraft('00000000-0000-4000-8000-0000000000aa');
+  const valid = {
+    eventId: draft.event_id,
+    draft,
+    createdAt: base,
+    bytes: 1,
+    attempts: 0,
+    ambiguous: false,
+    json: JSON.stringify({ ...draft, schema_version: 1, release_revision: 1 }),
+  };
+  const expired = {
+    ...valid,
+    eventId: '00000000-0000-4000-8000-0000000000cc',
+    createdAt: base - 400_000,
+  };
+  const malformed = { eventId: 'not-a-uuid' };
+  storage.setItem(
+    queueStorageKey,
+    JSON.stringify({ format: 'evia.queue.v1', entries: [expired, malformed, valid] }),
+  );
+  const delivered: Body[] = [];
+  const { client } = setup(
+    (body) => {
+      delivered.push(body);
+      return receipt(body);
+    },
+    { storage, persistQueue: true },
+  );
+  assert.equal(client.pending, 1);
+  await client.init();
+  await pump();
+  await client.flush();
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0]!.events[0]!.event_id, valid.eventId);
+  const pruned = JSON.parse(storage.read(queueStorageKey)!);
+  assert.equal(pruned.entries.length, 0);
+  client.destroy();
+});
+
+test('rehydrated entries awaiting configuration are resolved before delivery', async () => {
+  const storage = new MapStorage();
+  const base = Date.parse('2026-11-09T12:00:00Z');
+  const draft = durableDraft('00000000-0000-4000-8000-0000000000ad');
+  storage.setItem(
+    queueStorageKey,
+    JSON.stringify({
+      format: 'evia.queue.v1',
+      entries: [
+        {
+          eventId: draft.event_id,
+          draft,
+          createdAt: base,
+          bytes: 1,
+          attempts: 0,
+          ambiguous: false,
+        },
+      ],
+    }),
+  );
+  const delivered: Body[] = [];
+  const { client } = setup(
+    (body) => {
+      delivered.push(body);
+      return receipt(body);
+    },
+    { storage, persistQueue: true },
+  );
+  assert.equal(client.pending, 1);
+  await client.init();
+  await pump();
+  await client.flush();
+  assert.equal(delivered.length, 1);
+  const event = delivered[0]!.events[0]!;
+  assert.equal(event.event_id, draft.event_id);
+  assert.equal(event.schema_version, 1);
+  assert.equal(event.release_revision, 1);
+  client.destroy();
+});
+
+test('a corrupt snapshot fails soft to an empty in-memory queue', async () => {
+  const storage = new MapStorage();
+  storage.setItem(queueStorageKey, 'not-json{');
+  const { client } = setup((body) => receipt(body), { storage, persistQueue: true });
+  assert.equal(client.pending, 0);
+  await client.init();
+  const emission = client.emit('page_opened');
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  client.destroy();
+});
+
+test('a failing storage port fails soft and keeps in-memory delivery working', async () => {
+  const throwing: StoragePort = {
+    getItem: () => {
+      throw new Error('denied');
+    },
+    setItem: () => {
+      throw new Error('denied');
+    },
+  };
+  const { client } = setup((body) => receipt(body), {
+    storage: throwing,
+    persistQueue: true,
+  });
+  assert.equal(client.pending, 0);
+  await client.init();
+  const emission = client.emit('page_opened');
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
   client.destroy();
 });
