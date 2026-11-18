@@ -56,11 +56,11 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 		return nil, e
 	}
 	switch request.Attribution.Model {
-	case "linear":
+	case AttributionModelLinear:
 		return evaluateLinearAttribution(ctx, request, bySubject)
-	case "position_based":
+	case AttributionModelPositionBased:
 		return evaluatePositionBasedAttribution(ctx, request, bySubject)
-	case "time_decay":
+	case AttributionModelTimeDecay:
 		return evaluateTimeDecayAttribution(ctx, request, bySubject)
 	}
 
@@ -92,7 +92,7 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 		converters++
 		cutoff := events[conversionIndex].time - window*1_000_000_000
 		credited := directAttributionBucket
-		if request.Attribution.Model == "first_touch" {
+		if request.Attribution.Model == AttributionModelFirstTouch {
 			// First-touch: the earliest in-window touchpoint receives full
 			// credit, so scan forward and stop at the first match.
 			for i := 0; i < conversionIndex; i++ {
