@@ -23,6 +23,7 @@
 | 依赖选择模式（8） | 14 处内联字面量 → 提取为 `reporting.SelectionMode*` 常量 + `SelectionModes` | `QueryDependencyManifest.selection_mode` | 对齐 |
 | 看板参数类型（3）/算子（9） | 算子内联 map → `ParameterOp*` 常量 + `ParameterTypes/ParameterOperators` | `ParameterDeclaration.type/operator` | 对齐 |
 | 可视化类别（5） | switch 内联字面量 → `Visualization*` 常量 + `VisualizationKinds` | `SavedAnalysisVisualization.kind` | 对齐 |
+| 看板运行聚合态（7） | `DashboardRunState` 内联返回值 → `DashboardRun*` 常量 + `DashboardRunStates`（聚合读取的作业态抽为包内 key 常量） | `DashboardRun.state` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
@@ -53,3 +54,4 @@
 - 守卫只覆盖**枚举型闭集**；数值预算（31 天窗口、500 行等）仍由 `DiscoveryBudgets` 与契约描述分别维护，未机械比对——预算变更通常伴随语义评审，且部分预算仅存在于 Go 侧。
 - `query-request.schema.json` 原始文件未单独 embed；守卫统一消费 OpenAPI 生成的 bundle 内联副本，codegen 漂移由 `generated-check` 门禁拦截。
 - 不改变任何运行时行为、契约内容或 API 形状；本切片是可维护性/防回归工程。
+- `QueryJob.state` 六态（queued/running/succeeded/failed/canceled/expired）在 15 个文件有 43 处内联字面量，跨 analysis/reporting/postgres 三包，提取为独立重构切片；该词汇是核心作业生命周期且被大量既有测试覆盖，漂移风险低于已修复的差异类别。

@@ -229,3 +229,30 @@ func TestVisualizationVocabularyMatchesContract(t *testing.T) {
 	}
 	assertSameSet(t, "visualization kind", VisualizationKinds, got)
 }
+
+// TestDashboardRunStateVocabularyMatchesContract guards the seven dashboard
+// run aggregate states produced by DashboardRunState against the
+// DashboardRun.state enum. Widget query-job states are a separate six-value
+// vocabulary (QueryJob.state) and intentionally not part of this set because
+// partial exists only at the run aggregate level.
+func TestDashboardRunStateVocabularyMatchesContract(t *testing.T) {
+	var bundle struct {
+		Defs map[string]map[string]any `json:"$defs"`
+	}
+	if err := json.Unmarshal(wire.Schemas, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	props, ok := bundle.Defs["DashboardRun"]["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("DashboardRun schema missing properties")
+	}
+	raw, ok := props["state"].(map[string]any)["enum"].([]any)
+	if !ok {
+		t.Fatal("DashboardRun.state enum missing")
+	}
+	got := make([]string, 0, len(raw))
+	for _, value := range raw {
+		got = append(got, value.(string))
+	}
+	assertSameSet(t, "dashboard run state", DashboardRunStates, got)
+}
