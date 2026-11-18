@@ -87,6 +87,47 @@ interface Batch {
   entries: Entry[];
 }
 
+// Snapshot format for the opt-in durable queue mirror. Only serializable
+// entry fields are stored; the per-emission settle promise belongs to the
+// originating page and cannot survive a reload.
+const queueSnapshotFormat = 'evia.queue.v1';
+interface PersistedEntry {
+  eventId: string;
+  draft: Entry['draft'];
+  createdAt: number;
+  bytes: number;
+  attempts: number;
+  ambiguous: boolean;
+  json?: string;
+}
+interface PersistedQueue {
+  format: typeof queueSnapshotFormat;
+  entries: PersistedEntry[];
+}
+function isPersistedQueue(value: unknown): value is PersistedQueue {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return candidate.format === queueSnapshotFormat && Array.isArray(candidate.entries);
+}
+function isPersistedEntry(value: unknown): value is PersistedEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.eventId === 'string' &&
+    uuidPattern.test(candidate.eventId) &&
+    typeof candidate.draft === 'object' &&
+    candidate.draft !== null &&
+    typeof candidate.createdAt === 'number' &&
+    Number.isFinite(candidate.createdAt) &&
+    typeof candidate.bytes === 'number' &&
+    candidate.bytes > 0 &&
+    typeof candidate.attempts === 'number' &&
+    candidate.attempts >= 0 &&
+    typeof candidate.ambiguous === 'boolean' &&
+    (candidate.json === undefined || typeof candidate.json === 'string')
+  );
+}
+
 function storageDefault(): StoragePort | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -121,6 +162,8 @@ class Client implements BrowserClient {
   private readonly uuid: () => string;
   private readonly storage: StoragePort | null;
   private readonly storageKey: string;
+  private readonly persistQueue: boolean;
+  private readonly queueStorageKey: string;
   private readonly configTtl: number;
   private readonly flushInterval: number;
   private readonly retryBase: number;
@@ -216,6 +259,8 @@ class Client implements BrowserClient {
     this.scrollHost = options.scrollHost ?? defaultScrollHost();
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
+    this.persistQueue = options.persistQueue === true;
+    this.queueStorageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:queue`;
     let stored: string | null = null;
     try {
       stored = this.storage?.getItem(this.storageKey) ?? null;
@@ -248,6 +293,14 @@ class Client implements BrowserClient {
     }
     if (this.autoPageViews) this.emitAutoPageView();
     this.startScrollCollection();
+    this.rehydrateQueue();
+    if (this.persistQueue && this.queue.length) {
+      // Rehydrated events outlive their emitting page; drive config resolution
+      // and delivery even though no caller still holds the outcome promise.
+      void this.init()
+        .then(() => this.resolveQueuedEntries())
+        .catch(() => {});
+    }
   }
 
   get pending(): number {
@@ -264,6 +317,105 @@ class Client implements BrowserClient {
       this.storage?.setItem(this.storageKey, this.anonymousId);
     } catch {
       /* memory fallback */
+    }
+  }
+
+  // persistQueueState mirrors the bounded in-memory queue onto the storage
+  // port. It is write-through and fail-soft: any storage error keeps the
+  // memory queue working instead of breaking collection.
+  private persistQueueState(): void {
+    if (!this.persistQueue || !this.storage) return;
+    try {
+      const snapshot: PersistedQueue = {
+        format: queueSnapshotFormat,
+        entries: this.queue.map((entry) => {
+          const persisted: PersistedEntry = {
+            eventId: entry.eventId,
+            draft: entry.draft,
+            createdAt: entry.createdAt,
+            bytes: entry.bytes,
+            attempts: entry.attempts,
+            ambiguous: entry.ambiguous,
+          };
+          if (entry.json !== undefined) persisted.json = entry.json;
+          return persisted;
+        }),
+      };
+      this.storage.setItem(this.queueStorageKey, JSON.stringify(snapshot));
+    } catch {
+      /* memory fallback: keep serving from the in-memory queue */
+    }
+  }
+
+  // rehydrateQueue reloads a durable snapshot written by a previous page load.
+  // Expired, malformed or over-budget entries are pruned; surviving entries
+  // keep their original event_id so collector-side dedup makes redelivery safe.
+  private rehydrateQueue(): void {
+    if (!this.persistQueue || !this.storage) return;
+    let raw: string | null = null;
+    try {
+      raw = this.storage.getItem(this.queueStorageKey);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let snapshot: unknown;
+    try {
+      snapshot = JSON.parse(raw);
+    } catch {
+      return; // corrupt snapshot: fail soft and start from an empty queue
+    }
+    if (!isPersistedQueue(snapshot)) return;
+    const now = this.clock.now();
+    for (const item of snapshot.entries) {
+      if (!isPersistedEntry(item)) continue;
+      if (now - item.createdAt >= this.maxAge) continue;
+      if (item.bytes > 8192 || this.queue.length >= this.maxQueueEvents) continue;
+      if (this.queueBytes + item.bytes > this.maxQueueBytes) continue;
+      this.queue.push({
+        eventId: item.eventId,
+        draft: item.draft,
+        createdAt: item.createdAt,
+        bytes: item.bytes,
+        attempts: item.attempts,
+        ambiguous: item.ambiguous,
+        json: item.json,
+        // The original emitter no longer exists after a reload; the outcome is
+        // observable only through delivery and the collector receipt.
+        settle: () => {},
+      });
+      this.queueBytes += item.bytes;
+    }
+    // Write back the pruned snapshot so rejected data is not retried forever.
+    this.persistQueueState();
+  }
+
+  // resolveQueuedEntries fills the final envelope JSON for entries still
+  // waiting on configuration, including those rehydrated without a ready
+  // payload. Unpublished events fail closed; ready entries schedule a flush.
+  private resolveQueuedEntries(): void {
+    if (!this.config) return;
+    let changed = false;
+    for (const entry of [...this.queue]) {
+      if (entry.json) continue;
+      const event = this.config.events.find(
+        (candidate) => candidate.event_key === entry.draft.event_key,
+      );
+      if (!event) {
+        this.finish(entry, 'rejected', 'EVENT_NOT_PUBLISHED', false);
+        changed = true;
+        continue;
+      }
+      entry.json = JSON.stringify({
+        ...entry.draft,
+        schema_version: event.schema_version,
+        release_revision: this.config.release_revision,
+      });
+      changed = true;
+    }
+    if (changed) {
+      this.persistQueueState();
+      this.schedule(this.flushInterval);
     }
   }
 
@@ -313,6 +465,7 @@ class Client implements BrowserClient {
         this.config = config;
         this.etag = etag && /^"[a-f0-9]{64}"$/.test(etag) ? etag : undefined;
         this.configExpires = this.clock.now() + this.configTtl;
+        this.resolveQueuedEntries();
         return config;
       })
       .catch((error: unknown) => {
@@ -409,22 +562,13 @@ class Client implements BrowserClient {
     };
     this.queue.push(entry);
     this.queueBytes += reserved;
+    this.persistQueueState();
     this.schedule(this.maxAge);
     const generation = this.generation;
     void this.init()
-      .then((config) => {
+      .then(() => {
         if (generation !== this.generation || !this.enabled || !this.queue.includes(entry)) return;
-        const event = config.events.find((candidate) => candidate.event_key === eventKey);
-        if (!event) {
-          this.finish(entry, 'rejected', 'EVENT_NOT_PUBLISHED', false);
-          return;
-        }
-        entry.json = JSON.stringify({
-          ...draft,
-          schema_version: event.schema_version,
-          release_revision: config.release_revision,
-        });
-        this.schedule(this.flushInterval);
+        this.resolveQueuedEntries();
       })
       .catch((error: unknown) => {
         if (generation === this.generation && this.queue.includes(entry))
@@ -652,6 +796,7 @@ class Client implements BrowserClient {
     if (index < 0) return;
     this.queue.splice(index, 1);
     this.queueBytes -= entry.bytes;
+    this.persistQueueState();
     if (this.queue.length === 0 && this.timer !== undefined) {
       this.clock.clearTimeout(this.timer);
       this.timer = undefined;

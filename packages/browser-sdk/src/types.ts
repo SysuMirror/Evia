@@ -41,6 +41,14 @@ export interface ClientOptions {
   fetch?: typeof globalThis.fetch;
   /** null disables persistence; failures fall back to memory. */
   storage?: StoragePort | null;
+  /**
+   * Opt-in durable mirror of the bounded event queue onto the storage port, so
+   * queued events survive a page reload or same-context navigation. Defaults to
+   * false, which keeps the historical memory-only queue byte-identical.
+   * Redelivery after reload stays at-least-once: rehydrated events keep their
+   * original event_id and the collector deduplicates stable source/event IDs.
+   */
+  persistQueue?: boolean;
   /** Injectable browser capabilities, also useful for deterministic tests. */
   clock?: Clock;
   randomUUID?: () => string;
