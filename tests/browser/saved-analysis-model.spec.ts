@@ -352,6 +352,32 @@ test('metric reference write input omits the inline query', () => {
   expect(inlineInput.metric_ref).toBeUndefined();
 });
 
+test('composite metric reference keeps the explicit kind while atomic stays kind-free', () => {
+  const compositeRef: MetricReference = {
+    metric_id: '33333333-3333-4333-8333-333333333333',
+    version: 1,
+    kind: 'composite',
+  };
+  const picked = patchMetricReference(
+    switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric'),
+    compositeRef,
+  );
+  expect(validMetricReference(picked.metric_ref)).toBe(true);
+  const compositeInput = toSavedAnalysisInput(picked);
+  expect(compositeInput.metric_ref).toEqual(compositeRef);
+  expect(compositeInput.metric_ref?.kind).toBe('composite');
+
+  // An atomic reference never materializes a kind field, preserving the
+  // historical wire shape byte-for-byte.
+  const atomicPicked = patchMetricReference(
+    switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric'),
+    metricRef,
+  );
+  const atomicInput = toSavedAnalysisInput(atomicPicked);
+  expect(atomicInput.metric_ref).toEqual(metricRef);
+  expect('kind' in (atomicInput.metric_ref ?? {})).toBe(false);
+});
+
 test('metric reference summary describes the pinned version', () => {
   const empty = switchSavedAnalysisSource(initialSavedAnalysisDefinition(), 'metric');
   expect(savedDefinitionSummary(empty)).toContain('请选择已发布指标');
