@@ -8,6 +8,7 @@
       "const": "activity.event-plan.v1"
     },
     "status": {
+      "description": "Lifecycle state of this plan. published is the only state the delivery layer accepts as an active release manifest; draft_example_not_published marks authoring examples and fixtures that must never be treated as an active release.",
       "enum": [
         "draft_example_not_published",
         "published"
@@ -19,6 +20,7 @@
       "maxLength": 128
     },
     "environment": {
+      "description": "Target release environment. Releases are immutable per project and environment, and a machine credential is scoped to one environment; events are accepted only when their event version is published for that environment.",
       "enum": [
         "development",
         "staging",
@@ -89,6 +91,7 @@
             "minItems": 1,
             "uniqueItems": true,
             "items": {
+              "description": "Ingestion source kind allowed to send this event: browser for the first-party browser SDK, server for trusted server collectors. The list is unique, holds at most these two kinds, is required at publication, and cannot include browser when fact_kind is server_confirmed.",
               "enum": [
                 "browser",
                 "server"
@@ -96,6 +99,7 @@
             }
           },
           "fact_kind": {
+            "description": "Trust classification of the fact: user_intent is a deliberate user action, client_observed is browser-observed behavior without an explicit intent claim, server_confirmed is asserted by a trusted server and therefore cannot permit a browser source. Required at publication; any other value fails closed.",
             "enum": [
               "user_intent",
               "client_observed",

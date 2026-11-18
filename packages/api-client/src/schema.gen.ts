@@ -3672,7 +3672,10 @@ export interface components {
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;
-            /** @enum {unknown} */
+            /**
+             * @description Job lifecycle state. queued means admitted and waiting for a worker within the queue deadline; running means a worker holds the execution lease; succeeded means the result is stored and readable until its result TTL; failed is terminal with an error payload; canceled is reachable only from queued/running via an authorized cancel; expired is set by the reaper when the queue deadline, job deadline or result TTL passes and the result is no longer readable. failed, canceled and expired are terminal non-retryable states.
+             * @enum {unknown}
+             */
             state: "queued" | "running" | "succeeded" | "failed" | "canceled" | "expired";
             /** Format: date-time */
             created_at: string;
@@ -3706,7 +3709,10 @@ export interface components {
                 data_watermark: string | null;
                 /** @description 仅在实际使用已存在的身份关系快照时返回；原始 UID 或匿名标识查询省略此字段。 */
                 identity_revision?: number;
-                /** @enum {unknown} */
+                /**
+                 * @description 本次结果的精度口径：exact 为精确计算；approximate 仅 unique 与 p50/p90/p95/p99 百分位在请求显式指定时出现，由近似算法产生；漏斗、留存、分群、路径、归因等非指标引擎恒为 not_applicable。
+                 * @enum {unknown}
+                 */
                 accuracy: "exact" | "approximate" | "not_applicable";
                 sample_rate: number;
                 coverage: {
@@ -3716,7 +3722,10 @@ export interface components {
                         /** Format: date-time */
                         to: string;
                     };
-                    /** @enum {unknown} */
+                    /**
+                     * @description 数据覆盖的结算状态。当前引擎恒为 provisional：不证明分区已完整到达，known_gaps 显式列出尚未建立的流水线完整性与未应用的身份关联；settled 预留给完整性已确立的未来结算流程，partial 预留给已确认存在覆盖缺口的场景，当前版本均不会产出这两个值。
+                     * @enum {unknown}
+                     */
                     state: "provisional" | "settled" | "partial";
                     known_gaps: string[];
                 };
@@ -3769,7 +3778,10 @@ export interface components {
                 route_name?: string;
                 route_template?: string;
                 source_module?: string;
-                /** @enum {unknown} */
+                /**
+                 * @description Browser navigation that produced this page view. initial is the first page view of a fresh tab, session or post-reset context; push adds a history entry and is the SDK default when omitted; replace rewrites the current entry; pop is back/forward traversal; restore is a back/forward-cache revival. Any other value is rejected client-side with INVALID_NAVIGATION_TYPE.
+                 * @enum {unknown}
+                 */
                 navigation_type?: "initial" | "push" | "replace" | "pop" | "restore";
                 /** Format: uuid */
                 previous_page_view_id?: string;
@@ -3935,7 +3947,10 @@ export interface components {
         };
         /** @description Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference. */
         "saved-analysis-template.schema": {
-            /** @enum {string} */
+            /**
+             * @description Reusable aggregate query engine. The closed set is trend, funnel, retention, segment, path and attribution; the ad-hoc-only kinds events and journey are rejected with UNSUPPORTED_QUERY_KIND. Event versions are pinned immutably through event_versions or typed steps, while environment, time range and timezone are supplied only when the template is bound.
+             * @enum {string}
+             */
             kind: "trend" | "funnel" | "retention" | "segment" | "path" | "attribution";
             event_versions?: components["schemas"]["event_versions"];
             filter?: components["schemas"]["filter"];

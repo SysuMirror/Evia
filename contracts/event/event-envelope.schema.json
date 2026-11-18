@@ -91,6 +91,7 @@
           "maxLength": 64
         },
         "navigation_type": {
+          "description": "Browser navigation that produced this page view. initial is the first page view of a fresh tab, session or post-reset context; push adds a history entry and is the SDK default when omitted; replace rewrites the current entry; pop is back/forward traversal; restore is a back/forward-cache revival. Any other value is rejected client-side with INVALID_NAVIGATION_TYPE.",
           "enum": [
             "initial",
             "push",

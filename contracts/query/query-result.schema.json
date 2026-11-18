@@ -65,6 +65,7 @@
           "description": "仅在实际使用已存在的身份关系快照时返回；原始 UID 或匿名标识查询省略此字段。"
         },
         "accuracy": {
+          "description": "本次结果的精度口径：exact 为精确计算；approximate 仅 unique 与 p50/p90/p95/p99 百分位在请求显式指定时出现，由近似算法产生；漏斗、留存、分群、路径、归因等非指标引擎恒为 not_applicable。",
           "enum": [
             "exact",
             "approximate",
@@ -99,6 +100,7 @@
               ]
             },
             "state": {
+              "description": "数据覆盖的结算状态。当前引擎恒为 provisional：不证明分区已完整到达，known_gaps 显式列出尚未建立的流水线完整性与未应用的身份关联；settled 预留给完整性已确立的未来结算流程，partial 预留给已确认存在覆盖缺口的场景，当前版本均不会产出这两个值。",
               "enum": [
                 "provisional",
                 "settled",

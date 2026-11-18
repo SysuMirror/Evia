@@ -6,6 +6,7 @@
   "properties": {
     "kind": {
       "type": "string",
+      "description": "Reusable aggregate query engine. The closed set is trend, funnel, retention, segment, path and attribution; the ad-hoc-only kinds events and journey are rejected with UNSUPPORTED_QUERY_KIND. Event versions are pinned immutably through event_versions or typed steps, while environment, time range and timezone are supplied only when the template is bound.",
       "enum": [
         "trend",
         "funnel",

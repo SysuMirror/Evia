@@ -9,6 +9,7 @@
       "format": "uuid"
     },
     "state": {
+      "description": "Job lifecycle state. queued means admitted and waiting for a worker within the queue deadline; running means a worker holds the execution lease; succeeded means the result is stored and readable until its result TTL; failed is terminal with an error payload; canceled is reachable only from queued/running via an authorized cancel; expired is set by the reaper when the queue deadline, job deadline or result TTL passes and the result is no longer readable. failed, canceled and expired are terminal non-retryable states.",
       "enum": [
         "queued",
         "running",
