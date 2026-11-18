@@ -434,9 +434,41 @@ func BindDashboardWidget(version SavedAnalysisVersion, filter *analysis.Filter, 
 	return template.Bind(version.Environment, in.TimeRange, in.Timezone)
 }
 
+// Dashboard run aggregate state closed set, mirrored by the
+// DashboardRun.state OpenAPI enum and guarded by
+// TestDashboardRunStateVocabularyMatchesContract. The values reuse query job
+// state strings but add the partial aggregate.
+const (
+	DashboardRunQueued    = "queued"
+	DashboardRunRunning   = "running"
+	DashboardRunSucceeded = "succeeded"
+	DashboardRunPartial   = "partial"
+	DashboardRunExpired   = "expired"
+	DashboardRunCanceled  = "canceled"
+	DashboardRunFailed    = "failed"
+)
+
+// DashboardRunStates is the single Go-side source of truth for the seven run
+// aggregate states.
+var DashboardRunStates = []string{
+	DashboardRunQueued, DashboardRunRunning, DashboardRunSucceeded,
+	DashboardRunPartial, DashboardRunExpired, DashboardRunCanceled, DashboardRunFailed,
+}
+
+// queryJobState keys read from widget jobs when aggregating run state. They
+// mirror the QueryJob.state enum; the aggregate never emits values outside
+// DashboardRunStates.
+const (
+	queryJobStateQueued    = "queued"
+	queryJobStateRunning   = "running"
+	queryJobStateSucceeded = "succeeded"
+	queryJobStateExpired   = "expired"
+	queryJobStateCanceled  = "canceled"
+)
+
 func DashboardRunState(widgets []DashboardWidgetRun) string {
 	if len(widgets) == 0 {
-		return "expired"
+		return DashboardRunExpired
 	}
 	counts := map[string]int{}
 	total := 0
@@ -450,23 +482,23 @@ func DashboardRunState(widgets []DashboardWidgetRun) string {
 			total++
 		}
 	}
-	if counts["queued"] == total {
-		return "queued"
+	if counts[queryJobStateQueued] == total {
+		return DashboardRunQueued
 	}
-	if counts["queued"]+counts["running"] > 0 {
-		return "running"
+	if counts[queryJobStateQueued]+counts[queryJobStateRunning] > 0 {
+		return DashboardRunRunning
 	}
-	if counts["succeeded"] == total {
-		return "succeeded"
+	if counts[queryJobStateSucceeded] == total {
+		return DashboardRunSucceeded
 	}
-	if counts["succeeded"] > 0 {
-		return "partial"
+	if counts[queryJobStateSucceeded] > 0 {
+		return DashboardRunPartial
 	}
-	if counts["expired"] == total {
-		return "expired"
+	if counts[queryJobStateExpired] == total {
+		return DashboardRunExpired
 	}
-	if counts["canceled"] == total {
-		return "canceled"
+	if counts[queryJobStateCanceled] == total {
+		return DashboardRunCanceled
 	}
-	return "failed"
+	return DashboardRunFailed
 }

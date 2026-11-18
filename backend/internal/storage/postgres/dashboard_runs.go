@@ -338,7 +338,7 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 		}
 	}
 	out.State = reporting.DashboardRunState(out.Widgets)
-	if out.State == "queued" || out.State == "running" {
+	if out.State == reporting.DashboardRunQueued || out.State == reporting.DashboardRunRunning {
 		delay := 1000
 		out.PollAfterMS = &delay
 	}
