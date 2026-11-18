@@ -158,7 +158,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}
 	for _, raw := range []string{
 		// A model outside the explicit enum is rejected by the schema.
-		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"position_based"}}`,
+		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"data_driven"}}`,
 		// Window must be within 1..604800.
 		`{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":0,"model":"last_touch"}}`,
 		// At least one touchpoint is required.
@@ -179,7 +179,7 @@ func TestAttributionValidationClosedSet(t *testing.T) {
 	}{
 		{"nil attribution", func(r *Request) { r.Attribution = nil }, "INVALID_ATTRIBUTION"},
 		{"missing subject", func(r *Request) { r.Subject = "" }, "SUBJECT_REQUIRED"},
-		{"unknown model", func(r *Request) { r.Attribution.Model = "position_based" }, "INVALID_ATTRIBUTION_MODEL"},
+		{"unknown model", func(r *Request) { r.Attribution.Model = "data_driven" }, "INVALID_ATTRIBUTION_MODEL"},
 		{"zero window", func(r *Request) { r.Attribution.WindowSeconds = 0 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"oversized window", func(r *Request) { r.Attribution.WindowSeconds = 604801 }, "INVALID_ATTRIBUTION_WINDOW"},
 		{"conversion overlap", func(r *Request) {
@@ -313,7 +313,7 @@ func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
 		t.Fatalf("first_touch request must pass Go validation: %v", e)
 	}
 	bad := firstTouchRequest(86400)
-	bad.Attribution.Model = "position_based"
+	bad.Attribution.Model = "data_driven"
 	var problem *fault.Error
 	if e := Validate(&bad); e == nil || !errors.As(e, &problem) || problem.Code != "INVALID_ATTRIBUTION_MODEL" {
 		t.Fatalf("unknown model must fail closed: %v", e)
@@ -603,6 +603,181 @@ func TestTimeDecayPlannerEmitsCreditColumn(t *testing.T) {
 	}
 }
 
+func positionRequest(window int64) Request {
+	r := attributionRequest(window)
+	r.Attribution.Model = "position_based"
+	return r
+}
+
+func TestPositionBasedWeightsTable(t *testing.T) {
+	for _, tc := range []struct {
+		n      int
+		first  float64
+		last   float64
+		middle float64
+	}{
+		{1, 1.0, 1.0, 0},
+		{2, 0.5, 0.5, 0},
+		{3, 0.4, 0.4, 0.2},
+		{4, 0.4, 0.4, 0.1},
+		{5, 0.4, 0.4, 0.2 / 3.0},
+	} {
+		weights := positionBasedWeights(tc.n)
+		if len(weights) != tc.n {
+			t.Fatalf("n=%d wants %d weights, got %v", tc.n, tc.n, weights)
+		}
+		sum := 0.0
+		for _, weight := range weights {
+			sum += weight
+		}
+		if !approxEqual(sum, 1.0, 1e-12) {
+			t.Fatalf("n=%d weights must total one, got %v (%v)", tc.n, sum, weights)
+		}
+		if !approxEqual(weights[0], tc.first, 1e-12) || !approxEqual(weights[tc.n-1], tc.last, 1e-12) {
+			t.Fatalf("n=%d edge weights wrong: %v", tc.n, weights)
+		}
+		for i := 1; i < tc.n-1; i++ {
+			if !approxEqual(weights[i], tc.middle, 1e-12) {
+				t.Fatalf("n=%d middle weight %d wrong: %v", tc.n, i, weights)
+			}
+		}
+	}
+}
+
+func TestEvaluatePositionBasedUShapeWeightsAndDirectBucket(t *testing.T) {
+	rows := []map[string]any{
+		// u1 touches three distinct events -> 0.4 / 0.2 / 0.4 U-shape.
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 20, "email_open", false, true),
+		markedRow("u1", 30, "social_click", false, true),
+		markedRow("u1", 40, "buy", true, false),
+		// u2 touches two distinct events -> 0.5 / 0.5 even split.
+		markedRow("u2", 10, "ad_click", false, true),
+		markedRow("u2", 20, "email_open", false, true),
+		markedRow("u2", 30, "buy", true, false),
+		// u3 touches one event -> full weight.
+		markedRow("u3", 15, "ad_click", false, true),
+		markedRow("u3", 25, "buy", true, false),
+		// u4 converts without any touchpoint -> direct bucket full weight.
+		markedRow("u4", 50, "buy", true, false),
+	}
+
+	result, e := EvaluateAttribution(positionRequest(86400), rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := map[string]struct {
+		subjects int
+		credit   float64
+	}{
+		"ad_click":              {3, 1.9},
+		"email_open":            {2, 0.7},
+		"social_click":          {1, 0.4},
+		directAttributionBucket: {1, 1.0},
+	}
+	if len(result) != len(want) {
+		t.Fatalf("position-based wants %d rows, got %v", len(want), result)
+	}
+	shareSum := 0.0
+	for _, row := range result {
+		key, _ := row["touchpoint"].(string)
+		expected, ok := want[key]
+		if !ok {
+			t.Fatalf("unexpected touchpoint %q: %v", key, row)
+		}
+		if row["subjects"] != expected.subjects {
+			t.Fatalf("%s subjects=%v want %d", key, row["subjects"], expected.subjects)
+		}
+		credit, _ := row["credit"].(float64)
+		if !approxEqual(credit, expected.credit, 1e-12) {
+			t.Fatalf("%s credit=%v want %v", key, credit, expected.credit)
+		}
+		share, _ := row["share"].(float64)
+		shareSum += share
+	}
+	if diff := shareSum - 1.0; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("position-based shares must sum to 1, got %v", shareSum)
+	}
+}
+
+func TestEvaluatePositionBasedDedupesRepeatedTouchpoint(t *testing.T) {
+	// A repeated key is one distinct node carrying full weight, not two nodes.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 15, "ad_click", false, true),
+		markedRow("u1", 20, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(positionRequest(86400), rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("deduped position-based path wants one row: %v %v", result, e)
+	}
+	row := result[0]
+	if row["touchpoint"] != "ad_click" || row["subjects"] != 1 {
+		t.Fatalf("position-based dedupe mismatch: %v", row)
+	}
+	credit, _ := row["credit"].(float64)
+	if !approxEqual(credit, 1.0, 1e-12) {
+		t.Fatalf("deduped single touchpoint credit must be 1, got %v", credit)
+	}
+}
+
+func TestEvaluatePositionBasedRespectsLookbackWindow(t *testing.T) {
+	// ad_click at 10s is outside a 30s window ending at the 100s conversion.
+	rows := []map[string]any{
+		markedRow("u1", 10, "ad_click", false, true),
+		markedRow("u1", 95, "email_open", false, true),
+		markedRow("u1", 100, "buy", true, false),
+	}
+	result, e := EvaluateAttribution(positionRequest(30), rows)
+	if e != nil || len(result) != 1 {
+		t.Fatalf("windowed position-based wants one row: %v %v", result, e)
+	}
+	if result[0]["touchpoint"] != "email_open" {
+		t.Fatalf("out-of-window touchpoint must be excluded: %v", result[0])
+	}
+	credit, _ := result[0]["credit"].(float64)
+	if !approxEqual(credit, 1.0, 1e-12) {
+		t.Fatalf("only eligible touchpoint must carry full weight: %v", credit)
+	}
+
+	// A one-second window removes every touchpoint, collapsing to direct.
+	direct, e := EvaluateAttribution(positionRequest(1), rows)
+	if e != nil || len(direct) != 1 || direct[0]["touchpoint"] != directAttributionBucket {
+		t.Fatalf("position-based without in-window touchpoint must be direct: %v %v", direct, e)
+	}
+}
+
+func TestPositionBasedValidationAndPlannerContract(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	valid := `{"kind":"attribution","environment":"development","subject":"uid","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-05T00:00:00Z"},"timezone":"UTC","attribution":{"conversion":{"event_key":"buy","schema_version":1},"touchpoints":[{"event_key":"ad_click","schema_version":1}],"window_seconds":86400,"model":"position_based"}}`
+	parsed, e := Parse([]byte(valid), validator)
+	if e != nil {
+		t.Fatalf("position_based must be accepted: %v", e)
+	}
+	if parsed.Attribution.Model != "position_based" {
+		t.Fatalf("model must deserialize to position_based, got %q", parsed.Attribution.Model)
+	}
+
+	r := positionRequest(86400)
+	if e := Validate(&r); e != nil {
+		t.Fatalf("position_based request must pass Go validation: %v", e)
+	}
+	plan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	keys := map[string]bool{}
+	for _, column := range plan.Columns {
+		keys[column.Key] = true
+	}
+	if !keys["credit"] {
+		t.Fatalf("position_based plan must expose the credit column: %+v", plan.Columns)
+	}
+}
+
 func attributionTemplate() Template {
 	return Template{
 		Kind:    "attribution",
@@ -639,7 +814,7 @@ func TestAttributionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		{"missing attribution block", "INVALID_ATTRIBUTION", func(t *Template) { t.Attribution = nil }},
 		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
 		{"window out of range", "INVALID_ATTRIBUTION_WINDOW", func(t *Template) { t.Attribution.WindowSeconds = 0 }},
-		{"unknown model", "INVALID_ATTRIBUTION_MODEL", func(t *Template) { t.Attribution.Model = "position_based" }},
+		{"unknown model", "INVALID_ATTRIBUTION_MODEL", func(t *Template) { t.Attribution.Model = "data_driven" }},
 		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

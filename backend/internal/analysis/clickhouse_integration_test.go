@@ -985,6 +985,97 @@ func TestClickHouseTimeDecayAttribution(t *testing.T) {
 	}
 }
 
+// TestClickHousePositionBasedAttribution proves U-shaped 0.4/0.2/0.4 weighting
+// against the real migrated view: the first and last distinct touchpoints
+// anchor each journey, two touchpoints split evenly, a lone touchpoint keeps
+// full weight, and a converter without a touchpoint stays in the direct
+// bucket. Per-subject weights total one and shares sum to one across rows.
+func TestClickHousePositionBasedAttribution(t *testing.T) {
+	client := clickHouseDatabase(t)
+	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	at := func(second int) time.Time { return day.Add(time.Duration(second) * time.Second) }
+	rows := []map[string]any{
+		// u1 touches three distinct events -> 0.4 / 0.2 / 0.4.
+		fact("pb-u1-ad", "ad_click", "u1", "", "source-one", 10, map[string]any{}),
+		fact("pb-u1-email", "email_open", "u1", "", "source-one", 20, map[string]any{}),
+		fact("pb-u1-social", "social_click", "u1", "", "source-one", 30, map[string]any{}),
+		fact("pb-u1-buy", "buy", "u1", "", "source-one", 40, map[string]any{}),
+		// u2 touches two distinct events -> 0.5 / 0.5.
+		fact("pb-u2-ad", "ad_click", "u2", "", "source-one", 10, map[string]any{}),
+		fact("pb-u2-email", "email_open", "u2", "", "source-one", 20, map[string]any{}),
+		fact("pb-u2-buy", "buy", "u2", "", "source-one", 30, map[string]any{}),
+		// u3 touches one event -> full weight.
+		fact("pb-u3-ad", "ad_click", "u3", "", "source-one", 15, map[string]any{}),
+		fact("pb-u3-buy", "buy", "u3", "", "source-one", 25, map[string]any{}),
+		// u4 converts without a touchpoint -> direct bucket full weight.
+		fact("pb-u4-buy", "buy", "u4", "", "source-one", 50, map[string]any{}),
+	}
+	seconds := map[string]int{
+		"pb-u1-ad": 10, "pb-u1-email": 20, "pb-u1-social": 30, "pb-u1-buy": 40,
+		"pb-u2-ad": 10, "pb-u2-email": 20, "pb-u2-buy": 30,
+		"pb-u3-ad": 15, "pb-u3-buy": 25, "pb-u4-buy": 50,
+	}
+	for _, row := range rows {
+		id := row["event_id"].(string)
+		stamp := at(seconds[id]).Format("2006-01-02 15:04:05.000")
+		row["event_time"] = stamp
+		row["occurred_at"] = stamp
+	}
+	seedRows(t, client, rows)
+
+	r := Request{
+		Kind: "attribution", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
+		Timezone:  "UTC",
+		Attribution: &Attribution{
+			Conversion: Step{EventKey: "buy", SchemaVersion: 1},
+			Touchpoints: []Step{
+				{EventKey: "ad_click", SchemaVersion: 1},
+				{EventKey: "email_open", SchemaVersion: 1},
+				{EventKey: "social_click", SchemaVersion: 1},
+			},
+			WindowSeconds: 86400,
+			Model:         "position_based",
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 4 {
+		t.Fatalf("position_based result must expose four columns including credit: %+v", result.Columns)
+	}
+	want := map[string]struct {
+		subjects int
+		credit   float64
+	}{
+		"ad_click":              {3, 1.9},
+		"email_open":            {2, 0.7},
+		"social_click":          {1, 0.4},
+		directAttributionBucket: {1, 1.0},
+	}
+	if len(result.Rows) != len(want) {
+		t.Fatalf("position_based wants %d rows, got %v", len(want), result.Rows)
+	}
+	shareSum := 0.0
+	for _, row := range result.Rows {
+		key, _ := row["touchpoint"].(string)
+		expected, ok := want[key]
+		if !ok {
+			t.Fatalf("unexpected touchpoint %q: %v", key, row)
+		}
+		if row["subjects"] != expected.subjects {
+			t.Fatalf("%s subjects=%v want %d", key, row["subjects"], expected.subjects)
+		}
+		credit, _ := row["credit"].(float64)
+		if diff := credit - expected.credit; diff > 1e-12 || diff < -1e-12 {
+			t.Fatalf("%s credit=%v want %v", key, credit, expected.credit)
+		}
+		share, _ := row["share"].(float64)
+		shareSum += share
+	}
+	if diff := shareSum - 1.0; diff > 1e-12 || diff < -1e-12 {
+		t.Fatalf("position_based shares must sum to 1, got %v", shareSum)
+	}
+}
+
 // TestClickHousePathCollapseRepeats proves the opt-in loop compression
 // against the real migrated view: adjacent identical events fold into one
 // node before depth extraction, while the default request stays byte-stable.

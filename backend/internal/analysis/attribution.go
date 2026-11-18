@@ -58,6 +58,8 @@ func evaluateAttribution(ctx context.Context, request Request, rows []map[string
 	switch request.Attribution.Model {
 	case "linear":
 		return evaluateLinearAttribution(ctx, request, bySubject)
+	case "position_based":
+		return evaluatePositionBasedAttribution(ctx, request, bySubject)
 	case "time_decay":
 		return evaluateTimeDecayAttribution(ctx, request, bySubject)
 	}
@@ -247,6 +249,123 @@ func evaluateLinearAttribution(
 			}
 			entry.subjects++
 			entry.credit += weight
+		}
+	}
+
+	aggregated := make([]*linearCredit, 0, len(credits))
+	for _, value := range credits {
+		aggregated = append(aggregated, value)
+	}
+	sort.Slice(aggregated, func(i, j int) bool {
+		if aggregated[i].credit != aggregated[j].credit {
+			return aggregated[i].credit > aggregated[j].credit
+		}
+		return aggregated[i].touchpoint < aggregated[j].touchpoint
+	})
+
+	out := make([]map[string]any, 0, len(aggregated))
+	for _, value := range aggregated {
+		share := 0.0
+		if converters > 0 {
+			share = value.credit / float64(converters)
+		}
+		out = append(out, map[string]any{
+			"touchpoint": value.touchpoint,
+			"subjects":   value.subjects,
+			"credit":     value.credit,
+			"share":      share,
+		})
+	}
+	return out, nil
+}
+
+// U-shaped position-based weighting anchors the journey at its edges: the
+// first and last distinct touchpoints each receive 0.4, while the 0.2 middle
+// budget is shared equally. With fewer than three touchpoints the weights
+// collapse so every subject still contributes a total of exactly one.
+const (
+	positionBasedEdgeWeight   = 0.4
+	positionBasedMiddleWeight = 0.2
+)
+
+// positionBasedWeights returns one weight per distinct in-window touchpoint
+// key in first-occurrence order. n must be positive: a single touchpoint gets
+// full weight, two split evenly, and three or more use 0.4/0.2/0.4.
+func positionBasedWeights(n int) []float64 {
+	weights := make([]float64, n)
+	switch {
+	case n <= 1:
+		weights[0] = 1.0
+	case n == 2:
+		weights[0], weights[1] = 0.5, 0.5
+	default:
+		weights[0] = positionBasedEdgeWeight
+		weights[n-1] = positionBasedEdgeWeight
+		middleShare := positionBasedMiddleWeight / float64(n-2)
+		for i := 1; i < n-1; i++ {
+			weights[i] = middleShare
+		}
+	}
+	return weights
+}
+
+// evaluatePositionBasedAttribution applies U-shaped (0.4/0.2/0.4) weights to
+// each converting subject's distinct in-window touchpoints, preserving causal
+// first-occurrence order. Subjects without an in-window touchpoint keep their
+// full weight in the fixed direct bucket, so the converting population is
+// never dropped.
+func evaluatePositionBasedAttribution(
+	ctx context.Context,
+	request Request,
+	bySubject map[string][]attributionEvent,
+) ([]map[string]any, error) {
+	window := request.Attribution.WindowSeconds
+	credits := map[string]*linearCredit{}
+	converters := 0
+	for _, events := range bySubject {
+		if e := ctx.Err(); e != nil {
+			return nil, e
+		}
+		sort.SliceStable(events, func(i, j int) bool {
+			return earlierAttributionEvent(events[i], events[j])
+		})
+		conversionIndex := -1
+		for i, event := range events {
+			if event.isConversion {
+				conversionIndex = i
+				break
+			}
+		}
+		if conversionIndex < 0 {
+			continue
+		}
+		converters++
+		cutoff := events[conversionIndex].time - window*1_000_000_000
+
+		// Distinct in-window touchpoint keys, preserving first-occurrence order.
+		seen := map[string]bool{}
+		keys := make([]string, 0, len(events))
+		for i := 0; i < conversionIndex; i++ {
+			event := events[i]
+			if event.time < cutoff || !event.isTouchpoint || seen[event.eventKey] {
+				continue
+			}
+			seen[event.eventKey] = true
+			keys = append(keys, event.eventKey)
+		}
+
+		if len(keys) == 0 {
+			keys = []string{directAttributionBucket}
+		}
+		weights := positionBasedWeights(len(keys))
+		for i, key := range keys {
+			entry, ok := credits[key]
+			if !ok {
+				entry = &linearCredit{touchpoint: key}
+				credits[key] = entry
+			}
+			entry.subjects++
+			entry.credit += weights[i]
 		}
 	}
 

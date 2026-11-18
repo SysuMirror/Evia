@@ -284,9 +284,9 @@ func validatePath(r *Request) error {
 	return nil
 }
 
-// validateAttribution enforces an explicit attribution model (last-touch,
-// first-touch or linear equal-weight), an explicit subject, one pinned
-// conversion, 1..8 distinct
+// validateAttribution enforces an explicit attribution model (single-touch
+// last/first, linear equal-weight, U-shaped position-based or exponential
+// time decay), an explicit subject, one pinned conversion, 1..8 distinct
 // pinned touchpoints that never reuse the conversion pair, and a 1..604800
 // second lookback window. Every malformed value fails closed.
 func validateAttribution(r *Request) error {
@@ -297,7 +297,7 @@ func validateAttribution(r *Request) error {
 	if a == nil {
 		return Invalid("INVALID_ATTRIBUTION", "归因配置缺失", "/attribution")
 	}
-	if a.Model != "last_touch" && a.Model != "first_touch" && a.Model != "linear" && a.Model != "time_decay" {
+	if a.Model != "last_touch" && a.Model != "first_touch" && a.Model != "linear" && a.Model != "position_based" && a.Model != "time_decay" {
 		return Invalid("INVALID_ATTRIBUTION_MODEL", "归因模型尚未实现", "/attribution/model")
 	}
 	if a.WindowSeconds < 1 || a.WindowSeconds > 604800 {
