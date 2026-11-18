@@ -2990,7 +2990,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run" | "metrics.read" | "metrics.write" | "metrics.publish" | "metrics.run";
+        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run" | "metrics.read" | "metrics.write" | "metrics.publish" | "metrics.run" | "data.erasure" | "data.export";
         MachinePrincipal: {
             /** Format: uuid */
             id: string;
