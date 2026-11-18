@@ -97,8 +97,8 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		}
 		expired := false
 		for _, widget := range out.Widgets {
-			if widget.Query.State == "expired" ||
-				(widget.Comparison != nil && widget.Comparison.State == "expired") {
+			if widget.Query.State == analysis.JobStateExpired ||
+				(widget.Comparison != nil && widget.Comparison.State == analysis.JobStateExpired) {
 				expired = true
 			}
 		}
@@ -270,7 +270,7 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 	// First pass: resolve every child job (authorization, expiry, FOR UPDATE).
 	for i := range ordered {
 		row := &ordered[i]
-		row.job = analysis.Job{ID: row.originalID, State: "expired", CreatedAt: row.created, Error: &analysis.JobError{Code: "QUERY_EXPIRED", Retryable: false}}
+		row.job = analysis.Job{ID: row.originalID, State: analysis.JobStateExpired, CreatedAt: row.created, Error: &analysis.JobError{Code: "QUERY_EXPIRED", Retryable: false}}
 		if row.queryID == nil {
 			continue
 		}

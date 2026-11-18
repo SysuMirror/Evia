@@ -153,7 +153,7 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 		if e = tx.Commit(ctx); e != nil {
 			return analysis.Job{}, e
 		}
-		if job.State == "expired" {
+		if job.State == analysis.JobStateExpired {
 			return analysis.Job{}, savedQueryExpired()
 		}
 		return job, nil

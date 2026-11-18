@@ -90,7 +90,7 @@ func (s *Store) EnqueueMetricVersion(ctx context.Context, actor, project, id str
 		if e = tx.Commit(ctx); e != nil {
 			return analysis.Job{}, e
 		}
-		if job.State == "expired" {
+		if job.State == analysis.JobStateExpired {
 			return analysis.Job{}, metricQueryExpired()
 		}
 		return job, nil

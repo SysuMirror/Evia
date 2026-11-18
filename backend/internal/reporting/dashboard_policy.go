@@ -455,17 +455,6 @@ var DashboardRunStates = []string{
 	DashboardRunPartial, DashboardRunExpired, DashboardRunCanceled, DashboardRunFailed,
 }
 
-// queryJobState keys read from widget jobs when aggregating run state. They
-// mirror the QueryJob.state enum; the aggregate never emits values outside
-// DashboardRunStates.
-const (
-	queryJobStateQueued    = "queued"
-	queryJobStateRunning   = "running"
-	queryJobStateSucceeded = "succeeded"
-	queryJobStateExpired   = "expired"
-	queryJobStateCanceled  = "canceled"
-)
-
 func DashboardRunState(widgets []DashboardWidgetRun) string {
 	if len(widgets) == 0 {
 		return DashboardRunExpired
@@ -482,22 +471,22 @@ func DashboardRunState(widgets []DashboardWidgetRun) string {
 			total++
 		}
 	}
-	if counts[queryJobStateQueued] == total {
+	if counts[analysis.JobStateQueued] == total {
 		return DashboardRunQueued
 	}
-	if counts[queryJobStateQueued]+counts[queryJobStateRunning] > 0 {
+	if counts[analysis.JobStateQueued]+counts[analysis.JobStateRunning] > 0 {
 		return DashboardRunRunning
 	}
-	if counts[queryJobStateSucceeded] == total {
+	if counts[analysis.JobStateSucceeded] == total {
 		return DashboardRunSucceeded
 	}
-	if counts[queryJobStateSucceeded] > 0 {
+	if counts[analysis.JobStateSucceeded] > 0 {
 		return DashboardRunPartial
 	}
-	if counts[queryJobStateExpired] == total {
+	if counts[analysis.JobStateExpired] == total {
 		return DashboardRunExpired
 	}
-	if counts[queryJobStateCanceled] == total {
+	if counts[analysis.JobStateCanceled] == total {
 		return DashboardRunCanceled
 	}
 	return DashboardRunFailed

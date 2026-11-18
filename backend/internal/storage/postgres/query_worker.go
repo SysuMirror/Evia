@@ -146,7 +146,7 @@ func (s *Store) CompleteQuery(ctx context.Context, claim analysis.Claim, outcome
 	}
 	var resultJSON, errorJSON []byte
 	var e error
-	state := "failed"
+	state := analysis.JobStateFailed
 	if outcome.Result != nil {
 		if len(outcome.Result.Rows) > 500 || outcome.Result.QueryID != claim.JobID {
 			return analysis.Invalid("INVALID_QUERY_OUTCOME", "查询结果标识或行数无效")
@@ -158,7 +158,7 @@ func (s *Store) CompleteQuery(ctx context.Context, claim analysis.Claim, outcome
 		if len(resultJSON) > 2*1024*1024 {
 			return analysis.Invalid("QUERY_RESULT_LIMIT_EXCEEDED", "查询结果超过存储字节预算")
 		}
-		state = "succeeded"
+		state = analysis.JobStateSucceeded
 	} else {
 		errorJSON, e = json.Marshal(outcome.Error)
 		if e != nil {

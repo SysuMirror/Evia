@@ -41,11 +41,11 @@ func scanQuery(row queryScanner, project string) (analysis.Job, error) {
 			return job, e
 		}
 	}
-	if job.State == "queued" || job.State == "running" {
+	if job.State == analysis.JobStateQueued || job.State == analysis.JobStateRunning {
 		delay := 1000
 		job.PollAfterMS = &delay
 	}
-	if job.State == "succeeded" {
+	if job.State == analysis.JobStateSucceeded {
 		job.ResultURL = "/api/v1/projects/" + project + "/queries/" + job.ID + "/result"
 	}
 	return job, nil
@@ -257,15 +257,15 @@ func (s *Store) QueryResult(ctx context.Context, actor, project, id string) (ana
 	if e = tx.QueryRow(ctx, `SELECT state,result_json FROM analysis_query_jobs WHERE id=$1 AND project_id=$2`, id, project).Scan(&state, &data); e != nil {
 		return analysis.Result{}, e
 	}
-	if state != "succeeded" {
+	if state != analysis.JobStateSucceeded {
 		if e = tx.Commit(ctx); e != nil {
 			return analysis.Result{}, e
 		}
 		code := "QUERY_RESULT_NOT_READY"
-		if state == "expired" {
+		if state == analysis.JobStateExpired {
 			code = "QUERY_EXPIRED"
 		}
-		if state == "failed" || state == "canceled" {
+		if state == analysis.JobStateFailed || state == analysis.JobStateCanceled {
 			code = "QUERY_RESULT_UNAVAILABLE"
 		}
 		return analysis.Result{}, fault.New(fault.Conflict, code, "查询尚无可读取的结果")
