@@ -961,8 +961,9 @@ type MetricRecord struct {
 }
 
 type MetricReference struct {
-	MetricID string `json:"metric_id"`
-	Version  int64  `json:"version"`
+	MetricID string  `json:"metric_id"`
+	Version  int64   `json:"version"`
+	Kind     *string `json:"kind,omitempty"`
 }
 
 type MetricUpdate struct {

@@ -2388,11 +2388,16 @@ export interface components {
             /** @enum {string} */
             kind: "metric" | "line" | "bar" | "table" | "funnel";
         };
-        /** @description Immutable pointer to a published metric version. The exact version is pinned at publication and never resolves to the latest metric. */
+        /** @description Immutable pointer to a published metric version. The exact version is pinned at publication and never resolves to the latest metric. kind selects the atomic metric_versions table (default) or the composite formula_metric_versions table. */
         MetricReference: {
             /** Format: uuid */
             metric_id: string;
             version: number;
+            /**
+             * @description Which immutable version table the metric_id/version pair resolves against. atomic (the default when omitted) pins a row in metric_versions and derives an executable trend template; composite pins a row in formula_metric_versions whose formula DAG the query worker expands at run time through the internal formula_ref marker. The value is optional for backward compatibility and normalized to atomic when empty; any other value is rejected.
+             * @enum {string}
+             */
+            kind?: "atomic" | "composite";
         };
         /** @description Restricted typed formula node. constant carries only value, metric carries only an immutable reference, add/subtract/multiply/divide carry only left and right children, and convert carries only a left child plus target_unit for an explicit same-dimension unit conversion. There is no string grammar, SQL or JavaScript. Tree depth is at most 8, nodes at most 64 and distinct references at most 8. */
         FormulaExpression: {
