@@ -2687,7 +2687,7 @@ export interface components {
         };
         SavedAnalysisChange: {
             /** @enum {string} */
-            category: "definition" | "metadata" | "kind" | "event_versions" | "filter" | "subject" | "metrics" | "group_by" | "interval" | "funnel" | "limit" | "visualization";
+            category: "definition" | "metadata" | "kind" | "event_versions" | "filter" | "subject" | "metrics" | "group_by" | "interval" | "funnel" | "limit" | "visualization" | "retention" | "segment" | "path" | "attribution" | "metric_ref";
             path: string;
             before?: unknown;
             after?: unknown;
@@ -2813,7 +2813,7 @@ export interface components {
         };
         DashboardChange: {
             /** @enum {string} */
-            category: "definition" | "metadata" | "widgets" | "dependencies" | "layout";
+            category: "definition" | "metadata" | "widgets" | "dependencies" | "layout" | "parameters";
             path: string;
             before?: unknown;
             after?: unknown;

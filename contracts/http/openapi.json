@@ -24237,7 +24237,12 @@
               "interval",
               "funnel",
               "limit",
-              "visualization"
+              "visualization",
+              "retention",
+              "segment",
+              "path",
+              "attribution",
+              "metric_ref"
             ]
           },
           "path": {
@@ -24763,7 +24768,8 @@
               "metadata",
               "widgets",
               "dependencies",
-              "layout"
+              "layout",
+              "parameters"
             ]
           },
           "path": {
