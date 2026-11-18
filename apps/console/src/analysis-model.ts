@@ -76,22 +76,37 @@ export const operators: Record<string, string> = {
   eq: '等于',
   neq: '不等于',
   in: '属于',
+  not_in: '不属于',
   gt: '大于',
   gte: '大于等于',
   lt: '小于',
   lte: '小于等于',
   prefix: '开头是',
+  not_prefix: '开头不是',
   contains: '包含',
+  not_contains: '不包含',
   is_present: '存在',
   is_missing: '缺失',
 };
 export function fieldOperators(key: string, type?: string) {
   const kind = type ?? (key === 'event_time' ? 'datetime' : 'string');
-  if (kind.startsWith('array:')) return ['eq', 'neq', 'contains', 'is_present', 'is_missing'];
-  if (kind === 'boolean') return ['eq', 'neq', 'in', 'is_present', 'is_missing'];
+  if (kind.startsWith('array:'))
+    return ['eq', 'neq', 'contains', 'not_contains', 'is_present', 'is_missing'];
+  if (kind === 'boolean') return ['eq', 'neq', 'in', 'not_in', 'is_present', 'is_missing'];
   if (kind === 'number' || kind === 'integer' || kind === 'datetime')
-    return ['eq', 'neq', 'in', 'gt', 'gte', 'lt', 'lte', 'is_present', 'is_missing'];
-  return ['eq', 'neq', 'in', 'prefix', 'contains', 'is_present', 'is_missing'];
+    return ['eq', 'neq', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'is_present', 'is_missing'];
+  return [
+    'eq',
+    'neq',
+    'in',
+    'not_in',
+    'prefix',
+    'not_prefix',
+    'contains',
+    'not_contains',
+    'is_present',
+    'is_missing',
+  ];
 }
 export function publishedFields(
   schema: Record<string, unknown>,
@@ -275,7 +290,9 @@ function readFilters(form: AnalysisForm): QueryFilter[] {
     const reference: QueryField = field.reference;
     if (row.op === 'is_missing' || row.op === 'is_present') return { op: row.op, field: reference };
     const arrayValue =
-      row.op === 'in' || (field.type.startsWith('array:') && row.op !== 'contains');
+      row.op === 'in' ||
+      row.op === 'not_in' ||
+      (field.type.startsWith('array:') && row.op !== 'contains' && row.op !== 'not_contains');
     let values: unknown[];
     if (arrayValue) {
       let value: unknown;

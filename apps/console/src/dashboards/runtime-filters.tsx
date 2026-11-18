@@ -250,7 +250,7 @@ export function DashboardRuntimeFilters({
                   hint={
                     field?.type === 'boolean'
                       ? 'true 或 false'
-                      : row.op === 'in'
+                      : row.op === 'in' || row.op === 'not_in'
                         ? '输入 JSON 数组'
                         : undefined
                   }

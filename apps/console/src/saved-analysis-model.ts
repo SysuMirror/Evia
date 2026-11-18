@@ -264,7 +264,10 @@ export function parseSavedFilterValue(
   op: string,
 ): string | number | boolean | (string | number | boolean)[] {
   if (!fieldOperators('', type).includes(op)) throw new Error('筛选运算与字段类型不兼容。');
-  const array = op === 'in' || (type.startsWith('array:') && op !== 'contains');
+  const array =
+    op === 'in' ||
+    op === 'not_in' ||
+    (type.startsWith('array:') && op !== 'contains' && op !== 'not_contains');
   const kind = type.replace('array:', '');
   let input: unknown = text;
   if (array) {

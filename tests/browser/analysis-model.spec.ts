@@ -6,6 +6,8 @@ import {
   initialForm,
   metricLabel,
   publishedFields,
+  fieldOperators,
+  operators,
   type AnalysisForm,
   type QueryField,
 } from '../../apps/console/src/analysis-model';
@@ -98,6 +100,10 @@ test('analysis typed filters preserve empty strings, zero, false and JSON arrays
     ['string', 'in', '[""]', ['']],
     ['string', 'eq', '', ''],
     ['array:string', 'contains', '', ''],
+    ['array:string', 'not_contains', '', ''],
+    ['string', 'not_in', '["a", "b"]', ['a', 'b']],
+    ['string', 'not_contains', 'x', 'x'],
+    ['string', 'not_prefix', 'home', 'home'],
     ['number', 'eq', '0', 0],
     ['boolean', 'eq', 'false', false],
   ] as const)
@@ -112,6 +118,7 @@ test('analysis typed filters preserve empty strings, zero, false and JSON arrays
     ['array:string', 'eq', JSON.stringify(Array(21).fill('x'))],
     ['array:string', 'eq', JSON.stringify(['x'.repeat(1025)])],
     ['string', 'gt', 'x'],
+    ['string', 'not_in', 'x'],
   ])
     expect(() => filterValue(type!, op!, value!)).toThrow();
 });
@@ -617,4 +624,16 @@ test('analysis preserves immutable property versions, funnel order, timezone and
   expect(buildRequest(input, 'staging').interval).toBe('hour');
   input.to = input.from;
   expect(() => buildRequest(input, 'staging')).toThrow('开始早于结束');
+});
+
+test('field operators advertise negation members with labels per type', () => {
+  expect(fieldOperators('title', 'string')).toEqual(
+    expect.arrayContaining(['not_in', 'not_prefix', 'not_contains']),
+  );
+  expect(fieldOperators('score', 'number')).toEqual(expect.arrayContaining(['not_in']));
+  expect(fieldOperators('score', 'number')).not.toContain('not_prefix');
+  expect(fieldOperators('tags', 'array:string')).toEqual(expect.arrayContaining(['not_contains']));
+  expect(fieldOperators('tags', 'array:string')).not.toContain('not_in');
+  for (const op of ['not_in', 'not_prefix', 'not_contains'])
+    expect(typeof operators[op]).toBe('string');
 });
