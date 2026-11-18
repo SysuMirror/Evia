@@ -748,7 +748,13 @@ export function AnalysisPage({
                 {form.retentionReturn.event
                   ? `${form.retentionReturn.event} v${form.retentionReturn.version}`
                   : '未选择事件'}
-                ；{form.retentionGranularity === 'day' ? '按天' : '按周'} {form.retentionPeriods} 期
+                ；
+                {form.retentionGranularity === 'day'
+                  ? '按天'
+                  : form.retentionGranularity === 'month'
+                    ? '按月'
+                    : '按周'}{' '}
+                {form.retentionPeriods} 期
               </span>
             </div>
           )}
@@ -954,7 +960,7 @@ export function AnalysisPage({
                       (snapshot.request.kind === 'funnel'
                         ? `${snapshot.request.funnel?.steps.length ?? 0} 步有序漏斗`
                         : snapshot.request.kind === 'retention'
-                          ? `${snapshot.request.retention?.periods ?? 0} 期${snapshot.request.retention?.granularity === 'week' ? '按周' : '按天'}留存`
+                          ? `${snapshot.request.retention?.periods ?? 0} 期${snapshot.request.retention?.granularity === 'week' ? '按周' : snapshot.request.retention?.granularity === 'month' ? '按月' : '按天'}留存`
                           : snapshot.request.kind === 'segment'
                             ? `按 ${snapshot.request.segment?.field.key ?? ''} 分群`
                             : snapshot.request.kind === 'path'
@@ -1297,7 +1303,7 @@ export function AnalysisPage({
             {form.mode === 'metrics' || form.mode === 'trend'
               ? '最多 31 天'
               : form.mode === 'retention'
-                ? `最多 ${Number(form.retentionPeriods) * (form.retentionGranularity === 'week' ? 7 : 1)} 天`
+                ? `最多 ${Number(form.retentionPeriods) * (form.retentionGranularity === 'week' ? 7 : form.retentionGranularity === 'month' ? 31 : 1)} 天`
                 : '最多 7 天'}
             。输入采用 UTC，分桶与结果采用所选时区。
           </p>
@@ -1853,6 +1859,7 @@ export function AnalysisPage({
               options={[
                 { value: 'day', label: '按天（时区对齐日历日）' },
                 { value: 'week', label: '按周（周一开始）' },
+                { value: 'month', label: '按月（自然月首日起算）' },
               ]}
             />
           </Field>

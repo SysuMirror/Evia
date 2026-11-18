@@ -49,6 +49,7 @@ export function RetentionSection({
             options={[
               { value: 'day', label: '按天' },
               { value: 'week', label: '按周（周一起算）' },
+              { value: 'month', label: '按月（自然月首日起算）' },
             ]}
             onChange={(event) =>
               onRetentionChange({

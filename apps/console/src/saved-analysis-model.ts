@@ -325,7 +325,7 @@ export function savedDefinitionSummary(value: SavedAnalysisDefinition): string {
   if (q.kind === 'funnel')
     return `${q.funnel?.steps.length ?? 0} 个有序步骤，${q.funnel?.window_seconds ?? 0} 秒窗口`;
   if (q.kind === 'retention' && q.retention)
-    return `留存 ${q.retention.periods} 期（${q.retention.granularity === 'week' ? '按周' : '按天'}），起止事件各 1 个固定版本`;
+    return `留存 ${q.retention.periods} 期（${q.retention.granularity === 'week' ? '按周' : q.retention.granularity === 'month' ? '按月' : '按天'}），起止事件各 1 个固定版本`;
   if (q.kind === 'segment' && q.segment) return '分群：按主体最早分群事件的标量字段唯一归组';
   if (q.kind === 'path' && q.path)
     return `路径深度 ${q.path.depth}${q.path.start_event ? '，钉选起始事件' : '，读取窗口内全部事件'}`;
@@ -527,8 +527,8 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
       rt &&
       object(rt, ['start_event', 'return_event', 'granularity', 'periods'], '/query/retention')
     ) {
-      if (rt.granularity !== 'day' && rt.granularity !== 'week')
-        add('/query/retention/granularity', '留存粒度必须是 day 或 week。');
+      if (rt.granularity !== 'day' && rt.granularity !== 'week' && rt.granularity !== 'month')
+        add('/query/retention/granularity', '留存粒度必须是 day、week 或 month。');
       safe(rt.periods, 1, 12, '/query/retention/periods');
       if (
         object(

@@ -197,6 +197,36 @@ test('retention time window follows periods multiplied by granularity', () => {
   expect(() => buildRequest(input, 'development')).toThrow('最多 84 天');
 });
 
+test('retention natural-month granularity passes through with a 31-day per-period window', () => {
+  const input = form();
+  input.mode = 'retention';
+  input.retentionStart = { event: 'sign_up', version: '1' };
+  input.retentionReturn = { event: 'login', version: '1' };
+  input.retentionGranularity = 'month';
+  input.retentionPeriods = '2';
+  input.from = '2026-11-01T00:00';
+  input.to = '2027-01-02T00:00'; // 62 days = two 31-day month windows
+  const monthly = buildRequest(input, 'development');
+  expect(monthly.retention?.granularity).toBe('month');
+  expect(monthly.retention?.periods).toBe(2);
+
+  input.to = '2027-01-03T00:00'; // 63 days exceeds the 62-day month window
+  expect(() => buildRequest(input, 'development')).toThrow('最多 62 天');
+
+  // Twelve month periods permit the conservative 372-day scan ceiling.
+  input.retentionPeriods = '12';
+  input.from = '2026-11-01T00:00';
+  input.to = '2027-11-08T00:00'; // 372 days
+  const yearly = buildRequest(input, 'development');
+  expect(yearly.retention?.granularity).toBe('month');
+  expect(yearly.retention?.periods).toBe(12);
+
+  // Section validation accepts month and still rejects a foreign granularity.
+  expect(() => validateAnalysisSection(input, 'retention')).not.toThrow();
+  const bad = { ...input, retentionGranularity: 'hour' as 'day' };
+  expect(() => validateAnalysisSection(bad, 'retention')).toThrow();
+});
+
 test('segmentation builds unique-subject group requests and closes the validation surface', () => {
   const scalarField = publishedFields(
     {

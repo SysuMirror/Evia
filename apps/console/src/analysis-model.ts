@@ -38,7 +38,7 @@ export type AnalysisForm = {
   window: string;
   retentionStart: { event: string; version: string };
   retentionReturn: { event: string; version: string };
-  retentionGranularity: 'day' | 'week';
+  retentionGranularity: 'day' | 'week' | 'month';
   retentionPeriods: string;
   segmentEvent: { event: string; version: string };
   segmentField: string;
@@ -221,12 +221,15 @@ function readTimeRange(form: AnalysisForm) {
   return { from, to };
 }
 
-// retentionSpanDays mirrors the backend window: periods multiplied by the
-// calendar granularity, with an 84-day hard ceiling.
+// retentionSpanDays mirrors the backend scan window: day/week use their exact
+// period length, while month uses the conservative 31-day upper bound (the
+// evaluator aligns cohorts to calendar months independently of this duration).
 function retentionSpanDays(form: AnalysisForm): number {
   const periods = Number(form.retentionPeriods);
   const safePeriods = Number.isInteger(periods) && periods >= 1 && periods <= 12 ? periods : 12;
-  return safePeriods * (form.retentionGranularity === 'week' ? 7 : 1);
+  const daysPerPeriod =
+    form.retentionGranularity === 'week' ? 7 : form.retentionGranularity === 'month' ? 31 : 1;
+  return safePeriods * daysPerPeriod;
 }
 function readRetentionStep(
   step: { event: string; version: string },
@@ -237,8 +240,12 @@ function readRetentionStep(
   return { event_key: step.event, schema_version: Number(step.version) };
 }
 function readRetention(form: AnalysisForm): NonNullable<QueryRequest['retention']> {
-  if (form.retentionGranularity !== 'day' && form.retentionGranularity !== 'week')
-    throw new AnalysisValidationError('retention', '留存粒度须为按天或按周。');
+  if (
+    form.retentionGranularity !== 'day' &&
+    form.retentionGranularity !== 'week' &&
+    form.retentionGranularity !== 'month'
+  )
+    throw new AnalysisValidationError('retention', '留存粒度须为按天、按周或按月。');
   const periods = Number(form.retentionPeriods);
   if (!Number.isInteger(periods) || periods < 1 || periods > 12)
     throw new AnalysisValidationError('retention', '留存期数须为 1 至 12 的整数。');
