@@ -272,3 +272,34 @@ func TestMachineConcurrentIssuanceHasOneSecretAndExpiryBounds(t *testing.T) {
 		t.Fatal("bounded overlap missing", e)
 	}
 }
+
+// TestMachineGovernanceGrantsPersistAndAuthenticate closes the contract loop
+// for the two data governance permissions: a principal carrying data.erasure
+// and data.export must survive creation and authentication with the exact
+// permission set, matching the 26-entry access.machinePermissions closed set.
+func TestMachineGovernanceGrantsPersistAndAuthenticate(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	svc := access.NewMachines(f.s)
+	in := machineInput()
+	in.Name = "Governance agent"
+	in.Permissions = []string{access.PermissionDataErasure, access.PermissionDataExport}
+	issued, e := svc.CreatePrincipal(ctx, f.owner, f.project, "governance-create", in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(issued.Principal.Permissions) != 2 {
+		t.Fatalf("governance grants not persisted: %+v", issued.Principal.Permissions)
+	}
+	identity, e := svc.AuthenticateMachine(ctx, issued.SecretOnce)
+	if e != nil {
+		t.Fatal(e)
+	}
+	grants := map[string]bool{}
+	for _, permission := range identity.Permissions {
+		grants[permission] = true
+	}
+	if !grants[access.PermissionDataErasure] || !grants[access.PermissionDataExport] {
+		t.Fatalf("authenticated identity lost governance grants: %+v", identity.Permissions)
+	}
+}
