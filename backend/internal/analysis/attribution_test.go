@@ -22,7 +22,7 @@ func attributionRequest(window int64) Request {
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 			WindowSeconds: window,
-			Model:         "last_touch",
+			Model:         AttributionModelLastTouch,
 		},
 	}
 }
@@ -241,7 +241,7 @@ func TestAttributionPlannerEmitsMarkersAndSubjectPull(t *testing.T) {
 
 func firstTouchRequest(window int64) Request {
 	r := attributionRequest(window)
-	r.Attribution.Model = "first_touch"
+	r.Attribution.Model = AttributionModelFirstTouch
 	return r
 }
 
@@ -303,7 +303,7 @@ func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
 	if e != nil {
 		t.Fatalf("first_touch must be accepted: %v", e)
 	}
-	if parsed.Attribution.Model != "first_touch" {
+	if parsed.Attribution.Model != AttributionModelFirstTouch {
 		t.Fatalf("model must deserialize to first_touch, got %q", parsed.Attribution.Model)
 	}
 
@@ -322,7 +322,7 @@ func TestFirstTouchValidationAcceptsModelAndRejectsUnknown(t *testing.T) {
 
 func linearRequest(window int64) Request {
 	r := attributionRequest(window)
-	r.Attribution.Model = "linear"
+	r.Attribution.Model = AttributionModelLinear
 	return r
 }
 
@@ -436,7 +436,7 @@ func TestLinearValidationAndPlannerContract(t *testing.T) {
 	if e != nil {
 		t.Fatalf("linear must be accepted: %v", e)
 	}
-	if parsed.Attribution.Model != "linear" {
+	if parsed.Attribution.Model != AttributionModelLinear {
 		t.Fatalf("model must deserialize to linear, got %q", parsed.Attribution.Model)
 	}
 
@@ -471,7 +471,7 @@ func TestLinearValidationAndPlannerContract(t *testing.T) {
 
 func decayRequest(window, halfLife int64) Request {
 	r := attributionRequest(window)
-	r.Attribution.Model = "time_decay"
+	r.Attribution.Model = AttributionModelTimeDecay
 	r.Attribution.DecayHalfLifeSeconds = halfLife
 	return r
 }
@@ -605,7 +605,7 @@ func TestTimeDecayPlannerEmitsCreditColumn(t *testing.T) {
 
 func positionRequest(window int64) Request {
 	r := attributionRequest(window)
-	r.Attribution.Model = "position_based"
+	r.Attribution.Model = AttributionModelPositionBased
 	return r
 }
 
@@ -757,7 +757,7 @@ func TestPositionBasedValidationAndPlannerContract(t *testing.T) {
 	if e != nil {
 		t.Fatalf("position_based must be accepted: %v", e)
 	}
-	if parsed.Attribution.Model != "position_based" {
+	if parsed.Attribution.Model != AttributionModelPositionBased {
 		t.Fatalf("model must deserialize to position_based, got %q", parsed.Attribution.Model)
 	}
 
@@ -786,7 +786,7 @@ func attributionTemplate() Template {
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}},
 			WindowSeconds: 86400,
-			Model:         "last_touch",
+			Model:         AttributionModelLastTouch,
 		},
 	}
 }

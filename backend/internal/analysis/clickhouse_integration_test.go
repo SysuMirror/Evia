@@ -796,7 +796,7 @@ func TestClickHouseAttribution(t *testing.T) {
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 			WindowSeconds: 86400,
-			Model:         "last_touch",
+			Model:         AttributionModelLastTouch,
 		},
 	}
 	result := execute(t, client, r)
@@ -832,7 +832,7 @@ func TestClickHouseAttribution(t *testing.T) {
 		Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 		Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 		WindowSeconds: 5,
-		Model:         "last_touch",
+		Model:         AttributionModelLastTouch,
 	}
 	tightResult := execute(t, client, tight)
 	if len(tightResult.Rows) != 1 || tightResult.Rows[0]["touchpoint"] != directAttributionBucket || tightResult.Rows[0]["subjects"] != 3 {
@@ -879,7 +879,7 @@ func TestClickHouseFirstTouchAttribution(t *testing.T) {
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 			WindowSeconds: 86400,
-			Model:         "first_touch",
+			Model:         AttributionModelFirstTouch,
 		},
 	}
 	result := execute(t, client, r)
@@ -945,7 +945,7 @@ func TestClickHouseLinearAttribution(t *testing.T) {
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 			WindowSeconds: 86400,
-			Model:         "linear",
+			Model:         AttributionModelLinear,
 		},
 	}
 	result := execute(t, client, r)
@@ -1020,7 +1020,7 @@ func TestClickHouseTimeDecayAttribution(t *testing.T) {
 			Conversion:           Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:          []Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 1}},
 			WindowSeconds:        86400,
-			Model:                "time_decay",
+			Model:                AttributionModelTimeDecay,
 			DecayHalfLifeSeconds: 10,
 		},
 	}
@@ -1107,7 +1107,7 @@ func TestClickHousePositionBasedAttribution(t *testing.T) {
 				{EventKey: "social_click", SchemaVersion: 1},
 			},
 			WindowSeconds: 86400,
-			Model:         "position_based",
+			Model:         AttributionModelPositionBased,
 		},
 	}
 	result := execute(t, client, r)

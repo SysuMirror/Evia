@@ -568,7 +568,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 						Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
 						Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}},
 						WindowSeconds: 86400,
-						Model:         "last_touch",
+						Model:         analysis.AttributionModelLastTouch,
 					},
 				},
 				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},

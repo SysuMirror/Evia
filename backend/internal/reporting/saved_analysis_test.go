@@ -409,7 +409,7 @@ func attributionSavedDefinition() SavedAnalysisDefinition {
 				Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
 				Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 2}},
 				WindowSeconds: 86400,
-				Model:         "last_touch",
+				Model:         analysis.AttributionModelLastTouch,
 			},
 		},
 		Visualization: SavedAnalysisVisualization{Kind: "table"},
