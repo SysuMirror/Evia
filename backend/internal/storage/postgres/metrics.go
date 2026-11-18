@@ -441,7 +441,7 @@ func metricSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in rep
 	if e = resolveQueryFields(ctx, tx, project, &request); e != nil {
 		return out, e
 	}
-	manifest := reporting.DependencyManifest{ProjectID: project, Environment: out.Draft.Environment, SelectionMode: "event_versions", UnfixedEventKeys: []string{}, EventVersions: []reporting.Dependency{}}
+	manifest := reporting.DependencyManifest{ProjectID: project, Environment: out.Draft.Environment, SelectionMode: reporting.SelectionModeEventVersions, UnfixedEventKeys: []string{}, EventVersions: []reporting.Dependency{}}
 	versions := map[analysis.EventVersion]bool{}
 	for _, v := range request.EventVersions {
 		versions[v] = true

@@ -113,6 +113,34 @@ type Dependency struct {
 	SchemaVersion  int64  `json:"schema_version"`
 	DefinitionHash string `json:"definition_hash"`
 }
+
+// Dependency selection mode closed set, mirrored by the
+// QueryDependencyManifest.selection_mode OpenAPI enum and guarded by
+// TestSelectionModeVocabularyMatchesContract.
+const (
+	SelectionModeEventKeys        = "event_keys"
+	SelectionModeEventVersions    = "event_versions"
+	SelectionModeAllEvents        = "all_events"
+	SelectionModeFunnelSteps      = "funnel_steps"
+	SelectionModeRetentionSteps   = "retention_steps"
+	SelectionModeSegmentSteps     = "segment_steps"
+	SelectionModePathSteps        = "path_steps"
+	SelectionModeAttributionSteps = "attribution_steps"
+)
+
+// SelectionModes is the single Go-side source of truth for the eight
+// dependency selection modes.
+var SelectionModes = []string{
+	SelectionModeEventKeys,
+	SelectionModeEventVersions,
+	SelectionModeAllEvents,
+	SelectionModeFunnelSteps,
+	SelectionModeRetentionSteps,
+	SelectionModeSegmentSteps,
+	SelectionModePathSteps,
+	SelectionModeAttributionSteps,
+}
+
 type DependencyManifest struct {
 	ProjectID        string       `json:"project_id"`
 	Environment      string       `json:"environment"`
@@ -311,17 +339,17 @@ func (s *Discovery) ValidateQuery(ctx context.Context, actor, project string, ra
 	if e != nil {
 		return QueryValidation{}, e
 	}
-	manifest := DependencyManifest{ProjectID: project, Environment: r.Environment, SelectionMode: "all_events", UnfixedEventKeys: []string{}, EventVersions: resolved.Dependencies}
+	manifest := DependencyManifest{ProjectID: project, Environment: r.Environment, SelectionMode: SelectionModeAllEvents, UnfixedEventKeys: []string{}, EventVersions: resolved.Dependencies}
 	if manifest.EventVersions == nil {
 		manifest.EventVersions = []Dependency{}
 	}
 	switch {
 	case r.Funnel != nil:
-		manifest.SelectionMode = "funnel_steps"
+		manifest.SelectionMode = SelectionModeFunnelSteps
 	case r.EventVersions != nil:
-		manifest.SelectionMode = "event_versions"
+		manifest.SelectionMode = SelectionModeEventVersions
 	case len(r.EventKeys) > 0:
-		manifest.SelectionMode = "event_keys"
+		manifest.SelectionMode = SelectionModeEventKeys
 		manifest.UnfixedEventKeys = append(manifest.UnfixedEventKeys, safe.EventKeys...)
 	}
 	sort.Slice(manifest.EventVersions, func(i, j int) bool {

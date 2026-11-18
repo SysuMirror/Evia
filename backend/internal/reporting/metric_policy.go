@@ -174,7 +174,7 @@ func metricDependencies(draft MetricDraft, definition MetricDefinition, in Depen
 	invalid := func() (DependencyManifest, error) {
 		return DependencyManifest{}, analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "指标依赖与固定事件版本不匹配")
 	}
-	mode := "event_versions"
+	mode := SelectionModeEventVersions
 	selected := map[analysis.EventVersion]bool{}
 	for _, v := range definition.EventVersions {
 		selected[v] = true

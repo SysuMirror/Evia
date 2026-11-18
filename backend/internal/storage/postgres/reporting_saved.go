@@ -468,39 +468,39 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 	if e = resolveQueryFields(ctx, tx, project, &request); e != nil {
 		return out, e
 	}
-	manifest := reporting.DependencyManifest{ProjectID: project, Environment: out.Draft.Environment, SelectionMode: "event_versions", UnfixedEventKeys: []string{}, EventVersions: []reporting.Dependency{}}
+	manifest := reporting.DependencyManifest{ProjectID: project, Environment: out.Draft.Environment, SelectionMode: reporting.SelectionModeEventVersions, UnfixedEventKeys: []string{}, EventVersions: []reporting.Dependency{}}
 	versions := map[analysis.EventVersion]bool{}
 	for _, v := range request.EventVersions {
 		versions[v] = true
 	}
 	if request.Funnel != nil {
-		manifest.SelectionMode = "funnel_steps"
+		manifest.SelectionMode = reporting.SelectionModeFunnelSteps
 		for _, step := range request.Funnel.Steps {
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
 	if request.Retention != nil {
-		manifest.SelectionMode = "retention_steps"
+		manifest.SelectionMode = reporting.SelectionModeRetentionSteps
 		for _, step := range []analysis.Step{request.Retention.StartEvent, request.Retention.ReturnEvent} {
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
 	if request.Segment != nil {
-		manifest.SelectionMode = "segment_steps"
+		manifest.SelectionMode = reporting.SelectionModeSegmentSteps
 		step := request.Segment.Event
 		versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 	}
 	if request.Path != nil {
 		if request.Path.StartEvent != nil {
-			manifest.SelectionMode = "path_steps"
+			manifest.SelectionMode = reporting.SelectionModePathSteps
 			step := *request.Path.StartEvent
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		} else {
-			manifest.SelectionMode = "all_events"
+			manifest.SelectionMode = reporting.SelectionModeAllEvents
 		}
 	}
 	if request.Attribution != nil {
-		manifest.SelectionMode = "attribution_steps"
+		manifest.SelectionMode = reporting.SelectionModeAttributionSteps
 		for _, step := range append([]analysis.Step{request.Attribution.Conversion}, request.Attribution.Touchpoints...) {
 			versions[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}

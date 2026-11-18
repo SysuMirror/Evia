@@ -403,41 +403,41 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 	invalid := func() (DependencyManifest, error) {
 		return DependencyManifest{}, analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "保存分析依赖与固定事件版本不匹配")
 	}
-	mode := "event_versions"
+	mode := SelectionModeEventVersions
 	selected := map[analysis.EventVersion]bool{}
 	for _, v := range template.EventVersions {
 		selected[v] = true
 	}
 	if template.Kind == "funnel" {
-		mode = "funnel_steps"
+		mode = SelectionModeFunnelSteps
 		for _, step := range template.Funnel.Steps {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
 	if template.Kind == "retention" {
-		mode = "retention_steps"
+		mode = SelectionModeRetentionSteps
 		for _, step := range []analysis.Step{template.Retention.StartEvent, template.Retention.ReturnEvent} {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
 	if template.Kind == "segment" {
-		mode = "segment_steps"
+		mode = SelectionModeSegmentSteps
 		step := template.Segment.Event
 		selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 	}
 	if template.Kind == "path" {
 		if template.Path.StartEvent != nil {
-			mode = "path_steps"
+			mode = SelectionModePathSteps
 			step := *template.Path.StartEvent
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		} else {
 			// No pinned start: the path reads every in-window event, so there
 			// is no event-version dependency and the manifest stays all_events.
-			mode = "all_events"
+			mode = SelectionModeAllEvents
 		}
 	}
 	if template.Kind == "attribution" {
-		mode = "attribution_steps"
+		mode = SelectionModeAttributionSteps
 		for _, step := range append([]analysis.Step{template.Attribution.Conversion}, template.Attribution.Touchpoints...) {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
