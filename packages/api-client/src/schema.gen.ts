@@ -745,6 +745,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/saved-analyses/{analysis_id}/versions/{version}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * createSavedAnalysisExportJob
+         * @description Creates a bounded export job from an exact immutable saved analysis version. The server rebinds the stored snapshot with the supplied time_range and timezone, rechecks the metric pin (failing closed on METRIC_PIN_CONFLICT) and rejects archived analyses with SAVED_ANALYSIS_ARCHIVED. Composite metric refs persist the internal formula_ref marker and are expanded by the export worker. The same actor/project/idempotency key replays the accepted snapshot or returns IDEMPOTENCY_CONFLICT on a divergent body.
+         */
+        post: operations["createSavedAnalysisExportJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/dashboards/{dashboard_id}": {
         parameters: {
             query?: never;
@@ -2163,6 +2183,13 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             finished_at: string | null;
+            /**
+             * Format: uuid
+             * @description 非空时表示该导出源自指定保存分析不可变版本；与 source_analysis_version 同时为空或同时非空。
+             */
+            source_analysis_id?: string | null;
+            /** @description 导出来源保存分析版本号；内联查询导出时为 null。 */
+            source_analysis_version?: number | null;
         };
         ExportList: {
             items: components["schemas"]["ExportJob"][];
@@ -3369,6 +3396,20 @@ export interface components {
             title: string;
             description: string;
             sections: components["schemas"]["ReportSectionInput"][];
+        };
+        /** @description 基于已发布保存分析不可变版本创建导出作业：服务端按版本快照绑定有界查询，复合公式指标版本会写入内部 formula_ref 标记并由导出 worker 展开 DAG；调用方只提供时间范围、时区与产物偏好。 */
+        SavedAnalysisExportInput: {
+            name: string;
+            /**
+             * @description 导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录；缺省为 json。
+             * @default json
+             * @enum {string}
+             */
+            format: "json" | "csv" | "ndjson";
+            time_range: components["schemas"]["time_range"];
+            timezone: components["schemas"]["timezone"];
+            /** Format: date-time */
+            artifact_expiry_at?: string | null;
         };
         filter: {
             /**
@@ -10344,6 +10385,112 @@ export interface operations {
             };
             /** @description 请求失败 */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSavedAnalysisExportJob: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description 会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。 */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                analysis_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedAnalysisExportInput"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJob"];
+                };
+            };
+            /** @description 成功 */
+            201: {
+                headers: {
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJob"];
+                };
+            };
+            /** @description 请求失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求失败 */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

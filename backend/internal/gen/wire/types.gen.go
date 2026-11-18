@@ -661,20 +661,22 @@ type ExportInput struct {
 }
 
 type ExportJob struct {
-	JobID          string  `json:"job_id"`
-	ProjectID      string  `json:"project_id"`
-	Environment    string  `json:"environment"`
-	Name           string  `json:"name"`
-	Format         string  `json:"format"`
-	State          string  `json:"state"`
-	ErrorCode      *string `json:"error_code"`
-	ResultRows     *int64  `json:"result_rows"`
-	ArtifactBytes  *int64  `json:"artifact_bytes"`
-	ArtifactSha256 *string `json:"artifact_sha256"`
-	ExpiresAt      *string `json:"expires_at"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
-	FinishedAt     *string `json:"finished_at"`
+	JobID                 string  `json:"job_id"`
+	ProjectID             string  `json:"project_id"`
+	Environment           string  `json:"environment"`
+	Name                  string  `json:"name"`
+	Format                string  `json:"format"`
+	State                 string  `json:"state"`
+	ErrorCode             *string `json:"error_code"`
+	ResultRows            *int64  `json:"result_rows"`
+	ArtifactBytes         *int64  `json:"artifact_bytes"`
+	ArtifactSha256        *string `json:"artifact_sha256"`
+	ExpiresAt             *string `json:"expires_at"`
+	CreatedAt             string  `json:"created_at"`
+	UpdatedAt             string  `json:"updated_at"`
+	FinishedAt            *string `json:"finished_at"`
+	SourceAnalysisID      *string `json:"source_analysis_id,omitempty"`
+	SourceAnalysisVersion *int64  `json:"source_analysis_version,omitempty"`
 }
 
 type ExportList struct {
@@ -1436,6 +1438,14 @@ type SavedAnalysisDraft struct {
 type SavedAnalysisExecute struct {
 	TimeRange json.RawMessage `json:"time_range"`
 	Timezone  json.RawMessage `json:"timezone"`
+}
+
+type SavedAnalysisExportInput struct {
+	Name             string          `json:"name"`
+	Format           *string         `json:"format,omitempty"`
+	TimeRange        json.RawMessage `json:"time_range"`
+	Timezone         json.RawMessage `json:"timezone"`
+	ArtifactExpiryAt *string         `json:"artifact_expiry_at,omitempty"`
 }
 
 type SavedAnalysisList struct {

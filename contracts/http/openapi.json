@@ -8700,6 +8700,189 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/saved-analyses/{analysis_id}/versions/{version}/exports": {
+      "post": {
+        "operationId": "createSavedAnalysisExportJob",
+        "summary": "createSavedAnalysisExportJob",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "description": "会话认证的写操作必需；机器 Bearer 认证不使用 CSRF。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedAnalysisExportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportJob"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成功",
+            "headers": {
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Creates a bounded export job from an exact immutable saved analysis version. The server rebinds the stored snapshot with the supplied time_range and timezone, rechecks the metric pin (failing closed on METRIC_PIN_CONFLICT) and rejects archived analyses with SAVED_ANALYSIS_ARCHIVED. Composite metric refs persist the internal formula_ref marker and are expanded by the export worker. The same actor/project/idempotency key replays the accepted snapshot or returns IDEMPOTENCY_CONFLICT on a divergent body."
+      }
+    },
     "/api/v1/projects/{project_id}/dashboards/{dashboard_id}": {
       "get": {
         "operationId": "getDashboard",
@@ -21680,6 +21863,23 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "source_analysis_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "非空时表示该导出源自指定保存分析不可变版本；与 source_analysis_version 同时为空或同时非空。"
+          },
+          "source_analysis_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "导出来源保存分析版本号；内联查询导出时为 null。"
           }
         },
         "required": [
@@ -27133,6 +27333,46 @@
           "description",
           "sections"
         ]
+      },
+      "SavedAnalysisExportInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv",
+              "ndjson"
+            ],
+            "default": "json",
+            "description": "导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录；缺省为 json。"
+          },
+          "time_range": {
+            "$ref": "../query/query-request.schema.json#/properties/time_range"
+          },
+          "timezone": {
+            "$ref": "../query/query-request.schema.json#/properties/timezone"
+          },
+          "artifact_expiry_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "name",
+          "time_range",
+          "timezone"
+        ],
+        "description": "基于已发布保存分析不可变版本创建导出作业：服务端按版本快照绑定有界查询，复合公式指标版本会写入内部 formula_ref 标记并由导出 worker 展开 DAG；调用方只提供时间范围、时区与产物偏好。"
       }
     }
   }
