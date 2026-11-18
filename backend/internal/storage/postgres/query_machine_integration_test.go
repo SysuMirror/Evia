@@ -140,7 +140,7 @@ func TestMachineWorkerUsesPersistedCredentialAndRejectsRevocation(t *testing.T) 
 			}
 			var state string
 			var result []byte
-			if e = s.Pool.QueryRow(context.Background(), `SELECT state,result_json FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state, &result); e != nil || state != "canceled" || len(result) != 0 {
+			if e = s.Pool.QueryRow(context.Background(), `SELECT state,result_json FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state, &result); e != nil || state != analysis.JobStateCanceled || len(result) != 0 {
 				t.Fatal(state, len(result), e)
 			}
 			_, e = s.GetQuery(ctx, issued.Principal.ID, f.project, job.ID)

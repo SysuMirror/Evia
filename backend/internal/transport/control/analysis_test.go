@@ -33,7 +33,7 @@ func (f *analysisFake) job(actor, project string) (analysis.Job, error) {
 		panic("query escaped actor/project scope")
 	}
 	f.calls++
-	return analysis.Job{ID: queryJobID, State: "queued", CreatedAt: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)}, f.err
+	return analysis.Job{ID: queryJobID, State: analysis.JobStateQueued, CreatedAt: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)}, f.err
 }
 func (f *analysisFake) Create(_ context.Context, a, p string, _ json.RawMessage) (analysis.Job, error) {
 	return f.job(a, p)

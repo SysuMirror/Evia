@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -107,7 +108,7 @@ func TestDashboardComparisonFanoutAndShiftedWindow(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, w := range cancelled.Widgets {
-		if w.Query.State != "canceled" || w.Comparison == nil || w.Comparison.State != "canceled" {
+		if w.Query.State != analysis.JobStateCanceled || w.Comparison == nil || w.Comparison.State != analysis.JobStateCanceled {
 			t.Fatalf("both current and comparison jobs must be canceled: %+v", w)
 		}
 	}

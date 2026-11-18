@@ -113,7 +113,7 @@ func (f *formulaHTTPService) GetFormulaMetricVersion(_ context.Context, actor, p
 }
 func (f *formulaHTTPService) EnqueueFormulaMetricVersion(_ context.Context, actor, project, id string, version int64, key string, in reporting.MetricExecute) (analysis.Job, error) {
 	f.id, f.version, f.key = id, version, key
-	return analysis.Job{ID: "77777777-7777-4777-8777-777777777777", State: "queued", CreatedAt: formulaRecord().CreatedAt}, f.call(actor, project)
+	return analysis.Job{ID: "77777777-7777-4777-8777-777777777777", State: analysis.JobStateQueued, CreatedAt: formulaRecord().CreatedAt}, f.call(actor, project)
 }
 
 func formulaHTTP(t *testing.T, f *formulaHTTPService, access AccessService) (http.Handler, *cursor.Codec) {

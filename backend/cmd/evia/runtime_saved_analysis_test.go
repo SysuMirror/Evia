@@ -92,7 +92,7 @@ func TestRuntimeSavedAnalysisConfigurationAndExecutionAvailability(t *testing.T)
 			}
 			if enabled {
 				var job analysis.Job
-				if err := json.Unmarshal(response.Body.Bytes(), &job); err != nil || job.State != "queued" || store.jobs != 1 {
+				if err := json.Unmarshal(response.Body.Bytes(), &job); err != nil || job.State != analysis.JobStateQueued || store.jobs != 1 {
 					t.Fatal("configured execution did not enter the existing job service", err)
 				}
 			} else if store.jobs != 0 {

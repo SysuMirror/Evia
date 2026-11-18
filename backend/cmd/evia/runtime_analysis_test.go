@@ -54,7 +54,7 @@ func (*runtimeAnalysisStore) ValidateAnalysisQuery(_ context.Context, _, _ strin
 func (s *runtimeAnalysisStore) EnqueueQuery(context.Context, string, string, analysis.Request) (analysis.Job, error) {
 	s.jobs++
 	delay := 1000
-	return analysis.Job{ID: "33333333-3333-4333-8333-333333333333", State: "queued", CreatedAt: time.Now().UTC(), PollAfterMS: &delay}, nil
+	return analysis.Job{ID: "33333333-3333-4333-8333-333333333333", State: analysis.JobStateQueued, CreatedAt: time.Now().UTC(), PollAfterMS: &delay}, nil
 }
 
 type runtimeAnalysisEngine struct{ calls int }

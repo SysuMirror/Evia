@@ -126,20 +126,20 @@ func TestDashboardRunStateCountsComparisonJobs(t *testing.T) {
 		return analysis.Job{ID: "j", State: state}
 	}
 	widgets := []DashboardWidgetRun{
-		{WidgetID: "a", Query: job("succeeded")},
-		{WidgetID: "b", Query: job("succeeded"), Comparison: ptrJob(job("failed"))},
+		{WidgetID: "a", Query: job(analysis.JobStateSucceeded)},
+		{WidgetID: "b", Query: job(analysis.JobStateSucceeded), Comparison: ptrJob(job(analysis.JobStateFailed))},
 	}
-	if got := DashboardRunState(widgets); got != "partial" {
+	if got := DashboardRunState(widgets); got != DashboardRunPartial {
 		t.Fatalf("failed comparison must make the run partial, got %s", got)
 	}
-	widgets[1].Comparison = ptrJob(job("succeeded"))
-	if got := DashboardRunState(widgets); got != "succeeded" {
+	widgets[1].Comparison = ptrJob(job(analysis.JobStateSucceeded))
+	if got := DashboardRunState(widgets); got != DashboardRunSucceeded {
 		t.Fatalf("all jobs succeeded should be succeeded, got %s", got)
 	}
-	widgets[0].Query = job("queued")
-	widgets[1].Query = job("queued")
-	widgets[1].Comparison = ptrJob(job("queued"))
-	if got := DashboardRunState(widgets); got != "queued" {
+	widgets[0].Query = job(analysis.JobStateQueued)
+	widgets[1].Query = job(analysis.JobStateQueued)
+	widgets[1].Comparison = ptrJob(job(analysis.JobStateQueued))
+	if got := DashboardRunState(widgets); got != DashboardRunQueued {
 		t.Fatalf("all queued jobs should be queued, got %s", got)
 	}
 }

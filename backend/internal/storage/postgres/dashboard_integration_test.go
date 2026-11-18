@@ -330,14 +330,14 @@ func TestDashboardMixedChildLifecycleExpiryAndDeletion(t *testing.T) {
 	canceled := 0
 	for _, w := range mixed.Widgets {
 		switch w.Query.State {
-		case "succeeded":
+		case analysis.JobStateSucceeded:
 			succeeded++
 			if w.Query.ResultURL == "" {
 				t.Fatal("no shared result URL")
 			}
-		case "failed":
+		case analysis.JobStateFailed:
 			failed++
-		case "canceled":
+		case analysis.JobStateCanceled:
 			canceled++
 		}
 	}
@@ -356,7 +356,7 @@ func TestDashboardMixedChildLifecycleExpiryAndDeletion(t *testing.T) {
 	found := false
 	for _, w := range expired.Widgets {
 		if w.Query.ID == claim.JobID {
-			found = w.Query.State == "expired" && w.Query.ResultURL == ""
+			found = w.Query.State == analysis.JobStateExpired && w.Query.ResultURL == ""
 		}
 	}
 	if !found {
@@ -372,7 +372,7 @@ func TestDashboardMixedChildLifecycleExpiryAndDeletion(t *testing.T) {
 	found = false
 	for _, w := range deleted.Widgets {
 		if w.Query.ID == claim.JobID {
-			found = w.Query.State == "expired" && w.WidgetID != "" && w.AnalysisID != ""
+			found = w.Query.State == analysis.JobStateExpired && w.WidgetID != "" && w.AnalysisID != ""
 		}
 	}
 	if !found {
@@ -412,7 +412,7 @@ func TestDashboardCancellationOwnerPolicyAndRevocation(t *testing.T) {
 		t.Fatal("no dashboard child claimed")
 	}
 	canceled, e := f.s.CancelDashboardRun(ctx, f.owner, f.project, run.ID)
-	if e != nil || canceled.State != "canceled" {
+	if e != nil || canceled.State != analysis.JobStateCanceled {
 		t.Fatal(canceled, e)
 	}
 	if valid, e := f.s.QueryLeaseValid(ctx, *claim); e != nil || valid {
@@ -449,7 +449,7 @@ func TestDashboardCancellationOwnerPolicyAndRevocation(t *testing.T) {
 	found := false
 	for _, w := range state.Widgets {
 		if w.Query.ID == claim.JobID {
-			found = w.Query.State == "canceled" && w.Query.Error != nil && w.Query.Error.Code == "ACCESS_REVOKED"
+			found = w.Query.State == analysis.JobStateCanceled && w.Query.Error != nil && w.Query.Error.Code == "ACCESS_REVOKED"
 		}
 	}
 	if !found {

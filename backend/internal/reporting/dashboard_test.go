@@ -390,7 +390,16 @@ func TestDashboardRunStatesKeepMixedOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		states []string
 		want   string
-	}{{[]string{"queued", "queued"}, "queued"}, {[]string{"succeeded", "running"}, "running"}, {[]string{"succeeded", "succeeded"}, "succeeded"}, {[]string{"succeeded", "failed"}, "partial"}, {[]string{"succeeded", "expired"}, "partial"}, {[]string{"failed", "canceled"}, "failed"}, {[]string{"canceled", "canceled"}, "canceled"}, {[]string{"expired", "expired"}, "expired"}} {
+	}{
+		{[]string{analysis.JobStateQueued, analysis.JobStateQueued}, DashboardRunQueued},
+		{[]string{analysis.JobStateSucceeded, analysis.JobStateRunning}, DashboardRunRunning},
+		{[]string{analysis.JobStateSucceeded, analysis.JobStateSucceeded}, DashboardRunSucceeded},
+		{[]string{analysis.JobStateSucceeded, analysis.JobStateFailed}, DashboardRunPartial},
+		{[]string{analysis.JobStateSucceeded, analysis.JobStateExpired}, DashboardRunPartial},
+		{[]string{analysis.JobStateFailed, analysis.JobStateCanceled}, DashboardRunFailed},
+		{[]string{analysis.JobStateCanceled, analysis.JobStateCanceled}, DashboardRunCanceled},
+		{[]string{analysis.JobStateExpired, analysis.JobStateExpired}, DashboardRunExpired},
+	} {
 		widgets := []DashboardWidgetRun{}
 		for _, state := range tc.states {
 			widgets = append(widgets, DashboardWidgetRun{Query: analysis.Job{State: state}})

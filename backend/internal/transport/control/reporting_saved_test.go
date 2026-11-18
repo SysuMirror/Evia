@@ -106,7 +106,7 @@ func (f *savedHTTPService) GetSavedAnalysisVersion(_ context.Context, actor, pro
 }
 func (f *savedHTTPService) EnqueueSavedAnalysisVersion(_ context.Context, actor, project, id string, version int64, key string, in reporting.SavedAnalysisExecute) (analysis.Job, error) {
 	f.id, f.version, f.key = id, version, key
-	return analysis.Job{ID: savedID, State: "queued", CreatedAt: savedResource().CreatedAt}, f.call(actor, project)
+	return analysis.Job{ID: savedID, State: analysis.JobStateQueued, CreatedAt: savedResource().CreatedAt}, f.call(actor, project)
 }
 func (f *savedHTTPService) ArchiveSavedAnalysis(_ context.Context, actor, project, id string) (reporting.SavedAnalysis, error) {
 	f.id = id

@@ -41,7 +41,7 @@ func TestFormulaMetricEnqueueIdempotencyAndMarker(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if job.State != "queued" {
+	if job.State != analysis.JobStateQueued {
 		t.Fatalf("job state %s", job.State)
 	}
 	var kind string

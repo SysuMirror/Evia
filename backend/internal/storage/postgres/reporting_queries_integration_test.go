@@ -123,7 +123,7 @@ func TestSavedAnalysisQueryConcurrentReplayAndCurrentAuthorization(t *testing.T)
 	if _, e = f.s.CancelQuery(ctx, f.viewer, f.project, jobID); e != nil {
 		t.Fatal(e)
 	}
-	if job, e := f.s.EnqueueSavedAnalysisVersion(ctx, f.viewer, f.project, v.AnalysisID, v.Version, "retry", in); e != nil || job.ID != jobID || job.State != "canceled" {
+	if job, e := f.s.EnqueueSavedAnalysisVersion(ctx, f.viewer, f.project, v.AnalysisID, v.Version, "retry", in); e != nil || job.ID != jobID || job.State != analysis.JobStateCanceled {
 		t.Fatal("replay did not return current job", job, e)
 	}
 	assertSavedRunCounts(t, f, 1)
@@ -138,7 +138,7 @@ func TestSavedAnalysisQueryConcurrentReplayAndCurrentAuthorization(t *testing.T)
 	if e = f.s.CompleteQuery(ctx, *claim, queryOutcome(claim.JobID, claim.Request)); e != nil {
 		t.Fatal(e)
 	}
-	if job, e := f.s.EnqueueSavedAnalysisVersion(ctx, f.viewer, f.project, v.AnalysisID, v.Version, "another", in); e != nil || job.ID != claim.JobID || job.State != "succeeded" || job.ResultURL == "" {
+	if job, e := f.s.EnqueueSavedAnalysisVersion(ctx, f.viewer, f.project, v.AnalysisID, v.Version, "another", in); e != nil || job.ID != claim.JobID || job.State != analysis.JobStateSucceeded || job.ResultURL == "" {
 		t.Fatal("replay did not expose the existing result", job, e)
 	}
 	assertSavedRunCounts(t, f, 2)
@@ -405,7 +405,7 @@ func TestSavedAnalysisQueryMigrationPreservesExistingJobs(t *testing.T) {
 	if e = pool.QueryRow(ctx, `SELECT checksum FROM schema_migrations WHERE name='005_queries.sql'`).Scan(&checksum); e != nil || checksum != oldChecksum {
 		t.Fatal("original migration ledger changed", e)
 	}
-	if job, e := s.GetQuery(ctx, actor, project, legacy.ID); e != nil || job.ID != legacy.ID || job.State != "queued" {
+	if job, e := s.GetQuery(ctx, actor, project, legacy.ID); e != nil || job.ID != legacy.ID || job.State != analysis.JobStateQueued {
 		t.Fatal("upgrade changed existing query", job, e)
 	}
 	if _, e = s.EnqueueQuery(ctx, actor, project, queryRequest(t, "trend")); e != nil {

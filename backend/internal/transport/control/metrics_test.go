@@ -116,7 +116,7 @@ func (f *metricHTTPService) GetMetricVersion(_ context.Context, actor, project, 
 }
 func (f *metricHTTPService) EnqueueMetricVersion(_ context.Context, actor, project, id string, version int64, key string, in reporting.MetricExecute) (analysis.Job, error) {
 	f.id, f.version, f.key, f.execution = id, version, key, in
-	return analysis.Job{ID: metricID, State: "queued", CreatedAt: metricResource().CreatedAt}, f.call(actor, project)
+	return analysis.Job{ID: metricID, State: analysis.JobStateQueued, CreatedAt: metricResource().CreatedAt}, f.call(actor, project)
 }
 func metricHTTP(t *testing.T, f *metricHTTPService, access AccessService, machines ...MachineService) (http.Handler, *cursor.Codec) {
 	t.Helper()

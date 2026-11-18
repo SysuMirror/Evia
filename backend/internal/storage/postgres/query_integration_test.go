@@ -36,7 +36,7 @@ func TestQueryJobsAuthorizationLeasesAndCancellation(t *testing.T) {
 	ctx := context.Background()
 	request := queryRequest(t, "trend")
 	job, e := s.EnqueueQuery(ctx, f.viewer, f.project, request)
-	if e != nil || job.State != "queued" {
+	if e != nil || job.State != analysis.JobStateQueued {
 		t.Fatal(job, e)
 	}
 	_, e = s.GetQuery(ctx, f.outsider, f.project, job.ID)
@@ -65,7 +65,7 @@ func TestQueryJobsAuthorizationLeasesAndCancellation(t *testing.T) {
 		t.Fatal(result, e)
 	}
 	canceled, e := s.CancelQuery(ctx, f.viewer, f.project, job.ID)
-	if e != nil || canceled.State != "succeeded" {
+	if e != nil || canceled.State != analysis.JobStateSucceeded {
 		t.Fatal("terminal result changed by cancellation", canceled, e)
 	}
 	next, e := s.EnqueueQuery(ctx, f.viewer, f.project, request)
@@ -77,7 +77,7 @@ func TestQueryJobsAuthorizationLeasesAndCancellation(t *testing.T) {
 		t.Fatal(running, e)
 	}
 	canceled, e = s.CancelQuery(ctx, f.viewer, f.project, next.ID)
-	if e != nil || canceled.State != "canceled" {
+	if e != nil || canceled.State != analysis.JobStateCanceled {
 		t.Fatal(canceled, e)
 	}
 	if valid, e := s.QueryLeaseValid(ctx, *running); e != nil || valid {
@@ -88,7 +88,7 @@ func TestQueryJobsAuthorizationLeasesAndCancellation(t *testing.T) {
 		t.Fatal(e)
 	}
 	expired, e := s.GetQuery(ctx, f.viewer, f.project, job.ID)
-	if e != nil || expired.State != "expired" {
+	if e != nil || expired.State != analysis.JobStateExpired {
 		t.Fatal(expired, e)
 	}
 	_, e = s.QueryResult(ctx, f.viewer, f.project, job.ID)
@@ -136,7 +136,7 @@ func TestQueryDetailPermissionAndRevocation(t *testing.T) {
 	}
 	faultCode(t, s.CompleteQuery(ctx, *claim, queryOutcome(job.ID, aggregate)), "QUERY_LEASE_LOST")
 	var state string
-	if e = s.Pool.QueryRow(ctx, `SELECT state FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state); e != nil || state != "canceled" {
+	if e = s.Pool.QueryRow(ctx, `SELECT state FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state); e != nil || state != analysis.JobStateCanceled {
 		t.Fatal("revoked query was not canceled", state, e)
 	}
 }
@@ -229,7 +229,7 @@ func TestQueryCompletionAuditFailureRollsBackResult(t *testing.T) {
 	}
 	var state string
 	var noResult bool
-	if e = f.s.Pool.QueryRow(ctx, `SELECT state,result_json IS NULL FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state, &noResult); e != nil || state != "running" || !noResult {
+	if e = f.s.Pool.QueryRow(ctx, `SELECT state,result_json IS NULL FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state, &noResult); e != nil || state != analysis.JobStateRunning || !noResult {
 		t.Fatal("result escaped failed transaction", state, noResult, e)
 	}
 	if _, e = f.s.Pool.Exec(ctx, `DROP TRIGGER fail_query_audit ON audit_entries`); e != nil {

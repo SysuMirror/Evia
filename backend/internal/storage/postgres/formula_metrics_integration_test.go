@@ -400,7 +400,7 @@ func TestFormulaMetricNestedCompositeExpansion(t *testing.T) {
 
 	// The nested version enqueues like any formula job and stays marker-based.
 	job, e := f.s.EnqueueFormulaMetricVersion(ctx, f.owner, f.project, dVersion.MetricID, dVersion.Version, "nested-run", formulaExecuteInput())
-	if e != nil || job.State != "queued" {
+	if e != nil || job.State != analysis.JobStateQueued {
 		t.Fatalf("nested enqueue failed: %+v %v", job, e)
 	}
 

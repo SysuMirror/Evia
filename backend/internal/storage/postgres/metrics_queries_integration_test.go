@@ -114,7 +114,7 @@ func TestMetricQueryConcurrentReplayAndCurrentAuthorization(t *testing.T) {
 	if _, e = f.s.CancelQuery(ctx, f.viewer, f.project, jobID); e != nil {
 		t.Fatal(e)
 	}
-	if job, e := f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, v.Version, "retry", in); e != nil || job.ID != jobID || job.State != "canceled" {
+	if job, e := f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, v.Version, "retry", in); e != nil || job.ID != jobID || job.State != analysis.JobStateCanceled {
 		t.Fatal("replay did not return current job", job, e)
 	}
 	assertMetricRunCounts(t, f, 1)
@@ -129,7 +129,7 @@ func TestMetricQueryConcurrentReplayAndCurrentAuthorization(t *testing.T) {
 	if e = f.s.CompleteQuery(ctx, *claim, queryOutcome(claim.JobID, claim.Request)); e != nil {
 		t.Fatal(e)
 	}
-	if job, e := f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, v.Version, "another", in); e != nil || job.ID != claim.JobID || job.State != "succeeded" || job.ResultURL == "" {
+	if job, e := f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, v.Version, "another", in); e != nil || job.ID != claim.JobID || job.State != analysis.JobStateSucceeded || job.ResultURL == "" {
 		t.Fatal("replay did not expose the existing result", job, e)
 	}
 	assertMetricRunCounts(t, f, 2)

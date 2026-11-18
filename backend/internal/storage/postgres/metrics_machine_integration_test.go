@@ -159,7 +159,7 @@ func TestMetricWorkerRetainsOriginalCredentialAcrossRotation(t *testing.T) {
 				faultCode(t, f.s.CompleteQuery(replacementCtx, *claim, queryOutcome(job.ID, claim.Request)), "QUERY_LEASE_LOST")
 			}
 			var state string
-			if e = f.s.Pool.QueryRow(context.Background(), `SELECT state FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state); e != nil || state != "canceled" {
+			if e = f.s.Pool.QueryRow(context.Background(), `SELECT state FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&state); e != nil || state != analysis.JobStateCanceled {
 				t.Fatal(state, e)
 			}
 		})

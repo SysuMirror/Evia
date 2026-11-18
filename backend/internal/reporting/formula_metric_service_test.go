@@ -50,7 +50,7 @@ func (f *fakeFormulaMetricStore) GetFormulaMetricVersion(context.Context, string
 }
 func (f *fakeFormulaMetricStore) EnqueueFormulaMetricVersion(_ context.Context, _, _, _ string, _ int64, key string, in MetricExecute) (analysis.Job, error) {
 	f.key = key
-	return analysis.Job{ID: "formula-job", State: "queued"}, f.err
+	return analysis.Job{ID: "formula-job", State: analysis.JobStateQueued}, f.err
 }
 func (f *fakeFormulaMetricStore) ArchiveFormulaMetric(context.Context, string, string, string) (FormulaMetricRecord, error) {
 	return FormulaMetricRecord{ID: "formula-one"}, nil
