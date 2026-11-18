@@ -12,9 +12,9 @@
 | `unique`，未指定字段，`subject: uid` | `raw_uid`，原始登录标识去重，排除缺失/空 UID |
 | `unique`，未指定字段，`subject: anonymous` | `anonymous_id`，匿名标识去重，不代表已经合并为自然人 |
 | `unique`，指定字段 | `distinct_value`，该字段的不同值数量 |
-| `sum`、`avg`、`min`、`max`、`p95` | 必须指定支持的数值字段，单位为 `number`、`millisecond`、`second` 或 `byte` |
+| `sum`、`avg`、`min`、`max`、`p50`、`p90`、`p95`、`p99` | 必须指定支持的数值字段，单位为 `number`、`millisecond`、`second` 或 `byte` |
 
-默认精确，只有 `unique` 和 `p95` 可以显式选择 `accuracy: approximate`。单位与聚合不兼容时拒绝保存。数值单位由作者声明，服务端不会自动推断业务含义，也不会把毫秒转换成秒；修改单位会产生发布 diff。当前没有货币及复合量纲运算。
+默认精确，只有 `unique` 和四个百分位 `p50`/`p90`/`p95`/`p99` 可以显式选择 `accuracy: approximate`（精确走 `quantileExact`、近似走 `quantileTDigest`）。单位与聚合不兼容时拒绝保存。数值单位由作者声明，服务端不会自动推断业务含义，也不会把毫秒转换成秒；修改单位会产生发布 diff。当前没有货币及复合量纲运算。
 
 每个指标固定 1–20 个已发布事件版本，每个事件只选一个版本。草稿可以先引用待发布版本，但校验和发布必须证明这些版本属于当前项目与环境，并校验属性类型。历史版本查询不要求该事件仍是当前激活版本。系统事件运行时注册及身份图仍未实现。
 
