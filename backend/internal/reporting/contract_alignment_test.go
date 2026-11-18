@@ -177,3 +177,55 @@ func TestSelectionModeVocabularyMatchesContract(t *testing.T) {
 	}
 	assertSameSet(t, "selection mode", SelectionModes, got)
 }
+
+// TestParameterVocabularyMatchesContract guards dashboard parameter scalar
+// types and the operator union against the ParameterDeclaration schema.
+func TestParameterVocabularyMatchesContract(t *testing.T) {
+	var bundle struct {
+		Defs map[string]map[string]any `json:"$defs"`
+	}
+	if err := json.Unmarshal(wire.Schemas, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	props, ok := bundle.Defs["ParameterDeclaration"]["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("ParameterDeclaration schema missing properties")
+	}
+	enumOf := func(property string) []string {
+		raw, ok := props[property].(map[string]any)["enum"].([]any)
+		if !ok {
+			t.Fatalf("ParameterDeclaration.%s enum missing", property)
+		}
+		out := make([]string, 0, len(raw))
+		for _, value := range raw {
+			out = append(out, value.(string))
+		}
+		return out
+	}
+	assertSameSet(t, "parameter type", ParameterTypes, enumOf("type"))
+	assertSameSet(t, "parameter operator", ParameterOperators, enumOf("operator"))
+}
+
+// TestVisualizationVocabularyMatchesContract guards the five saved analysis
+// visualization kinds against the SavedAnalysisVisualization schema.
+func TestVisualizationVocabularyMatchesContract(t *testing.T) {
+	var bundle struct {
+		Defs map[string]map[string]any `json:"$defs"`
+	}
+	if err := json.Unmarshal(wire.Schemas, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	props, ok := bundle.Defs["SavedAnalysisVisualization"]["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("SavedAnalysisVisualization schema missing properties")
+	}
+	raw, ok := props["kind"].(map[string]any)["enum"].([]any)
+	if !ok {
+		t.Fatal("SavedAnalysisVisualization.kind enum missing")
+	}
+	got := make([]string, 0, len(raw))
+	for _, value := range raw {
+		got = append(got, value.(string))
+	}
+	assertSameSet(t, "visualization kind", VisualizationKinds, got)
+}

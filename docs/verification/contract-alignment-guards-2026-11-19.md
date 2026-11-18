@@ -21,6 +21,8 @@
 | 诊断状态（4，仅 pipeline 可用 no_data） | `diagnostics.Status*` 常量 | 四个 `Diagnostics*.status` | 对齐；守卫同时锁定 no_data 的分区适用性 |
 | 配额来源（2）/运行态（2） | control 内联字面量 → 提取为 `quota*` 常量 | `CollectionQuota.source/runtime_status` | 对齐 |
 | 依赖选择模式（8） | 14 处内联字面量 → 提取为 `reporting.SelectionMode*` 常量 + `SelectionModes` | `QueryDependencyManifest.selection_mode` | 对齐 |
+| 看板参数类型（3）/算子（9） | 算子内联 map → `ParameterOp*` 常量 + `ParameterTypes/ParameterOperators` | `ParameterDeclaration.type/operator` | 对齐 |
+| 可视化类别（5） | switch 内联字面量 → `Visualization*` 常量 + `VisualizationKinds` | `SavedAnalysisVisualization.kind` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
