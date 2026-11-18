@@ -3500,8 +3500,11 @@ export interface components {
             retention?: {
                 start_event: components["schemas"]["retention_step"];
                 return_event: components["schemas"]["retention_step"];
-                /** @enum {unknown} */
-                granularity: "day" | "week";
+                /**
+                 * @description Calendar cohort period. month aligns each cohort to the first day of its calendar month in the request timezone; the bounded raw-pull window for month uses a conservative 31-day-per-period upper bound.
+                 * @enum {unknown}
+                 */
+                granularity: "day" | "week" | "month";
                 periods: number;
             };
             segment?: {
@@ -3811,8 +3814,11 @@ export interface components {
         retention: {
             start_event: components["schemas"]["retention_step"];
             return_event: components["schemas"]["retention_step"];
-            /** @enum {unknown} */
-            granularity: "day" | "week";
+            /**
+             * @description Calendar cohort period. month aligns each cohort to the first day of its calendar month in the request timezone; the bounded raw-pull window for month uses a conservative 31-day-per-period upper bound.
+             * @enum {unknown}
+             */
+            granularity: "day" | "week" | "month";
             periods: number;
         };
         segment: {
