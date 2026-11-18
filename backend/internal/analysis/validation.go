@@ -164,7 +164,7 @@ func ValidateConfiguration(r *Request) error {
 		if len(r.Metrics) == 0 {
 			r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
 		}
-		if r.Interval != "" && r.Interval != "minute" && r.Interval != "hour" && r.Interval != "day" {
+		if r.Interval != "" && r.Interval != "minute" && r.Interval != "hour" && r.Interval != "day" && r.Interval != "week" {
 			return Invalid("INVALID_INTERVAL", "时间分组无效", "/interval")
 		}
 	} else if r.Interval != "" || len(r.Metrics) > 0 || len(r.GroupBy) > 0 {

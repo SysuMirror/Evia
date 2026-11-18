@@ -210,3 +210,22 @@ func TestFieldCapabilitiesAdvertiseNegationOperators(t *testing.T) {
 		t.Fatalf("array capabilities negation set wrong: %v", arrayCaps.FilterOperators)
 	}
 }
+
+func TestCapabilitiesAdvertiseWeekInterval(t *testing.T) {
+	s := discoveryForTest(t, &discoveryStoreFake{})
+	capabilities, e := s.Capabilities(context.Background(), "actor", "project")
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := map[string]bool{"minute": false, "hour": false, "day": false, "week": false}
+	for _, interval := range capabilities.Intervals {
+		if _, known := want[interval]; known {
+			want[interval] = true
+		}
+	}
+	for interval, found := range want {
+		if !found {
+			t.Fatalf("capabilities intervals missing %s: %v", interval, capabilities.Intervals)
+		}
+	}
+}

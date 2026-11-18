@@ -317,11 +317,17 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		selectSQL := []string{}
 		groups := []string{}
 		if r.Interval != "" {
+			tz := p.bind("String", r.Timezone)
 			bucket := map[string]string{"minute": "toStartOfMinute", "hour": "toStartOfHour", "day": "toStartOfDay"}[r.Interval]
-			if bucket == "" {
+			bucketCall := bucket + "(event_time," + tz + ")"
+			if r.Interval == "week" {
+				// Mode 1 starts the bucket on Monday, matching the retention
+				// cohort calendar; the bound timezone keeps the edge local.
+				bucketCall = "toStartOfWeek(event_time,1," + tz + ")"
+			} else if bucket == "" {
 				return Plan{}, Invalid("INVALID_INTERVAL", "时间间隔无效")
 			}
-			selectSQL = append(selectSQL, "toUnixTimestamp64Milli(toDateTime64("+bucket+"(event_time,"+p.bind("String", r.Timezone)+"),3,'UTC')) AS bucket_ms")
+			selectSQL = append(selectSQL, "toUnixTimestamp64Milli(toDateTime64("+bucketCall+",3,'UTC')) AS bucket_ms")
 			groups = append(groups, "bucket_ms")
 			plan.Columns = append(plan.Columns, Column{Key: "bucket", Type: "datetime"})
 		}

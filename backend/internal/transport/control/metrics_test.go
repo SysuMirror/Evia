@@ -211,7 +211,7 @@ func TestMetricHTTPStrictInputs(t *testing.T) {
 		{"duplicate JSON", "POST", metricItem + "/validations", `{"draft_revision":1,"draft_revision":2,"expected_published_version":0}`, nil, 400},
 		{"null definition", "POST", metricBase, `{"environment":"development","definition":null}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"trailing JSON", "POST", metricItem + "/validations", metricValidateBody + `{}`, nil, 400},
-		{"invalid interval", "POST", metricItem + "/versions/1/queries", strings.Replace(metricExecuteBody, `"interval":"day"`, `"interval":"week"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
+		{"invalid interval", "POST", metricItem + "/versions/1/queries", strings.Replace(metricExecuteBody, `"interval":"day"`, `"interval":"month"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
 		{"definition runtime context", "POST", metricBase, strings.Replace(metricCreateBody, `"subject":"uid"`, `"subject":"uid","environment":"production"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
 		{"execute env override body", "POST", metricItem + "/versions/1/queries", strings.TrimSuffix(metricExecuteBody, "}") + `,"environment":"production"}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"CSRF validation", "POST", metricItem + "/validations", metricValidateBody, map[string]string{"X-CSRF-Token": ""}, 403},

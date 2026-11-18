@@ -199,7 +199,7 @@ func TestFormulaMetricHTTPStrictInputs(t *testing.T) {
 		{"formula unknown op", "POST", formulaBase, `{"environment":"development","definition":{"title":"x","description":"","formula":{"expression":{"op":"pow"},"unit":"event"}}}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"atomic field rejected", "POST", formulaBase, `{"environment":"development","definition":{"title":"x","description":"","formula":{"expression":` + formulaExpression + `,"unit":"event"},"aggregation":{"op":"count"}}}`, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"execute needs key", "POST", formulaItem + "/versions/1/queries", formulaExecuteBody, nil, 400},
-		{"execute invalid interval", "POST", formulaItem + "/versions/1/queries", strings.Replace(formulaExecuteBody, `"interval":"day"`, `"interval":"week"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
+		{"execute invalid interval", "POST", formulaItem + "/versions/1/queries", strings.Replace(formulaExecuteBody, `"interval":"day"`, `"interval":"month"`, 1), map[string]string{"Idempotency-Key": "key"}, 400},
 		{"execute invalid version", "POST", formulaItem + "/versions/0/queries", formulaExecuteBody, map[string]string{"Idempotency-Key": "key"}, 400},
 		{"CSRF execution", "POST", formulaItem + "/versions/1/queries", formulaExecuteBody, map[string]string{"X-CSRF-Token": "", "Idempotency-Key": "key"}, 403},
 		{"CSRF validation", "POST", formulaItem + "/validations", formulaValidateBody, map[string]string{"X-CSRF-Token": ""}, 403},
