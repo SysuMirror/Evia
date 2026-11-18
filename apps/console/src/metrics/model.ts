@@ -20,7 +20,18 @@ export function normalizeMetricSearch(input: string): string {
     : trimmed;
 }
 
-export const metricOps = ['count', 'unique', 'sum', 'avg', 'min', 'max', 'p95'] as const;
+export const metricOps = [
+  'count',
+  'unique',
+  'sum',
+  'avg',
+  'min',
+  'max',
+  'p50',
+  'p90',
+  'p95',
+  'p99',
+] as const;
 export type MetricOp = (typeof metricOps)[number];
 
 export type MetricUnit =
@@ -33,8 +44,8 @@ export type MetricUnit =
   | 'second'
   | 'byte';
 
-export const numericOps: MetricOp[] = ['sum', 'avg', 'min', 'max', 'p95'];
-export const approximateOps: MetricOp[] = ['unique', 'p95'];
+export const numericOps: MetricOp[] = ['sum', 'avg', 'min', 'max', 'p50', 'p90', 'p95', 'p99'];
+export const approximateOps: MetricOp[] = ['unique', 'p50', 'p90', 'p95', 'p99'];
 
 export const opLabels: Record<MetricOp, string> = {
   count: '次数 count',
@@ -43,7 +54,10 @@ export const opLabels: Record<MetricOp, string> = {
   avg: '平均 avg',
   min: '最小 min',
   max: '最大 max',
+  p50: 'P50',
+  p90: 'P90',
   p95: 'P95',
+  p99: 'P99',
 };
 
 export const subjectLabels: Record<MetricSubject, string> = {

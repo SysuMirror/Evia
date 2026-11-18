@@ -61,7 +61,14 @@ export function MetricsSection({
                     ...metric,
                     op,
                     ...(op === 'count' ? { field: undefined } : {}),
-                    accuracy: op === 'unique' || op === 'p95' ? metric.accuracy : 'exact',
+                    accuracy:
+                      op === 'unique' ||
+                      op === 'p50' ||
+                      op === 'p90' ||
+                      op === 'p95' ||
+                      op === 'p99'
+                        ? metric.accuracy
+                        : 'exact',
                   });
                 }}
               />
@@ -84,7 +91,14 @@ export function MetricsSection({
             <Field label={`指标 ${index + 1} 精度`} htmlFor={`${id}-accuracy-${index}`}>
               <Select
                 id={`${id}-accuracy-${index}`}
-                disabled={blocked || (metric.op !== 'unique' && metric.op !== 'p95')}
+                disabled={
+                  blocked ||
+                  (metric.op !== 'unique' &&
+                    metric.op !== 'p50' &&
+                    metric.op !== 'p90' &&
+                    metric.op !== 'p95' &&
+                    metric.op !== 'p99')
+                }
                 value={metric.accuracy ?? 'exact'}
                 options={[
                   { value: 'exact', label: '精确' },

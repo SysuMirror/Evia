@@ -16,7 +16,10 @@ export function metricInfo(definition: SavedAnalysisDefinition, index: number) {
         avg: '平均值',
         min: '最小值',
         max: '最大值',
+        p50: 'P50',
+        p90: 'P90',
         p95: 'P95',
+        p99: 'P99',
       } as Record<string, string>
     )[metric.op] ?? metric.op;
   return {

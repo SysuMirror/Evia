@@ -37,7 +37,10 @@ export const savedMetricLabels: Record<SavedMetric['op'], string> = {
   avg: '平均值',
   min: '最小值',
   max: '最大值',
+  p50: 'P50',
+  p90: 'P90',
   p95: 'P95',
+  p99: 'P99',
 };
 export function initialSavedAnalysisDefinition(): SavedAnalysisDefinition {
   return {
@@ -801,7 +804,14 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
         if (metric.field !== undefined) field(metric.field, `${path}/field`);
         if (metric.accuracy !== undefined && !['exact', 'approximate'].includes(metric.accuracy))
           add(path, '精度无效。');
-        if (metric.accuracy === 'approximate' && metric.op !== 'unique' && metric.op !== 'p95')
+        if (
+          metric.accuracy === 'approximate' &&
+          metric.op !== 'unique' &&
+          metric.op !== 'p50' &&
+          metric.op !== 'p90' &&
+          metric.op !== 'p95' &&
+          metric.op !== 'p99'
+        )
           add(path, '此指标只支持精确结果。');
         if (metric.op === 'count' && metric.field !== undefined) add(path, '事件数不接受字段。');
         if (metric.op !== 'count' && metric.op !== 'unique' && !metric.field)

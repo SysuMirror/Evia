@@ -35,7 +35,7 @@ test('aggregation compatibility drives units, approximate scope and numeric ops'
   expect(
     compatibleUnits(validState({ op: 'unique', fieldEnabled: true, fieldKey: 'plan' })),
   ).toEqual(['distinct_value']);
-  for (const op of ['sum', 'avg', 'min', 'max', 'p95'] as const)
+  for (const op of ['sum', 'avg', 'min', 'max', 'p50', 'p90', 'p95', 'p99'] as const)
     expect(compatibleUnits(validState({ op, fieldEnabled: true, fieldKey: 'duration' }))).toEqual([
       'number',
       'millisecond',
@@ -43,8 +43,10 @@ test('aggregation compatibility drives units, approximate scope and numeric ops'
       'byte',
     ]);
   expect(supportsApproximate('unique')).toBe(true);
-  expect(supportsApproximate('p95')).toBe(true);
+  for (const op of ['p50', 'p90', 'p95', 'p99'] as const)
+    expect(supportsApproximate(op)).toBe(true);
   expect(supportsApproximate('count')).toBe(false);
+  expect(isNumericOp('p99')).toBe(true);
   expect(isNumericOp('sum')).toBe(true);
   expect(isNumericOp('count')).toBe(false);
 });
