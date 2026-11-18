@@ -25,10 +25,11 @@
 | 可视化类别（5） | switch 内联字面量 → `Visualization*` 常量 + `VisualizationKinds` | `SavedAnalysisVisualization.kind` | 对齐 |
 | 看板运行聚合态（7） | `DashboardRunState` 内联返回值 → `DashboardRun*` 常量 + `DashboardRunStates`（聚合读取的作业态抽为包内 key 常量） | `DashboardRun.state` | 对齐 |
 | 公式计量单位（8）/换算目标对（2） | 单位 switch 内联字面量 → `reporting.Unit*` 常量 + `KnownUnits`，换算表改用常量键 | `MetricDefinition.unit` / `FormulaDefinition.unit` / `FormulaExpression.target_unit` | 对齐 |
+| 查询作业态（6） | 五包 20+ 文件内联字面量 → `analysis.JobState*` 常量 + `JobStates`（独立切片，见 [queryjob-state-closed-set](queryjob-state-closed-set-2026-11-19.md)） | `QueryJob.state` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（9 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（10 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -39,6 +40,7 @@
 7. `diagnostics.TestDiagnosticsStatusMatchesContract`：四个分区状态均为 Go 闭集子集，pipeline 分区恰为完整四态且独占 no_data。
 8. `control.TestCollectionQuotaVocabularyContract`：配额来源与运行态枚举相等。
 9. `reporting.TestFormulaUnitVocabularyMatchesContract`：`MetricDefinition`/`FormulaDefinition` 的 unit 枚举与 `KnownUnits` 集合相等，`FormulaExpression.target_unit` 恰为毫秒/秒换算目标对。
+10. `analysis.TestQueryJobStateVocabularyMatchesContract`：`QueryJob.state` 六态枚举与 `analysis.JobStates` 集合相等；存储侧副本由迁移 005 的 CHECK 约束兜底。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -46,6 +48,7 @@
 - archiving：临时把 `drift_probe` 加入守卫期望集（模拟 Go 闭集单边扩项）→ 报 `archive status drift ... [drift_probe failed materialized pending]` 变红，还原复绿。
 - 上一切片的机器权限守卫已用第 27 项注入验证过同类捕获力。
 - 公式单位：向 `KnownUnits` 注入 `drift_probe` → 报 `metric unit drift ... Go 9 != contract 8` 变红；向守卫的换算目标期望集注入 `UnitByte` → 报 `convert target unit drift ... [byte millisecond second]` 变红，两条断言分支均被证有效。
+- 查询作业态：向 `analysis.JobStates` 注入 `drift_probe` → 报 `query job state drift ... Go 7 != contract 6` 变红，还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
@@ -57,4 +60,4 @@
 - 守卫只覆盖**枚举型闭集**；数值预算（31 天窗口、500 行等）仍由 `DiscoveryBudgets` 与契约描述分别维护，未机械比对——预算变更通常伴随语义评审，且部分预算仅存在于 Go 侧。
 - `query-request.schema.json` 原始文件未单独 embed；守卫统一消费 OpenAPI 生成的 bundle 内联副本，codegen 漂移由 `generated-check` 门禁拦截。
 - 不改变任何运行时行为、契约内容或 API 形状；本切片是可维护性/防回归工程。
-- `QueryJob.state` 六态（queued/running/succeeded/failed/canceled/expired）在 15 个文件有 43 处内联字面量，跨 analysis/reporting/postgres 三包，提取为独立重构切片；该词汇是核心作业生命周期且被大量既有测试覆盖，漂移风险低于已修复的差异类别。
+- ~~`QueryJob.state` 六态提取~~ 已完成（2026-11-19 独立切片）：常量落在 `analysis.JobState*`，raw SQL/迁移字面量刻意保留，由 DB CHECK 与契约守卫双侧兜底，详见 [queryjob-state-closed-set](queryjob-state-closed-set-2026-11-19.md)。
