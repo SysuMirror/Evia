@@ -1,6 +1,6 @@
 # Analysis discovery and validation
 
-The reporting foundation implements three endpoints under `P = /api/v1/projects/{project_id}`, accepting management sessions or scoped machine credentials. OpenAPI and the query JSON Schema remain authoritative. [Saved analyses](saved-analyses.md), [dashboards](dashboards.md) and [machine access](machine-access.md) are delivered as separate modules; independent metrics remain planned.
+The reporting foundation implements three endpoints under `P = /api/v1/projects/{project_id}`, accepting management sessions or scoped machine credentials. OpenAPI and the query JSON Schema remain authoritative. [Saved analyses](saved-analyses.md), [dashboards](dashboards.md) and [machine access](machine-access.md) are delivered as separate modules; independent [atomic and composite formula metrics](metrics.md) are likewise delivered as their own versioned resources.
 
 | Endpoint | Implemented behavior |
 | --- | --- |
