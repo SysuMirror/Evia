@@ -151,3 +151,29 @@ func TestFormulaAndComparisonVocabularyMatchesContract(t *testing.T) {
 	}
 	assertSameSet(t, "comparison unit", wantUnits, gotUnits)
 }
+
+// TestSelectionModeVocabularyMatchesContract keeps the eight dependency
+// selection modes aligned with the QueryDependencyManifest.selection_mode
+// enum, covering both the reporting policy builders and the Postgres
+// manifest construction that consume these constants.
+func TestSelectionModeVocabularyMatchesContract(t *testing.T) {
+	var bundle struct {
+		Defs map[string]map[string]any `json:"$defs"`
+	}
+	if err := json.Unmarshal(wire.Schemas, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	props, ok := bundle.Defs["QueryDependencyManifest"]["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("QueryDependencyManifest schema missing properties")
+	}
+	raw, ok := props["selection_mode"].(map[string]any)["enum"].([]any)
+	if !ok {
+		t.Fatal("selection_mode enum missing from embedded bundle")
+	}
+	got := make([]string, 0, len(raw))
+	for _, value := range raw {
+		got = append(got, value.(string))
+	}
+	assertSameSet(t, "selection mode", SelectionModes, got)
+}
