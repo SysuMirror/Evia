@@ -13,8 +13,8 @@
 | 最近功能交付基线 | `a8c0f569ab8cb4de4bc10e4d24853e5247cab331`，简称 `a8c0f56` |
 | 基线 CI | [42625615892](https://github.com/howtomakeaname/Evia/actions/runs/42625615892)，4 个任务全部成功 |
 | 最近后端功能源码提交 | `ac81e3e`，之后主要为接入工具、验收、机器授权选项和文档 |
-| PostgreSQL 当前迁移 | `001` 至 `012_metrics.sql` |
-| ClickHouse 当前迁移 | `001` 至 `005_identity_projections.sql`，独立迁移链 |
+| PostgreSQL 当前迁移 | `001` 至 `039_export_format_ndjson.sql`（快照后仍会追加，以 `backend/internal/storage/postgres/migrations/` 最新编号为准） |
+| ClickHouse 当前迁移 | `001` 至 `009_dedicated_layout_view.sql`，独立迁移链；`006`–`009` 是属性读布局门控实验，禁止 backfill、禁止生产切换与容量声明，生产读路径仍走 v0 |
 | 最近新增能力 | 独立原子指标后端 10 个接口；上一批为项目治理后端 7 个接口及账号创建命令 |
 | 当前重点缺口 | 指标公式、保存分析/看板引用指标版本、治理与指标管理界面、身份关联、生命周期、导出和大规模查询性能 |
 | 当前工作树 | 写本文档前干净，功能基线已推送；交接文档提交仅修改文档 |
@@ -292,7 +292,7 @@ docs/                            架构、标准、运行手册、验证和规�
 2. 安装仓库锁定的 Go/Node/pnpm、Python 验证依赖及浏览器。细节见 [本地开发](docs/runbooks/development.md)。Go 竞态测试需要支持 CGO 的 C 工具链。
 3. 为开发/测试创建专用 PostgreSQL 数据库，私有配置保留在仓库外或忽略目录，权限 `0600`。
 4. 按 [依赖手册](docs/runbooks/dependencies.md) 启动需要的 Kafka、ClickHouse、Redis；按 [完整控制台验证](docs/runbooks/console-verification.md) 生成完整运行配置、准备主题和 ClickHouse 迁移。
-5. 用同一新二进制显式迁移 PostgreSQL 至当前 `012`；新空库才 bootstrap。已有账号不得靠重复 bootstrap 重置。
+5. 用同一新二进制显式执行 `evia migrate`，迁移至 `backend/internal/storage/postgres/migrations/` 内嵌的最新编号（本文写作时为 `039`，以后续目录为准）；新空库才 bootstrap。已有账号不得靠重复 bootstrap 重置。
 6. 分别启动 `serve`、`ingest-worker`、`query-worker`。配置探针后，API 同时运行交付协调。仅启动 PostgreSQL/API 不足以验证完整平台。
 7. 等待 `http://127.0.0.1:8080/readyz` 返回 204；控制台使用配置中的精确 Origin `http://127.0.0.1:5173`。
 
