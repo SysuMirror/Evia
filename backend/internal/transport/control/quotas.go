@@ -25,6 +25,15 @@ type QuotaRuntime interface {
 	ApplyOverride(ctx context.Context, scope budget.Scope, policy budget.Policy) (bucketReset bool, err error)
 }
 
+// Collection quota wire vocabulary, mirrored by the CollectionQuota
+// OpenAPI enums and guarded by TestCollectionQuotaVocabularyContract.
+const (
+	quotaSourceDefault         = "default"
+	quotaSourceProjectOverride = "project_override"
+	quotaRuntimeApplied        = "applied"
+	quotaRuntimeResetPending   = "bucket_reset_pending"
+)
+
 // QuotaAPI exposes owner-only collection quota management. It is mounted only
 // when collection (and therefore the runtime budget engine) is enabled.
 type QuotaAPI struct {
@@ -71,19 +80,19 @@ func (a *QuotaAPI) get(w http.ResponseWriter, r *http.Request, actor authorizedA
 		ProjectID:     project,
 		Environment:   environment,
 		Override:      configured,
-		RuntimeStatus: "applied",
+		RuntimeStatus: quotaRuntimeApplied,
 		CreatedAt:     nil,
 		UpdatedAt:     nil,
 	}
 	if configured {
-		out.Source = "project_override"
+		out.Source = quotaSourceProjectOverride
 		out.RatePerSecond = policy.Rate
 		out.Burst = int64(policy.Burst)
 		out.Revision = policy.Revision
 		out.CreatedAt = quotaTimePtr(policy.CreatedAt)
 		out.UpdatedAt = quotaTimePtr(policy.UpdatedAt)
 	} else {
-		out.Source = "default"
+		out.Source = quotaSourceDefault
 		for _, entry := range snapshot {
 			if entry.Environment == environment {
 				out.RatePerSecond = entry.Rate
@@ -148,14 +157,14 @@ func (a *QuotaAPI) patch(w http.ResponseWriter, r *http.Request, actor authorize
 		RatePerSecond: policy.Rate,
 		Burst:         int64(policy.Burst),
 		Override:      true,
-		Source:        "project_override",
+		Source:        quotaSourceProjectOverride,
 		Revision:      policy.Revision,
-		RuntimeStatus: "applied",
+		RuntimeStatus: quotaRuntimeApplied,
 		CreatedAt:     quotaTimePtr(policy.CreatedAt),
 		UpdatedAt:     quotaTimePtr(policy.UpdatedAt),
 	}
 	if !bucketReset {
-		out.RuntimeStatus = "bucket_reset_pending"
+		out.RuntimeStatus = quotaRuntimeResetPending
 	}
 	machineETag(w, out.Revision)
 	return a.API.Boundary.JSON(w, http.StatusOK, "CollectionQuota", out)

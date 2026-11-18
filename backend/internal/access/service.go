@@ -128,7 +128,7 @@ func (s *Service) CreateProject(ctx context.Context, userID, name, timezone stri
 	if _, e := time.LoadLocation(timezone); e != nil {
 		return Project{}, fault.New(fault.Invalid, "INVALID_TIMEZONE", "请选择有效的 IANA 时区")
 	}
-	project := Project{ID: ids.New(), Name: name, Timezone: timezone, Role: "owner"}
+	project := Project{ID: ids.New(), Name: name, Timezone: timezone, Role: RoleOwner}
 	if e := s.store.CreateProject(ctx, userID, project); e != nil {
 		return Project{}, e
 	}
@@ -148,7 +148,7 @@ func (s *Service) Authorize(ctx context.Context, userID, projectID string, write
 	if e != nil {
 		return e
 	}
-	if write && role != "owner" && role != "editor" {
+	if write && role != RoleOwner && role != RoleEditor {
 		return fault.New(fault.Forbidden, "PROJECT_FORBIDDEN", "当前角色不能修改此项目")
 	}
 	return nil

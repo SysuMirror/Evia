@@ -12,6 +12,17 @@ import (
 // A cursor carrying a prior revision cannot silently mix membership snapshots.
 const MaxMembershipRevision int64 = 9007199254740991
 
+// Project role closed set, mirrored by the ProjectMember* OpenAPI enums and
+// guarded by TestProjectRoleContractStaysAligned.
+const (
+	RoleOwner  = "owner"
+	RoleEditor = "editor"
+	RoleViewer = "viewer"
+)
+
+// ProjectRoles is the single Go-side source of truth for the role vocabulary.
+var ProjectRoles = []string{RoleOwner, RoleEditor, RoleViewer}
+
 type Member struct {
 	UserID, Username, DisplayName, Role string
 	Disabled                            bool
@@ -98,7 +109,7 @@ func (s *Memberships) mutate(ctx context.Context, actor, project, user, operatio
 	if operation != "add" && in.Username != "" || operation == "remove" && in.Role != "" {
 		return MemberResult{}, fault.New(fault.Invalid, "INVALID_MEMBER_INPUT", "成员操作参数无效")
 	}
-	if operation != "remove" && in.Role != "owner" && in.Role != "editor" && in.Role != "viewer" {
+	if operation != "remove" && in.Role != RoleOwner && in.Role != RoleEditor && in.Role != RoleViewer {
 		return MemberResult{}, fault.New(fault.Invalid, "INVALID_MEMBER_ROLE", "成员角色无效")
 	}
 	hash, e := canonical.Hash(struct {

@@ -52,6 +52,28 @@ type Capabilities struct {
 	FieldTypes              []FieldCapability `json:"field_types"`
 	Budgets                 DiscoveryBudgets  `json:"budgets"`
 }
+
+// Discovery vocabulary slices are the single Go-side source of truth for
+// the closed sets advertised by GET analysis-capabilities. Contract
+// alignment tests compare them against the embedded OpenAPI bundle so a
+// schema-side vocabulary change can never silently diverge from discovery.
+var (
+	discoveryQueryKinds = []string{
+		"events", "trend", "funnel", "journey", "retention", "segment", "path", "attribution",
+	}
+	discoveryAggregations = []string{
+		"count", "unique", "sum", "avg", "min", "max", "p50", "p90", "p95", "p99",
+	}
+	discoveryApproximateAggregations = []string{"unique", "p50", "p90", "p95", "p99"}
+	// resolved_person stays a contract-level reserved subject and is never
+	// advertised until the identity graph exists; discovery therefore lists
+	// only the implemented subjects.
+	discoverySubjects               = []string{"uid", "anonymous"}
+	discoveryIntervals              = []string{"minute", "hour", "day", "week"}
+	discoveryFunnelModes            = []string{"ordered_with_interleaving"}
+	discoveryRetentionGranularities = []string{"day", "week", "month"}
+)
+
 type CatalogField struct {
 	Field            analysis.Field `json:"field"`
 	Type             string         `json:"type"`
@@ -168,7 +190,18 @@ func (s *Discovery) Capabilities(ctx context.Context, actor, project string) (Ca
 	if e := s.store.AuthorizeAnalysisDiscovery(ctx, actor, project); e != nil {
 		return Capabilities{}, e
 	}
-	out := Capabilities{ExecutionAvailable: s.executionAvailable, QueryKinds: []string{"events", "trend", "funnel", "journey", "retention", "segment", "path", "attribution"}, Aggregations: []string{"count", "unique", "sum", "avg", "min", "max", "p50", "p90", "p95", "p99"}, ApproximateAggregations: []string{"unique", "p50", "p90", "p95", "p99"}, Subjects: []string{"uid", "anonymous"}, Intervals: []string{"minute", "hour", "day", "week"}, FunnelModes: []string{"ordered_with_interleaving"}, RetentionGranularities: []string{"day", "week", "month"}, FieldTypes: []FieldCapability{}, Budgets: DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 372 * 86400}}
+	out := Capabilities{
+		ExecutionAvailable:      s.executionAvailable,
+		QueryKinds:              discoveryQueryKinds,
+		Aggregations:            discoveryAggregations,
+		ApproximateAggregations: discoveryApproximateAggregations,
+		Subjects:                discoverySubjects,
+		Intervals:               discoveryIntervals,
+		FunnelModes:             discoveryFunnelModes,
+		RetentionGranularities:  discoveryRetentionGranularities,
+		FieldTypes:              []FieldCapability{},
+		Budgets:                 DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 372 * 86400},
+	}
 	for _, kind := range []string{"string", "boolean", "number", "integer", "datetime", "array:string", "array:boolean", "array:number", "array:integer"} {
 		c, _ := FieldCapabilities(kind)
 		out.FieldTypes = append(out.FieldTypes, c)
