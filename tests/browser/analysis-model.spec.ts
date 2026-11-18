@@ -628,13 +628,15 @@ test('analysis preserves immutable property versions, funnel order, timezone and
 
 test('field operators advertise negation members with labels per type', () => {
   expect(fieldOperators('title', 'string')).toEqual(
-    expect.arrayContaining(['not_in', 'not_prefix', 'not_contains']),
+    expect.arrayContaining(['not_in', 'not_prefix', 'not_contains', 'suffix', 'not_suffix']),
   );
   expect(fieldOperators('score', 'number')).toEqual(expect.arrayContaining(['not_in']));
   expect(fieldOperators('score', 'number')).not.toContain('not_prefix');
+  expect(fieldOperators('score', 'number')).not.toContain('suffix');
   expect(fieldOperators('tags', 'array:string')).toEqual(expect.arrayContaining(['not_contains']));
   expect(fieldOperators('tags', 'array:string')).not.toContain('not_in');
-  for (const op of ['not_in', 'not_prefix', 'not_contains'])
+  expect(fieldOperators('tags', 'array:string')).not.toContain('suffix');
+  for (const op of ['not_in', 'not_prefix', 'not_contains', 'suffix', 'not_suffix'])
     expect(typeof operators[op]).toBe('string');
 });
 
