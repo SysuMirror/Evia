@@ -656,6 +656,10 @@ func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.S
 	if err != nil {
 		return err
 	}
+	// Route internal formula_ref markers from saved-analysis exports through
+	// the same bounded fan-out engine as the query worker pool; ordinary
+	// requests pass through to the ClickHouse engine unchanged.
+	executionEngine := reporting.NewCompositeFormulaEngine(engine, store)
 	artifacts, err := exporting.NewFileArtifactStore(c.ExportDir)
 	if err != nil {
 		return stageError("export artifact store", err)
@@ -663,7 +667,7 @@ func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.S
 	registry := observe.NewRegistry("export-worker")
 	worker := &exporting.Worker{
 		Store:     store,
-		Engine:    engine,
+		Engine:    executionEngine,
 		Artifacts: artifacts,
 		ID:        c.InstanceID + "-" + ids.New(),
 		Lease:     2 * time.Minute,

@@ -24,17 +24,26 @@ import (
 const exportJobID = "88888888-8888-4888-8888-888888888888"
 
 type fakeExportService struct {
-	created     bool
-	job         exporting.Job
-	page        exporting.Page
-	grantToken  string
-	grant       exporting.Grant
-	redeemJob   exporting.Job
-	createInput exporting.Input
+	created          bool
+	job              exporting.Job
+	page             exporting.Page
+	grantToken       string
+	grant            exporting.Grant
+	redeemJob        exporting.Job
+	createInput      exporting.Input
+	savedCreateInput exporting.SavedAnalysisExportInput
+	savedAnalysisID  string
+	savedVersion     int64
 }
 
 func (s *fakeExportService) CreateJob(_ context.Context, in exporting.Input) (exporting.Job, bool, error) {
 	s.createInput = in
+	return s.job, s.created, nil
+}
+func (s *fakeExportService) CreateSavedAnalysisExportJob(_ context.Context, _, _, analysisID string, version int64, in exporting.SavedAnalysisExportInput) (exporting.Job, bool, error) {
+	s.savedAnalysisID = analysisID
+	s.savedVersion = version
+	s.savedCreateInput = in
 	return s.job, s.created, nil
 }
 func (s *fakeExportService) GetExportJob(context.Context, string, string, string) (exporting.Job, error) {

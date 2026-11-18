@@ -19,6 +19,7 @@ import (
 // ExportService is the export lifecycle subset the HTTP surface needs.
 type ExportService interface {
 	CreateJob(ctx context.Context, in exporting.Input) (exporting.Job, bool, error)
+	CreateSavedAnalysisExportJob(ctx context.Context, actor, project, analysisID string, version int64, in exporting.SavedAnalysisExportInput) (exporting.Job, bool, error)
 	GetExportJob(ctx context.Context, actor, project, jobID string) (exporting.Job, error)
 	ListExportJobs(ctx context.Context, actor, project string, filter exporting.ListFilter) (exporting.Page, error)
 	CancelExportJob(ctx context.Context, actor, project, jobID string) (exporting.Job, error)
@@ -47,6 +48,16 @@ type exportRequestBody struct {
 	ArtifactExpiryAt *string         `json:"artifact_expiry_at,omitempty"`
 }
 
+// savedAnalysisExportRequestBody binds caller-owned parameters; the bounded
+// query is rebuilt server-side from the immutable version snapshot.
+type savedAnalysisExportRequestBody struct {
+	Name             string             `json:"name"`
+	Format           string             `json:"format,omitempty"`
+	TimeRange        analysis.TimeRange `json:"time_range"`
+	Timezone         string             `json:"timezone"`
+	ArtifactExpiryAt *string            `json:"artifact_expiry_at,omitempty"`
+}
+
 func (a *ExportAPI) Register(mux *http.ServeMux) {
 	if a.Service == nil {
 		return
@@ -54,6 +65,8 @@ func (a *ExportAPI) Register(mux *http.ServeMux) {
 	const base = "/api/v1/projects/{project_id}/exports"
 	mux.HandleFunc("GET "+base, a.API.projectPermissionAuth(false, access.PermissionDataExport, a.list))
 	mux.HandleFunc("POST "+base, a.API.projectPermissionAuth(true, access.PermissionDataExport, a.create))
+	mux.HandleFunc("POST /api/v1/projects/{project_id}/saved-analyses/{analysis_id}/versions/{version}/exports",
+		a.API.projectPermissionAuth(true, access.PermissionDataExport, a.createFromSavedAnalysis))
 	mux.HandleFunc("GET "+base+"/{job_id}", a.API.projectPermissionAuth(false, access.PermissionDataExport, a.get))
 	mux.HandleFunc("DELETE "+base+"/{job_id}", a.API.projectPermissionAuth(true, access.PermissionDataExport, a.cancel))
 	mux.HandleFunc("POST "+base+"/{job_id}/download-grants", a.API.projectPermissionAuth(true, access.PermissionDataExport, a.grant))
@@ -95,6 +108,12 @@ func exportJobWire(job exporting.Job) wire.ExportJob {
 	if job.FinishedAt != nil {
 		formatted := job.FinishedAt.UTC().Format(time.RFC3339Nano)
 		out.FinishedAt = &formatted
+	}
+	if job.Source != nil {
+		analysisID := job.Source.AnalysisID
+		sourceVersion := job.Source.Version
+		out.SourceAnalysisID = &analysisID
+		out.SourceAnalysisVersion = &sourceVersion
 	}
 	return out
 }
@@ -145,6 +164,68 @@ func (a *ExportAPI) create(w http.ResponseWriter, r *http.Request, actor authori
 		ArtifactExpiry: expiry,
 	}
 	job, created, err := a.Service.CreateJob(r.Context(), in)
+	if err != nil {
+		return err
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	return a.API.Boundary.JSON(w, status, "ExportJob", exportJobWire(job))
+}
+
+// createFromSavedAnalysis creates an export job from an exact immutable saved
+// analysis version. The server rebinds the published snapshot, rechecks the
+// metric pin and applies the archived guard inside one storage transaction;
+// the caller only supplies the time window, timezone and artifact preferences.
+func (a *ExportAPI) createFromSavedAnalysis(w http.ResponseWriter, r *http.Request, actor authorizedActor) error {
+	project, err := governanceProject(r)
+	if err != nil {
+		return err
+	}
+	if _, err = governanceQuery(r); err != nil {
+		return err
+	}
+	analysisID := r.PathValue("analysis_id")
+	if !catalogUUID.MatchString(analysisID) {
+		return fault.New(fault.Invalid, "INVALID_SAVED_ANALYSIS", "保存分析标识格式不正确")
+	}
+	version, err := savedVersion(r.PathValue("version"))
+	if err != nil {
+		return err
+	}
+	key, err := savedIdempotency(r)
+	if err != nil {
+		return err
+	}
+	var body savedAnalysisExportRequestBody
+	if err = a.API.Boundary.Decode(w, r, "SavedAnalysisExportInput", &body); err != nil {
+		return err
+	}
+	var expiry *time.Time
+	if body.ArtifactExpiryAt != nil && *body.ArtifactExpiryAt != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, *body.ArtifactExpiryAt)
+		if parseErr != nil {
+			return fault.New(fault.Invalid, "INVALID_EXPORT_INPUT", "产物过期时间格式无效")
+		}
+		expiry = &parsed
+	}
+	hash, err := canonical.Hash(body)
+	if err != nil {
+		return err
+	}
+	in := exporting.SavedAnalysisExportInput{
+		ProjectID:      project,
+		ActorID:        actor.ID,
+		Name:           body.Name,
+		Format:         body.Format,
+		TimeRange:      body.TimeRange,
+		Timezone:       body.Timezone,
+		IdempotencyKey: key,
+		RequestHash:    hash,
+		ArtifactExpiry: expiry,
+	}
+	job, created, err := a.Service.CreateSavedAnalysisExportJob(r.Context(), actor.ID, project, analysisID, version, in)
 	if err != nil {
 		return err
 	}
