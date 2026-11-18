@@ -149,6 +149,125 @@ func TestEvaluateRetentionWeekAlignmentUsesTimezone(t *testing.T) {
 	}
 }
 
+func monthRequest(periods int) Request {
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	return Request{
+		Kind:        "retention",
+		Environment: "development",
+		Subject:     "uid",
+		TimeRange:   TimeRange{From: from, To: time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)},
+		Timezone:    "UTC",
+		Retention: &Retention{
+			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
+			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
+			Granularity: "month",
+			Periods:     periods,
+		},
+	}
+}
+
+func TestEvaluateRetentionMonthCohortMatrix(t *testing.T) {
+	request := monthRequest(3)
+	if e := Validate(&request); e != nil {
+		t.Fatalf("month granularity must pass validation: %v", e)
+	}
+	at := func(year int, month time.Month, day, hour int) time.Time {
+		return time.Date(year, month, day, hour, 0, 0, 0, time.UTC)
+	}
+	rows := []map[string]any{
+		// November 2026 cohort: u1 and u2.
+		retentionRow("u1", at(2026, time.November, 5, 9), true, false),
+		retentionRow("u1", at(2026, time.December, 10, 9), false, true),
+		retentionRow("u2", at(2026, time.November, 20, 10), true, false),
+		retentionRow("u2", at(2026, time.November, 25, 10), false, true),
+		retentionRow("u2", at(2027, time.January, 15, 9), false, true),
+		// December 2026 cohort: u3 returns the following January.
+		retentionRow("u3", at(2026, time.December, 8, 9), true, false),
+		retentionRow("u3", at(2027, time.January, 2, 9), false, true),
+		// January 2027 cohort: u4 enters with no later return.
+		retentionRow("u4", at(2027, time.January, 10, 9), true, false),
+	}
+	result, e := EvaluateRetention(request, rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := []struct {
+		index    int
+		start    string
+		size     int
+		retained []int
+		rates    []float64
+	}{
+		{0, "2026-11-01T00:00:00Z", 2, []int{2, 1, 1}, []float64{1, 0.5, 0.5}},
+		{1, "2026-12-01T00:00:00Z", 1, []int{1, 1, 0}, []float64{1, 1, 0}},
+		{2, "2027-01-01T00:00:00Z", 1, []int{1, 0, 0}, []float64{1, 0, 0}},
+	}
+	if len(result) != len(want) {
+		t.Fatalf("want %d month cohorts, got %d: %v", len(want), len(result), result)
+	}
+	for i, expected := range want {
+		row := result[i]
+		if row["cohort_index"] != expected.index || row["cohort_start"] != expected.start || row["cohort_size"] != expected.size {
+			t.Fatalf("month cohort %d header mismatch: %v", i, row)
+		}
+		retained, ok := row["retained"].([]int)
+		if !ok || len(retained) != 3 {
+			t.Fatalf("month cohort %d retained shape wrong: %#v", i, row["retained"])
+		}
+		for offset := range expected.retained {
+			if retained[offset] != expected.retained[offset] {
+				t.Fatalf("month cohort %d offset %d retained=%d want %d", i, offset, retained[offset], expected.retained[offset])
+			}
+		}
+		rates, ok := row["retention_rate"].([]any)
+		if !ok || len(rates) != 3 {
+			t.Fatalf("month cohort %d rate shape wrong: %#v", i, row["retention_rate"])
+		}
+		for offset, expectedRate := range expected.rates {
+			if got, ok := rates[offset].(float64); !ok || got != expectedRate {
+				t.Fatalf("month cohort %d offset %d rate=%v want %v", i, offset, rates[offset], expectedRate)
+			}
+		}
+	}
+}
+
+func TestEvaluateRetentionMonthAlignmentUsesTimezone(t *testing.T) {
+	shanghai, e := time.LoadLocation("Asia/Shanghai")
+	if e != nil {
+		t.Fatal(e)
+	}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, shanghai)
+	request := Request{
+		Kind: "retention", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: from, To: from.AddDate(0, 2, 0)},
+		Timezone:  "Asia/Shanghai",
+		Retention: &Retention{
+			StartEvent: Step{EventKey: "sign_up", SchemaVersion: 1}, ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
+			Granularity: "month", Periods: 2,
+		},
+	}
+	rows := []map[string]any{
+		retentionRow("u1", time.Date(2026, 11, 2, 10, 0, 0, 0, shanghai), true, false),
+		retentionRow("u2", time.Date(2026, 11, 3, 8, 0, 0, 0, shanghai), true, false),
+		// 16:30 UTC is 00:30 next-day local and still belongs to the November local month.
+		retentionRow("u3", time.Date(2026, 10, 31, 16, 30, 0, 0, time.UTC), true, false),
+	}
+	result, e := EvaluateRetention(request, rows)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(result) != 1 {
+		t.Fatalf("all three entries must share one local month cohort: %v", result)
+	}
+	row := result[0]
+	if row["cohort_index"] != 0 || row["cohort_size"] != 3 {
+		t.Fatalf("month cohort assignment wrong: %v", row)
+	}
+	if row["cohort_start"] != "2026-10-31T16:00:00Z" {
+		t.Fatalf("cohort start must be the timezone-aligned first month day in UTC: %v", row["cohort_start"])
+	}
+}
+
 func TestEvaluateRetentionHandlesEdgeCases(t *testing.T) {
 	request := retentionRequest("day", 2)
 	for _, tc := range []struct {

@@ -22,7 +22,8 @@ type cohortAggregate struct {
 // period of its earliest start event; offset zero always retains (the entry
 // itself), and later offsets count distinct subjects with a return event in
 // the corresponding calendar period. Periods are aligned to the request
-// timezone; weeks start on Monday.
+// timezone; weeks start on Monday and month cohorts start on the first
+// calendar day of the month.
 func EvaluateRetention(request Request, rows []map[string]any) ([]map[string]any, error) {
 	return evaluateRetention(context.Background(), request, rows)
 }
@@ -124,14 +125,21 @@ func evaluateRetention(ctx context.Context, request Request, rows []map[string]a
 		indices = append(indices, index)
 	}
 	sort.Ints(indices)
-	daysPerPeriod := 1
-	if rt.Granularity == "week" {
-		daysPerPeriod = 7
-	}
 	out := make([]map[string]any, 0, len(indices))
 	for _, index := range indices {
 		aggregate := cohorts[index]
-		cohortStart := origin.AddDate(0, 0, index*daysPerPeriod)
+		var cohortStart time.Time
+		if rt.Granularity == "month" {
+			// Origin is a first-of-month floor, so month AddDate lands on the
+			// cohort's first calendar month without day-overflow.
+			cohortStart = origin.AddDate(0, index, 0)
+		} else {
+			daysPerPeriod := 1
+			if rt.Granularity == "week" {
+				daysPerPeriod = 7
+			}
+			cohortStart = origin.AddDate(0, 0, index*daysPerPeriod)
+		}
 		rates := make([]any, rt.Periods)
 		for offset, retained := range aggregate.retained {
 			rates[offset] = float64(retained) / float64(aggregate.size)
@@ -163,8 +171,12 @@ func periodFloor(when time.Time, location *time.Location, granularity string) ti
 	local := when.In(location)
 	year, month, day := local.Date()
 	midnight := time.Date(year, month, day, 0, 0, 0, 0, location)
-	if granularity == "day" {
+	switch granularity {
+	case "day":
 		return midnight
+	case "month":
+		// Timezone-local first day of the calendar month at midnight.
+		return time.Date(year, month, 1, 0, 0, 0, 0, location)
 	}
 	// Go's Weekday is Sunday=0; shift so Monday becomes zero.
 	back := (int(midnight.Weekday()) + 6) % 7
@@ -175,6 +187,11 @@ func periodFloor(when time.Time, location *time.Location, granularity string) ti
 // uses ordinal day arithmetic rather than nanosecond division so DST shifts
 // cannot move the boundary by an hour.
 func periodOffset(origin, floor time.Time, granularity string) int {
+	if granularity == "month" {
+		// Both arguments are first-of-month floors, so the month ordinal
+		// difference is exact regardless of variable month length.
+		return floor.Year()*12 + int(floor.Month()) - origin.Year()*12 - int(origin.Month())
+	}
 	days := dayOrdinal(floor) - dayOrdinal(origin)
 	if granularity == "week" {
 		return days / 7

@@ -515,6 +515,78 @@ func TestClickHouseRetentionMatrix(t *testing.T) {
 	}
 }
 
+// TestClickHouseRetentionMonthCohorts proves calendar-month cohorts against
+// the real migrated view: first-of-month alignment, variable month length and
+// cross-year month offsets, with the same bounded-pull and flag decoding as the
+// day/week matrices.
+func TestClickHouseRetentionMonthCohorts(t *testing.T) {
+	client := clickHouseDatabase(t)
+	at := func(year int, month time.Month, day, hour int) time.Time {
+		return time.Date(year, month, day, hour, 0, 0, 0, time.UTC)
+	}
+	rows := []map[string]any{
+		retentionFact("m-u1-start", "sign_up", "u1", at(2026, time.November, 5, 9)),
+		retentionFact("m-u1-return", "login", "u1", at(2026, time.December, 10, 9)),
+		retentionFact("m-u2-start", "sign_up", "u2", at(2026, time.November, 20, 10)),
+		retentionFact("m-u2-return", "login", "u2", at(2027, time.January, 15, 9)),
+		retentionFact("m-u3-start", "sign_up", "u3", at(2026, time.December, 8, 9)),
+		retentionFact("m-u3-return", "login", "u3", at(2027, time.January, 2, 9)),
+		retentionFact("m-u4-start", "sign_up", "u4", at(2027, time.January, 10, 9)),
+	}
+	outsider := retentionFact("m-outsider", "sign_up", "outsider", at(2026, time.November, 7, 9))
+	outsider["project_id"] = "project-two"
+	seedRows(t, client, append(rows, outsider))
+
+	r := Request{
+		Kind: "retention", Environment: "development", Subject: "uid",
+		TimeRange: TimeRange{From: at(2026, time.November, 1, 0), To: at(2027, time.February, 1, 0)},
+		Timezone:  "UTC",
+		Retention: &Retention{
+			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
+			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
+			Granularity: "month", Periods: 3,
+		},
+	}
+	result := execute(t, client, r)
+	if len(result.Columns) != 5 || result.Metadata.Accuracy != "exact" || result.Metadata.DataWatermark == nil {
+		t.Fatalf("month retention result contract wrong: %+v metadata=%+v", result.Columns, result.Metadata)
+	}
+	want := []struct {
+		index, size int
+		start       string
+		retained    []int
+	}{
+		{0, 2, "2026-11-01T00:00:00Z", []int{2, 1, 1}},
+		{1, 1, "2026-12-01T00:00:00Z", []int{1, 1, 0}},
+		{2, 1, "2027-01-01T00:00:00Z", []int{1, 0, 0}},
+	}
+	if len(result.Rows) != len(want) {
+		t.Fatalf("want %d month cohorts, got %d: %v", len(want), len(result.Rows), result.Rows)
+	}
+	for i, expected := range want {
+		row := result.Rows[i]
+		if row["cohort_index"] != expected.index || row["cohort_start"] != expected.start || row["cohort_size"] != expected.size {
+			t.Fatalf("month cohort %d header mismatch: %v", i, row)
+		}
+		retained, ok := row["retained"].([]int)
+		if !ok || len(retained) != 3 {
+			t.Fatalf("month cohort %d retained shape wrong: %#v", i, row["retained"])
+		}
+		for offset, expectedCount := range expected.retained {
+			if retained[offset] != expectedCount {
+				t.Fatalf("month cohort %d offset %d retained=%d want %d", i, offset, retained[offset], expectedCount)
+			}
+		}
+		rates, ok := row["retention_rate"].([]any)
+		if !ok || len(rates) != 3 {
+			t.Fatalf("month cohort %d rate shape wrong: %#v", i, row["retention_rate"])
+		}
+		if first, ok := rates[0].(float64); !ok || first != 1 {
+			t.Fatalf("entry-period month retention must be 1.0: %v", rates[0])
+		}
+	}
+}
+
 // TestClickHouseSegmentation proves subject-level segmentation against the
 // real migrated view: one group per subject via the earliest event value,
 // an explicit missing group, shares, and project scoping.
