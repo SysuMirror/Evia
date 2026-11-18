@@ -3428,9 +3428,15 @@ export interface components {
             key: string;
         };
         "query-request.schema": {
-            /** @enum {unknown} */
+            /**
+             * @description Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints.
+             * @enum {unknown}
+             */
             kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution";
-            /** @enum {unknown} */
+            /**
+             * @description Deployment scope. The query runs only against facts published in this environment, and for machine credentials it must match the granted environment.
+             * @enum {unknown}
+             */
             environment: "development" | "staging" | "production";
             time_range: {
                 /** Format: date-time */
@@ -3441,7 +3447,10 @@ export interface components {
             timezone: string;
             event_keys?: string[];
             filter?: components["schemas"]["filter"];
-            /** @enum {unknown} */
+            /**
+             * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier (never a resolved person). resolved_person is reserved for a future identity graph and currently fails closed with IDENTITY_RESOLUTION_UNAVAILABLE.
+             * @enum {unknown}
+             */
             subject?: "uid" | "anonymous" | "resolved_person";
             identity_revision?: number;
             identity_filter?: {
@@ -3479,10 +3488,16 @@ export interface components {
                     schema_version: number;
                     key: string;
                 };
-                /** @enum {unknown} */
+                /**
+                 * @description exact (the default) uses precise aggregation; approximate is accepted only for unique counts and the p50/p90/p95/p99 percentiles (ClickHouse uniqCombined64/quantileTDigest) and is rejected for every other operator.
+                 * @enum {unknown}
+                 */
                 accuracy?: "exact" | "approximate";
             }[];
-            /** @enum {unknown} */
+            /**
+             * @description Trend time bucket in the request timezone. Omit it to aggregate the whole range into one value. week starts on Monday (ClickHouse toStartOfWeek mode 1); month is intentionally not a trend interval because it is variable-duration.
+             * @enum {unknown}
+             */
             interval?: "minute" | "hour" | "day" | "week";
             funnel?: {
                 steps: {
@@ -3772,7 +3787,10 @@ export interface components {
             event_key: string;
             schema_version: number;
         }[];
-        /** @enum {unknown} */
+        /**
+         * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier (never a resolved person). resolved_person is reserved for a future identity graph and currently fails closed with IDENTITY_RESOLUTION_UNAVAILABLE.
+         * @enum {unknown}
+         */
         subject: "uid" | "anonymous" | "resolved_person";
         group_by: ({
             /** @constant */
@@ -3804,10 +3822,16 @@ export interface components {
                 schema_version: number;
                 key: string;
             };
-            /** @enum {unknown} */
+            /**
+             * @description exact (the default) uses precise aggregation; approximate is accepted only for unique counts and the p50/p90/p95/p99 percentiles (ClickHouse uniqCombined64/quantileTDigest) and is rejected for every other operator.
+             * @enum {unknown}
+             */
             accuracy?: "exact" | "approximate";
         }[];
-        /** @enum {unknown} */
+        /**
+         * @description Trend time bucket in the request timezone. Omit it to aggregate the whole range into one value. week starts on Monday (ClickHouse toStartOfWeek mode 1); month is intentionally not a trend interval because it is variable-duration.
+         * @enum {unknown}
+         */
         interval: "minute" | "hour" | "day" | "week";
         funnel: {
             steps: {
@@ -3909,7 +3933,10 @@ export interface components {
                 schema_version: number;
                 key: string;
             };
-            /** @enum {unknown} */
+            /**
+             * @description exact (the default) uses precise aggregation; approximate is accepted only for unique counts and the p50/p90/p95/p99 percentiles (ClickHouse uniqCombined64/quantileTDigest) and is rejected for every other operator.
+             * @enum {unknown}
+             */
             accuracy?: "exact" | "approximate";
         };
     };
