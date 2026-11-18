@@ -17,7 +17,7 @@ import { savedDefinitionSummary } from '../saved-analysis-model';
 import { maxTextCardContentRunes } from './model';
 import type { DashboardWidgetSource } from './types';
 
-type SourceKind = 'analysis' | 'metric' | 'text';
+type SourceKind = 'analysis' | 'metric' | 'formula' | 'text';
 
 export function DashboardWidgetPicker({
   context,
@@ -78,6 +78,27 @@ export function DashboardWidgetPicker({
       ),
     enabled: open && sourceKind === 'metric' && !!metricID,
   });
+  const formulaList = useQuery({
+    queryKey: [...scope, 'formula-list', cursors.at(-1)],
+    queryFn: ({ signal }) =>
+      api.listFormulaMetrics(
+        project.id,
+        { environment, cursor: cursors.at(-1), limit: 20 },
+        signal,
+      ),
+    enabled: open && sourceKind === 'formula',
+  });
+  const formulaVersions = useQuery({
+    queryKey: [...scope, 'formula-versions', metricID, versionCursors.at(-1)],
+    queryFn: ({ signal }) =>
+      api.listFormulaMetricVersions(
+        project.id,
+        metricID,
+        { limit: 20, cursor: versionCursors.at(-1) },
+        signal,
+      ),
+    enabled: open && sourceKind === 'formula' && !!metricID,
+  });
 
   const selectedAnalysis = analysisVersions.data?.items.find(
     (item) => item.version === Number(version),
@@ -88,6 +109,10 @@ export function DashboardWidgetPicker({
   const selectedMetricVersion = metricVersions.data?.items.find(
     (item) => item.version === Number(version),
   );
+  const selectedFormulaRecord = formulaList.data?.items.find((item) => item.metric_id === metricID);
+  const selectedFormulaVersion = formulaVersions.data?.items.find(
+    (item) => item.version === Number(version),
+  );
   const textRunes = [...textContent].length;
   const ready =
     sourceKind === 'text'
@@ -96,7 +121,9 @@ export function DashboardWidgetPicker({
         textRunes <= maxTextCardContentRunes
       : sourceKind === 'analysis'
         ? !!selectedAnalysis && title.trim().length > 0
-        : !!selectedMetricRecord && !!selectedMetricVersion && title.trim().length > 0;
+        : sourceKind === 'formula'
+          ? !!selectedFormulaRecord && !!selectedFormulaVersion && title.trim().length > 0
+          : !!selectedMetricRecord && !!selectedMetricVersion && title.trim().length > 0;
 
   useEffect(() => {
     if (open) {
@@ -124,7 +151,9 @@ export function DashboardWidgetPicker({
     const errors =
       sourceKind === 'analysis'
         ? [analysisList.error, analysisVersions.error]
-        : [metricList.error, metricVersions.error];
+        : sourceKind === 'formula'
+          ? [formulaList.error, formulaVersions.error]
+          : [metricList.error, metricVersions.error];
     for (const error of errors)
       if (error && 'status' in error && [401, 403].includes(Number(error.status))) onDenied(error);
   }, [
@@ -133,11 +162,19 @@ export function DashboardWidgetPicker({
     analysisVersions.error,
     metricList.error,
     metricVersions.error,
+    formulaList.error,
+    formulaVersions.error,
     onDenied,
   ]);
 
-  const list = sourceKind === 'analysis' ? analysisList : metricList;
-  const versions = sourceKind === 'analysis' ? analysisVersions : metricVersions;
+  const list =
+    sourceKind === 'analysis' ? analysisList : sourceKind === 'formula' ? formulaList : metricList;
+  const versions =
+    sourceKind === 'analysis'
+      ? analysisVersions
+      : sourceKind === 'formula'
+        ? formulaVersions
+        : metricVersions;
 
   return (
     <Modal
@@ -168,6 +205,11 @@ export function DashboardWidgetPicker({
               { kind: 'metric', metric: selectedMetricRecord, version: selectedMetricVersion },
               title.trim(),
             );
+          } else if (sourceKind === 'formula' && selectedFormulaRecord && selectedFormulaVersion) {
+            onAdd(
+              { kind: 'formula', metric: selectedFormulaRecord, version: selectedFormulaVersion },
+              title.trim(),
+            );
           }
           onClose();
         }}
@@ -179,7 +221,8 @@ export function DashboardWidgetPicker({
             onChange={(e) => switchSource(e.target.value as SourceKind)}
             options={[
               { value: 'analysis', label: '已发布保存分析' },
-              { value: 'metric', label: '已发布独立指标' },
+              { value: 'metric', label: '已发布独立指标（原子）' },
+              { value: 'formula', label: '已发布复合公式指标' },
               { value: 'text', label: 'Markdown 文本卡（说明/注释，不产生查询）' },
             ]}
           />
@@ -218,7 +261,13 @@ export function DashboardWidgetPicker({
             <CatalogError error={list.error} retry={() => void list.refetch()} />
             {list.isPending ? (
               <LoadingPanel
-                label={sourceKind === 'analysis' ? '正在读取保存分析' : '正在读取指标'}
+                label={
+                  sourceKind === 'analysis'
+                    ? '正在读取保存分析'
+                    : sourceKind === 'formula'
+                      ? '正在读取复合公式指标'
+                      : '正在读取指标'
+                }
               />
             ) : sourceKind === 'analysis' ? (
               <Field label="保存的分析" htmlFor={`${id}-analysis`}>
@@ -237,6 +286,28 @@ export function DashboardWidgetPicker({
                       .filter((item) => item.published_version > 0)
                       .map((item) => ({
                         value: item.analysis_id,
+                        label: `${item.title}，最新 v${item.published_version}`,
+                      })),
+                  ]}
+                />
+              </Field>
+            ) : sourceKind === 'formula' ? (
+              <Field label="复合公式指标" htmlFor={`${id}-metric`}>
+                <Select
+                  id={`${id}-metric`}
+                  value={metricID}
+                  onChange={(e) => {
+                    setMetricID(e.target.value);
+                    setVersion('');
+                    setVersionCursors([]);
+                    setTitle('');
+                  }}
+                  options={[
+                    { value: '', label: '选择已发布的复合公式指标' },
+                    ...(formulaList.data?.items ?? [])
+                      .filter((item) => item.published_version > 0)
+                      .map((item) => ({
+                        value: item.metric_id,
                         label: `${item.title}，最新 v${item.published_version}`,
                       })),
                   ]}
@@ -268,11 +339,15 @@ export function DashboardWidgetPicker({
             {!list.isPending &&
               (sourceKind === 'analysis'
                 ? !(analysisList.data?.items ?? []).some((item) => item.published_version > 0)
-                : !(metricList.data?.items ?? []).some((item) => item.published_version > 0)) && (
+                : sourceKind === 'formula'
+                  ? !(formulaList.data?.items ?? []).some((item) => item.published_version > 0)
+                  : !(metricList.data?.items ?? []).some((item) => item.published_version > 0)) && (
                 <p className="field-help">
                   {sourceKind === 'analysis'
                     ? '本页暂无已发布分析，可继续翻页或先在保存的分析中发布。'
-                    : '本页暂无已发布指标，可继续翻页或先在独立指标中发布。'}
+                    : sourceKind === 'formula'
+                      ? '本页暂无已发布复合公式指标，可继续翻页或先在复合公式指标中发布。'
+                      : '本页暂无已发布指标，可继续翻页或先在独立指标中发布。'}
                 </p>
               )}
             {(cursors.length > 0 || list.data?.next_cursor) && (
@@ -289,7 +364,7 @@ export function DashboardWidgetPicker({
             )}
 
             {((sourceKind === 'analysis' && analysisID) ||
-              (sourceKind === 'metric' && metricID)) && (
+              ((sourceKind === 'metric' || sourceKind === 'formula') && metricID)) && (
               <>
                 <CatalogError error={versions.error} retry={() => void versions.refetch()} />
                 <Field
@@ -311,6 +386,11 @@ export function DashboardWidgetPicker({
                       setVersion(e.target.value);
                       if (sourceKind === 'analysis') {
                         const item = analysisVersions.data?.items.find(
+                          (v) => v.version === Number(e.target.value),
+                        );
+                        setTitle(item?.definition.title ?? '');
+                      } else if (sourceKind === 'formula') {
+                        const item = formulaVersions.data?.items.find(
                           (v) => v.version === Number(e.target.value),
                         );
                         setTitle(item?.definition.title ?? '');

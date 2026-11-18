@@ -6,6 +6,8 @@ import {
   type DashboardDraft,
   type DashboardPublish,
   type DashboardRebinding,
+  type FormulaMetricRecord,
+  type FormulaMetricVersion,
   type MetricRecord,
   type MetricVersion,
   type SavedAnalysisVersion,
@@ -15,6 +17,7 @@ import {
 export type DashboardWidgetSource =
   | { kind: 'analysis'; analysis: SavedAnalysisVersion }
   | { kind: 'metric'; metric: MetricRecord; version: MetricVersion }
+  | { kind: 'formula'; metric: FormulaMetricRecord; version: FormulaMetricVersion }
   | { kind: 'text'; content: string };
 
 /** Copy request carried from the modal through the list to the controller. */

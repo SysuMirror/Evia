@@ -96,7 +96,15 @@ export function DashboardEditor({
                 version: source.version.version,
               },
             }
-          : { text_card: { content: source.content } };
+          : source.kind === 'formula'
+            ? {
+                metric_ref: {
+                  metric_id: source.version.metric_id,
+                  version: source.version.version,
+                  kind: 'composite' as const,
+                },
+              }
+            : { text_card: { content: source.content } };
     if (replacing) {
       const current = value.widgets.find((w) => w.widget_id === replacing);
       if (current) {

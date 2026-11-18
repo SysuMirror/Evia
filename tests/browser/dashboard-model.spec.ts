@@ -162,6 +162,47 @@ test('text card widgets satisfy the three-way exclusive source invariant', () =>
   expect(dashboardIssues(withBinding).join('\n')).toContain('文本卡，不能绑定运行参数');
 });
 
+test('composite formula metric widgets validate and label distinctly from atomic ones', () => {
+  const compositeWidget: DashboardWidget = {
+    widget_id: 'formula-card',
+    metric_ref: {
+      metric_id: '33333333-3333-4333-8333-333333333333',
+      version: 2,
+      kind: 'composite',
+    },
+    title: '复合指标卡',
+    reading_order: 0,
+    layout: { x: 0, y: 0, width: 12, height: 2 },
+  };
+  const atomicWidget: DashboardWidget = {
+    widget_id: 'atomic-card',
+    metric_ref: { metric_id: '11111111-1111-4111-8111-111111111111', version: 1 },
+    title: '原子指标卡',
+    reading_order: 1,
+    layout: { x: 0, y: 2, width: 12, height: 2 },
+  };
+  const board: DashboardDefinition = {
+    title: '混合指标看板',
+    widgets: [compositeWidget, atomicWidget],
+  };
+  expect(dashboardIssues(board)).toEqual([]);
+  expect(widgetSourceLabel(compositeWidget)).toBe('复合指标 v2');
+  expect(widgetSourceLabel(atomicWidget)).toBe('指标 v1');
+  expect(executableWidgets(board.widgets).map((w) => w.widget_id)).toEqual([
+    'formula-card',
+    'atomic-card',
+  ]);
+
+  // Cross-environment rebinding payloads stay kind-free: the server preserves
+  // the source widget kind when rebuilding the reference in the target env.
+  const selections: Record<string, CrossCopySelection> = {
+    'formula-card': { resourceID: 'target-formula', version: '7' },
+  };
+  expect(buildRebindings([compositeWidget], selections)).toEqual([
+    { widget_id: 'formula-card', metric_id: 'target-formula', metric_version: 7 },
+  ]);
+});
+
 test('markdown subset parser keeps block structure and degrades unknown markers to text', () => {
   const blocks = parseTextCardBlocks(
     [

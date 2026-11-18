@@ -121,7 +121,10 @@ export function availableWidgetPosition(widgets: readonly DashboardWidget[]) {
 /** Human-readable pinned-source label used by editor cards and run summaries. */
 export function widgetSourceLabel(widget: DashboardWidget): string {
   if (widget.text_card) return '文本卡';
-  if (widget.metric_ref) return `指标 v${widget.metric_ref.version}`;
+  if (widget.metric_ref)
+    return widget.metric_ref.kind === 'composite'
+      ? `复合指标 v${widget.metric_ref.version}`
+      : `指标 v${widget.metric_ref.version}`;
   return `分析 v${widget.analysis_version ?? '—'}`;
 }
 export function reorderWidget(
