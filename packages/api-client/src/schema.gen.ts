@@ -3366,11 +3366,17 @@ export interface components {
             sections: components["schemas"]["ReportSectionInput"][];
         };
         filter: {
-            /** @enum {unknown} */
+            /**
+             * @description Logical node combining 1-20 nested filter nodes. There is no generic NOT node; negation is expressed only through the explicit negated scalar operators (not_in/not_prefix/not_suffix/not_contains) so missing-key handling stays explicit.
+             * @enum {unknown}
+             */
             op: "and" | "or";
             args: components["schemas"]["filter"][];
         } | {
-            /** @enum {unknown} */
+            /**
+             * @description Scalar comparison over one field. eq/neq are equality, in/not_in are set membership with an array value, gt/gte/lt/lte apply to numeric or datetime fields, and prefix/suffix/contains (string-only, ClickHouse startsWith/endsWith/position) each have an explicit not_* negation. Every leaf keeps the same scope/presence/validity guard; a negation only inverts the inner test, so absent keys, explicit nulls and wrongly typed values stay excluded. An empty not_in matches every present/valid row. User values are always bound parameters, never SQL text.
+             * @enum {unknown}
+             */
             op: "eq" | "neq" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "not_prefix" | "suffix" | "not_suffix" | "contains" | "not_contains";
             field: {
                 /** @constant */
@@ -3386,7 +3392,10 @@ export interface components {
             };
             value: (string | boolean | number) | (string | boolean | number)[];
         } | {
-            /** @enum {unknown} */
+            /**
+             * @description Key-existence test within the pinned event/version. is_present matches when the key exists, including an explicit null; is_missing matches absent keys. Neither coerces a missing value into a default or a typed comparison.
+             * @enum {unknown}
+             */
             op: "is_missing" | "is_present";
             field: {
                 /** @constant */
@@ -3569,11 +3578,17 @@ export interface components {
                     key: string;
                 };
                 filter: {
-                    /** @enum {unknown} */
+                    /**
+                     * @description Logical node combining 1-20 nested filter nodes. There is no generic NOT node; negation is expressed only through the explicit negated scalar operators (not_in/not_prefix/not_suffix/not_contains) so missing-key handling stays explicit.
+                     * @enum {unknown}
+                     */
                     op: "and" | "or";
                     args: components["schemas"]["filter"][];
                 } | {
-                    /** @enum {unknown} */
+                    /**
+                     * @description Scalar comparison over one field. eq/neq are equality, in/not_in are set membership with an array value, gt/gte/lt/lte apply to numeric or datetime fields, and prefix/suffix/contains (string-only, ClickHouse startsWith/endsWith/position) each have an explicit not_* negation. Every leaf keeps the same scope/presence/validity guard; a negation only inverts the inner test, so absent keys, explicit nulls and wrongly typed values stay excluded. An empty not_in matches every present/valid row. User values are always bound parameters, never SQL text.
+                     * @enum {unknown}
+                     */
                     op: "eq" | "neq" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "not_prefix" | "suffix" | "not_suffix" | "contains" | "not_contains";
                     field: {
                         /** @constant */
@@ -3589,7 +3604,10 @@ export interface components {
                     };
                     value: (string | boolean | number) | (string | boolean | number)[];
                 } | {
-                    /** @enum {unknown} */
+                    /**
+                     * @description Key-existence test within the pinned event/version. is_present matches when the key exists, including an explicit null; is_missing matches absent keys. Neither coerces a missing value into a default or a typed comparison.
+                     * @enum {unknown}
+                     */
                     op: "is_missing" | "is_present";
                     field: {
                         /** @constant */
