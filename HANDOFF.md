@@ -292,7 +292,7 @@ docs/                            架构、标准、运行手册、验证和规�
 2. 安装仓库锁定的 Go/Node/pnpm、Python 验证依赖及浏览器。细节见 [本地开发](docs/runbooks/development.md)。Go 竞态测试需要支持 CGO 的 C 工具链。
 3. 为开发/测试创建专用 PostgreSQL 数据库，私有配置保留在仓库外或忽略目录，权限 `0600`。
 4. 按 [依赖手册](docs/runbooks/dependencies.md) 启动需要的 Kafka、ClickHouse、Redis；按 [完整控制台验证](docs/runbooks/console-verification.md) 生成完整运行配置、准备主题和 ClickHouse 迁移。
-5. 用同一新二进制显式执行 `evia migrate`，迁移至 `backend/internal/storage/postgres/migrations/` 内嵌的最新编号（本文写作时为 `039`，以后续目录为准）；新空库才 bootstrap。已有账号不得靠重复 bootstrap 重置。
+5. 用同一新二进制显式执行 `evia migrate`，迁移至 `backend/internal/storage/postgres/migrations/` 内嵌的最新编号（本文写作时为 `040`，以后续目录为准）；新空库才 bootstrap。已有账号不得靠重复 bootstrap 重置。
 6. 分别启动 `serve`、`ingest-worker`、`query-worker`。配置探针后，API 同时运行交付协调。仅启动 PostgreSQL/API 不足以验证完整平台。
 7. 等待 `http://127.0.0.1:8080/readyz` 返回 204；控制台使用配置中的精确 Origin `http://127.0.0.1:5173`。
 
