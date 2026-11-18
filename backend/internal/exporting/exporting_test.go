@@ -71,6 +71,9 @@ type GrantInput struct {
 func (f *fakeStore) CreateExportJob(context.Context, Input) (Job, bool, error) {
 	return f.job, true, nil
 }
+func (f *fakeStore) CreateSavedAnalysisExportJob(context.Context, string, string, string, int64, SavedAnalysisExportInput) (Job, bool, error) {
+	return f.job, true, nil
+}
 func (f *fakeStore) GetExportJob(context.Context, string, string, string) (Job, error) {
 	return f.job, nil
 }

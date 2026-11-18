@@ -70,6 +70,39 @@ func ValidateInput(in Input) error {
 	return nil
 }
 
+// ValidateSavedAnalysisExportInput repeats the HTTP contract at the domain
+// boundary for the version export path. Environment and the bound request are
+// derived from the immutable snapshot inside the storage adapter, so this
+// checks only the caller-owned parameters; time-range budgets are re-applied
+// during snapshot binding.
+func ValidateSavedAnalysisExportInput(in SavedAnalysisExportInput) error {
+	if _, err := NormalizeFormat(in.Format); err != nil {
+		return err
+	}
+	if !uuidPattern.MatchString(in.ProjectID) || !uuidPattern.MatchString(in.ActorID) {
+		return invalid("项目或操作主体标识格式不正确")
+	}
+	if len(in.Name) < 1 || len(in.Name) > MaxNameLength {
+		return invalid("导出名称长度必须在 1 到 200 字符之间")
+	}
+	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 128 {
+		return invalid("幂等键长度无效")
+	}
+	if len(in.RequestHash) != 64 {
+		return invalid("请求摘要无效")
+	}
+	if in.TimeRange.From.IsZero() || in.TimeRange.To.IsZero() || !in.TimeRange.To.After(in.TimeRange.From) {
+		return invalid("导出时间范围无效")
+	}
+	if len(in.Timezone) < 1 || len(in.Timezone) > 64 {
+		return invalid("时区标识无效")
+	}
+	if in.ArtifactExpiry != nil && !in.ArtifactExpiry.After(time.Now()) {
+		return invalid("产物过期时间必须晚于当前时间")
+	}
+	return nil
+}
+
 // Service coordinates domain validation and one-time grant minting on top of
 // the durable store. It never executes queries; the worker owns execution.
 type Service struct {
@@ -87,6 +120,15 @@ func (s *Service) CreateJob(ctx context.Context, in Input) (Job, bool, error) {
 		return Job{}, false, err
 	}
 	return s.store.CreateExportJob(ctx, in)
+}
+
+// CreateSavedAnalysisExportJob validates caller parameters and delegates
+// snapshot resolution, pin verification and job persistence to the store.
+func (s *Service) CreateSavedAnalysisExportJob(ctx context.Context, actor, project, analysisID string, version int64, in SavedAnalysisExportInput) (Job, bool, error) {
+	if err := ValidateSavedAnalysisExportInput(in); err != nil {
+		return Job{}, false, err
+	}
+	return s.store.CreateSavedAnalysisExportJob(ctx, actor, project, analysisID, version, in)
 }
 
 func (s *Service) GetJob(ctx context.Context, actor, project, jobID string) (Job, error) {

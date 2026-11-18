@@ -41,13 +41,16 @@ const (
 
 // Job is the durable export lifecycle record.
 type Job struct {
-	JobID           string
-	ProjectID       string
-	Environment     string
-	ActorID         string
-	Name            string
-	Format          string
-	Request         analysis.Request
+	JobID       string
+	ProjectID   string
+	Environment string
+	ActorID     string
+	Name        string
+	Format      string
+	Request     analysis.Request
+	// Source is non-nil when the export was created from an immutable saved
+	// analysis version; inline exports leave it nil.
+	Source          *SavedAnalysisSource
 	State           string
 	IdempotencyKey  string
 	RequestHash     string
@@ -76,8 +79,34 @@ type Input struct {
 	Request        analysis.Request
 	IdempotencyKey string
 	RequestHash    string
+	// Source witnesses the saved analysis version when the job was created
+	// through the version export endpoint; inline exports leave it nil.
+	Source *SavedAnalysisSource
 	// ArtifactExpiry optionally bounds artifact retention; nil keeps the
 	// default retention enforced by the operator.
+	ArtifactExpiry *time.Time
+}
+
+// SavedAnalysisSource witnesses the immutable saved analysis version an
+// export was materialized from. Both fields are always populated together.
+type SavedAnalysisSource struct {
+	AnalysisID string
+	Version    int64
+}
+
+// SavedAnalysisExportInput carries the caller-owned parameters for an export
+// materialized from an immutable saved analysis version. The bounded
+// analysis.Request is resolved server-side from the published snapshot, so
+// this path never accepts an inline query body.
+type SavedAnalysisExportInput struct {
+	ProjectID      string
+	ActorID        string
+	Name           string
+	Format         string
+	TimeRange      analysis.TimeRange
+	Timezone       string
+	IdempotencyKey string
+	RequestHash    string
 	ArtifactExpiry *time.Time
 }
 
@@ -125,6 +154,10 @@ type Store interface {
 	// CreateJob records a queued job or replays the accepted snapshot for the
 	// same actor + idempotency key. The boolean reports a new insertion.
 	CreateExportJob(ctx context.Context, in Input) (Job, bool, error)
+	// CreateSavedAnalysisExportJob resolves an immutable saved analysis
+	// version, rechecks its metric pin and enqueues an export job bound to
+	// that snapshot under the same idempotency guarantees as CreateJob.
+	CreateSavedAnalysisExportJob(ctx context.Context, actor, project, analysisID string, version int64, in SavedAnalysisExportInput) (Job, bool, error)
 	GetExportJob(ctx context.Context, actor, project, jobID string) (Job, error)
 	ListExportJobs(ctx context.Context, actor, project string, filter ListFilter) (Page, error)
 	// CancelJob transitions a queued job to cancelled; running and terminal

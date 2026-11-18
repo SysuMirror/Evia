@@ -27,6 +27,9 @@ type stubStore struct {
 func (s *stubStore) CreateExportJob(context.Context, Input) (Job, bool, error) {
 	return Job{}, false, nil
 }
+func (s *stubStore) CreateSavedAnalysisExportJob(context.Context, string, string, string, int64, SavedAnalysisExportInput) (Job, bool, error) {
+	return Job{}, false, nil
+}
 func (s *stubStore) GetExportJob(context.Context, string, string, string) (Job, error) {
 	return Job{}, nil
 }

@@ -72,7 +72,8 @@ func validateExportInput(in exporting.Input) (exporting.Input, error) {
 
 const exportJobColumns = `id::text,project_id::text,environment,actor_id::text,name,format,request_json,state,
  idempotency_key,request_hash,error_code,attempts,lease_generation,lease_owner,lease_until,
- artifact_path,artifact_sha256,artifact_bytes,result_rows,expires_at,created_at,updated_at,finished_at`
+ artifact_path,artifact_sha256,artifact_bytes,result_rows,expires_at,created_at,updated_at,finished_at,
+ source_analysis_id::text,source_analysis_version`
 
 func scanExportJob(row queryScanner) (exporting.Job, error) {
 	var j exporting.Job
@@ -80,10 +81,12 @@ func scanExportJob(row queryScanner) (exporting.Job, error) {
 	var artifactPath, artifactSHA *string
 	var artifactBytes *int64
 	var resultRows *int
+	var sourceAnalysisID *string
+	var sourceAnalysisVersion *int64
 	e := row.Scan(&j.JobID, &j.ProjectID, &j.Environment, &j.ActorID, &j.Name, &j.Format, &rawRequest,
 		&j.State, &j.IdempotencyKey, &j.RequestHash, &j.ErrorCode, &j.Attempts, &j.LeaseGeneration,
 		&j.LeaseOwner, &j.LeaseUntil, &artifactPath, &artifactSHA, &artifactBytes, &resultRows,
-		&j.ExpiresAt, &j.CreatedAt, &j.UpdatedAt, &j.FinishedAt)
+		&j.ExpiresAt, &j.CreatedAt, &j.UpdatedAt, &j.FinishedAt, &sourceAnalysisID, &sourceAnalysisVersion)
 	if e != nil {
 		return j, e
 	}
@@ -94,6 +97,9 @@ func scanExportJob(row queryScanner) (exporting.Job, error) {
 	j.ArtifactSHA256 = artifactSHA
 	j.ArtifactBytes = artifactBytes
 	j.ResultRows = resultRows
+	if sourceAnalysisID != nil && sourceAnalysisVersion != nil {
+		j.Source = &exporting.SavedAnalysisSource{AnalysisID: *sourceAnalysisID, Version: *sourceAnalysisVersion}
+	}
 	return j, nil
 }
 
@@ -115,6 +121,15 @@ func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (export
 	if e = s.exportAuthority(ctx, tx, in.ActorID, in.ProjectID, in.Environment); e != nil {
 		return exporting.Job{}, false, e
 	}
+	return s.createExportJobTx(ctx, tx, in, rawRequest)
+}
+
+// createExportJobTx owns the shared idempotency, insert and audit path used by
+// both inline exports and saved-analysis version exports. Callers must already
+// hold export authority; the input is expected to pass validateExportInput.
+// The source witness columns are NULL for inline exports and populated for
+// version exports, sharing one idempotency space per project and actor.
+func (s *Store) createExportJobTx(ctx context.Context, tx pgx.Tx, in exporting.Input, rawRequest []byte) (exporting.Job, bool, error) {
 	existing, e := scanExportJob(tx.QueryRow(ctx, `SELECT `+exportJobColumns+` FROM export_jobs
  WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3`, in.ProjectID, in.ActorID, in.IdempotencyKey))
 	if e == nil {
@@ -131,11 +146,18 @@ func (s *Store) CreateExportJob(ctx context.Context, in exporting.Input) (export
 	if in.ArtifactExpiry != nil {
 		expiry = in.ArtifactExpiry.UTC()
 	}
+	var sourceID any
+	var sourceVersion any
+	if in.Source != nil {
+		sourceID = in.Source.AnalysisID
+		sourceVersion = in.Source.Version
+	}
 	row := tx.QueryRow(ctx, `INSERT INTO export_jobs(
- id,project_id,environment,actor_id,name,format,request_json,idempotency_key,request_hash,expires_at)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING `+exportJobColumns,
+ id,project_id,environment,actor_id,name,format,request_json,idempotency_key,request_hash,expires_at,
+ source_analysis_id,source_analysis_version)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING `+exportJobColumns,
 		jobID, in.ProjectID, in.Environment, in.ActorID, in.Name, in.Format, rawRequest,
-		in.IdempotencyKey, in.RequestHash, expiry)
+		in.IdempotencyKey, in.RequestHash, expiry, sourceID, sourceVersion)
 	job, e := scanExportJob(row)
 	if e != nil {
 		return exporting.Job{}, false, e
