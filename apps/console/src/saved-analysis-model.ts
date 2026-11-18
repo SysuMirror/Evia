@@ -670,7 +670,9 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
         '/query/attribution',
       )
     ) {
-      if (!['last_touch', 'first_touch', 'linear', 'time_decay'].includes(at.model))
+      if (
+        !['last_touch', 'first_touch', 'linear', 'position_based', 'time_decay'].includes(at.model)
+      )
         add('/query/attribution/model', '归因模型无效。');
       safe(at.window_seconds, 1, 604800, '/query/attribution/window_seconds');
       if (at.model === 'time_decay')

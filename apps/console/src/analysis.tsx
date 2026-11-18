@@ -805,6 +805,7 @@ export function AnalysisPage({
                     last_touch: '末次触点',
                     first_touch: '首次触点',
                     linear: '线性均分',
+                    position_based: '位置归因',
                     time_decay: '时间衰减',
                   }[form.attributionModel]
                 }
@@ -959,7 +960,7 @@ export function AnalysisPage({
                             : snapshot.request.kind === 'path'
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
                               : snapshot.request.kind === 'attribution'
-                                ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分', time_decay: '时间衰减' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
+                                ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分', position_based: '位置归因', time_decay: '时间衰减' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
                                 : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
@@ -2239,6 +2240,7 @@ export function AnalysisPage({
                 { value: 'last_touch', label: '末次触点（窗口内最晚触点）' },
                 { value: 'first_touch', label: '首次触点（窗口内最早触点）' },
                 { value: 'linear', label: '线性均分（窗内触点等权分摊）' },
+                { value: 'position_based', label: '位置归因（首末触点各 40%，中间均分 20%）' },
                 { value: 'time_decay', label: '时间衰减（越接近转化权重越高）' },
               ]}
             />

@@ -54,6 +54,7 @@ export function AttributionSection({
               { value: 'last_touch', label: '末次触点（窗口内最晚触点）' },
               { value: 'first_touch', label: '首次触点（窗口内最早触点）' },
               { value: 'linear', label: '线性均分（窗内触点等权分摊）' },
+              { value: 'position_based', label: '位置归因（首末触点各 40%，中间均分 20%）' },
               { value: 'time_decay', label: '时间衰减（越接近转化权重越高）' },
             ]}
             onChange={(event) =>
