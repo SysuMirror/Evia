@@ -2280,7 +2280,7 @@ export interface components {
             execution_available: boolean;
             query_kinds: string[];
             aggregations: string[];
-            /** @description Only unique and p95 accept explicit approximate accuracy; all aggregations default to exact. */
+            /** @description Only unique and the p50/p90/p95/p99 percentiles accept explicit approximate accuracy; all aggregations default to exact. */
             approximate_aggregations: string[];
             subjects: string[];
             intervals: string[];
@@ -3453,8 +3453,11 @@ export interface components {
                 key: string;
             })[];
             metrics?: {
-                /** @enum {unknown} */
-                op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p95";
+                /**
+                 * @description Aggregation operator. p50/p90/p95/p99 are exact (quantileExact) or approximate (quantileTDigest) percentiles over a numeric field.
+                 * @enum {unknown}
+                 */
+                op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p50" | "p90" | "p95" | "p99";
                 field?: {
                     /** @constant */
                     kind: "system";
@@ -3766,8 +3769,11 @@ export interface components {
             key: string;
         })[];
         metrics: {
-            /** @enum {unknown} */
-            op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p95";
+            /**
+             * @description Aggregation operator. p50/p90/p95/p99 are exact (quantileExact) or approximate (quantileTDigest) percentiles over a numeric field.
+             * @enum {unknown}
+             */
+            op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p50" | "p90" | "p95" | "p99";
             field?: {
                 /** @constant */
                 kind: "system";
@@ -3868,8 +3874,11 @@ export interface components {
         };
         timezone: string;
         items: {
-            /** @enum {unknown} */
-            op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p95";
+            /**
+             * @description Aggregation operator. p50/p90/p95/p99 are exact (quantileExact) or approximate (quantileTDigest) percentiles over a numeric field.
+             * @enum {unknown}
+             */
+            op: "count" | "unique" | "sum" | "avg" | "max" | "min" | "p50" | "p90" | "p95" | "p99";
             field?: {
                 /** @constant */
                 kind: "system";

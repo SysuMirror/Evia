@@ -22202,7 +22202,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Only unique and p95 accept explicit approximate accuracy; all aggregations default to exact."
+            "description": "Only unique and the p50/p90/p95/p99 percentiles accept explicit approximate accuracy; all aggregations default to exact."
           },
           "subjects": {
             "type": "array",
@@ -26361,7 +26361,10 @@
                         "avg",
                         "min",
                         "max",
-                        "p95"
+                        "p50",
+                        "p90",
+                        "p95",
+                        "p99"
                       ]
                     }
                   }

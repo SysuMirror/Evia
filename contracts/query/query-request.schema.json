@@ -157,6 +157,7 @@
         "additionalProperties": false,
         "properties": {
           "op": {
+            "description": "Aggregation operator. p50/p90/p95/p99 are exact (quantileExact) or approximate (quantileTDigest) percentiles over a numeric field.",
             "enum": [
               "count",
               "unique",
@@ -164,7 +165,10 @@
               "avg",
               "max",
               "min",
-              "p95"
+              "p50",
+              "p90",
+              "p95",
+              "p99"
             ]
           },
           "field": {
