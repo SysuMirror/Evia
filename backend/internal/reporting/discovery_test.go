@@ -182,3 +182,31 @@ func TestCatalogProjectsOnlyQueryableTopLevelTypedFields(t *testing.T) {
 		t.Fatal(fields)
 	}
 }
+
+func TestFieldCapabilitiesAdvertiseNegationOperators(t *testing.T) {
+	hasOp := func(ops []string, want string) bool {
+		for _, op := range ops {
+			if op == want {
+				return true
+			}
+		}
+		return false
+	}
+	stringCaps, ok := FieldCapabilities("string")
+	if !ok {
+		t.Fatal("string capabilities missing")
+	}
+	for _, op := range []string{"not_in", "not_prefix", "not_contains"} {
+		if !hasOp(stringCaps.FilterOperators, op) {
+			t.Fatalf("string capabilities must advertise %s: %v", op, stringCaps.FilterOperators)
+		}
+	}
+	numberCaps, _ := FieldCapabilities("number")
+	if !hasOp(numberCaps.FilterOperators, "not_in") || hasOp(numberCaps.FilterOperators, "not_prefix") {
+		t.Fatalf("number capabilities negation set wrong: %v", numberCaps.FilterOperators)
+	}
+	arrayCaps, _ := FieldCapabilities("array:string")
+	if !hasOp(arrayCaps.FilterOperators, "not_contains") || hasOp(arrayCaps.FilterOperators, "not_in") {
+		t.Fatalf("array capabilities negation set wrong: %v", arrayCaps.FilterOperators)
+	}
+}

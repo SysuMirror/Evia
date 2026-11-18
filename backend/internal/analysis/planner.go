@@ -169,12 +169,16 @@ func (p *planner) filter(f *Filter) (string, error) {
 	kind := f.Field.ResolvedType
 	if strings.HasPrefix(kind, "array:") {
 		item := strings.TrimPrefix(kind, "array:")
-		if f.Op == "contains" {
+		if f.Op == "contains" || f.Op == "not_contains" {
 			value, e := p.scalar(item, f.Value)
 			if e != nil {
 				return "", e
 			}
-			return guard + "has(" + field.value + "," + value + "))", nil
+			test := "has(" + field.value + "," + value + ")"
+			if f.Op == "not_contains" {
+				test = "NOT " + test
+			}
+			return guard + test + ")", nil
 		}
 		values, ok := f.Value.([]any)
 		if !ok {
@@ -194,13 +198,18 @@ func (p *planner) filter(f *Filter) (string, error) {
 		}
 		return guard + expression + ")", nil
 	}
-	if f.Op == "in" {
+	if f.Op == "in" || f.Op == "not_in" {
 		values, ok := f.Value.([]any)
 		if !ok {
-			return "", Invalid("INVALID_FILTER_TYPE", "in 值必须为数组")
+			return "", Invalid("INVALID_FILTER_TYPE", "in/not_in 值必须为数组")
 		}
 		if len(values) == 0 {
-			return "0", nil
+			// Empty set: in matches nothing while not_in matches every row that
+			// still passes the same presence/validity guard, never missing rows.
+			if f.Op == "in" {
+				return "0", nil
+			}
+			return "(" + field.scope + " AND " + field.present + " AND " + field.valid + ")", nil
 		}
 		parts := make([]string, 0, len(values))
 		for _, v := range values {
@@ -210,7 +219,11 @@ func (p *planner) filter(f *Filter) (string, error) {
 			}
 			parts = append(parts, s)
 		}
-		return guard + field.value + " IN (" + strings.Join(parts, ",") + "))", nil
+		keyword := "IN"
+		if f.Op == "not_in" {
+			keyword = "NOT IN"
+		}
+		return guard + field.value + " " + keyword + " (" + strings.Join(parts, ",") + "))", nil
 	}
 	value, e := p.scalar(kind, f.Value)
 	if e != nil {
@@ -223,8 +236,14 @@ func (p *planner) filter(f *Filter) (string, error) {
 	if f.Op == "prefix" {
 		return guard + "startsWith(" + field.value + "," + value + "))", nil
 	}
+	if f.Op == "not_prefix" {
+		return guard + "NOT startsWith(" + field.value + "," + value + "))", nil
+	}
 	if f.Op == "contains" {
 		return guard + "position(" + field.value + "," + value + ")>0)", nil
+	}
+	if f.Op == "not_contains" {
+		return guard + "position(" + field.value + "," + value + ")=0)", nil
 	}
 	return "", Invalid("INVALID_FILTER_OPERATOR", "过滤运算无效")
 }

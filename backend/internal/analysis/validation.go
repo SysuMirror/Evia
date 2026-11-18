@@ -472,7 +472,7 @@ func validateFilter(f *Filter, depth int, nodes *int) error {
 			return Invalid("INVALID_FILTER", "存在性过滤不能带值")
 		}
 		return nil
-	case "eq", "neq", "in", "gt", "gte", "lt", "lte", "prefix", "contains":
+	case "eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "prefix", "not_prefix", "contains", "not_contains":
 	default:
 		return Invalid("INVALID_FILTER_OPERATOR", "过滤运算不受支持")
 	}
@@ -494,15 +494,15 @@ func validateFilter(f *Filter, depth int, nodes *int) error {
 			}
 			kind = k
 		}
-		if f.Op != "in" && f.Op != "eq" && f.Op != "neq" {
+		if f.Op != "in" && f.Op != "not_in" && f.Op != "eq" && f.Op != "neq" {
 			return Invalid("INVALID_FILTER_VALUE", "此运算不接受值数组")
 		}
 	} else {
 		if _, e := scalarType(f.Value); e != nil {
 			return e
 		}
-		if f.Op == "in" {
-			return Invalid("INVALID_FILTER_VALUE", "in 必须使用数组")
+		if f.Op == "in" || f.Op == "not_in" {
+			return Invalid("INVALID_FILTER_VALUE", "in/not_in 必须使用数组")
 		}
 	}
 	return nil

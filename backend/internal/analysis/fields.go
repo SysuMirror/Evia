@@ -110,9 +110,9 @@ func CheckResolved(r Request) error {
 		kind := f.Field.ResolvedType
 		values, isArray := f.Value.([]any)
 		if strings.HasPrefix(kind, "array:") {
-			if f.Op == "contains" {
+			if f.Op == "contains" || f.Op == "not_contains" {
 				if isArray {
-					return Invalid("INVALID_FILTER_TYPE", "数组 contains 需要标量值")
+					return Invalid("INVALID_FILTER_TYPE", "数组 contains/not_contains 需要标量值")
 				}
 				return compatibleScalar(strings.TrimPrefix(kind, "array:"), f.Value)
 			}
@@ -126,7 +126,7 @@ func CheckResolved(r Request) error {
 			}
 			return nil
 		}
-		if f.Op == "prefix" || f.Op == "contains" {
+		if f.Op == "prefix" || f.Op == "not_prefix" || f.Op == "contains" || f.Op == "not_contains" {
 			if kind != "string" {
 				return Invalid("INVALID_FILTER_TYPE", "文本运算需要字符串字段")
 			}
@@ -137,8 +137,8 @@ func CheckResolved(r Request) error {
 			}
 		}
 		if isArray {
-			if f.Op != "in" {
-				return Invalid("INVALID_FILTER_TYPE", "标量字段仅支持 in 值数组")
+			if f.Op != "in" && f.Op != "not_in" {
+				return Invalid("INVALID_FILTER_TYPE", "标量字段仅支持 in/not_in 值数组")
 			}
 			for _, v := range values {
 				if e := compatibleScalar(kind, v); e != nil {

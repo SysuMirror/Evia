@@ -145,10 +145,10 @@ func NewDiscovery(store DiscoveryStore, validator analysis.Validator, executionA
 	return &Discovery{store: store, validator: validator, executionAvailable: executionAvailable}
 }
 func FieldCapabilities(kind string) (FieldCapability, bool) {
-	c := FieldCapability{Type: kind, FilterOperators: []string{"eq", "neq", "in", "is_missing", "is_present"}, Groupable: true, MetricOperations: []string{"unique"}}
+	c := FieldCapability{Type: kind, FilterOperators: []string{"eq", "neq", "in", "not_in", "is_missing", "is_present"}, Groupable: true, MetricOperations: []string{"unique"}}
 	switch kind {
 	case "string":
-		c.FilterOperators = append(c.FilterOperators, "prefix", "contains")
+		c.FilterOperators = append(c.FilterOperators, "prefix", "not_prefix", "contains", "not_contains")
 	case "boolean":
 	case "number", "integer":
 		c.FilterOperators = append(c.FilterOperators, "gt", "gte", "lt", "lte")
@@ -156,7 +156,7 @@ func FieldCapabilities(kind string) (FieldCapability, bool) {
 	case "datetime":
 		c.FilterOperators = append(c.FilterOperators, "gt", "gte", "lt", "lte")
 	case "array:string", "array:boolean", "array:number", "array:integer":
-		c.FilterOperators = []string{"eq", "neq", "contains", "is_missing", "is_present"}
+		c.FilterOperators = []string{"eq", "neq", "contains", "not_contains", "is_missing", "is_present"}
 		c.Groupable = false
 		c.MetricOperations = []string{}
 	default:
