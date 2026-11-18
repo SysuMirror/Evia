@@ -75,6 +75,7 @@ export type SavedAnalysisUpdate = components['schemas']['SavedAnalysisUpdate'];
 export type SavedAnalysisValidate = components['schemas']['SavedAnalysisValidate'];
 export type SavedAnalysisPublish = components['schemas']['SavedAnalysisPublish'];
 export type SavedAnalysisExecute = components['schemas']['SavedAnalysisExecute'];
+export type SavedAnalysisExportInput = components['schemas']['SavedAnalysisExportInput'];
 export type SavedAnalysisList = components['schemas']['SavedAnalysisList'];
 export type SavedAnalysisVersionList = components['schemas']['SavedAnalysisVersionList'];
 export type SavedAnalysisChange = components['schemas']['SavedAnalysisChange'];
@@ -979,6 +980,25 @@ export const api = {
   ) =>
     request<QueryJob>(
       `${savedAnalysisPath(projectID, analysisID)}/versions/${encodeURIComponent(String(version))}/queries`,
+      {
+        method: 'POST',
+        body,
+        csrf,
+        signal,
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  createSavedAnalysisExportJob: (
+    projectID: string,
+    analysisID: string,
+    version: number,
+    body: SavedAnalysisExportInput,
+    idempotencyKey: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ExportJob>(
+      `${savedAnalysisPath(projectID, analysisID)}/versions/${encodeURIComponent(String(version))}/exports`,
       {
         method: 'POST',
         body,

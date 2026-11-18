@@ -8,6 +8,7 @@ import {
   type DashboardTextCard,
   type ErasureInput,
   type ExportInput,
+  type SavedAnalysisExportInput,
   type MachineIssued,
   type MachinePrincipalInput,
   type MetricDefinition,
@@ -1470,6 +1471,54 @@ test('export jobs encode scope, lifecycle actions and grant redemption path', as
   assert.equal((post.headers as Headers).get('Idempotency-Key'), 'export-key');
   assert.equal((post.headers as Headers).get('X-CSRF-Token'), 'csrf');
   assert.deepEqual(JSON.parse(post.body as string), input);
+  controller.abort();
+});
+
+test('saved analysis version exports post under the version resource with idempotency', async () => {
+  const fetch = respond(201, {
+    job_id: '88888888-8888-4888-8888-888888888888',
+    project_id: 'p/q',
+    environment: 'production',
+    name: 'version export',
+    format: 'csv',
+    state: 'queued',
+    error_code: null,
+    result_rows: null,
+    artifact_bytes: null,
+    artifact_sha256: null,
+    expires_at: null,
+    created_at: '2026-11-19T00:00:00Z',
+    updated_at: '2026-11-19T00:00:00Z',
+    finished_at: null,
+    source_analysis_id: '77777777-7777-4777-8777-777777777777',
+    source_analysis_version: 3,
+  });
+  const controller = new AbortController();
+  const body: SavedAnalysisExportInput = {
+    name: 'version export',
+    format: 'csv',
+    time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-12T00:00:00Z' },
+    timezone: 'UTC',
+  };
+  const job = await api.createSavedAnalysisExportJob(
+    'p/q',
+    '77777777-7777-4777-8777-777777777777',
+    3,
+    body,
+    'saved-export-key',
+    'csrf',
+    controller.signal,
+  );
+  assert.equal(
+    fetch.mock.calls[0]!.arguments[0],
+    '/api/v1/projects/p%2Fq/saved-analyses/77777777-7777-4777-8777-777777777777/versions/3/exports',
+  );
+  const init = fetch.mock.calls[0]!.arguments[1] as RequestInit;
+  assert.equal(init.method, 'POST');
+  assert.equal((init.headers as Headers).get('Idempotency-Key'), 'saved-export-key');
+  assert.equal((init.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(init.body as string), body);
+  assert.equal(job.source_analysis_version, 3);
   controller.abort();
 });
 

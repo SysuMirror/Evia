@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   buildQueryRequest,
   defaultExportForm,
+  exportSourceLabel,
   exportStateLabel,
   exportStateTone,
   formatByteSize,
@@ -14,6 +15,13 @@ import {
   validateExportForm,
   type ExportFormState,
 } from '../../apps/console/src/exports/model';
+import {
+  buildSavedExportInput,
+  defaultSavedExportForm,
+  validateSavedExportForm,
+} from '../../apps/console/src/saved-analysis-run/export-model';
+import type { SavedRunRange } from '../../apps/console/src/saved-analysis-run/types';
+import type { SavedAnalysisVersion } from '../../packages/api-client/src/index';
 import type { ExportJob } from '../../packages/api-client/src/index';
 
 function form(overrides: Partial<ExportFormState> = {}): ExportFormState {
@@ -111,4 +119,70 @@ test('formatters degrade gracefully on missing or bad values', () => {
   expect(formatInstant(null)).toBe('—');
   expect(formatInstant('not-a-date')).toBe('not-a-date');
   expect(formatInstant('2026-11-12T10:00:00Z')).toContain('UTC');
+});
+
+test('export source label distinguishes version exports from inline jobs', () => {
+  expect(exportSourceLabel({ source_analysis_version: null } as ExportJob)).toBe('内联查询');
+  expect(exportSourceLabel({ source_analysis_version: 3 } as ExportJob)).toBe('保存分析 v3');
+});
+
+const runRange: SavedRunRange = {
+  from: '2026-11-07T10:00',
+  to: '2026-11-07T11:00',
+  timezone: 'UTC',
+};
+
+test('saved version export builds the bounded input without an inline query', () => {
+  const form = { name: '版本导出', format: 'csv' as const };
+  const built = buildSavedExportInput(runRange, 'trend', form);
+  expect(built.errors).toEqual([]);
+  expect(built.input).toEqual({
+    name: '版本导出',
+    format: 'csv',
+    time_range: { from: '2026-11-07T10:00:00.000Z', to: '2026-11-07T11:00:00.000Z' },
+    timezone: 'UTC',
+  });
+  expect((built.input ?? {}).timezone).toBe('UTC');
+});
+
+test('saved version export validates name length', () => {
+  expect(validateSavedExportForm({ name: '  ', format: 'json' }).length).toBeGreaterThan(0);
+  expect(validateSavedExportForm({ name: 'x'.repeat(201), format: 'json' }).length).toBeGreaterThan(
+    0,
+  );
+  expect(validateSavedExportForm({ name: '合规名称', format: 'ndjson' })).toEqual([]);
+});
+
+test('saved version export reuses the run range budget by query kind', () => {
+  const overRange: SavedRunRange = {
+    ...runRange,
+    from: '2026-10-06T11:00',
+    to: '2026-11-07T11:00',
+  };
+  expect(
+    buildSavedExportInput(overRange, 'trend', { name: '超期', format: 'json' }).input,
+  ).toBeNull();
+  const funnelOver: SavedRunRange = {
+    ...runRange,
+    from: '2026-10-30T11:00',
+    to: '2026-11-07T11:00',
+  };
+  expect(
+    buildSavedExportInput(funnelOver, 'funnel', { name: '漏斗超期', format: 'json' }).input,
+  ).toBeNull();
+  const inverted: SavedRunRange = { ...runRange, from: runRange.to, to: runRange.from };
+  expect(
+    buildSavedExportInput(inverted, 'trend', { name: '反向', format: 'json' }).errors.length,
+  ).toBeGreaterThan(0);
+});
+
+test('default saved export form derives its name from the immutable title', () => {
+  const version = {
+    analysis_id: '77777777-7777-4777-8777-777777777777',
+    version: 2,
+    definition: { title: '课程完课率' },
+  } as SavedAnalysisVersion;
+  const form = defaultSavedExportForm(version);
+  expect(form.name).toBe('课程完课率 导出');
+  expect(form.format).toBe('json');
 });

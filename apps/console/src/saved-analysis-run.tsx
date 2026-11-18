@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import type { Environment, Project, SavedAnalysisVersion, Session } from '@evia/api-client';
 import { Alert, Button, EmptyPanel, Panel } from '@evia/design-system';
+import { SavedExportDialog } from './saved-analysis-run/export-dialog';
 import { initialForm } from './analysis-model';
 import { CatalogError, environmentLabel } from './catalog-helpers';
 import { SavedResultPresentation } from './saved-analysis-run/result-presentation';
@@ -34,6 +37,10 @@ export function SavedAnalysisRun({
   const [rangeBaseline, setRangeBaseline] = useState(() => JSON.stringify(range));
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeError, setRangeError] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const exportAllowed = project.permissions.includes('data.export');
   const execution = useSavedExecution({
     version,
     project,
@@ -111,6 +118,15 @@ export function SavedAnalysisRun({
                   取消查询
                 </Button>
               )}
+              {exportAllowed && (
+                <Button
+                  onClick={() => setExportOpen(true)}
+                  disabled={disabled || busy || !!attempt}
+                  aria-haspopup="dialog"
+                >
+                  导出此版本
+                </Button>
+              )}
               <Button
                 type="submit"
                 variant="primary"
@@ -148,6 +164,19 @@ export function SavedAnalysisRun({
         setRangeError={setRangeError}
         kind={version.definition.query.kind}
         onClose={() => setRangeOpen(false)}
+      />
+      <SavedExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        version={version}
+        range={range}
+        project={project}
+        session={session}
+        onAccessDenied={onAccessDenied}
+        onCreated={() => {
+          void queryClient.invalidateQueries({ queryKey: ['exports', project.id] });
+          void navigate(`/projects/${project.id}/exports?environment=${environment}`);
+        }}
       />
     </div>
   );

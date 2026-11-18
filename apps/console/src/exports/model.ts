@@ -113,6 +113,17 @@ export function toExportInput(form: ExportFormState): {
   return { input, errors: [] };
 }
 
+/**
+ * Distinguishes exports materialized from an immutable saved analysis version
+ * from inline ad-hoc exports; both witness fields arrive together per the
+ * server soundness CHECK.
+ */
+export function exportSourceLabel(job: ExportJob): string {
+  return job.source_analysis_version === null || job.source_analysis_version === undefined
+    ? '内联查询'
+    : `保存分析 v${job.source_analysis_version}`;
+}
+
 type JobState = ExportJob['state'];
 
 const STATE_LABELS: Record<JobState, string> = {

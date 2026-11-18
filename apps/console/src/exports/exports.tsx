@@ -30,6 +30,7 @@ import {
   EXPORT_LIMIT_MAX,
   EXPORT_LIMIT_MIN,
   EXPORT_NAME_MAX,
+  exportSourceLabel,
   exportStateLabel,
   exportStateTone,
   formatByteSize,
@@ -207,6 +208,11 @@ export function ExportsPage({ project, session, environment }: PageProps) {
       key: 'name',
       header: '名称',
       render: (row) => row.name,
+    },
+    {
+      key: 'source',
+      header: '来源',
+      render: (row) => exportSourceLabel(row),
     },
     {
       key: 'format',
