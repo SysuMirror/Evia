@@ -126,7 +126,7 @@ func CheckResolved(r Request) error {
 			}
 			return nil
 		}
-		if f.Op == "prefix" || f.Op == "not_prefix" || f.Op == "contains" || f.Op == "not_contains" {
+		if f.Op == "prefix" || f.Op == "not_prefix" || f.Op == "suffix" || f.Op == "not_suffix" || f.Op == "contains" || f.Op == "not_contains" {
 			if kind != "string" {
 				return Invalid("INVALID_FILTER_TYPE", "文本运算需要字符串字段")
 			}

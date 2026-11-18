@@ -148,7 +148,7 @@ func FieldCapabilities(kind string) (FieldCapability, bool) {
 	c := FieldCapability{Type: kind, FilterOperators: []string{"eq", "neq", "in", "not_in", "is_missing", "is_present"}, Groupable: true, MetricOperations: []string{"unique"}}
 	switch kind {
 	case "string":
-		c.FilterOperators = append(c.FilterOperators, "prefix", "not_prefix", "contains", "not_contains")
+		c.FilterOperators = append(c.FilterOperators, "prefix", "not_prefix", "suffix", "not_suffix", "contains", "not_contains")
 	case "boolean":
 	case "number", "integer":
 		c.FilterOperators = append(c.FilterOperators, "gt", "gte", "lt", "lte")

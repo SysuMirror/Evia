@@ -472,7 +472,7 @@ func validateFilter(f *Filter, depth int, nodes *int) error {
 			return Invalid("INVALID_FILTER", "存在性过滤不能带值")
 		}
 		return nil
-	case "eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "prefix", "not_prefix", "contains", "not_contains":
+	case "eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "prefix", "not_prefix", "suffix", "not_suffix", "contains", "not_contains":
 	default:
 		return Invalid("INVALID_FILTER_OPERATOR", "过滤运算不受支持")
 	}

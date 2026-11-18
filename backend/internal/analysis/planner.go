@@ -239,6 +239,12 @@ func (p *planner) filter(f *Filter) (string, error) {
 	if f.Op == "not_prefix" {
 		return guard + "NOT startsWith(" + field.value + "," + value + "))", nil
 	}
+	if f.Op == "suffix" {
+		return guard + "endsWith(" + field.value + "," + value + "))", nil
+	}
+	if f.Op == "not_suffix" {
+		return guard + "NOT endsWith(" + field.value + "," + value + "))", nil
+	}
 	if f.Op == "contains" {
 		return guard + "position(" + field.value + "," + value + ")>0)", nil
 	}

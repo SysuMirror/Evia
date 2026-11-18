@@ -196,13 +196,13 @@ func TestFieldCapabilitiesAdvertiseNegationOperators(t *testing.T) {
 	if !ok {
 		t.Fatal("string capabilities missing")
 	}
-	for _, op := range []string{"not_in", "not_prefix", "not_contains"} {
+	for _, op := range []string{"not_in", "not_prefix", "not_contains", "suffix", "not_suffix"} {
 		if !hasOp(stringCaps.FilterOperators, op) {
 			t.Fatalf("string capabilities must advertise %s: %v", op, stringCaps.FilterOperators)
 		}
 	}
 	numberCaps, _ := FieldCapabilities("number")
-	if !hasOp(numberCaps.FilterOperators, "not_in") || hasOp(numberCaps.FilterOperators, "not_prefix") {
+	if !hasOp(numberCaps.FilterOperators, "not_in") || hasOp(numberCaps.FilterOperators, "not_prefix") || hasOp(numberCaps.FilterOperators, "suffix") {
 		t.Fatalf("number capabilities negation set wrong: %v", numberCaps.FilterOperators)
 	}
 	arrayCaps, _ := FieldCapabilities("array:string")
