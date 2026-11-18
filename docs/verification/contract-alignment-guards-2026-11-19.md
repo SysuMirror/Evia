@@ -24,10 +24,11 @@
 | 看板参数类型（3）/算子（9） | 算子内联 map → `ParameterOp*` 常量 + `ParameterTypes/ParameterOperators` | `ParameterDeclaration.type/operator` | 对齐 |
 | 可视化类别（5） | switch 内联字面量 → `Visualization*` 常量 + `VisualizationKinds` | `SavedAnalysisVisualization.kind` | 对齐 |
 | 看板运行聚合态（7） | `DashboardRunState` 内联返回值 → `DashboardRun*` 常量 + `DashboardRunStates`（聚合读取的作业态抽为包内 key 常量） | `DashboardRun.state` | 对齐 |
+| 公式计量单位（8）/换算目标对（2） | 单位 switch 内联字面量 → `reporting.Unit*` 常量 + `KnownUnits`，换算表改用常量键 | `MetricDefinition.unit` / `FormulaDefinition.unit` / `FormulaExpression.target_unit` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（8 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（9 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -37,17 +38,19 @@
 6. `backfilling.TestBackfillStateMatchesContract`、`archiving.TestArchiveStatusMatchesContract`、`retention.TestSweepStatusMatchesContract`：各生命周期状态集合相等。
 7. `diagnostics.TestDiagnosticsStatusMatchesContract`：四个分区状态均为 Go 闭集子集，pipeline 分区恰为完整四态且独占 no_data。
 8. `control.TestCollectionQuotaVocabularyContract`：配额来源与运行态枚举相等。
+9. `reporting.TestFormulaUnitVocabularyMatchesContract`：`MetricDefinition`/`FormulaDefinition` 的 unit 枚举与 `KnownUnits` 集合相等，`FormulaExpression.target_unit` 恰为毫秒/秒换算目标对。
 
 ## 守卫有效性取证（变异红绿）
 
 - reporting：临时给 `discoveryQueryKinds` 注入 `drift_probe` → 守卫报 `query kind drift: contract 8 != Go 9` 变红，还原复绿。
 - archiving：临时把 `drift_probe` 加入守卫期望集（模拟 Go 闭集单边扩项）→ 报 `archive status drift ... [drift_probe failed materialized pending]` 变红，还原复绿。
 - 上一切片的机器权限守卫已用第 27 项注入验证过同类捕获力。
+- 公式单位：向 `KnownUnits` 注入 `drift_probe` → 报 `metric unit drift ... Go 9 != contract 8` 变红；向守卫的换算目标期望集注入 `UnitByte` → 报 `convert target unit drift ... [byte millisecond second]` 变红，两条断言分支均被证有效。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。
 
 ## 明确未做（边界）
 

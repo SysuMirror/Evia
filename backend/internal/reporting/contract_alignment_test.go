@@ -256,3 +256,33 @@ func TestDashboardRunStateVocabularyMatchesContract(t *testing.T) {
 	}
 	assertSameSet(t, "dashboard run state", DashboardRunStates, got)
 }
+
+// TestFormulaUnitVocabularyMatchesContract guards the measurement unit closed
+// set and the convertible target-unit pair against the formula/metric schemas.
+func TestFormulaUnitVocabularyMatchesContract(t *testing.T) {
+	var bundle struct {
+		Defs map[string]map[string]any `json:"$defs"`
+	}
+	if err := json.Unmarshal(wire.Schemas, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	enumOf := func(schema, property string) []string {
+		props, ok := bundle.Defs[schema]["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s schema missing properties", schema)
+		}
+		raw, ok := props[property].(map[string]any)["enum"].([]any)
+		if !ok {
+			t.Fatalf("%s.%s enum missing", schema, property)
+		}
+		out := make([]string, 0, len(raw))
+		for _, value := range raw {
+			out = append(out, value.(string))
+		}
+		return out
+	}
+	assertSameSet(t, "metric unit", KnownUnits, enumOf("MetricDefinition", "unit"))
+	assertSameSet(t, "formula unit", KnownUnits, enumOf("FormulaDefinition", "unit"))
+	assertSameSet(t, "convert target unit",
+		[]string{UnitMillisecond, UnitSecond}, enumOf("FormulaExpression", "target_unit"))
+}
