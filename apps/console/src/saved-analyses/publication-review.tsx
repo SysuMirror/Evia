@@ -12,7 +12,12 @@ const categories: Record<string, string> = {
   group_by: '分组',
   interval: '时间粒度',
   funnel: '漏斗',
+  retention: '留存分析',
+  segment: '主体分群',
+  path: '聚合路径',
+  attribution: '触点归因',
   limit: '结果上限',
+  metric_ref: '指标引用',
   visualization: '展示方式',
 };
 type PublicationReviewProps = {

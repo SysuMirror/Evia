@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Checkbox, CodeBlock, DataTable, Modal } from '@ev
 import { CatalogError } from '../catalog-helpers';
 const categories: Record<string, string> = {
   definition: '初始定义',
+  parameters: '运行参数',
   widgets: '组件',
   dependencies: '固定组件依赖',
   layout: '组件布局',
