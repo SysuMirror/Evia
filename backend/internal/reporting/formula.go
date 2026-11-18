@@ -233,10 +233,32 @@ func sortReferences(refs []MetricReference) {
 	}
 }
 
+// Measurement unit closed set, mirrored by the MetricDefinition.unit and
+// FormulaDefinition.unit OpenAPI enums and guarded by
+// TestFormulaUnitVocabularyMatchesContract.
+const (
+	UnitEvent         = "event"
+	UnitRawUID        = "raw_uid"
+	UnitAnonymousID   = "anonymous_id"
+	UnitDistinctValue = "distinct_value"
+	UnitNumber        = "number"
+	UnitMillisecond   = "millisecond"
+	UnitSecond        = "second"
+	UnitByte          = "byte"
+)
+
+// KnownUnits is the single Go-side source of truth for the eight measurement
+// units accepted by metrics and formula expressions.
+var KnownUnits = []string{
+	UnitEvent, UnitRawUID, UnitAnonymousID, UnitDistinctValue,
+	UnitNumber, UnitMillisecond, UnitSecond, UnitByte,
+}
+
 func formulaKnownUnit(unit string) bool {
-	switch unit {
-	case "event", "raw_uid", "anonymous_id", "distinct_value", "number", "millisecond", "second", "byte":
-		return true
+	for _, known := range KnownUnits {
+		if unit == known {
+			return true
+		}
 	}
 	return false
 }
@@ -247,8 +269,8 @@ func formulaKnownUnit(unit string) bool {
 // a convert node can never invent a relationship between unrelated dimensions
 // (no byte↔millisecond, no currency because no currency unit exists yet).
 var formulaConversions = map[string]map[string]float64{
-	"millisecond": {"second": 0.001},
-	"second":      {"millisecond": 1000},
+	UnitMillisecond: {UnitSecond: 0.001},
+	UnitSecond:      {UnitMillisecond: 1000},
 }
 
 // formulaConvertibleTarget reports whether a unit may appear as the target of
