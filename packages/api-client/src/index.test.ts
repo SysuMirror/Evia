@@ -66,6 +66,58 @@ test('query result continuation encodes cursor and page size', async () => {
   );
 });
 
+test('analysis discovery, validation and journey routes encode scope and CSRF', async () => {
+  const fetch = respond(200, {
+    query_kinds: ['events', 'trend'],
+    execution_available: true,
+    environment: 'development',
+    catalog_revision: 3,
+    items: [],
+    next_cursor: null,
+  });
+  const controller = new AbortController();
+  await api.getAnalysisCapabilities('p/q', controller.signal);
+  await api.getAnalysisCatalog(
+    'p/q',
+    { environment: 'development', limit: 50, cursor: 'a+/=' },
+    controller.signal,
+  );
+  const calls = fetch.mock.calls;
+  assert.equal(calls[0]?.arguments[0], '/api/v1/projects/p%2Fq/analysis-capabilities');
+  assert.equal((calls[0]?.arguments[1] as RequestInit).method, 'GET');
+  assert.equal(
+    calls[1]?.arguments[0],
+    '/api/v1/projects/p%2Fq/analysis-catalog?environment=development&cursor=a%2B%2F%3D&limit=50',
+  );
+
+  const body = {
+    kind: 'trend',
+    environment: 'development',
+    time_range: { from: '2026-11-01T00:00:00Z', to: '2026-11-12T00:00:00Z' },
+    timezone: 'UTC',
+  };
+  const writeFetch = respond(200, { valid: true, execution_performed: false, query_hash: 'h' });
+  const validation = await api.validateQuery('p/q', body as never, 'csrf');
+  assert.equal(validation.valid, true);
+  const validationCall = writeFetch.mock.calls[0]!;
+  assert.equal(validationCall.arguments[0], '/api/v1/projects/p%2Fq/query-validations');
+  const validationInit = validationCall.arguments[1] as RequestInit;
+  assert.equal(validationInit.method, 'POST');
+  assert.equal((validationInit.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(validationInit.body as string), body);
+
+  const journeyFetch = respond(202, { query_id: 'q-1', state: 'queued' });
+  const job = await api.createJourneyQuery('p/q', body as never, 'csrf');
+  assert.equal(job.query_id, 'q-1');
+  const journeyCall = journeyFetch.mock.calls[0]!;
+  assert.equal(journeyCall.arguments[0], '/api/v1/projects/p%2Fq/journeys/query');
+  const journeyInit = journeyCall.arguments[1] as RequestInit;
+  assert.equal(journeyInit.method, 'POST');
+  assert.equal((journeyInit.headers as Headers).get('X-CSRF-Token'), 'csrf');
+  assert.deepEqual(JSON.parse(journeyInit.body as string), body);
+  controller.abort();
+});
+
 test('source updates and release activation send revision, CSRF and idempotency', async () => {
   const fetch = respond();
   await api.updateSource('p', 's', 4, { status: 'disabled' }, 'csrf');

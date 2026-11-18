@@ -62,6 +62,9 @@ export type ReportDefinitionInput = components['schemas']['ReportDefinitionInput
 export type QueryRequest = Omit<components['schemas']['query-request.schema'], '$defs'>;
 export type QueryJob = components['schemas']['query-job.schema'];
 export type QueryResult = components['schemas']['query-result.schema'];
+export type AnalysisCapabilities = components['schemas']['AnalysisCapabilities'];
+export type AnalysisCatalog = components['schemas']['AnalysisCatalog'];
+export type QueryValidation = components['schemas']['QueryValidation'];
 export type SavedAnalysisTemplate = components['schemas']['SavedAnalysisTemplate'];
 export type SavedAnalysisDefinition = components['schemas']['SavedAnalysisDefinition'];
 export type SavedAnalysisDefinitionInput = components['schemas']['SavedAnalysisDefinitionInput'];
@@ -1227,6 +1230,30 @@ export const api = {
       `${projectPath(projectID)}/queries/${encodeURIComponent(queryID)}/result${queryResultQuery(options)}`,
       { signal: options.signal },
     ),
+  getAnalysisCapabilities: (projectID: string, signal?: AbortSignal) =>
+    request<AnalysisCapabilities>(`${projectPath(projectID)}/analysis-capabilities`, { signal }),
+  getAnalysisCatalog: (
+    projectID: string,
+    page: { environment: Environment; cursor?: string; limit?: number },
+    signal?: AbortSignal,
+  ) =>
+    request<AnalysisCatalog>(`${projectPath(projectID)}/analysis-catalog${catalogQuery(page)}`, {
+      signal,
+    }),
+  validateQuery: (projectID: string, body: QueryRequest, csrf: string, signal?: AbortSignal) =>
+    request<QueryValidation>(`${projectPath(projectID)}/query-validations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  createJourneyQuery: (projectID: string, body: QueryRequest, csrf: string, signal?: AbortSignal) =>
+    request<QueryJob>(`${projectPath(projectID)}/journeys/query`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
   createErasureJob: (
     projectID: string,
     body: ErasureInput,
