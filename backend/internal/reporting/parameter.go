@@ -16,6 +16,31 @@ const (
 	ParameterBoolean = "boolean"
 )
 
+// Parameter operator closed set, mirrored by the
+// ParameterDeclaration.operator OpenAPI enum and guarded by
+// TestParameterVocabularyMatchesContract.
+const (
+	ParameterOpEq       = "eq"
+	ParameterOpNeq      = "neq"
+	ParameterOpIn       = "in"
+	ParameterOpPrefix   = "prefix"
+	ParameterOpContains = "contains"
+	ParameterOpGt       = "gt"
+	ParameterOpGte      = "gte"
+	ParameterOpLt       = "lt"
+	ParameterOpLte      = "lte"
+)
+
+// ParameterTypes is the single Go-side source of truth for the three scalar
+// types; ParameterOperators is the union allowed across all three types.
+var (
+	ParameterTypes     = []string{ParameterString, ParameterNumber, ParameterBoolean}
+	ParameterOperators = []string{
+		ParameterOpEq, ParameterOpNeq, ParameterOpIn, ParameterOpPrefix, ParameterOpContains,
+		ParameterOpGt, ParameterOpGte, ParameterOpLt, ParameterOpLte,
+	}
+)
+
 // MaxParameterValues bounds the number of declared parameters and the size of
 // each in-list, mirroring the query filter budgets.
 const (
@@ -51,12 +76,13 @@ type ParameterBinding struct {
 type ParameterValues map[string]any
 
 var stringOperators = map[string]bool{
-	"eq": true, "neq": true, "in": true, "prefix": true, "contains": true,
+	ParameterOpEq: true, ParameterOpNeq: true, ParameterOpIn: true, ParameterOpPrefix: true, ParameterOpContains: true,
 }
 var numberOperators = map[string]bool{
-	"eq": true, "neq": true, "in": true, "gt": true, "gte": true, "lt": true, "lte": true,
+	ParameterOpEq: true, ParameterOpNeq: true, ParameterOpIn: true,
+	ParameterOpGt: true, ParameterOpGte: true, ParameterOpLt: true, ParameterOpLte: true,
 }
-var booleanOperators = map[string]bool{"eq": true, "neq": true}
+var booleanOperators = map[string]bool{ParameterOpEq: true, ParameterOpNeq: true}
 
 // ValidateDeclaration checks the closed-set shape independently of any run so
 // malformed parameter contracts are rejected at dashboard validation time.
@@ -102,7 +128,7 @@ func validateParameterValue(decl ParameterDeclaration, value any) error {
 			if len(v) == 0 || len(v) > MaxParameterListValues {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数组长度无效", "/parameters")
 			}
-			if decl.Operator != "in" && decl.Operator != "eq" && decl.Operator != "neq" {
+			if decl.Operator != ParameterOpIn && decl.Operator != ParameterOpEq && decl.Operator != ParameterOpNeq {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "该运算不接受数组参数", "/parameters")
 			}
 			for _, item := range v {
@@ -129,7 +155,7 @@ func validateParameterValue(decl ParameterDeclaration, value any) error {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "参数数值无效", "/parameters")
 			}
 		case []any:
-			if len(v) == 0 || len(v) > MaxParameterListValues || decl.Operator != "in" {
+			if len(v) == 0 || len(v) > MaxParameterListValues || decl.Operator != ParameterOpIn {
 				return analysis.Invalid("INVALID_PARAMETER_VALUE", "数值数组参数无效", "/parameters")
 			}
 			for _, item := range v {

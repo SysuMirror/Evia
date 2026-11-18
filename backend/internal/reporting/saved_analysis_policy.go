@@ -93,19 +93,37 @@ func validateSavedDefinitionMeta(in SavedAnalysisDefinition, out *SavedAnalysisD
 	return nil
 }
 
+// Visualization kind closed set, mirrored by the
+// SavedAnalysisVisualization.kind OpenAPI enum and guarded by
+// TestVisualizationVocabularyMatchesContract.
+const (
+	VisualizationTable  = "table"
+	VisualizationMetric = "metric"
+	VisualizationLine   = "line"
+	VisualizationBar    = "bar"
+	VisualizationFunnel = "funnel"
+)
+
+// VisualizationKinds is the single Go-side source of truth for the five
+// visualization kinds.
+var VisualizationKinds = []string{
+	VisualizationTable, VisualizationMetric, VisualizationLine,
+	VisualizationBar, VisualizationFunnel,
+}
+
 func validateInlineVisualization(out *SavedAnalysisDefinition) error {
 	q := out.Query
 	valid := false
 	switch out.Visualization.Kind {
-	case "table":
+	case VisualizationTable:
 		valid = true
-	case "metric":
+	case VisualizationMetric:
 		valid = q.Kind == "trend" && len(q.Metrics) == 1 && len(q.GroupBy) == 0 && q.Interval == ""
-	case "line":
+	case VisualizationLine:
 		valid = q.Kind == "trend" && q.Interval != ""
-	case "bar":
+	case VisualizationBar:
 		valid = q.Kind == "trend" && (len(q.GroupBy) > 0 || q.Interval != "")
-	case "funnel":
+	case VisualizationFunnel:
 		valid = q.Kind == "funnel"
 	}
 	if !valid {
@@ -158,7 +176,7 @@ func NormalizeSavedAnalysisDefinition(in SavedAnalysisDefinition) (SavedAnalysis
 		}
 		// v1 renders a referenced metric as one whole-range metric card. Trend
 		// intervals and grouping on top of a metric remain a future extension.
-		if out.Visualization.Kind != "metric" {
+		if out.Visualization.Kind != VisualizationMetric {
 			return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
 		}
 	}
@@ -218,7 +236,7 @@ func normalizeResolvedMetricDefinition(in SavedAnalysisDefinition) (SavedAnalysi
 		return out, e
 	}
 	sort.Slice(out.Query.EventVersions, func(i, j int) bool { return out.Query.EventVersions[i].EventKey < out.Query.EventVersions[j].EventKey })
-	if out.Visualization.Kind != "metric" {
+	if out.Visualization.Kind != VisualizationMetric {
 		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
 	}
 	q := out.Query
@@ -279,7 +297,7 @@ func normalizeResolvedCompositeDefinition(in SavedAnalysisDefinition) (SavedAnal
 	if len(out.Query.EventVersions) != 0 || len(out.Query.Metrics) != 0 || out.Query.Interval != "" || len(out.Query.GroupBy) != 0 || out.Query.Filter != nil {
 		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "复合指标标记卡片不能携带原子查询体", "/metric_ref")
 	}
-	if out.Visualization.Kind != "metric" {
+	if out.Visualization.Kind != VisualizationMetric {
 		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
 	}
 	if e = boundSavedDefinition(out); e != nil {
