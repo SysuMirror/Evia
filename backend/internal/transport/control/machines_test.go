@@ -244,6 +244,7 @@ func TestMachineCredentialAdministrationContract(t *testing.T) {
 	}{
 		{name: "create", method: "POST", path: machineURL, body: create, status: 201, calls: 1},
 		{name: "create explicit metric grants", method: "POST", path: machineURL, body: strings.Replace(create, `["project.read"]`, `["metrics.read","metrics.write","metrics.publish","metrics.run"]`, 1), status: 201, calls: 1},
+		{name: "create data governance grants", method: "POST", path: machineURL, body: strings.Replace(create, `["project.read"]`, `["data.erasure","data.export"]`, 1), status: 201, calls: 1},
 		{name: "lost create response retry", method: "POST", path: machineURL, body: create, replay: true, status: 201, calls: 1},
 		{name: "missing csrf", method: "POST", path: machineURL, body: create, omitCSRF: true, status: 403},
 		{name: "missing key", method: "POST", path: machineURL, body: create, omitKey: true, status: 400},
