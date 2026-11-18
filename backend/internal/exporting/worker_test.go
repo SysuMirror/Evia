@@ -279,3 +279,57 @@ func TestWorkerExportsNativeEvaluatorResultAsJSON(t *testing.T) {
 		t.Fatalf("bad json artifact: %+v", store.completedArtifact)
 	}
 }
+
+// recordingEngine captures the request handed to the execution engine so the
+// worker seam can prove it never strips the internal formula_ref marker that
+// the runtime CompositeFormulaEngine wrapper expands for composite exports.
+type recordingEngine struct {
+	gotScope   analysis.Scope
+	gotRequest analysis.Request
+	result     analysis.Result
+}
+
+func (e *recordingEngine) Execute(_ context.Context, scope analysis.Scope, request analysis.Request) (analysis.Result, error) {
+	e.gotScope = scope
+	e.gotRequest = request
+	return e.result, nil
+}
+
+func TestWorkerPassesFormulaMarkerToEngine(t *testing.T) {
+	t.Parallel()
+	artifacts, err := NewFileArtifactStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim := &Claim{Job: Job{
+		JobID:       "33333333-3333-4333-8333-333333333333",
+		ProjectID:   "p",
+		Environment: "development",
+		State:       StateQueued,
+		Request: analysis.Request{
+			Kind:        "trend",
+			Environment: "development",
+			Formula:     &analysis.FormulaJobRef{MetricID: "44444444-4444-4444-8444-444444444444", Version: 2},
+		},
+	}}
+	store := &stubStore{claim: claim, done: make(chan struct{})}
+	engine := &recordingEngine{result: analysis.Result{
+		Columns: []analysis.Column{{Key: "observed", Type: "number"}},
+		Rows:    []map[string]any{{"observed": 7}},
+	}}
+	worker := &Worker{Store: store, Engine: engine, Artifacts: artifacts, ID: "export-worker-marker", Lease: time.Minute, Logger: discardLogger()}
+	if worked, e := worker.RunOnce(context.Background()); e != nil || !worked {
+		t.Fatalf("RunOnce worked=%v err=%v", worked, e)
+	}
+	<-store.done
+	if engine.gotRequest.Formula == nil || engine.gotRequest.Formula.MetricID != claim.Request.Formula.MetricID ||
+		engine.gotRequest.Formula.Version != 2 {
+		t.Fatalf("formula marker must reach the engine intact: %+v", engine.gotRequest)
+	}
+	if engine.gotScope.ProjectID != "p" || engine.gotScope.Environment != "development" {
+		t.Fatalf("execution scope mismatch: %+v", engine.gotScope)
+	}
+	if store.completedArtifact.Rows != 1 || store.completedClaim.JobID != claim.JobID {
+		t.Fatalf("marker-driven job completion mismatch: %+v", store.completedArtifact)
+	}
+}

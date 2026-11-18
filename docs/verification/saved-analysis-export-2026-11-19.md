@@ -49,6 +49,9 @@
 3. 复合分支条件反转为 `false` → marker 用例如期变红（Bind marker shell 报 `INVALID_EVENT_SELECTION`），还原复绿。
 每轮还原后哈希全部 OK，最终 `-count=1` 全绿。
 
+### Worker 接缝（`exporting`）
+`TestWorkerPassesFormulaMarkerToEngine` 用录制引擎断言导出 worker 不剥离内部 `formula_ref` 标记：marker 原样到达执行引擎、Scope 携带项目与环境、产物按结果行数完成，为 runtime 的 `CompositeFormulaEngine` 包装提供接缝级证据。
+
 ### HTTP 边界（`transport/control`）
 `TestSavedAnalysisExportCreateValidatesAndMaps` 断言版本路由参数映射、幂等头透传、64 位请求摘要、时间窗解析与 `ExportJob` 来源见证输出；`TestSavedAnalysisExportRejectsBadVersionAndBody` 覆盖 0/非数字版本与缺时间窗请求体在到达 service 前即 400。
 
