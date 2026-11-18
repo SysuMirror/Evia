@@ -1,7 +1,7 @@
 import type { ExportInput, ExportJob, QueryRequest } from '@evia/api-client';
 
 export type ExportKind = 'trend' | 'events';
-export type ExportFormat = 'json' | 'csv';
+export type ExportFormat = 'json' | 'csv' | 'ndjson';
 
 export interface ExportFormState {
   name: string;

@@ -35,6 +35,9 @@ test('format defaults to json and is carried into the export input', () => {
   const csv = toExportInput(form({ format: 'csv' }));
   expect(csv.errors).toEqual([]);
   expect(csv.input?.format).toBe('csv');
+  const ndjson = toExportInput(form({ format: 'ndjson' }));
+  expect(ndjson.errors).toEqual([]);
+  expect(ndjson.input?.format).toBe('ndjson');
 });
 
 test('window ceiling follows the query kind budget', () => {
