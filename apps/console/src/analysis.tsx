@@ -684,6 +684,7 @@ export function AnalysisPage({
                   { value: 'minute', label: '分钟' },
                   { value: 'hour', label: '小时' },
                   { value: 'day', label: '天' },
+                  { value: 'week', label: '周' },
                 ]}
               />
             </Field>
@@ -1023,7 +1024,7 @@ export function AnalysisPage({
                   <span>
                     {snapshot.request.environment}，上限 {snapshot.request.limit} 行
                     {snapshot.request.interval
-                      ? `，按${{ minute: '分钟', hour: '小时', day: '天' }[snapshot.request.interval]}`
+                      ? `，按${{ minute: '分钟', hour: '小时', day: '天', week: '周' }[snapshot.request.interval]}`
                       : ''}
                     {snapshot.request.filter ? '，已应用过滤条件' : ''}
                   </span>

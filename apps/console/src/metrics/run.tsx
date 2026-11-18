@@ -197,6 +197,7 @@ export function MetricRunPanel({ project, session, metricID, version, canRun }: 
                   { value: 'minute', label: '分钟' },
                   { value: 'hour', label: '小时' },
                   { value: 'day', label: '天' },
+                  { value: 'week', label: '周' },
                 ]}
                 onChange={(event) =>
                   setForm((c) => ({

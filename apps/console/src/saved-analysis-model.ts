@@ -471,7 +471,7 @@ export function savedAnalysisIssues(value: SavedAnalysisDefinition): SavedIssue[
   if (q.subject !== undefined && q.subject !== 'uid' && q.subject !== 'anonymous')
     add('/query/subject', '请选择原始 UID 或匿名标识。');
   if (q.limit !== undefined) safe(q.limit, 1, 500, '/query/limit');
-  if (q.interval !== undefined && !['minute', 'hour', 'day'].includes(q.interval))
+  if (q.interval !== undefined && !['minute', 'hour', 'day', 'week'].includes(q.interval))
     add('/query/interval', '时间粒度无效。');
   const pins: SavedPin[] = [];
   if (q.kind === 'trend') {

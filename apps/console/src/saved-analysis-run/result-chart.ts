@@ -100,7 +100,9 @@ export function savedAnalysisResultChart(
         from: Date.parse(execution.time_range.from),
         to: Date.parse(execution.time_range.to),
       },
-      intervalMs: { minute: 60000, hour: 3600000, day: 86400000 }[definition.query.interval],
+      intervalMs: { minute: 60000, hour: 3600000, day: 86400000, week: 604800000 }[
+        definition.query.interval
+      ],
     };
   }
   return {

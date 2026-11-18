@@ -378,3 +378,12 @@ test('saved analysis search terms trim blanks and clamp to the server rune limit
   expect(emojiClamped.startsWith('😀')).toBe(true);
   expect(normalizeSavedAnalysisSearch('a\tb  c')).toBe('a\tb  c');
 });
+
+test('saved trend accepts the week interval but keeps the closed set', () => {
+  const weekly = definition();
+  weekly.query.interval = 'week';
+  expect(savedAnalysisIssues(weekly).some((issue) => issue.path === '/query/interval')).toBe(false);
+  const invalid = definition();
+  invalid.query.interval = 'month' as never;
+  expect(savedAnalysisIssues(invalid).some((issue) => issue.path === '/query/interval')).toBe(true);
+});

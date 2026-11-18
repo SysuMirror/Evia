@@ -637,3 +637,16 @@ test('field operators advertise negation members with labels per type', () => {
   for (const op of ['not_in', 'not_prefix', 'not_contains'])
     expect(typeof operators[op]).toBe('string');
 });
+
+test('trend week interval is emitted with the fixed seven-day bucket size', () => {
+  const input = form();
+  input.mode = 'trend';
+  input.interval = 'week';
+  input.from = '2026-11-01T00:00';
+  input.to = '2026-11-15T00:00';
+  const request = buildRequest(input, 'development');
+  expect(request.kind).toBe('trend');
+  expect(request.interval).toBe('week');
+  // A fourteen-day range stays inside the result-row limit at one bucket per week.
+  expect(() => buildRequest(input, 'development')).not.toThrow();
+});

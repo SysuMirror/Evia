@@ -29,7 +29,7 @@ export type AnalysisForm = {
   metric: 'count' | 'pv' | 'uv';
   subject: 'uid' | 'anonymous';
   accuracy: 'exact' | 'approximate';
-  interval: 'minute' | 'hour' | 'day';
+  interval: 'minute' | 'hour' | 'day' | 'week';
   identity: string;
   limit: string;
   filters: FilterRow[];
@@ -520,7 +520,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     if (form.metric === 'uv') request.subject = form.subject;
     if (form.mode === 'trend') request.interval = form.interval;
     // Do not submit a query that must exceed the bounded result contract.
-    const size = { minute: 60000, hour: 3600000, day: 86400000 }[form.interval];
+    const size = { minute: 60000, hour: 3600000, day: 86400000, week: 604800000 }[form.interval];
     if (form.mode === 'trend' && Math.ceil((to.getTime() - from.getTime()) / size) + 1 > limit)
       throw new AnalysisValidationError(
         'interval',

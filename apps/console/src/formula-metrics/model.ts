@@ -221,7 +221,7 @@ export interface FormulaRunForm {
   from: string;
   to: string;
   timezone: string;
-  interval: '' | 'minute' | 'hour' | 'day';
+  interval: '' | 'minute' | 'hour' | 'day' | 'week';
   limit: string;
 }
 

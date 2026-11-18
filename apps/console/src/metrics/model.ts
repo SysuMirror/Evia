@@ -274,7 +274,7 @@ export interface MetricRunForm {
   from: string;
   to: string;
   timezone: string;
-  interval: '' | 'minute' | 'hour' | 'day';
+  interval: '' | 'minute' | 'hour' | 'day' | 'week';
   limit: string;
   filterJSON: string;
   groupBy: GroupByInput[];
