@@ -26,7 +26,7 @@ func sourceService(t *testing.T, f catalogFixture) *ingestion.SourceService {
 }
 func sourceInput(kind string) ingestion.SourceInput {
 	origins := []string{}
-	if kind == "browser" {
+	if kind == ingestion.SourceKindBrowser {
 		origins = []string{"https://website.example"}
 	}
 	return ingestion.SourceInput{Name: "Website", Environment: "development", Kind: kind, AllowedOrigins: origins}
@@ -35,7 +35,7 @@ func TestSourceAuthorizationScopeRevisionsAndAudit(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("browser"))
+	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindBrowser))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -46,9 +46,9 @@ func TestSourceAuthorizationScopeRevisionsAndAudit(t *testing.T) {
 	faultCode(t, e, "PROJECT_NOT_FOUND")
 	_, e = svc.GetSource(ctx, f.owner, f.otherProject, created.Source.ID)
 	faultCode(t, e, "SOURCE_NOT_FOUND")
-	_, e = svc.CreateSource(ctx, f.viewer, f.project, sourceInput("server"))
+	_, e = svc.CreateSource(ctx, f.viewer, f.project, sourceInput(ingestion.SourceKindServer))
 	faultCode(t, e, "PROJECT_FORBIDDEN")
-	_, e = svc.UpdateSource(ctx, f.viewer, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString("disabled")})
+	_, e = svc.UpdateSource(ctx, f.viewer, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)})
 	faultCode(t, e, "PROJECT_FORBIDDEN")
 	if rows, e := svc.ListSources(ctx, f.viewer, f.project, "production", "", 10); e != nil || len(rows) != 0 {
 		t.Fatal("environment scope leaked", rows, e)
@@ -63,7 +63,7 @@ func TestSourceAuthorizationScopeRevisionsAndAudit(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Go(func() {
-			_, e := svc.UpdateSource(ctx, f.owner, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString("disabled")})
+			_, e := svc.UpdateSource(ctx, f.owner, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)})
 			if e == nil {
 				successes.Add(1)
 			} else {
@@ -76,7 +76,7 @@ func TestSourceAuthorizationScopeRevisionsAndAudit(t *testing.T) {
 		t.Fatal("stale writes were admitted", successes.Load())
 	}
 	source, e := f.s.ResolveSource(ctx, created.Source.WriteKey)
-	if e != nil || source.Source.Status != "disabled" {
+	if e != nil || source.Source.Status != ingestion.SourceStatusDisabled {
 		t.Fatal("source disable not persisted", source, e)
 	}
 	var audit int
@@ -92,7 +92,7 @@ func TestSourceSecretRotationIdempotencyAndOverlap(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	issued, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("server"))
+	issued, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindServer))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -156,7 +156,7 @@ func TestConcurrentSourceRotationHasOneIdempotentResult(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("server"))
+	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindServer))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -192,7 +192,7 @@ func TestSourceApplicationStateAndCrossInstanceRevocationBound(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("browser"))
+	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindBrowser))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -200,7 +200,7 @@ func TestSourceApplicationStateAndCrossInstanceRevocationBound(t *testing.T) {
 	if _, e = cache.ResolveSource(ctx, created.Source.WriteKey); e != nil {
 		t.Fatal(e)
 	}
-	updated, e := svc.UpdateSource(ctx, f.owner, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString("disabled")})
+	updated, e := svc.UpdateSource(ctx, f.owner, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)})
 	if e != nil || updated.ApplicationState != "pending" {
 		t.Fatal(updated, e)
 	}
@@ -218,7 +218,7 @@ func TestSourceApplicationStateAndCrossInstanceRevocationBound(t *testing.T) {
 		t.Fatal("bounded distribution never became applied", observed, e)
 	}
 	resolved, e := cache.ResolveSource(ctx, created.Source.WriteKey)
-	if e != nil || resolved.Source.Status != "disabled" {
+	if e != nil || resolved.Source.Status != ingestion.SourceStatusDisabled {
 		t.Fatal("stale cache outlived applied bound", resolved, e)
 	}
 }
@@ -237,7 +237,7 @@ func TestSourceCollectorUsesCommittedScopeAndReadyActivation(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("browser"))
+	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindBrowser))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -283,7 +283,7 @@ func TestSourceCollectorUsesCommittedScopeAndReadyActivation(t *testing.T) {
 	if e != nil || status != 202 || len(queue.records) != 1 || queue.records[0].ProjectID != f.project || queue.records[0].Environment != "development" {
 		t.Fatal("verified scope not bound to durable record", status, e, queue.records)
 	}
-	production := sourceInput("browser")
+	production := sourceInput(ingestion.SourceKindBrowser)
 	production.Environment = "production"
 	other, e := svc.CreateSource(ctx, f.owner, f.project, production)
 	if e != nil {
@@ -294,11 +294,11 @@ func TestSourceCollectorUsesCommittedScopeAndReadyActivation(t *testing.T) {
 	if e != nil || status != 422 || result.Results[0].Error.Code != "SCHEMA_NOT_PUBLISHED" || len(queue.records) != 1 {
 		t.Fatal("source crossed environment release boundary", status, e, result)
 	}
-	server1, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("server"))
+	server1, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindServer))
 	if e != nil {
 		t.Fatal(e)
 	}
-	server2, e := svc.CreateSource(ctx, f.owner, f.otherProject, sourceInput("server"))
+	server2, e := svc.CreateSource(ctx, f.owner, f.otherProject, sourceInput(ingestion.SourceKindServer))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -314,7 +314,7 @@ func TestSourceMutationRollsBackCredentialAndAuditFailures(t *testing.T) {
 	if _, e := f.s.Pool.Exec(ctx, `CREATE FUNCTION reject_source_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic audit failure'; END $$; CREATE TRIGGER reject_source_audit BEFORE INSERT ON audit_entries FOR EACH ROW WHEN (NEW.action='source.created') EXECUTE FUNCTION reject_source_audit()`); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("server")); e == nil {
+	if _, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindServer)); e == nil {
 		t.Fatal("source creation ignored audit failure")
 	}
 	for _, table := range []string{"ingestion_sources", "ingestion_credentials"} {
@@ -329,7 +329,7 @@ func TestSourceExpiredCacheDoesNotSurviveDatabaseFailure(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput("browser"))
+	created, e := svc.CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindBrowser))
 	if e != nil {
 		t.Fatal(e)
 	}

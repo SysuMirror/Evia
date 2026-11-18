@@ -46,7 +46,7 @@ func TestSourceMutationsUseOperationAuthorityForPreflight(t *testing.T) {
 	for _, operation := range []string{"update", "rotate"} {
 		for _, preflightError := range []error{nil, denied} {
 			t.Run(operation+"/"+map[bool]string{true: "denied", false: "allowed"}[preflightError != nil], func(t *testing.T) {
-				store := &sourceOperationStore{source: Source{ID: "source", Kind: "server"}, preflightError: preflightError}
+				store := &sourceOperationStore{source: Source{ID: "source", Kind: SourceKindServer}, preflightError: preflightError}
 				service, err := NewSourceService(store, bytes.Repeat([]byte{7}, 32), nil)
 				if err != nil {
 					t.Fatal(err)

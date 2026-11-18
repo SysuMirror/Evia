@@ -59,7 +59,7 @@ func TestImmutableManifestMutationIsNotSilentlyRecompiled(t *testing.T) {
 		t.Fatal(e)
 	}
 	expirePlan(t, c, 1)
-	p.value.Events = map[string]EventRule{"different": {Key: "different", Version: 2, AllowedSourceKinds: []string{"browser"}, Schema: map[string]any{"type": "object"}}}
+	p.value.Events = map[string]EventRule{"different": {Key: "different", Version: 2, AllowedSourceKinds: []string{SourceKindBrowser}, Schema: map[string]any{"type": "object"}}}
 	for i := 0; i < 2; i++ {
 		if _, e := c.plan(context.Background(), testProject, "development", 1); e == nil || fault.Public(e).Code != "EVENT_PLAN_INVALID" {
 			t.Fatal("changed immutable revision was trusted", e)
@@ -185,7 +185,7 @@ func TestCompiledRuleCountBoundEvictsLargePlans(t *testing.T) {
 	p.value.Events = map[string]EventRule{}
 	for i := 0; i < 200; i++ {
 		key := fmt.Sprintf("event_%d", i)
-		p.value.Events[key] = EventRule{Key: key, Version: 1, AllowedSourceKinds: []string{"browser"}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}
+		p.value.Events[key] = EventRule{Key: key, Version: 1, AllowedSourceKinds: []string{SourceKindBrowser}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}
 	}
 	for i := int64(1); i <= 22; i++ {
 		if _, e := c.plan(context.Background(), testProject, "development", i); e != nil {

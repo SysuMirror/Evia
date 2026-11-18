@@ -13,6 +13,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/diagnostics"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/admissionstats"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
@@ -70,10 +71,10 @@ func sampleDiagnosticsReport() diagnostics.Report {
 		Sources: diagnostics.SourceSection{
 			Status:        diagnostics.StatusOK,
 			Total:         2,
-			ByStatus:      []diagnostics.NameCount{{Name: "active", Count: 1}, {Name: "disabled", Count: 1}},
+			ByStatus:      []diagnostics.NameCount{{Name: ingestion.SourceStatusActive, Count: 1}, {Name: ingestion.SourceStatusDisabled, Count: 1}},
 			ByEnvironment: []diagnostics.NameCount{{Name: "production", Count: 2}},
 			DisabledSources: []diagnostics.DisabledSource{
-				{ID: "44444444-4444-4444-8444-444444444444", Name: "legacy-web", Environment: "production", Kind: "browser"},
+				{ID: "44444444-4444-4444-8444-444444444444", Name: "legacy-web", Environment: "production", Kind: ingestion.SourceKindBrowser},
 			},
 		},
 		Budget: &diagnostics.BudgetSection{

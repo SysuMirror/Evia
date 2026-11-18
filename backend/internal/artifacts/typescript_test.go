@@ -3,6 +3,8 @@ package artifacts
 import (
 	"strings"
 	"testing"
+
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
 func samplePlan() ReleasePlan {
@@ -32,7 +34,7 @@ func samplePlan() ReleasePlan {
 						"note":     map[string]any{"type": "string", "maxLength": float64(1024)},
 					},
 				},
-				AllowedSourceKinds: []string{"browser", "server"},
+				AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer},
 				FactKind:           "user_intent",
 			},
 			{

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
 func testSchema(t *testing.T, content string) map[string]any {
@@ -75,7 +77,7 @@ func TestUnsupportedAndUnboundedSchema(t *testing.T) {
 	}
 }
 func TestCompatibilityClassification(t *testing.T) {
-	before := DraftInput{Schema: testSchema(t, validSchema), AllowedSourceKinds: []string{"browser", "server"}, FactKind: str("user_intent")}
+	before := DraftInput{Schema: testSchema(t, validSchema), AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer}, FactKind: str("user_intent")}
 	if got := Compatibility(nil, before); got != "initial" {
 		t.Fatal(got)
 	}
@@ -96,7 +98,7 @@ func TestCompatibilityClassification(t *testing.T) {
 		})
 	}
 	next := before
-	next.AllowedSourceKinds = []string{"server"}
+	next.AllowedSourceKinds = []string{ingestion.SourceKindServer}
 	if Compatibility(&before, next) != "breaking" {
 		t.Fatal("source removal compatible")
 	}

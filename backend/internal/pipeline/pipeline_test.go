@@ -23,7 +23,7 @@ const testEvent = "33333333-3333-4333-8333-333333333333"
 
 func testRecord() ingestion.Record {
 	now := time.Date(2026, 11, 7, 10, 11, 12, 123456789, time.UTC)
-	return ingestion.Record{SourceKind: "browser", ProjectID: testProject, SourceID: testSource, Environment: "development", EventID: testEvent, EventKey: "page_opened", SchemaVersion: 1, ReleaseRevision: 1, OccurredAt: now, ReceivedAt: now, UID: "synthetic-user", ContextJSON: json.RawMessage(`{}`), PropertiesJSON: json.RawMessage(`{"count":0,"enabled":false,"title":"Home"}`), SDKName: "test", SDKVersion: "1.0.0"}
+	return ingestion.Record{SourceKind: ingestion.SourceKindBrowser, ProjectID: testProject, SourceID: testSource, Environment: "development", EventID: testEvent, EventKey: "page_opened", SchemaVersion: 1, ReleaseRevision: 1, OccurredAt: now, ReceivedAt: now, UID: "synthetic-user", ContextJSON: json.RawMessage(`{}`), PropertiesJSON: json.RawMessage(`{"count":0,"enabled":false,"title":"Home"}`), SDKName: "test", SDKVersion: "1.0.0"}
 }
 func testMessage(t *testing.T) Message {
 	t.Helper()

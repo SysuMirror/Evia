@@ -20,13 +20,13 @@ import (
 type collectionSources struct{}
 
 func (collectionSources) ResolveSource(context.Context, string) (ingestion.AdmissionSource, error) {
-	return ingestion.AdmissionSource{Source: ingestion.Source{ID: catalogReleaseID, ProjectID: projectID, Environment: "development", Kind: "browser", Status: "active", AllowedOrigins: []string{"https://website.example"}}}, nil
+	return ingestion.AdmissionSource{Source: ingestion.Source{ID: catalogReleaseID, ProjectID: projectID, Environment: "development", Kind: ingestion.SourceKindBrowser, Status: ingestion.SourceStatusActive, AllowedOrigins: []string{"https://website.example"}}}, nil
 }
 
 type collectionPlans struct{}
 
 func (collectionPlans) ResolvePlan(_ context.Context, p, e string, r int64) (ingestion.Plan, error) {
-	return ingestion.Plan{ProjectID: p, Environment: e, Revision: r, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]ingestion.EventRule{"page_opened": {Key: "page_opened", Version: 1, AllowedSourceKinds: []string{"browser"}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}}}, nil
+	return ingestion.Plan{ProjectID: p, Environment: e, Revision: r, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]ingestion.EventRule{"page_opened": {Key: "page_opened", Version: 1, AllowedSourceKinds: []string{ingestion.SourceKindBrowser}, Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}}}, nil
 }
 
 type collectionBudget struct{}

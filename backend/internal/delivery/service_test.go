@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -123,7 +124,7 @@ func TestActivationRequiresCompiledHashAndBoundFreshProof(t *testing.T) {
 		}, "PIPELINE_PROOF_INVALID"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &memoryStore{candidate: candidate(t, 1, "browser", schema())}
+			store := &memoryStore{candidate: candidate(t, 1, ingestion.SourceKindBrowser, schema())}
 			if tc.edit != nil {
 				tc.edit(store)
 			}
@@ -154,7 +155,7 @@ func TestActivationReplayDoesNotRepeatPipelineSideEffects(t *testing.T) {
 func TestManifestRejectsRemoteSchemaBeforeCompilation(t *testing.T) {
 	raw := schema()
 	raw["$ref"] = "https://untrusted.invalid/schema"
-	store := &memoryStore{candidate: candidate(t, 1, "browser", raw)}
+	store := &memoryStore{candidate: candidate(t, 1, ingestion.SourceKindBrowser, raw)}
 	s := newTestService(t, store, probeFunc(successfulProbe))
 	_, e := s.Activate(context.Background(), testProject, testProject, "activation-1", ActivationInput{Environment: "development", ReleaseID: testRelease})
 	code(t, e, "RELEASE_SCHEMA_INVALID")
@@ -164,7 +165,7 @@ func TestManifestRejectsRemoteSchemaBeforeCompilation(t *testing.T) {
 }
 func TestPublicConfigAllowlistSourceFilterAndRevocation(t *testing.T) {
 	store := &memoryStore{}
-	store.snapshot = ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: "browser", Status: "active", AllowedOrigins: []string{"https://site.example"}}, Active: candidate(t, 1, "browser", schema())}
+	store.snapshot = ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: ingestion.SourceKindBrowser, Status: ingestion.SourceStatusActive, AllowedOrigins: []string{"https://site.example"}}, Active: candidate(t, 1, ingestion.SourceKindBrowser, schema())}
 	s := newTestService(t, store, probeFunc(successfulProbe))
 	auth := Authentication{Origin: "https://site.example"}
 	out, e := s.PublicConfig(context.Background(), "public-key", auth, 0)
@@ -183,16 +184,16 @@ func TestPublicConfigAllowlistSourceFilterAndRevocation(t *testing.T) {
 	if _, ok := out.Config.Events[0].Schema["properties"].(map[string]any)["description"]; !ok {
 		t.Fatal("business property named description was removed")
 	}
-	store.snapshot.Source.Kind = "server"
+	store.snapshot.Source.Kind = ingestion.SourceKindServer
 	store.snapshot.Source.SecretDigest = strings.Repeat("0", 64)
 	_, e = s.PublicConfig(context.Background(), "public-key", Authentication{}, 0)
 	code(t, e, "SOURCE_CREDENTIAL_INVALID")
-	store.snapshot.Source.Kind = "browser"
-	store.snapshot.Source.Status = "disabled"
+	store.snapshot.Source.Kind = ingestion.SourceKindBrowser
+	store.snapshot.Source.Status = ingestion.SourceStatusDisabled
 	_, e = s.PublicConfig(context.Background(), "public-key", auth, 0)
 	code(t, e, "SOURCE_DISABLED")
-	store.snapshot.Source.Status = "active"
-	store.snapshot.Active = candidate(t, 1, "server", schema())
+	store.snapshot.Source.Status = ingestion.SourceStatusActive
+	store.snapshot.Active = candidate(t, 1, ingestion.SourceKindServer, schema())
 	out, e = s.PublicConfig(context.Background(), "public-key", auth, 0)
 	if e != nil || len(out.Config.Events) != 0 {
 		t.Fatal("source kind filter cannot produce empty valid config", out, e)
@@ -203,10 +204,10 @@ func TestPublicConfigAllowlistSourceFilterAndRevocation(t *testing.T) {
 	code(t, e, "SOURCE_CREDENTIAL_INVALID")
 }
 func TestPublicConfigCompatibleUpgradeAndBoundedOldRevision(t *testing.T) {
-	prior := candidate(t, 1, "browser", schema())
+	prior := candidate(t, 1, ingestion.SourceKindBrowser, schema())
 	nextSchema := schema()
 	nextSchema["properties"].(map[string]any)["extra"] = map[string]any{"type": "boolean"}
-	store := &memoryStore{snapshot: ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: "browser", Status: "active", AllowedOrigins: []string{"https://site.example"}}, Active: candidate(t, 2, "browser", nextSchema), Current: &prior, CurrentAccepted: true}}
+	store := &memoryStore{snapshot: ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: ingestion.SourceKindBrowser, Status: ingestion.SourceStatusActive, AllowedOrigins: []string{"https://site.example"}}, Active: candidate(t, 2, ingestion.SourceKindBrowser, nextSchema), Current: &prior, CurrentAccepted: true}}
 	s := newTestService(t, store, probeFunc(successfulProbe))
 	auth := Authentication{Origin: "https://site.example"}
 	out, e := s.PublicConfig(context.Background(), "key", auth, 1)
@@ -215,7 +216,7 @@ func TestPublicConfigCompatibleUpgradeAndBoundedOldRevision(t *testing.T) {
 	}
 	breaking := schema()
 	breaking["properties"].(map[string]any)["count"] = map[string]any{"type": "string"}
-	store.snapshot.Active = candidate(t, 3, "browser", breaking)
+	store.snapshot.Active = candidate(t, 3, ingestion.SourceKindBrowser, breaking)
 	out, e = s.PublicConfig(context.Background(), "key", auth, 1)
 	if e != nil || out.Config.Revision != 1 {
 		t.Fatal("breaking release blindly upgraded old client", out, e)
@@ -232,9 +233,9 @@ func TestPublicConfigCompatibleUpgradeAndBoundedOldRevision(t *testing.T) {
 }
 
 func TestPublicConfigMetadataMeaningChangeKeepsPriorRevision(t *testing.T) {
-	prior := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{"browser"}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "ms"}}}}}
-	next := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{"browser"}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "s"}}}}}
-	if canUpgrade(prior, next, "browser") {
+	prior := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "ms"}}}}}
+	next := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "s"}}}}}
+	if canUpgrade(prior, next, ingestion.SourceKindBrowser) {
 		t.Fatal("same JSON type silently changed measurement meaning")
 	}
 }
@@ -242,7 +243,7 @@ func TestPublicConfigMetadataMeaningChangeKeepsPriorRevision(t *testing.T) {
 func TestPublicConfigServerBearerAndCrossOriginFailClosed(t *testing.T) {
 	secret := strings.Repeat("s", 43)
 	sum := sha256.Sum256([]byte(secret))
-	store := &memoryStore{snapshot: ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: "server", Status: "active", SecretDigest: hex.EncodeToString(sum[:])}, Active: candidate(t, 1, "server", schema())}}
+	store := &memoryStore{snapshot: ConfigSnapshot{Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: ingestion.SourceKindServer, Status: ingestion.SourceStatusActive, SecretDigest: hex.EncodeToString(sum[:])}, Active: candidate(t, 1, ingestion.SourceKindServer, schema())}}
 	service := newTestService(t, store, probeFunc(successfulProbe))
 	out, e := service.PublicConfig(context.Background(), "server-key", Authentication{Bearer: secret}, 0)
 	if e != nil || len(out.Config.Events) != 1 || out.AllowedOrigin != "" {
@@ -273,7 +274,7 @@ func TestManifestValidationSingleFlightBoundsConcurrentMisses(t *testing.T) {
 	service := newTestService(t, store, probeFunc(successfulProbe))
 	v := &blockingValidator{Validator: service.validator, entered: make(chan struct{}), release: make(chan struct{})}
 	service.validator = v
-	c := candidate(t, 1, "browser", schema())
+	c := candidate(t, 1, ingestion.SourceKindBrowser, schema())
 	results := make(chan error, 16)
 	for range 16 {
 		go func() { _, e := service.checkManifest(context.Background(), c); results <- e }()
@@ -326,17 +327,17 @@ func (p reservedProviderStub) ReservedEvents() []ReservedEvent { return p.events
 func reservedBrowserSnapshot(t *testing.T, kind string) ConfigSnapshot {
 	t.Helper()
 	return ConfigSnapshot{
-		Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: kind, Status: "active", AllowedOrigins: []string{"https://site.example"}},
+		Source: Source{ID: testRelease, ProjectID: testProject, Environment: "development", Kind: kind, Status: ingestion.SourceStatusActive, AllowedOrigins: []string{"https://site.example"}},
 		Active: candidate(t, 1, kind, schema()),
 	}
 }
 
 func TestPublicConfigAppendsReservedEventsForBrowserSource(t *testing.T) {
 	reserved := []ReservedEvent{
-		{Key: "sys.page_view", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object", "description": "private annotation", "additionalProperties": false, "properties": map[string]any{}}},
-		{Key: "sys.session_end", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"reason": map[string]any{"type": "string", "title": "private label"}}}},
+		{Key: "sys.page_view", Version: 1, Kinds: []string{ingestion.SourceKindBrowser}, Schema: map[string]any{"type": "object", "description": "private annotation", "additionalProperties": false, "properties": map[string]any{}}},
+		{Key: "sys.session_end", Version: 1, Kinds: []string{ingestion.SourceKindBrowser}, Schema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"reason": map[string]any{"type": "string", "title": "private label"}}}},
 	}
-	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, ingestion.SourceKindBrowser)}
 	s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: reserved})
 	auth := Authentication{Origin: "https://site.example"}
 
@@ -378,10 +379,10 @@ func TestPublicConfigAppendsReservedEventsForBrowserSource(t *testing.T) {
 
 func TestPublicConfigReservedEventsRespectSourceKind(t *testing.T) {
 	reserved := []ReservedEvent{
-		{Key: "sys.page_view", Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object"}},
-		{Key: "sys.server_only", Version: 2, Kinds: []string{"server"}, Schema: map[string]any{"type": "object"}},
+		{Key: "sys.page_view", Version: 1, Kinds: []string{ingestion.SourceKindBrowser}, Schema: map[string]any{"type": "object"}},
+		{Key: "sys.server_only", Version: 2, Kinds: []string{ingestion.SourceKindServer}, Schema: map[string]any{"type": "object"}},
 	}
-	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+	store := &memoryStore{snapshot: reservedBrowserSnapshot(t, ingestion.SourceKindBrowser)}
 	s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: reserved})
 	out, e := s.PublicConfig(context.Background(), "public-key", Authentication{Origin: "https://site.example"}, 0)
 	if e != nil {
@@ -408,9 +409,9 @@ func TestPublicConfigReservedEventBudgetGuard(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			events := make([]ReservedEvent, tc.count)
 			for i := range events {
-				events[i] = ReservedEvent{Key: "sys.event_" + strconv.Itoa(i), Version: 1, Kinds: []string{"browser"}, Schema: map[string]any{"type": "object"}}
+				events[i] = ReservedEvent{Key: "sys.event_" + strconv.Itoa(i), Version: 1, Kinds: []string{ingestion.SourceKindBrowser}, Schema: map[string]any{"type": "object"}}
 			}
-			store := &memoryStore{snapshot: reservedBrowserSnapshot(t, "browser")}
+			store := &memoryStore{snapshot: reservedBrowserSnapshot(t, ingestion.SourceKindBrowser)}
 			s := newTestService(t, store, probeFunc(successfulProbe)).WithReservedEvents(reservedProviderStub{events: events})
 			out, e := s.PublicConfig(context.Background(), "public-key", Authentication{Origin: "https://site.example"}, 0)
 			if tc.wantErr != "" {

@@ -75,8 +75,8 @@ func collectorFixture(t *testing.T) (*Collector, *sourceStub, *planStub, *queueS
 	if e != nil {
 		t.Fatal(e)
 	}
-	source := &sourceStub{value: AdmissionSource{Source: Source{ID: testSource, ProjectID: testProject, Kind: "browser", Environment: "development", Status: "active", AllowedOrigins: []string{"https://website.example"}}, Credential: Credential{ID: testSource}}}
-	plans := &planStub{value: Plan{ProjectID: testProject, Environment: "development", Revision: 1, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]EventRule{"lesson_opened": {Key: "lesson_opened", Version: 1, AllowedSourceKinds: []string{"browser", "server"}, Schema: map[string]any{"type": "object", "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}, "additionalProperties": false}}}}}
+	source := &sourceStub{value: AdmissionSource{Source: Source{ID: testSource, ProjectID: testProject, Kind: SourceKindBrowser, Environment: "development", Status: SourceStatusActive, AllowedOrigins: []string{"https://website.example"}}, Credential: Credential{ID: testSource}}}
+	plans := &planStub{value: Plan{ProjectID: testProject, Environment: "development", Revision: 1, Ready: true, Active: true, ValidFor: time.Minute, Events: map[string]EventRule{"lesson_opened": {Key: "lesson_opened", Version: 1, AllowedSourceKinds: []string{SourceKindBrowser, SourceKindServer}, Schema: map[string]any{"type": "object", "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}, "additionalProperties": false}}}}}
 	queue, budget := &queueStub{}, &budgetStub{}
 	c, e := NewCollector(source, plans, queue, budget, v)
 	if e != nil {
@@ -100,7 +100,7 @@ func TestCollectionPartialAcknowledgementAndVerifiedScope(t *testing.T) {
 		t.Fatal("partial results lost invalid item semantics", out)
 	}
 	r := queue.records[0]
-	if r.ProjectID != testProject || r.SourceID != testSource || r.SourceKind != "browser" || r.Environment != "development" || r.UID != "website-user" || r.Context.Sequence == nil || *r.Context.Sequence != 1 || !strings.Contains(string(r.ContextJSON), `"route_name":""`) {
+	if r.ProjectID != testProject || r.SourceID != testSource || r.SourceKind != SourceKindBrowser || r.Environment != "development" || r.UID != "website-user" || r.Context.Sequence == nil || *r.Context.Sequence != 1 || !strings.Contains(string(r.ContextJSON), `"route_name":""`) {
 		t.Fatal("normalized scope/context lost", r)
 	}
 	if budget.calls != 1 || budget.count != 3 || budget.project != testProject || plans.calls != 1 || plans.requestedProject != testProject || plans.requestedEnvironment != "development" {
@@ -116,10 +116,12 @@ func TestCollectionFailsClosedAndDoesNotAcknowledgeAmbiguousQueue(t *testing.T) 
 		change     func(*sourceStub, *planStub, *queueStub, *budgetStub)
 		auth       Authentication
 	}{
-		{name: "disabled", code: "SOURCE_DISABLED", change: func(s *sourceStub, _ *planStub, _ *queueStub, _ *budgetStub) { s.value.Source.Status = "disabled" }, auth: browserAuth()},
+		{name: "disabled", code: "SOURCE_DISABLED", change: func(s *sourceStub, _ *planStub, _ *queueStub, _ *budgetStub) {
+			s.value.Source.Status = SourceStatusDisabled
+		}, auth: browserAuth()},
 		{name: "origin", code: "SOURCE_ORIGIN_FORBIDDEN", auth: Authentication{Origin: "https://foreign.example"}},
 		{name: "server public key alone", code: "SOURCE_CREDENTIAL_INVALID", change: func(s *sourceStub, _ *planStub, _ *queueStub, _ *budgetStub) {
-			s.value.Source.Kind = "server"
+			s.value.Source.Kind = SourceKindServer
 			s.value.Credential.SecretDigest = Digest(strings.Repeat("s", 43))
 		}},
 		{name: "unready", code: "EVENT_PLAN_NOT_READY", change: func(_ *sourceStub, p *planStub, _ *queueStub, _ *budgetStub) { p.value.Ready = false }, auth: browserAuth()},
@@ -148,10 +150,10 @@ func TestCollectionFailsClosedAndDoesNotAcknowledgeAmbiguousQueue(t *testing.T) 
 }
 func TestServerCredentialsAndPermanentErrors(t *testing.T) {
 	c, source, _, queue, _ := collectorFixture(t)
-	source.value.Source.Kind = "server"
+	source.value.Source.Kind = SourceKindServer
 	secret := strings.Repeat("s", 43)
 	source.value.Credential.SecretDigest = Digest(secret)
-	if _, status, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent())), Authentication{Bearer: secret}); e != nil || status != 202 || queue.records[0].SourceKind != "server" {
+	if _, status, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent())), Authentication{Bearer: secret}); e != nil || status != 202 || queue.records[0].SourceKind != SourceKindServer {
 		t.Fatal("server credential did not authorize its source", status, e)
 	}
 	c, _, plans, queue, _ := collectorFixture(t)
@@ -188,7 +190,7 @@ func TestCollectionWorkAndSizeBounds(t *testing.T) {
 	}
 }
 func TestExpiredSourceCacheFailsClosed(t *testing.T) {
-	s := &sourceStub{value: AdmissionSource{Source: Source{ID: testSource, Status: "active"}}}
+	s := &sourceStub{value: AdmissionSource{Source: Source{ID: testSource, Status: SourceStatusActive}}}
 	cache := NewCachedSources(s)
 	if _, e := cache.ResolveSource(context.Background(), "key"); e != nil {
 		t.Fatal(e)

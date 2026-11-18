@@ -67,9 +67,9 @@ func TestDisabledSectionsWhenPortsAreNil(t *testing.T) {
 
 func TestSourceInventoryAggregation(t *testing.T) {
 	rows := []ingestion.Source{
-		{ID: "1", Name: "web", Environment: "production", Kind: "browser", Status: "active"},
-		{ID: "2", Name: "api", Environment: "production", Kind: "server", Status: "disabled"},
-		{ID: "3", Name: "qa", Environment: "staging", Kind: "server", Status: "active"},
+		{ID: "1", Name: "web", Environment: "production", Kind: ingestion.SourceKindBrowser, Status: ingestion.SourceStatusActive},
+		{ID: "2", Name: "api", Environment: "production", Kind: ingestion.SourceKindServer, Status: ingestion.SourceStatusDisabled},
+		{ID: "3", Name: "qa", Environment: "staging", Kind: ingestion.SourceKindServer, Status: ingestion.SourceStatusActive},
 	}
 	service := NewService(Features{CollectionEnabled: true}, &sourceListerStub{rows: rows}, nil, nil, nil)
 	report, err := service.Build(context.Background(), "actor-1", projectID)
@@ -84,7 +84,7 @@ func TestSourceInventoryAggregation(t *testing.T) {
 	for _, item := range section.ByStatus {
 		counts[item.Name] = item.Count
 	}
-	if counts["active"] != 2 || counts["disabled"] != 1 {
+	if counts[ingestion.SourceStatusActive] != 2 || counts[ingestion.SourceStatusDisabled] != 1 {
 		t.Fatalf("unexpected status counts: %+v", section.ByStatus)
 	}
 	if len(section.DisabledSources) != 1 || section.DisabledSources[0].ID != "2" {

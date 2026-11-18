@@ -413,8 +413,8 @@ func TestSystemEventsFlowCollectorKafkaClickHouse(t *testing.T) {
 	}
 	resolver := integrationSystemSource{source: ingestion.AdmissionSource{
 		Source: ingestion.Source{
-			ID: testSource, ProjectID: testProject, Kind: "browser", Environment: "development",
-			Status: "active", AllowedOrigins: []string{"https://site.example"},
+			ID: testSource, ProjectID: testProject, Kind: ingestion.SourceKindBrowser, Environment: "development",
+			Status: ingestion.SourceStatusActive, AllowedOrigins: []string{"https://site.example"},
 		},
 		Credential: ingestion.Credential{ID: testSource},
 	}}

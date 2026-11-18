@@ -49,7 +49,7 @@ func TestLoadSystemCatalogEmbedded(t *testing.T) {
 		if rule.Key != key || rule.Version != 1 {
 			t.Fatalf("rule %q has unexpected shape %+v", key, rule)
 		}
-		if len(rule.AllowedSourceKinds) != 1 || rule.AllowedSourceKinds[0] != "browser" {
+		if len(rule.AllowedSourceKinds) != 1 || rule.AllowedSourceKinds[0] != SourceKindBrowser {
 			t.Fatalf("rule %q must stay browser-only, got %v", key, rule.AllowedSourceKinds)
 		}
 	}

@@ -16,10 +16,11 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
 func fixtureConfig() Config {
-	return Config{ContractVersion: 1, APIURL: "http://127.0.0.1:8081", ProjectID: "11111111-1111-4111-8111-111111111111", RunID: "22222222-2222-4222-8222-222222222222", Environment: "development", SourceKind: "server", WriteKey: "never-report-this-write-key", ServerSecret: "never-report-this-secret", EventKey: "benchmark_page_view", SchemaVersion: 1, ReleaseRevision: 1, StartedAt: time.Now().UTC(), UIDCardinality: 10}
+	return Config{ContractVersion: 1, APIURL: "http://127.0.0.1:8081", ProjectID: "11111111-1111-4111-8111-111111111111", RunID: "22222222-2222-4222-8222-222222222222", Environment: "development", SourceKind: ingestion.SourceKindServer, WriteKey: "never-report-this-write-key", ServerSecret: "never-report-this-secret", EventKey: "benchmark_page_view", SchemaVersion: 1, ReleaseRevision: 1, StartedAt: time.Now().UTC(), UIDCardinality: 10}
 }
 
 func accepted(w http.ResponseWriter, r wire.CollectRequest) {

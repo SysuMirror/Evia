@@ -191,23 +191,23 @@ func TestMachineSourcesActualScopeSecretGrantsAndRevokedReplay(t *testing.T) {
 	f := catalogDB(t)
 	svc := sourceService(t, f)
 	ctx := context.Background()
-	production := sourceInput("server")
+	production := sourceInput(ingestion.SourceKindServer)
 	production.Environment = "production"
 	prod, err := svc.CreateSource(ctx, f.owner, f.project, production)
 	if err != nil {
 		t.Fatal(err)
 	}
 	writer := catalogMachine(t, f, "development", access.PermissionSourcesWrite)
-	created, err := svc.CreateSource(writer.ctx, writer.actor, f.project, sourceInput("server"))
+	created, err := svc.CreateSource(writer.ctx, writer.actor, f.project, sourceInput(ingestion.SourceKindServer))
 	if err != nil || created.SecretOnce == "" {
 		t.Fatal("write grant must return new server secret", err)
 	}
-	if _, err = svc.UpdateSource(writer.ctx, writer.actor, f.project, created.Source.ID, created.Source.Revision, ingestion.SourceUpdate{Status: sourceString("disabled"), AllowedOrigins: &[]string{}}); err != nil {
+	if _, err = svc.UpdateSource(writer.ctx, writer.actor, f.project, created.Source.ID, created.Source.Revision, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled), AllowedOrigins: &[]string{}}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = svc.CreateSource(writer.ctx, writer.actor, f.project, production)
 	faultCode(t, err, "MACHINE_FORBIDDEN")
-	_, err = svc.UpdateSource(writer.ctx, writer.actor, f.project, prod.Source.ID, prod.Source.Revision, ingestion.SourceUpdate{Status: sourceString("disabled")})
+	_, err = svc.UpdateSource(writer.ctx, writer.actor, f.project, prod.Source.ID, prod.Source.Revision, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)})
 	faultCode(t, err, "MACHINE_FORBIDDEN")
 	_, err = svc.GetSource(writer.ctx, writer.actor, f.project, created.Source.ID)
 	faultCode(t, err, "MACHINE_FORBIDDEN")

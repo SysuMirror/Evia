@@ -62,7 +62,7 @@ func TestSystemEventAcceptedWithoutProjectPlan(t *testing.T) {
 	if first.EventKey != "sys.page_view" || first.SchemaVersion != 1 || first.ReleaseRevision != 7 {
 		t.Fatalf("system record provenance lost: %+v", first)
 	}
-	if first.SourceKind != "browser" || first.ProjectID != testProject || first.AnonymousID != "44444444-4444-4444-8444-444444444444" {
+	if first.SourceKind != SourceKindBrowser || first.ProjectID != testProject || first.AnonymousID != "44444444-4444-4444-8444-444444444444" {
 		t.Fatalf("system record scope lost: %+v", first)
 	}
 	if budget.calls != 1 || budget.count != 2 {
@@ -123,7 +123,7 @@ func TestSystemEventRejections(t *testing.T) {
 			auth := browserAuth()
 			if tc.serverSrc {
 				secret := strings.Repeat("s", 43)
-				source.value.Source.Kind = "server"
+				source.value.Source.Kind = SourceKindServer
 				source.value.Credential.SecretDigest = Digest(secret)
 				auth = Authentication{Bearer: secret}
 			}

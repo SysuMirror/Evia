@@ -192,8 +192,8 @@ func admissionCollector(t *testing.T, limiter *budget.Limiter, project, environm
 	}
 	source := &sourceStub{value: AdmissionSource{
 		Source: Source{
-			ID: testSource, ProjectID: project, Kind: "browser",
-			Environment: environment, Status: "active",
+			ID: testSource, ProjectID: project, Kind: SourceKindBrowser,
+			Environment: environment, Status: SourceStatusActive,
 			AllowedOrigins: []string{"https://website.example"},
 		},
 		Credential: Credential{ID: testSource},
@@ -203,7 +203,7 @@ func admissionCollector(t *testing.T, limiter *budget.Limiter, project, environm
 		Ready: true, Active: true, ValidFor: time.Minute,
 		Events: map[string]EventRule{"lesson_opened": {
 			Key: "lesson_opened", Version: 1,
-			AllowedSourceKinds: []string{"browser", "server"},
+			AllowedSourceKinds: []string{SourceKindBrowser, SourceKindServer},
 			Schema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

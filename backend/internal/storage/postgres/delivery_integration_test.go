@@ -222,7 +222,7 @@ func TestDeliveryPublicConfigurationAuthFreshnessAndOldRevision(t *testing.T) {
 	if _, e = s.Activate(ctx, f.owner, f.project, "activate-1", activationInput(first, 0)); e != nil {
 		t.Fatal(e)
 	}
-	source, e := sourceService(t, f).CreateSource(ctx, f.owner, f.project, sourceInput("browser"))
+	source, e := sourceService(t, f).CreateSource(ctx, f.owner, f.project, sourceInput(ingestion.SourceKindBrowser))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -256,7 +256,7 @@ func TestDeliveryPublicConfigurationAuthFreshnessAndOldRevision(t *testing.T) {
 	}
 	_, e = s.PublicConfig(ctx, source.Source.WriteKey, auth, 1)
 	faultCode(t, e, "CONFIG_COMPATIBILITY_EXPIRED")
-	if _, e = sourceService(t, f).UpdateSource(ctx, f.owner, f.project, source.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString("disabled")}); e != nil {
+	if _, e = sourceService(t, f).UpdateSource(ctx, f.owner, f.project, source.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)}); e != nil {
 		t.Fatal(e)
 	}
 	_, e = s.PublicConfig(ctx, source.Source.WriteKey, auth, 0)
