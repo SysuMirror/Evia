@@ -72,6 +72,14 @@ export const permissionGroups: {
       { value: 'dashboards.run', label: '运行看板' },
     ],
   },
+  {
+    name: '数据治理',
+    help: '独立敏感授权，不由其他权限推导：数据删除按身份永久清除事实，数据导出物化有界查询产物。',
+    items: [
+      { value: 'data.erasure', label: '按身份删除数据' },
+      { value: 'data.export', label: '创建数据导出作业' },
+    ],
+  },
 ];
 export function uncertain(error: Error | undefined) {
   return !!error && (!(error instanceof ApiError) || error.status === 0 || error.status >= 500);
