@@ -3381,7 +3381,10 @@ export interface components {
             field: {
                 /** @constant */
                 kind: "system";
-                /** @enum {unknown} */
+                /**
+                 * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                 * @enum {unknown}
+                 */
                 key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
             } | {
                 /** @constant */
@@ -3400,7 +3403,10 @@ export interface components {
             field: {
                 /** @constant */
                 kind: "system";
-                /** @enum {unknown} */
+                /**
+                 * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                 * @enum {unknown}
+                 */
                 key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
             } | {
                 /** @constant */
@@ -3418,7 +3424,10 @@ export interface components {
         segment_field: {
             /** @constant */
             kind: "system";
-            /** @enum {unknown} */
+            /**
+             * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+             * @enum {unknown}
+             */
             key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "operation_id";
         } | {
             /** @constant */
@@ -3461,7 +3470,10 @@ export interface components {
             group_by?: ({
                 /** @constant */
                 kind: "system";
-                /** @enum {unknown} */
+                /**
+                 * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                 * @enum {unknown}
+                 */
                 key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
             } | {
                 /** @constant */
@@ -3479,7 +3491,10 @@ export interface components {
                 field?: {
                     /** @constant */
                     kind: "system";
-                    /** @enum {unknown} */
+                    /**
+                     * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                     * @enum {unknown}
+                     */
                     key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                 } | {
                     /** @constant */
@@ -3513,7 +3528,10 @@ export interface components {
                     field: {
                         /** @constant */
                         kind: "system";
-                        /** @enum {unknown} */
+                        /**
+                         * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                         * @enum {unknown}
+                         */
                         key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                     } | {
                         /** @constant */
@@ -3566,7 +3584,10 @@ export interface components {
                 field: {
                     /** @constant */
                     kind: "system";
-                    /** @enum {unknown} */
+                    /**
+                     * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                     * @enum {unknown}
+                     */
                     key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                 } | {
                     /** @constant */
@@ -3583,7 +3604,10 @@ export interface components {
                 segment_field: {
                     /** @constant */
                     kind: "system";
-                    /** @enum {unknown} */
+                    /**
+                     * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                     * @enum {unknown}
+                     */
                     key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "operation_id";
                 } | {
                     /** @constant */
@@ -3608,7 +3632,10 @@ export interface components {
                     field: {
                         /** @constant */
                         kind: "system";
-                        /** @enum {unknown} */
+                        /**
+                         * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                         * @enum {unknown}
+                         */
                         key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                     } | {
                         /** @constant */
@@ -3627,7 +3654,10 @@ export interface components {
                     field: {
                         /** @constant */
                         kind: "system";
-                        /** @enum {unknown} */
+                        /**
+                         * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                         * @enum {unknown}
+                         */
                         key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                     } | {
                         /** @constant */
@@ -3698,7 +3728,10 @@ export interface components {
         field: {
             /** @constant */
             kind: "system";
-            /** @enum {unknown} */
+            /**
+             * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+             * @enum {unknown}
+             */
             key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
         } | {
             /** @constant */
@@ -3795,7 +3828,10 @@ export interface components {
         group_by: ({
             /** @constant */
             kind: "system";
-            /** @enum {unknown} */
+            /**
+             * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+             * @enum {unknown}
+             */
             key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
         } | {
             /** @constant */
@@ -3813,7 +3849,10 @@ export interface components {
             field?: {
                 /** @constant */
                 kind: "system";
-                /** @enum {unknown} */
+                /**
+                 * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                 * @enum {unknown}
+                 */
                 key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
             } | {
                 /** @constant */
@@ -3847,7 +3886,10 @@ export interface components {
                 field: {
                     /** @constant */
                     kind: "system";
-                    /** @enum {unknown} */
+                    /**
+                     * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                     * @enum {unknown}
+                     */
                     key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
                 } | {
                     /** @constant */
@@ -3924,7 +3966,10 @@ export interface components {
             field?: {
                 /** @constant */
                 kind: "system";
-                /** @enum {unknown} */
+                /**
+                 * @description Selectable built-in system column (not a custom property, which uses kind=property with an event-scoped key). event_key is the event type; uid/anonymous_id are the subject identifiers; session_id/page_view_id/operation_id are execution-context columns; event_time is the only datetime system field. Presence and empty-string guards differ by column.
+                 * @enum {unknown}
+                 */
                 key: "event_key" | "uid" | "anonymous_id" | "session_id" | "page_view_id" | "event_time" | "operation_id";
             } | {
                 /** @constant */
