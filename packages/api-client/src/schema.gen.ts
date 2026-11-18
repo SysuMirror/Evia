@@ -3371,7 +3371,7 @@ export interface components {
             args: components["schemas"]["filter"][];
         } | {
             /** @enum {unknown} */
-            op: "eq" | "neq" | "in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "contains";
+            op: "eq" | "neq" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "not_prefix" | "contains" | "not_contains";
             field: {
                 /** @constant */
                 kind: "system";
@@ -3574,7 +3574,7 @@ export interface components {
                     args: components["schemas"]["filter"][];
                 } | {
                     /** @enum {unknown} */
-                    op: "eq" | "neq" | "in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "contains";
+                    op: "eq" | "neq" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "prefix" | "not_prefix" | "contains" | "not_contains";
                     field: {
                         /** @constant */
                         kind: "system";

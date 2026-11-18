@@ -697,12 +697,15 @@
                 "eq",
                 "neq",
                 "in",
+                "not_in",
                 "gt",
                 "gte",
                 "lt",
                 "lte",
                 "prefix",
-                "contains"
+                "not_prefix",
+                "contains",
+                "not_contains"
               ]
             },
             "field": {
