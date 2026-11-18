@@ -124,7 +124,18 @@ The collector returns per-event receipts for HTTP 202, including mixed accepted/
 | `dropped`   | No collection attempt was made: configuration failure, local lifecycle cancellation or age expiry.             |
 | `uncertain` | An attempted event has no conclusive final acknowledgement. It may already have been accepted.                 |
 
-`flush()` resolves with `{pending}` after its bounded turn, not after guaranteed delivery. Event outcome promises provide the individual results. New emissions may continue during a flush within the queue limits. Memory queues are not a durable offline store and do not survive process termination or reload. Delivery retries can produce duplicate receipts; the server deduplicates stable source/event IDs in its exact read view.
+`flush()` resolves with `{pending}` after its bounded turn, not after guaranteed delivery. Event outcome promises provide the individual results. New emissions may continue during a flush within the queue limits. The default memory queue does not survive process termination or reload; an opt-in durable mirror is described below. Delivery retries can produce duplicate receipts; the server deduplicates stable source/event IDs in its exact read view.
+
+## Durable queue persistence (opt-in)
+
+Set `persistQueue: true` to write-through the bounded event queue onto the injected storage port (the browser `localStorage` adapter by default, injectable for tests and absent under SSR) under a dedicated `...:queue` key separate from the anonymous identifier. The existing event/byte bounds still apply and every storage failure fails soft back to memory, so collection is never broken by an unavailable store.
+
+- Snapshot format `evia.queue.v1` stores only serializable entry fields; the per-emission outcome promise belongs to the originating page and is not persisted.
+- On construction the client rehydrates the snapshot, prunes expired (`maxAgeMs`), malformed and over-budget entries, and preserves every original `event_id`, then writes back the pruned snapshot.
+- Rehydrated entries without a ready envelope are re-resolved against the current public configuration; events no longer published fail closed with `EVENT_NOT_PUBLISHED`.
+- Delivery stays at-least-once: a redelivered event keeps its stable `event_id`, and the collector deduplicates stable source/event IDs, so reload redelivery cannot create duplicate facts.
+- The original emitter's outcome promise does not survive reload; post-reload results are observable through delivery and receipts rather than the pre-reload `Emission.result`.
+- v1 scopes durability to reload and same-context navigation while storage is available. Cross-tab writer coordination is not implemented; concurrent tabs rely on the same idempotent redelivery, and browser-driven storage eviction stays outside SDK control. Omitting the option keeps the historical memory-only behavior byte-identical.
 
 ## Configuration and lifecycle
 
