@@ -341,6 +341,16 @@ func TestExportRoutesRequireSession(t *testing.T) {
 	if w.Code == http.StatusOK {
 		t.Fatal("export list without a session must be rejected")
 	}
+	// The saved-analysis version export shares the same management session gate.
+	r = httptest.NewRequest(http.MethodPost,
+		"/api/v1/projects/"+projectID+"/saved-analyses/"+savedAnalysisID+"/versions/1/exports",
+		strings.NewReader(validSavedExportBody))
+	r.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code == http.StatusCreated || w.Code == http.StatusOK {
+		t.Fatalf("version export without a session must be rejected: %d", w.Code)
+	}
 }
 
 var _ analysis.Request
