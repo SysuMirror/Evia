@@ -148,10 +148,10 @@ func (s *Store) UpdateSource(ctx context.Context, actor, project, id string, rev
 	if in.AllowedOrigins != nil {
 		out.AllowedOrigins = *in.AllowedOrigins
 	}
-	if out.Kind == "browser" && len(out.AllowedOrigins) == 0 {
+	if out.Kind == ingestion.SourceKindBrowser && len(out.AllowedOrigins) == 0 {
 		return out, ingestion.Invalid("INVALID_ORIGINS", "浏览器来源必须配置至少一个 Origin")
 	}
-	if out.Kind == "server" && len(out.AllowedOrigins) != 0 {
+	if out.Kind == ingestion.SourceKindServer && len(out.AllowedOrigins) != 0 {
 		return out, ingestion.Invalid("INVALID_ORIGINS", "服务端来源不使用浏览器 Origin 配置")
 	}
 	out, e = scanSource(tx.QueryRow(ctx, `UPDATE ingestion_sources SET status=$3,allowed_origins=$4,revision=revision+1,updated_at=clock_timestamp(),observed_at=NULL WHERE project_id=$1 AND id=$2 RETURNING `+sourceColumns, project, id, out.Status, out.AllowedOrigins))

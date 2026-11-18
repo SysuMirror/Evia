@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
 func httpClient(concurrency int) *http.Client {
@@ -30,7 +32,7 @@ func sendBatch(ctx context.Context, client *http.Client, c Config, b batch, m *r
 	req.GetBody = nil
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	if c.SourceKind == "server" {
+	if c.SourceKind == ingestion.SourceKindServer {
 		req.Header.Set("Authorization", "Bearer "+c.ServerSecret)
 	} else {
 		req.Header.Set("Origin", c.Origin)

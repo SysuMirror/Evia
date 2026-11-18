@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
 func pointer(s string) string                { return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1") }
@@ -61,7 +63,7 @@ func CheckDefinition(in DraftInput, publication bool) []Issue {
 	}
 	seen := map[string]bool{}
 	for _, v := range in.AllowedSourceKinds {
-		if (v != "browser" && v != "server") || seen[v] {
+		if !ingestion.ValidSourceKind(v) || seen[v] {
 			add("/allowed_source_kinds", "来源必须为 browser 或 server，且不能重复")
 		}
 		seen[v] = true
@@ -69,7 +71,7 @@ func CheckDefinition(in DraftInput, publication bool) []Issue {
 	if in.FactKind != nil && text(in.FactKind) != "user_intent" && text(in.FactKind) != "client_observed" && text(in.FactKind) != "server_confirmed" || publication && in.FactKind == nil {
 		add("/fact_kind", "事实类型无效")
 	}
-	if text(in.FactKind) == "server_confirmed" && seen["browser"] {
+	if text(in.FactKind) == "server_confirmed" && seen[ingestion.SourceKindBrowser] {
 		add("/allowed_source_kinds", "服务端确认事件不能允许浏览器来源")
 	}
 	if len(in.FieldMetadata) > 50 {

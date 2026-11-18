@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -137,14 +138,14 @@ func (s *Service) authorize(source Source, auth Authentication) (string, error) 
 	if source.ID == "" {
 		return "", fault.New(fault.Unauthenticated, "SOURCE_CREDENTIAL_INVALID", "来源凭据无效")
 	}
-	if source.Status != "active" {
+	if source.Status != ingestion.SourceStatusActive {
 		return "", fault.New(fault.Forbidden, "SOURCE_DISABLED", "来源已停用")
 	}
 	if source.ExpiresAt != nil && !source.ExpiresAt.After(time.Now()) {
 		return "", fault.New(fault.Unauthenticated, "SOURCE_CREDENTIAL_INVALID", "来源凭据已失效")
 	}
 	switch source.Kind {
-	case "browser":
+	case ingestion.SourceKindBrowser:
 		if auth.Bearer != "" {
 			return "", fault.New(fault.Forbidden, "BROWSER_AUTH_FORBIDDEN", "浏览器来源不得携带服务端凭据")
 		}
@@ -154,7 +155,7 @@ func (s *Service) authorize(source Source, auth Authentication) (string, error) 
 			}
 		}
 		return "", fault.New(fault.Forbidden, "SOURCE_ORIGIN_FORBIDDEN", "该来源不允许此 Origin")
-	case "server":
+	case ingestion.SourceKindServer:
 		sum := sha256.Sum256([]byte(auth.Bearer))
 		digest := hex.EncodeToString(sum[:])
 		if auth.Origin != "" || len(auth.Bearer) != 43 || subtle.ConstantTimeCompare([]byte(digest), []byte(source.SecretDigest)) != 1 {

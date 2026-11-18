@@ -113,7 +113,7 @@ func NormalizeOrigins(origins []string) ([]string, error) {
 }
 func (s *SourceService) credential(sourceID, kind string) (Credential, string, error) {
 	c := Credential{ID: ids.New(), SourceID: sourceID, WriteKey: "evia_w_" + ids.Secret()}
-	if kind != "server" {
+	if kind != SourceKindServer {
 		return c, "", nil
 	}
 	secret := ids.Secret()
@@ -144,20 +144,20 @@ func (s *SourceService) CreateSource(ctx context.Context, actor, project string,
 	if !ValidEnvironment(in.Environment) {
 		return Issued{}, Invalid("INVALID_ENVIRONMENT", "环境无效")
 	}
-	if in.Kind != "browser" && in.Kind != "server" {
+	if !ValidSourceKind(in.Kind) {
 		return Issued{}, Invalid("INVALID_SOURCE_KIND", "来源类型无效")
 	}
 	origins, e := NormalizeOrigins(in.AllowedOrigins)
 	if e != nil {
 		return Issued{}, e
 	}
-	if in.Kind == "browser" && len(origins) == 0 {
+	if in.Kind == SourceKindBrowser && len(origins) == 0 {
 		return Issued{}, Invalid("INVALID_ORIGINS", "浏览器来源必须配置至少一个 Origin")
 	}
-	if in.Kind == "server" && len(origins) != 0 {
+	if in.Kind == SourceKindServer && len(origins) != 0 {
 		return Issued{}, Invalid("INVALID_ORIGINS", "服务端来源不使用浏览器 Origin 配置")
 	}
-	src := Source{ID: ids.New(), ProjectID: project, Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: origins, Status: "active", Revision: 1, ApplicationState: "pending"}
+	src := Source{ID: ids.New(), ProjectID: project, Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: origins, Status: SourceStatusActive, Revision: 1, ApplicationState: "pending"}
 	c, secret, e := s.credential(src.ID, in.Kind)
 	if e != nil {
 		return Issued{}, e
@@ -186,7 +186,7 @@ func (s *SourceService) UpdateSource(ctx context.Context, actor, project, id str
 	if in.Status == nil && in.AllowedOrigins == nil {
 		return Source{}, Invalid("INVALID_SOURCE_UPDATE", "必须指定来源更新字段")
 	}
-	if in.Status != nil && *in.Status != "active" && *in.Status != "disabled" {
+	if in.Status != nil && !ValidSourceStatus(*in.Status) {
 		return Source{}, Invalid("INVALID_SOURCE_STATUS", "来源状态无效")
 	}
 	if in.AllowedOrigins != nil {
@@ -199,7 +199,7 @@ func (s *SourceService) UpdateSource(ctx context.Context, actor, project, id str
 		if e != nil {
 			return Source{}, e
 		}
-		if prior.Kind == "server" && len(origins) != 0 {
+		if prior.Kind == SourceKindServer && len(origins) != 0 {
 			return Source{}, Invalid("INVALID_ORIGINS", "服务端来源不使用浏览器 Origin 配置")
 		}
 	}
@@ -229,7 +229,7 @@ func (s *SourceService) RotateSource(ctx context.Context, actor, project, id, ke
 		return Issued{}, e
 	}
 	secret := ""
-	if src.Kind == "server" {
+	if src.Kind == SourceKindServer {
 		secret, e = s.DecryptCredential(c)
 		if e != nil {
 			return Issued{}, e

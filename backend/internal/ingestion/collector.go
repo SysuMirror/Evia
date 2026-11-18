@@ -217,17 +217,17 @@ func (c *Collector) authenticate(ctx context.Context, key string, auth Authentic
 		}
 		return source, unavailable("SOURCE_CONFIGURATION_UNAVAILABLE")
 	}
-	if source.Source.Status != "active" {
+	if source.Source.Status != SourceStatusActive {
 		return source, fault.New(fault.Forbidden, "SOURCE_DISABLED", "来源已停用")
 	}
 	if source.Credential.ExpiresAt != nil && !source.Credential.ExpiresAt.After(time.Now()) {
 		return source, fault.New(fault.Unauthenticated, "SOURCE_CREDENTIAL_INVALID", "来源凭据已失效")
 	}
-	if source.Source.Kind == "server" {
+	if source.Source.Kind == SourceKindServer {
 		if len(auth.Bearer) != 43 || subtle.ConstantTimeCompare([]byte(Digest(auth.Bearer)), []byte(source.Credential.SecretDigest)) != 1 {
 			return source, fault.New(fault.Unauthenticated, "SOURCE_CREDENTIAL_INVALID", "来源凭据无效")
 		}
-	} else if source.Source.Kind == "browser" {
+	} else if source.Source.Kind == SourceKindBrowser {
 		allowed := false
 		for _, origin := range source.Source.AllowedOrigins {
 			allowed = allowed || origin == auth.Origin

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 )
 
@@ -83,10 +84,10 @@ func (c Config) validate() error {
 	if c.WriteKey == "" || len(c.WriteKey) > 128 || c.StartedAt.IsZero() || c.StartedAt.Location() != time.UTC {
 		return errors.New("configuration requires write_key and UTC started_at")
 	}
-	if c.SourceKind == "server" && c.ServerSecret != "" && len(c.ServerSecret) <= 4096 && !strings.ContainsAny(c.ServerSecret, "\r\n") {
+	if c.SourceKind == ingestion.SourceKindServer && c.ServerSecret != "" && len(c.ServerSecret) <= 4096 && !strings.ContainsAny(c.ServerSecret, "\r\n") {
 		return nil
 	}
-	if c.SourceKind == "browser" && c.ServerSecret == "" {
+	if c.SourceKind == ingestion.SourceKindBrowser && c.ServerSecret == "" {
 		origin, e := url.Parse(c.Origin)
 		if e == nil && (origin.Scheme == "https" || origin.Scheme == "http") && origin.Host != "" && origin.User == nil && origin.Path == "" && origin.RawQuery == "" && origin.Fragment == "" {
 			return nil

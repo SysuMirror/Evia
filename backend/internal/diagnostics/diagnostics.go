@@ -204,7 +204,7 @@ func (s *Service) buildSources(ctx context.Context, actor, projectID string) (So
 		section.Total++
 		statusCounts[source.Status]++
 		environmentCounts[source.Environment]++
-		if source.Status == "disabled" && len(section.DisabledSources) < disabledListLimit {
+		if source.Status == ingestion.SourceStatusDisabled && len(section.DisabledSources) < disabledListLimit {
 			section.DisabledSources = append(section.DisabledSources, DisabledSource{
 				ID:          source.ID,
 				Name:        source.Name,
