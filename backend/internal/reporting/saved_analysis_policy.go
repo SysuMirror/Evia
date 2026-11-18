@@ -463,7 +463,7 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 }
 func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefinition) []SavedAnalysisChange {
 	if before == nil {
-		return []SavedAnalysisChange{{Category: "definition", Path: "/definition", After: after}}
+		return []SavedAnalysisChange{{Category: ChangeCategoryDefinition, Path: "/definition", After: after}}
 	}
 	changes := []SavedAnalysisChange{}
 	add := func(category, path string, a, b any) {
@@ -471,23 +471,23 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 			changes = append(changes, SavedAnalysisChange{Category: category, Path: path, Before: a, After: b})
 		}
 	}
-	add("metadata", "/title", before.Title, after.Title)
-	add("metadata", "/description", before.Description, after.Description)
-	add("kind", "/query/kind", before.Query.Kind, after.Query.Kind)
-	add("event_versions", "/query/event_versions", before.Query.EventVersions, after.Query.EventVersions)
-	add("filter", "/query/filter", before.Query.Filter, after.Query.Filter)
-	add("subject", "/query/subject", before.Query.Subject, after.Query.Subject)
-	add("metrics", "/query/metrics", before.Query.Metrics, after.Query.Metrics)
-	add("group_by", "/query/group_by", before.Query.GroupBy, after.Query.GroupBy)
-	add("interval", "/query/interval", before.Query.Interval, after.Query.Interval)
-	add("funnel", "/query/funnel", before.Query.Funnel, after.Query.Funnel)
-	add("retention", "/query/retention", before.Query.Retention, after.Query.Retention)
-	add("segment", "/query/segment", before.Query.Segment, after.Query.Segment)
-	add("path", "/query/path", before.Query.Path, after.Query.Path)
-	add("attribution", "/query/attribution", before.Query.Attribution, after.Query.Attribution)
-	add("limit", "/query/limit", before.Query.Limit, after.Query.Limit)
-	add("metric_ref", "/metric_ref", before.MetricRef, after.MetricRef)
-	add("visualization", "/visualization", before.Visualization, after.Visualization)
+	add(ChangeCategoryMetadata, "/title", before.Title, after.Title)
+	add(ChangeCategoryMetadata, "/description", before.Description, after.Description)
+	add(ChangeCategoryKind, "/query/kind", before.Query.Kind, after.Query.Kind)
+	add(ChangeCategoryEventVersions, "/query/event_versions", before.Query.EventVersions, after.Query.EventVersions)
+	add(ChangeCategoryFilter, "/query/filter", before.Query.Filter, after.Query.Filter)
+	add(ChangeCategorySubject, "/query/subject", before.Query.Subject, after.Query.Subject)
+	add(ChangeCategoryMetrics, "/query/metrics", before.Query.Metrics, after.Query.Metrics)
+	add(ChangeCategoryGroupBy, "/query/group_by", before.Query.GroupBy, after.Query.GroupBy)
+	add(ChangeCategoryInterval, "/query/interval", before.Query.Interval, after.Query.Interval)
+	add(ChangeCategoryFunnel, "/query/funnel", before.Query.Funnel, after.Query.Funnel)
+	add(ChangeCategoryRetention, "/query/retention", before.Query.Retention, after.Query.Retention)
+	add(ChangeCategorySegment, "/query/segment", before.Query.Segment, after.Query.Segment)
+	add(ChangeCategoryPath, "/query/path", before.Query.Path, after.Query.Path)
+	add(ChangeCategoryAttribution, "/query/attribution", before.Query.Attribution, after.Query.Attribution)
+	add(ChangeCategoryLimit, "/query/limit", before.Query.Limit, after.Query.Limit)
+	add(ChangeCategoryMetricRef, "/metric_ref", before.MetricRef, after.MetricRef)
+	add(ChangeCategoryVisualization, "/visualization", before.Visualization, after.Visualization)
 	return changes
 }
 func savedEnvironment(value string) bool {

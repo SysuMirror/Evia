@@ -248,7 +248,7 @@ func sortMetricDependencies(deps []MetricDependency) {
 
 func formulaMetricDiff(before *FormulaMetricDefinition, after FormulaMetricDefinition) []FormulaMetricChange {
 	if before == nil {
-		return []FormulaMetricChange{{Category: "definition", Path: "/definition", After: after}}
+		return []FormulaMetricChange{{Category: ChangeCategoryDefinition, Path: "/definition", After: after}}
 	}
 	changes := []FormulaMetricChange{}
 	add := func(category, path string, a, b any) {
@@ -256,8 +256,8 @@ func formulaMetricDiff(before *FormulaMetricDefinition, after FormulaMetricDefin
 			changes = append(changes, FormulaMetricChange{Category: category, Path: path, Before: a, After: b})
 		}
 	}
-	add("metadata", "/title", before.Title, after.Title)
-	add("metadata", "/description", before.Description, after.Description)
-	add("formula", "/formula", before.Formula, after.Formula)
+	add(ChangeCategoryMetadata, "/title", before.Title, after.Title)
+	add(ChangeCategoryMetadata, "/description", before.Description, after.Description)
+	add(ChangeCategoryFormula, "/formula", before.Formula, after.Formula)
 	return changes
 }

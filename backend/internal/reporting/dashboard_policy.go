@@ -319,7 +319,7 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 		if snapshot.Baseline != nil {
 			return out, fault.New(fault.Conflict, "PUBLISHED_VERSION_CONFLICT", "发布基线已变化")
 		}
-		diff = append(diff, SavedAnalysisChange{Category: "definition", Path: "/definition", After: definition})
+		diff = append(diff, SavedAnalysisChange{Category: ChangeCategoryDefinition, Path: "/definition", After: definition})
 	} else {
 		b := snapshot.Baseline
 		if b == nil || b.DashboardID != d.ID || b.ProjectID != d.ProjectID || b.Environment != d.Environment || b.Version != d.PublishedVersion {
@@ -334,9 +334,9 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 				diff = append(diff, SavedAnalysisChange{Category: category, Path: path, Before: before, After: after})
 			}
 		}
-		add("metadata", "/title", baseline.Title, definition.Title)
-		add("metadata", "/description", baseline.Description, definition.Description)
-		add("parameters", "/parameters", baseline.Parameters, definition.Parameters)
+		add(ChangeCategoryMetadata, "/title", baseline.Title, definition.Title)
+		add(ChangeCategoryMetadata, "/description", baseline.Description, definition.Description)
+		add(ChangeCategoryParameters, "/parameters", baseline.Parameters, definition.Parameters)
 		old := map[string]DashboardWidget{}
 		for _, w := range baseline.Widgets {
 			old[w.ID] = w
@@ -344,14 +344,14 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 		for _, w := range definition.Widgets {
 			prev, exists := old[w.ID]
 			if !exists {
-				add("widgets", "/widgets/"+w.ID, nil, w)
+				add(ChangeCategoryWidgets, "/widgets/"+w.ID, nil, w)
 				continue
 			}
-			add("metadata", "/widgets/"+w.ID+"/title", prev.Title, w.Title)
-			add("dependencies", "/widgets/"+w.ID+"/analysis", []any{prev.AnalysisID, prev.AnalysisVersion}, []any{w.AnalysisID, w.AnalysisVersion})
-			add("layout", "/widgets/"+w.ID+"/layout", prev.Layout, w.Layout)
-			add("layout", "/widgets/"+w.ID+"/reading_order", prev.ReadingOrder, w.ReadingOrder)
-			add("parameters", "/widgets/"+w.ID+"/parameter_bindings", prev.ParameterBindings, w.ParameterBindings)
+			add(ChangeCategoryMetadata, "/widgets/"+w.ID+"/title", prev.Title, w.Title)
+			add(ChangeCategoryDependencies, "/widgets/"+w.ID+"/analysis", []any{prev.AnalysisID, prev.AnalysisVersion}, []any{w.AnalysisID, w.AnalysisVersion})
+			add(ChangeCategoryLayout, "/widgets/"+w.ID+"/layout", prev.Layout, w.Layout)
+			add(ChangeCategoryLayout, "/widgets/"+w.ID+"/reading_order", prev.ReadingOrder, w.ReadingOrder)
+			add(ChangeCategoryParameters, "/widgets/"+w.ID+"/parameter_bindings", prev.ParameterBindings, w.ParameterBindings)
 			delete(old, w.ID)
 		}
 		removed := []string{}
@@ -360,7 +360,7 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 		}
 		sort.Strings(removed)
 		for _, id := range removed {
-			add("widgets", "/widgets/"+id, old[id], nil)
+			add(ChangeCategoryWidgets, "/widgets/"+id, old[id], nil)
 		}
 	}
 	out = DashboardValidation{Valid: true, DraftRevision: d.DraftRevision, PublishedVersion: d.PublishedVersion, NormalizedDefinition: definition, Dependencies: deps, Diff: diff}

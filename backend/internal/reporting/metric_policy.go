@@ -200,7 +200,7 @@ func metricDependencies(draft MetricDraft, definition MetricDefinition, in Depen
 }
 func metricDiff(before *MetricDefinition, after MetricDefinition) []MetricChange {
 	if before == nil {
-		return []MetricChange{{Category: "definition", Path: "/definition", After: after}}
+		return []MetricChange{{Category: ChangeCategoryDefinition, Path: "/definition", After: after}}
 	}
 	changes := []MetricChange{}
 	add := func(category, path string, a, b any) {
@@ -208,13 +208,13 @@ func metricDiff(before *MetricDefinition, after MetricDefinition) []MetricChange
 			changes = append(changes, MetricChange{Category: category, Path: path, Before: a, After: b})
 		}
 	}
-	add("metadata", "/title", before.Title, after.Title)
-	add("metadata", "/description", before.Description, after.Description)
-	add("event_versions", "/event_versions", before.EventVersions, after.EventVersions)
-	add("filter", "/filter", before.Filter, after.Filter)
-	add("subject", "/subject", before.Subject, after.Subject)
-	add("aggregation", "/aggregation", before.Aggregation, after.Aggregation)
-	add("unit", "/unit", before.Unit, after.Unit)
+	add(ChangeCategoryMetadata, "/title", before.Title, after.Title)
+	add(ChangeCategoryMetadata, "/description", before.Description, after.Description)
+	add(ChangeCategoryEventVersions, "/event_versions", before.EventVersions, after.EventVersions)
+	add(ChangeCategoryFilter, "/filter", before.Filter, after.Filter)
+	add(ChangeCategorySubject, "/subject", before.Subject, after.Subject)
+	add(ChangeCategoryAggregation, "/aggregation", before.Aggregation, after.Aggregation)
+	add(ChangeCategoryUnit, "/unit", before.Unit, after.Unit)
 	return changes
 }
 
