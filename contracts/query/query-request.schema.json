@@ -460,10 +460,12 @@
         },
         "model": {
           "type": "string",
+          "description": "Multi-touch model. position_based applies U-shaped weights: the first and last distinct in-window touchpoint each receive 0.4, the middle touchpoints share 0.2 equally; two touchpoints split 0.5/0.5 and a single touchpoint receives full weight.",
           "enum": [
             "last_touch",
             "first_touch",
             "linear",
+            "position_based",
             "time_decay"
           ]
         }

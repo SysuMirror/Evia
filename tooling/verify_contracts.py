@@ -286,7 +286,7 @@ attribution_definition["visualization"]["kind"] = "table"
 validator("SavedAnalysisDefinition").validate(attribution_definition)
 validator("SavedAnalysisTemplate").validate(attribution_definition["query"])
 reject_saved("SavedAnalysisDefinition", "attribution bad window", attribution_definition, ["query", "attribution", "window_seconds"], 0)
-reject_saved("SavedAnalysisDefinition", "attribution unknown model", attribution_definition, ["query", "attribution", "model"], "position_based")
+reject_saved("SavedAnalysisDefinition", "attribution unknown model", attribution_definition, ["query", "attribution", "model"], "data_driven")
 reject_saved("SavedAnalysisDefinition", "attribution event_versions", attribution_definition, ["query", "event_versions"], saved_definition["query"]["event_versions"])
 
 print(

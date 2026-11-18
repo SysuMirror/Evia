@@ -3520,8 +3520,11 @@ export interface components {
                 window_seconds: number;
                 /** @description Half-life in seconds used only by the time_decay model; required when model is time_decay, ignored otherwise. */
                 decay_half_life_seconds?: number;
-                /** @enum {string} */
-                model: "last_touch" | "first_touch" | "linear" | "time_decay";
+                /**
+                 * @description Multi-touch model. position_based applies U-shaped weights: the first and last distinct in-window touchpoint each receive 0.4, the middle touchpoints share 0.2 equally; two touchpoints split 0.5/0.5 and a single touchpoint receives full weight.
+                 * @enum {string}
+                 */
+                model: "last_touch" | "first_touch" | "linear" | "position_based" | "time_decay";
             };
             limit?: number;
             cursor?: string;
@@ -3828,8 +3831,11 @@ export interface components {
             window_seconds: number;
             /** @description Half-life in seconds used only by the time_decay model; required when model is time_decay, ignored otherwise. */
             decay_half_life_seconds?: number;
-            /** @enum {string} */
-            model: "last_touch" | "first_touch" | "linear" | "time_decay";
+            /**
+             * @description Multi-touch model. position_based applies U-shaped weights: the first and last distinct in-window touchpoint each receive 0.4, the middle touchpoints share 0.2 equally; two touchpoints split 0.5/0.5 and a single touchpoint receives full weight.
+             * @enum {string}
+             */
+            model: "last_touch" | "first_touch" | "linear" | "position_based" | "time_decay";
         };
         /** @description Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference. */
         "saved-analysis-template.schema": {
