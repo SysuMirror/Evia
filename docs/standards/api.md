@@ -1,6 +1,7 @@
 # API conventions
 
 OpenAPI and JSON Schema under contracts are the only wire-format authority. Changes update generated types, fixtures and tests together.
+- Every closed-set enum in a public JSON Schema carries a `description` grounded in implemented behavior (validation, lifecycle state machine, guards), so machine and Agent consumers read value semantics from the contract without internal docs. Adding or removing an enum value is a contract change, not a documentation edit, and regenerates the wire bundle and TypeScript types with zero behavior drift.
 
 - Paths use /api/v1 for control and query APIs; /v1 for public collection/configuration. HTTP method expresses operation intent.
 - JSON properties use snake_case. IDs are strings, timestamps RFC3339 UTC. Numeric values stay within JavaScript's safe range. Missing, null, zero and false are distinct.
