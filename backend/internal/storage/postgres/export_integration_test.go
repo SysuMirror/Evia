@@ -103,6 +103,25 @@ func TestExportCSVFormatPersistedAndReplayed(t *testing.T) {
 	}
 }
 
+func TestExportNDJSONFormatPersistedAndReplayed(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	in := exportInput(f, "export-ndjson")
+	in.Format = exporting.FormatNDJSON
+	job, created, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || !created || job.Format != exporting.FormatNDJSON {
+		t.Fatalf("ndjson job not persisted through migration CHECK: %+v err=%v", job, e)
+	}
+	replay, _, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || replay.Format != exporting.FormatNDJSON {
+		t.Fatalf("ndjson replay mismatch: %+v err=%v", replay, e)
+	}
+	claim, e := f.s.ClaimExportJob(ctx, "export-worker-ndjson", time.Minute)
+	if e != nil || claim == nil || claim.Format != exporting.FormatNDJSON {
+		t.Fatalf("claimed ndjson job lost format: %+v err=%v", claim, e)
+	}
+}
+
 func TestExportClaimCompleteFailAndLeaseGuard(t *testing.T) {
 	f := catalogDB(t)
 	ctx := context.Background()

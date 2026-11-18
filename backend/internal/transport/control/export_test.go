@@ -240,6 +240,40 @@ func TestExportDownloadUsesCsvMediaType(t *testing.T) {
 	}
 }
 
+func TestExportDownloadUsesNDJSONMediaType(t *testing.T) {
+	dir := t.TempDir()
+	downloads, err := exporting.NewFileArtifactStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactPath := filepath.Join(dir, exportJobID+".ndjson")
+	payload := "{\"count\":2,\"subject\":\"user1\"}\n{\"count\":1,\"subject\":\"user2\"}\n"
+	if err = os.WriteFile(artifactPath, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := sampleExportJob()
+	job.Format = exporting.FormatNDJSON
+	job.ArtifactPath = &artifactPath
+	svc := &fakeExportService{redeemJob: job}
+	_, handler := exportAPI(t, svc, downloads)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/exports/downloads/"+strings.Repeat("7", 64), nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/x-ndjson; charset=utf-8" {
+		t.Fatalf("ndjson content type wrong: %s", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, exportJobID+".ndjson") {
+		t.Fatalf("ndjson filename extension wrong: %s", cd)
+	}
+	if w.Body.String() != payload {
+		t.Fatalf("streamed ndjson payload mismatch: %q", w.Body.String())
+	}
+}
+
 func TestExportRoutesRequireSession(t *testing.T) {
 	svc := &fakeExportService{job: sampleExportJob()}
 	_, handler := exportAPI(t, svc, nil)

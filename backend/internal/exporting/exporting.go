@@ -24,6 +24,8 @@ const (
 	FormatJSON = "json"
 	// FormatCSV renders the tabular rows with the result's column order.
 	FormatCSV = "csv"
+	// FormatNDJSON renders one compact JSON result record per line.
+	FormatNDJSON = "ndjson"
 	// MaxAttempts bounds worker retries before a job is parked as failed.
 	MaxAttempts = 5
 	// MaxNameLength bounds the human-readable export name.

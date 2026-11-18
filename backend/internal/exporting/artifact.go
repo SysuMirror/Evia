@@ -71,6 +71,8 @@ func (s *FileArtifactStore) Write(_ context.Context, jobID, format string, resul
 	switch normalized {
 	case FormatCSV:
 		payload, err = renderCSV(result)
+	case FormatNDJSON:
+		payload, err = renderNDJSON(result)
 	default:
 		payload, err = json.MarshalIndent(result, "", "  ")
 	}

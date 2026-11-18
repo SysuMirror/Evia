@@ -88,9 +88,10 @@ func TestRenderCSVRejectsEmptyColumnsAndUnknownTypes(t *testing.T) {
 func TestNormalizeFormatVocabulary(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
-		"":     FormatJSON,
-		"json": FormatJSON,
-		"csv":  FormatCSV,
+		"":       FormatJSON,
+		"json":   FormatJSON,
+		"csv":    FormatCSV,
+		"ndjson": FormatNDJSON,
 	}
 	for input, want := range cases {
 		got, err := NormalizeFormat(input)
@@ -133,6 +134,20 @@ func TestFileArtifactStoreWritesFormatSpecificFiles(t *testing.T) {
 	}
 	if filepath.Ext(jsonArtifact.Path) != ".json" {
 		t.Fatalf("json artifact must use .json extension: %s", jsonArtifact.Path)
+	}
+	ndjsonArtifact, err := store.Write(context.Background(), jobID, FormatNDJSON, sampleResult())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Ext(ndjsonArtifact.Path) != ".ndjson" {
+		t.Fatalf("ndjson artifact must use .ndjson extension: %s", ndjsonArtifact.Path)
+	}
+	ndjsonPayload, err := os.ReadFile(ndjsonArtifact.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines := strings.Split(strings.TrimRight(string(ndjsonPayload), "\n"), "\n"); len(lines) != 2 {
+		t.Fatalf("ndjson artifact must hold one record per row, got %d: %q", len(lines), ndjsonPayload)
 	}
 }
 

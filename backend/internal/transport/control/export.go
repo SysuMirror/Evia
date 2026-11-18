@@ -263,10 +263,14 @@ func (a *ExportAPI) grant(w http.ResponseWriter, r *http.Request, actor authoriz
 // type and filename extension. The database CHECK constrains the vocabulary;
 // unknown values fall back to json rather than failing an authorized download.
 func artifactMediaType(format string) (string, string) {
-	if format == exporting.FormatCSV {
+	switch format {
+	case exporting.FormatCSV:
 		return "text/csv; charset=utf-8", ".csv"
+	case exporting.FormatNDJSON:
+		return "application/x-ndjson; charset=utf-8", ".ndjson"
+	default:
+		return "application/json; charset=utf-8", ".json"
 	}
-	return "application/json; charset=utf-8", ".json"
 }
 
 // download redeems a one-time grant and streams the JSON artifact. The token
