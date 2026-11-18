@@ -63,12 +63,17 @@ type DashboardDependency struct {
 	// AnalysisID/AnalysisVersion are empty for a metric-sourced widget.
 	AnalysisID      string `json:"analysis_id,omitempty"`
 	AnalysisVersion int64  `json:"analysis_version,omitempty"`
-	// MetricID/MetricVersion are empty for an analysis-sourced widget.
-	MetricID       string `json:"metric_id,omitempty"`
-	MetricVersion  int64  `json:"metric_version,omitempty"`
-	DefinitionHash string `json:"definition_hash"`
-	DependencyHash string `json:"dependency_hash"`
-	ValidationHash string `json:"validation_hash"`
+	// MetricID/MetricVersion are empty for analysis-sourced and composite
+	// formula widgets; they pin an atomic metric_versions row.
+	MetricID      string `json:"metric_id,omitempty"`
+	MetricVersion int64  `json:"metric_version,omitempty"`
+	// FormulaMetricID/FormulaMetricVersion pin a formula_metric_versions row;
+	// they stay empty for analysis widgets and atomic metric widgets.
+	FormulaMetricID      string `json:"formula_metric_id,omitempty"`
+	FormulaMetricVersion int64  `json:"formula_metric_version,omitempty"`
+	DefinitionHash       string `json:"definition_hash"`
+	DependencyHash       string `json:"dependency_hash"`
+	ValidationHash       string `json:"validation_hash"`
 }
 type DashboardDependencies struct {
 	ProjectID   string                `json:"project_id"`

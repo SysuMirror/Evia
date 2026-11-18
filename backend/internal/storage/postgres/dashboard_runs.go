@@ -162,6 +162,10 @@ func (s *Store) EnqueueDashboardRun(ctx context.Context, actor, project, id stri
 		return out, e
 	}
 	insertRunWidget := func(widget reporting.DashboardWidget, position int, period string, job analysis.Job) error {
+		if widget.MetricRef != nil && widget.MetricRef.IsComposite() {
+			_, e = tx.Exec(ctx, `INSERT INTO dashboard_run_widgets(project_id,environment,dashboard_id,version,run_id,widget_id,formula_metric_id,formula_metric_version,position,period,query_id,original_query_id,query_created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12)`, project, snapshot.Environment, id, version, runID, widget.ID, widget.MetricRef.MetricID, widget.MetricRef.Version, position, period, job.ID, job.CreatedAt)
+			return e
+		}
 		if widget.MetricRef != nil {
 			_, e = tx.Exec(ctx, `INSERT INTO dashboard_run_widgets(project_id,environment,dashboard_id,version,run_id,widget_id,metric_id,metric_version,position,period,query_id,original_query_id,query_created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12)`, project, snapshot.Environment, id, version, runID, widget.ID, widget.MetricRef.MetricID, widget.MetricRef.Version, position, period, job.ID, job.CreatedAt)
 			return e
@@ -231,26 +235,28 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 		return out, e
 	}
 
-	rows, e := tx.Query(ctx, `SELECT widget_id::text,COALESCE(analysis_id::text,''),analysis_version,COALESCE(metric_id::text,''),metric_version,period,query_id::text,original_query_id::text,query_created_at FROM dashboard_run_widgets WHERE project_id=$1 AND run_id=$2 ORDER BY position,period DESC`, project, id)
+	rows, e := tx.Query(ctx, `SELECT widget_id::text,COALESCE(analysis_id::text,''),analysis_version,COALESCE(metric_id::text,''),metric_version,COALESCE(formula_metric_id::text,''),formula_metric_version,period,query_id::text,original_query_id::text,query_created_at FROM dashboard_run_widgets WHERE project_id=$1 AND run_id=$2 ORDER BY position,period DESC`, project, id)
 	if e != nil {
 		return out, e
 	}
 	type runWidgetRow struct {
-		widgetID        string
-		period          string
-		queryID         *string
-		originalID      string
-		created         time.Time
-		analysisID      string
-		analysisVersion *int64
-		metricID        string
-		metricVersion   *int64
-		job             analysis.Job
+		widgetID             string
+		period               string
+		queryID              *string
+		originalID           string
+		created              time.Time
+		analysisID           string
+		analysisVersion      *int64
+		metricID             string
+		metricVersion        *int64
+		formulaMetricID      string
+		formulaMetricVersion *int64
+		job                  analysis.Job
 	}
 	ordered := []runWidgetRow{}
 	for rows.Next() {
 		var row runWidgetRow
-		if e = rows.Scan(&row.widgetID, &row.analysisID, &row.analysisVersion, &row.metricID, &row.metricVersion, &row.period, &row.queryID, &row.originalID, &row.created); e != nil {
+		if e = rows.Scan(&row.widgetID, &row.analysisID, &row.analysisVersion, &row.metricID, &row.metricVersion, &row.formulaMetricID, &row.formulaMetricVersion, &row.period, &row.queryID, &row.originalID, &row.created); e != nil {
 			rows.Close()
 			return out, e
 		}
@@ -312,6 +318,9 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 		}
 		if row.metricID != "" && row.metricVersion != nil {
 			widget.MetricRef = &reporting.MetricReference{MetricID: row.metricID, Version: *row.metricVersion}
+		}
+		if row.formulaMetricID != "" && row.formulaMetricVersion != nil {
+			widget.MetricRef = &reporting.MetricReference{MetricID: row.formulaMetricID, Version: *row.formulaMetricVersion, Kind: reporting.MetricRefKindComposite}
 		}
 		out.Widgets = append(out.Widgets, widget)
 	}
@@ -441,25 +450,32 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 		filter := reporting.CombineWidgetRuntimeFilters(paramFilters, filters[widget.ID])
 		var request analysis.Request
 		if widget.MetricRef != nil {
-			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
-			if e != nil {
-				return nil, e
-			}
-			if mv.Environment != snapshot.Environment {
-				return nil, analysis.Invalid("DASHBOARD_METRIC_ENVIRONMENT_MISMATCH", "看板组件指标版本不属于当前环境")
-			}
-			execute := reporting.MetricExecute{
-				TimeRange: in.TimeRange,
-				Timezone:  in.Timezone,
-				Filter:    filter,
-			}
-			template, e := reporting.MetricTemplate(mv.Definition, execute)
-			if e != nil {
-				return nil, e
-			}
-			request, e = template.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
-			if e != nil {
-				return nil, e
+			if widget.MetricRef.IsComposite() {
+				request, e = s.dashboardFormulaMarkerRequestTx(ctx, tx, snapshot, widget, in.TimeRange, in.Timezone)
+				if e != nil {
+					return nil, e
+				}
+			} else {
+				mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
+				if e != nil {
+					return nil, e
+				}
+				if mv.Environment != snapshot.Environment {
+					return nil, analysis.Invalid("DASHBOARD_METRIC_ENVIRONMENT_MISMATCH", "看板组件指标版本不属于当前环境")
+				}
+				execute := reporting.MetricExecute{
+					TimeRange: in.TimeRange,
+					Timezone:  in.Timezone,
+					Filter:    filter,
+				}
+				template, e := reporting.MetricTemplate(mv.Definition, execute)
+				if e != nil {
+					return nil, e
+				}
+				request, e = template.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
+				if e != nil {
+					return nil, e
+				}
 			}
 		} else {
 			v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)
@@ -490,23 +506,58 @@ func (s *Store) dashboardRequestsTx(ctx context.Context, tx pgx.Tx, actor, proje
 	return requests, nil
 }
 
+// dashboardFormulaMarkerRequestTx builds the internal formula_ref marker
+// request for a composite metric widget. A formula DAG cannot bind an atomic
+// trend template, so the query worker expands it through CompositeFormulaEngine;
+// the same 31-day/IANA closed sets as the direct formula run path apply.
+func (s *Store) dashboardFormulaMarkerRequestTx(ctx context.Context, tx pgx.Tx, snapshot reporting.DashboardVersion, widget reporting.DashboardWidget, timeRange analysis.TimeRange, timezone string) (analysis.Request, error) {
+	fv, e := readFormulaMetricVersionTx(ctx, tx, snapshot.ProjectID, widget.MetricRef.MetricID, widget.MetricRef.Version)
+	if e != nil {
+		return analysis.Request{}, e
+	}
+	if fv.Environment != snapshot.Environment {
+		return analysis.Request{}, analysis.Invalid("DASHBOARD_METRIC_ENVIRONMENT_MISMATCH", "看板组件复合指标版本不属于当前环境")
+	}
+	if timeRange.To.Sub(timeRange.From) > 31*24*time.Hour {
+		return analysis.Request{}, analysis.Invalid("QUERY_COST_EXCEEDED", "查询时间范围超过预算", "/time_range")
+	}
+	if _, e = time.LoadLocation(timezone); e != nil || len(timezone) > 64 {
+		return analysis.Request{}, analysis.Invalid("INVALID_TIMEZONE", "请选择 IANA 时区", "/timezone")
+	}
+	return analysis.Request{
+		Kind:        "trend",
+		Environment: snapshot.Environment,
+		TimeRange:   timeRange,
+		Timezone:    timezone,
+		Formula:     &analysis.FormulaJobRef{MetricID: widget.MetricRef.MetricID, Version: widget.MetricRef.Version},
+	}, nil
+}
+
 // dashboardComparisonRequestTx rebuilds one widget request against the shifted
 // window, reusing the pinned source and every fixed/runtime predicate.
 func (s *Store) dashboardComparisonRequestTx(ctx context.Context, tx pgx.Tx, actor, project string, snapshot reporting.DashboardVersion, widget reporting.DashboardWidget, filter *analysis.Filter, in reporting.DashboardExecute, shifted analysis.TimeRange, permission string) (analysis.Request, error) {
 	var request analysis.Request
 	if widget.MetricRef != nil {
-		mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
-		if e != nil {
-			return analysis.Request{}, e
-		}
-		execute := reporting.MetricExecute{TimeRange: shifted, Timezone: in.Timezone, Filter: filter}
-		template, e := reporting.MetricTemplate(mv.Definition, execute)
-		if e != nil {
-			return analysis.Request{}, e
-		}
-		request, e = template.Bind(snapshot.Environment, shifted, in.Timezone)
-		if e != nil {
-			return analysis.Request{}, e
+		if widget.MetricRef.IsComposite() {
+			var e error
+			request, e = s.dashboardFormulaMarkerRequestTx(ctx, tx, snapshot, widget, shifted, in.Timezone)
+			if e != nil {
+				return analysis.Request{}, e
+			}
+		} else {
+			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
+			if e != nil {
+				return analysis.Request{}, e
+			}
+			execute := reporting.MetricExecute{TimeRange: shifted, Timezone: in.Timezone, Filter: filter}
+			template, e := reporting.MetricTemplate(mv.Definition, execute)
+			if e != nil {
+				return analysis.Request{}, e
+			}
+			request, e = template.Bind(snapshot.Environment, shifted, in.Timezone)
+			if e != nil {
+				return analysis.Request{}, e
+			}
 		}
 	} else {
 		v, e := readSavedAnalysisVersionTx(ctx, tx, project, widget.AnalysisID, widget.AnalysisVersion)

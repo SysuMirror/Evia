@@ -58,15 +58,11 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 			return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "组件标识、标题或固定引用版本无效", "/widgets")
 		}
 		if hasMetric {
-			// Dashboard metric widgets resolve only the atomic metric_versions
-			// table; composite formula refs are a separate work item and must
-			// fail closed here rather than reach the atomic resolver as no-row.
-			kind, e := NormalizedMetricRefKind(w.MetricRef.Kind)
-			if e != nil {
+			// Validate the closed set without writing a default back: an empty
+			// kind stays empty (atomic) in the canonical JSON, while an explicit
+			// composite routes to formula_metric_versions in the storage layer.
+			if _, e := NormalizedMetricRefKind(w.MetricRef.Kind); e != nil {
 				return out, e
-			}
-			if kind == MetricRefKindComposite {
-				return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "看板组件暂不支持复合公式指标引用", "/widgets/metric_ref/kind")
 			}
 		}
 		if hasTextCard {
@@ -252,7 +248,7 @@ func RebindDashboardDefinition(
 				if rebinding.MetricID == "" {
 					return DashboardDefinition{}, analysis.Invalid("INVALID_DASHBOARD_REBINDING", "指标组件只能重绑定到目标环境的指标版本", "/rebindings")
 				}
-				widget.MetricRef = &MetricReference{MetricID: rebinding.MetricID, Version: rebinding.MetricVersion}
+				widget.MetricRef = &MetricReference{MetricID: rebinding.MetricID, Version: rebinding.MetricVersion, Kind: widget.MetricRef.Kind}
 				widget.AnalysisID, widget.AnalysisVersion = "", 0
 			} else {
 				if rebinding.AnalysisID == "" {
@@ -304,9 +300,10 @@ func BuildDashboardValidation(snapshot DashboardSnapshot) (DashboardValidation, 
 			if w.ID != dep.WidgetID {
 				continue
 			}
-			analysisMatch := w.AnalysisID == dep.AnalysisID && w.AnalysisVersion == dep.AnalysisVersion && w.MetricRef == nil && dep.MetricID == ""
-			metricMatch := w.MetricRef != nil && w.MetricRef.MetricID == dep.MetricID && w.MetricRef.Version == dep.MetricVersion && w.AnalysisID == "" && dep.AnalysisID == ""
-			if analysisMatch || metricMatch {
+			analysisMatch := w.AnalysisID == dep.AnalysisID && w.AnalysisVersion == dep.AnalysisVersion && w.MetricRef == nil && dep.MetricID == "" && dep.FormulaMetricID == ""
+			metricMatch := w.MetricRef != nil && !w.MetricRef.IsComposite() && w.MetricRef.MetricID == dep.MetricID && w.MetricRef.Version == dep.MetricVersion && w.AnalysisID == "" && dep.AnalysisID == "" && dep.FormulaMetricID == ""
+			formulaMatch := w.MetricRef != nil && w.MetricRef.IsComposite() && w.MetricRef.MetricID == dep.FormulaMetricID && w.MetricRef.Version == dep.FormulaMetricVersion && w.AnalysisID == "" && dep.AnalysisID == "" && dep.MetricID == ""
+			if analysisMatch || metricMatch || formulaMatch {
 				found = true
 				break
 			}

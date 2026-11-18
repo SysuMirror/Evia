@@ -159,7 +159,7 @@ func TestCompositeMarkerShellRejectsAtomicBody(t *testing.T) {
 	}
 }
 
-func TestDashboardRejectsCompositeMetricRef(t *testing.T) {
+func TestDashboardAcceptsCompositeMetricRefButRejectsUnknownKind(t *testing.T) {
 	widget := DashboardWidget{
 		ID:           dashboardWidgetOne,
 		Title:        "Composite widget",
@@ -168,8 +168,18 @@ func TestDashboardRejectsCompositeMetricRef(t *testing.T) {
 		MetricRef:    &MetricReference{MetricID: testFormulaID, Version: 2, Kind: MetricRefKindComposite},
 	}
 	def := DashboardDefinition{Title: "Board", Description: "d", Widgets: []DashboardWidget{widget}}
-	if _, err := NormalizeDashboardDefinition(def); err == nil {
-		t.Fatal("dashboard must reject composite metric refs until the triple-target witness lands")
+	normalized, err := NormalizeDashboardDefinition(def)
+	if err != nil {
+		t.Fatalf("composite metric refs must be accepted by the dashboard normalizer: %v", err)
+	}
+	if normalized.Widgets[0].MetricRef == nil || !normalized.Widgets[0].MetricRef.IsComposite() {
+		t.Fatalf("composite kind lost during normalization: %+v", normalized.Widgets[0].MetricRef)
+	}
+
+	badKind := widget
+	badKind.MetricRef = &MetricReference{MetricID: testFormulaID, Version: 2, Kind: "nested"}
+	if _, err = NormalizeDashboardDefinition(DashboardDefinition{Title: "Board", Description: "d", Widgets: []DashboardWidget{badKind}}); err == nil {
+		t.Fatal("unknown metric ref kind must fail closed")
 	} else {
 		savedErrorCode(t, err, "INVALID_METRIC_REFERENCE")
 	}

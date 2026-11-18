@@ -65,7 +65,7 @@ func (s *Store) CopyDashboard(ctx context.Context, actor, project, id, key strin
 		}
 		// Semantic validation: every target version must exist and belong to
 		// the destination environment.
-		if e = s.assertRebindingTargetsTx(ctx, tx, project, targetEnvironment, in.Rebindings); e != nil {
+		if e = s.assertRebindingTargetsTx(ctx, tx, project, targetEnvironment, source.Definition, in.Rebindings); e != nil {
 			return out, e
 		}
 	} else {
@@ -125,7 +125,13 @@ func (s *Store) CopyDashboard(ctx context.Context, actor, project, id, key strin
 // version in the destination environment. Missing versions surface the existing
 // NOT_FOUND codes; a version in another environment fails closed as an invalid
 // rebinding rather than silently crossing the environment boundary.
-func (s *Store) assertRebindingTargetsTx(ctx context.Context, tx pgx.Tx, project, targetEnvironment string, rebindings []reporting.DashboardRebinding) error {
+func (s *Store) assertRebindingTargetsTx(ctx context.Context, tx pgx.Tx, project, targetEnvironment string, source reporting.DashboardDefinition, rebindings []reporting.DashboardRebinding) error {
+	compositeWidgets := map[string]bool{}
+	for _, widget := range source.Widgets {
+		if widget.MetricRef != nil && widget.MetricRef.IsComposite() {
+			compositeWidgets[widget.ID] = true
+		}
+	}
 	for _, rebinding := range rebindings {
 		if rebinding.AnalysisID != "" {
 			version, e := readSavedAnalysisVersionTx(ctx, tx, project, rebinding.AnalysisID, rebinding.AnalysisVersion)
@@ -134,6 +140,19 @@ func (s *Store) assertRebindingTargetsTx(ctx context.Context, tx pgx.Tx, project
 			}
 			if version.Environment != targetEnvironment {
 				return analysis.Invalid("DASHBOARD_REBINDING_ENVIRONMENT_MISMATCH", "重绑定的保存分析版本不属于目标环境", "/rebindings")
+			}
+			continue
+		}
+		// Metric rebindings serve both atomic and composite widgets; the widget
+		// kind is preserved by RebindDashboardDefinition, so resolve against the
+		// matching immutable version table in the target environment.
+		if compositeWidgets[rebinding.WidgetID] {
+			formula, e := readFormulaMetricVersionTx(ctx, tx, project, rebinding.MetricID, rebinding.MetricVersion)
+			if e != nil {
+				return e
+			}
+			if formula.Environment != targetEnvironment {
+				return analysis.Invalid("DASHBOARD_REBINDING_ENVIRONMENT_MISMATCH", "重绑定的复合指标版本不属于目标环境", "/rebindings")
 			}
 			continue
 		}

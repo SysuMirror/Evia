@@ -309,6 +309,17 @@ func dashboardSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in 
 			continue
 		}
 		if widget.MetricRef != nil {
+			if widget.MetricRef.IsComposite() {
+				fv, e := readFormulaMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
+				if e != nil {
+					return out, e
+				}
+				if fv.Environment != out.Draft.Environment {
+					return out, analysis.Invalid("DASHBOARD_METRIC_ENVIRONMENT_MISMATCH", "看板组件复合指标版本不属于当前环境", "/definition/widgets")
+				}
+				out.Dependencies.Analyses = append(out.Dependencies.Analyses, reporting.DashboardDependency{WidgetID: widget.ID, FormulaMetricID: fv.MetricID, FormulaMetricVersion: fv.Version, DefinitionHash: fv.DefinitionHash, DependencyHash: fv.DependencyHash, ValidationHash: fv.ValidationHash})
+				continue
+			}
 			mv, e := readMetricVersionTx(ctx, tx, project, widget.MetricRef.MetricID, widget.MetricRef.Version)
 			if e != nil {
 				return out, e
@@ -410,14 +421,19 @@ func (s *Store) PublishDashboard(ctx context.Context, actor, project, id, key st
 		return out, e
 	}
 	for _, d := range validation.Dependencies.Analyses {
-		if d.MetricID != "" {
+		switch {
+		case d.FormulaMetricID != "":
+			if _, e = tx.Exec(ctx, `INSERT INTO dashboard_dependencies(project_id,environment,dashboard_id,version,widget_id,formula_metric_id,formula_metric_version,definition_hash,dependency_hash,validation_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, project, draft.Environment, id, version, d.WidgetID, d.FormulaMetricID, d.FormulaMetricVersion, d.DefinitionHash, d.DependencyHash, d.ValidationHash); e != nil {
+				return out, e
+			}
+		case d.MetricID != "":
 			if _, e = tx.Exec(ctx, `INSERT INTO dashboard_dependencies(project_id,environment,dashboard_id,version,widget_id,metric_id,metric_version,definition_hash,dependency_hash,validation_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, project, draft.Environment, id, version, d.WidgetID, d.MetricID, d.MetricVersion, d.DefinitionHash, d.DependencyHash, d.ValidationHash); e != nil {
 				return out, e
 			}
-			continue
-		}
-		if _, e = tx.Exec(ctx, `INSERT INTO dashboard_dependencies(project_id,environment,dashboard_id,version,widget_id,analysis_id,analysis_version,definition_hash,dependency_hash,validation_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, project, draft.Environment, id, version, d.WidgetID, d.AnalysisID, d.AnalysisVersion, d.DefinitionHash, d.DependencyHash, d.ValidationHash); e != nil {
-			return out, e
+		default:
+			if _, e = tx.Exec(ctx, `INSERT INTO dashboard_dependencies(project_id,environment,dashboard_id,version,widget_id,analysis_id,analysis_version,definition_hash,dependency_hash,validation_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, project, draft.Environment, id, version, d.WidgetID, d.AnalysisID, d.AnalysisVersion, d.DefinitionHash, d.DependencyHash, d.ValidationHash); e != nil {
+				return out, e
+			}
 		}
 	}
 	if _, e = tx.Exec(ctx, `UPDATE dashboards SET published_version=$3,updated_at=clock_timestamp() WHERE project_id=$1 AND dashboard_id=$2`, project, id, version); e != nil {
