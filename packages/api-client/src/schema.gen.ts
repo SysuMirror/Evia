@@ -3474,7 +3474,7 @@ export interface components {
                 accuracy?: "exact" | "approximate";
             }[];
             /** @enum {unknown} */
-            interval?: "minute" | "hour" | "day";
+            interval?: "minute" | "hour" | "day" | "week";
             funnel?: {
                 steps: {
                     event_key: string;
@@ -3790,7 +3790,7 @@ export interface components {
             accuracy?: "exact" | "approximate";
         }[];
         /** @enum {unknown} */
-        interval: "minute" | "hour" | "day";
+        interval: "minute" | "hour" | "day" | "week";
         funnel: {
             steps: {
                 event_key: string;

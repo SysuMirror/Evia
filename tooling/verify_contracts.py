@@ -349,7 +349,7 @@ reject_saved("MetricDefinition", "resolved type", metric_definition, ["filter", 
 reject_saved("MetricDefinition", "unpinned version", metric_definition, ["event_versions", 0, "schema_version"], 0)
 reject_saved("MetricExecute", "group budget", metric_execute, ["group_by"], [{"kind": "system", "key": "event_key"}] * 4)
 reject_saved("MetricExecute", "row budget", metric_execute, ["limit"], 501)
-reject_saved("MetricExecute", "interval", metric_execute, ["interval"], "week")
+reject_saved("MetricExecute", "interval", metric_execute, ["interval"], "month")
 reject_saved("MetricExecute", "scope override", metric_execute, ["environment"], "production")
 reject_saved("MetricValidation", "execution performed", metric_validation, ["execution_performed"], True)
 print(f"Independent metric contracts verified: {len(metric_cases)} cases and {metric_negative_count} unit incompatibilities, plus strict fields/runtime budgets.")

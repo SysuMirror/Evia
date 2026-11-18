@@ -244,7 +244,8 @@
       "enum": [
         "minute",
         "hour",
-        "day"
+        "day",
+        "week"
       ]
     },
     "funnel": {
