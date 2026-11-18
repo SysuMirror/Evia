@@ -525,11 +525,14 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 		return fn + "(" + field.value + "," + valid + ")", nil
 	}
 	functions := map[string]string{"sum": "sumIf", "avg": "avgIf", "min": "minIf", "max": "maxIf"}
+	// Percentile operators map to their quantile level; the closed validation
+	// set guarantees every key here is reachable only with a numeric field.
+	percentileLevels := map[string]string{"p50": "0.50", "p90": "0.90", "p95": "0.95", "p99": "0.99"}
 	fn, ok := functions[m.Op]
-	if m.Op == "p95" {
-		fn = "quantileExactIf(0.95)"
+	if level, isPercentile := percentileLevels[m.Op]; isPercentile {
+		fn = "quantileExactIf(" + level + ")"
 		if m.Accuracy == "approximate" {
-			fn = "quantileTDigestIf(0.95)"
+			fn = "quantileTDigestIf(" + level + ")"
 		}
 		ok = true
 	}

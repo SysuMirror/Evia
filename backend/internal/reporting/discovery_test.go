@@ -146,10 +146,16 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	if !hasAttribution {
 		t.Fatalf("attribution must be advertised in query kinds: %v", capabilities.QueryKinds)
 	}
-	if len(capabilities.RetentionGranularities) != 2 || capabilities.RetentionGranularities[0] != "day" || capabilities.RetentionGranularities[1] != "week" {
+	wantGranularities := []string{"day", "week", "month"}
+	if len(capabilities.RetentionGranularities) != len(wantGranularities) {
 		t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
 	}
-	if capabilities.Budgets.RetentionMaxPeriods != 12 || capabilities.Budgets.RetentionMaxWindowSeconds != 84*86400 {
+	for i, want := range wantGranularities {
+		if capabilities.RetentionGranularities[i] != want {
+			t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
+		}
+	}
+	if capabilities.Budgets.RetentionMaxPeriods != 12 || capabilities.Budgets.RetentionMaxWindowSeconds != 372*86400 {
 		t.Fatalf("retention budgets wrong: %+v", capabilities.Budgets)
 	}
 }

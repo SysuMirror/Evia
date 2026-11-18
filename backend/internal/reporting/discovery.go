@@ -152,7 +152,7 @@ func FieldCapabilities(kind string) (FieldCapability, bool) {
 	case "boolean":
 	case "number", "integer":
 		c.FilterOperators = append(c.FilterOperators, "gt", "gte", "lt", "lte")
-		c.MetricOperations = append(c.MetricOperations, "sum", "avg", "min", "max", "p95")
+		c.MetricOperations = append(c.MetricOperations, "sum", "avg", "min", "max", "p50", "p90", "p95", "p99")
 	case "datetime":
 		c.FilterOperators = append(c.FilterOperators, "gt", "gte", "lt", "lte")
 	case "array:string", "array:boolean", "array:number", "array:integer":
@@ -168,7 +168,7 @@ func (s *Discovery) Capabilities(ctx context.Context, actor, project string) (Ca
 	if e := s.store.AuthorizeAnalysisDiscovery(ctx, actor, project); e != nil {
 		return Capabilities{}, e
 	}
-	out := Capabilities{ExecutionAvailable: s.executionAvailable, QueryKinds: []string{"events", "trend", "funnel", "journey", "retention", "segment", "path", "attribution"}, Aggregations: []string{"count", "unique", "sum", "avg", "min", "max", "p95"}, ApproximateAggregations: []string{"unique", "p95"}, Subjects: []string{"uid", "anonymous"}, Intervals: []string{"minute", "hour", "day"}, FunnelModes: []string{"ordered_with_interleaving"}, RetentionGranularities: []string{"day", "week"}, FieldTypes: []FieldCapability{}, Budgets: DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 84 * 86400}}
+	out := Capabilities{ExecutionAvailable: s.executionAvailable, QueryKinds: []string{"events", "trend", "funnel", "journey", "retention", "segment", "path", "attribution"}, Aggregations: []string{"count", "unique", "sum", "avg", "min", "max", "p50", "p90", "p95", "p99"}, ApproximateAggregations: []string{"unique", "p50", "p90", "p95", "p99"}, Subjects: []string{"uid", "anonymous"}, Intervals: []string{"minute", "hour", "day"}, FunnelModes: []string{"ordered_with_interleaving"}, RetentionGranularities: []string{"day", "week", "month"}, FieldTypes: []FieldCapability{}, Budgets: DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 372 * 86400}}
 	for _, kind := range []string{"string", "boolean", "number", "integer", "datetime", "array:string", "array:boolean", "array:number", "array:integer"} {
 		c, _ := FieldCapabilities(kind)
 		out.FieldTypes = append(out.FieldTypes, c)

@@ -38,7 +38,10 @@ func TestMetricUnitPolicy(t *testing.T) {
 		{"avg", "uid", field, []string{"number", "millisecond", "second", "byte"}},
 		{"min", "uid", field, []string{"number", "millisecond", "second", "byte"}},
 		{"max", "uid", field, []string{"number", "millisecond", "second", "byte"}},
+		{"p50", "uid", field, []string{"number", "millisecond", "second", "byte"}},
+		{"p90", "uid", field, []string{"number", "millisecond", "second", "byte"}},
 		{"p95", "uid", field, []string{"number", "millisecond", "second", "byte"}},
+		{"p99", "uid", field, []string{"number", "millisecond", "second", "byte"}},
 	} {
 		for _, unit := range units {
 			t.Run(tc.op+tc.subject+unit, func(t *testing.T) {

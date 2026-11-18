@@ -80,6 +80,49 @@ func TestClickHouseNumericFieldsIncludeJSONDoubleWithoutCoercion(t *testing.T) {
 	}
 }
 
+func TestClickHousePercentileLevels(t *testing.T) {
+	client := clickHouseDatabase(t)
+	// 101 sorted values 1..101 keep every quantile level on an integer index,
+	// so quantileExact has no interpolation ambiguity.
+	rows := make([]map[string]any, 0, 101)
+	for value := 1; value <= 101; value++ {
+		row := fact(fmt.Sprintf("pct-%d", value), "opened", "user", "", "source-one", value, nil)
+		row["properties_json"] = fmt.Sprintf(`{"score":%d}`, value)
+		rows = append(rows, row)
+	}
+	seedRows(t, client, rows)
+
+	field := Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "score", ResolvedType: "number"}
+	for op, level := range map[string]float64{"p50": 51, "p90": 91, "p95": 96, "p99": 100} {
+		r := request(t, baseRequest)
+		r.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
+		r.Metrics = []Metric{{Op: op, Field: &field, Accuracy: "exact"}}
+		got := trendPlanRows(t, client, r, "event_facts")
+		if len(got) != 1 {
+			t.Fatalf("%s expected one aggregate row, got %v", op, got)
+		}
+		number, ok := got[0]["metric_0"].(json.Number)
+		if !ok {
+			t.Fatalf("%s missing metric_0: %v", op, got[0])
+		}
+		value, err := number.Float64()
+		if err != nil || value != level {
+			t.Fatalf("%s exact percentile=%v want %v (%v)", op, value, level, err)
+		}
+		// Approximate TDigest must still resolve to a finite in-range number.
+		r.Metrics[0].Accuracy = "approximate"
+		approx := trendPlanRows(t, client, r, "event_facts")
+		approxNumber, ok := approx[0]["metric_0"].(json.Number)
+		if !ok {
+			t.Fatalf("%s approximate missing metric_0: %v", op, approx[0])
+		}
+		approxValue, err := approxNumber.Float64()
+		if err != nil || approxValue < 1 || approxValue > 101 {
+			t.Fatalf("%s approximate percentile out of range: %v (%v)", op, approxValue, err)
+		}
+	}
+}
+
 func TestClickHouseNumericArrayExtractionRetainsExistingCoercionAndSignedZero(t *testing.T) {
 	client := clickHouseDatabase(t)
 	row := fact("array-coercion", "opened", "user", "device", "source", 0, nil)

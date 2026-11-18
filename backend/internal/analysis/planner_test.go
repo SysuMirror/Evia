@@ -147,6 +147,74 @@ func TestMetricPrecisionAndTypes(t *testing.T) {
 		t.Fatal("zero coerced into false")
 	}
 }
+func TestMetricPercentileQuantileLevels(t *testing.T) {
+	numericField := &Field{
+		Kind: "property", EventKey: "page_opened", SchemaVersion: 1,
+		Key: "score", ResolvedType: "number",
+	}
+	for _, tc := range []struct {
+		op    string
+		level string
+	}{
+		{"p50", "0.50"},
+		{"p90", "0.90"},
+		{"p95", "0.95"},
+		{"p99", "0.99"},
+	} {
+		r := request(t, baseRequest)
+		r.Subject = "uid"
+		r.Metrics = []Metric{{Op: tc.op, Field: numericField, Accuracy: "exact"}}
+		plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
+		if e != nil {
+			t.Fatalf("%s exact compile: %v", tc.op, e)
+		}
+		if want := "quantileExactIf(" + tc.level + ")"; !strings.Contains(plan.SQL, want) {
+			t.Fatalf("%s exact SQL missing %s: %s", tc.op, want, plan.SQL)
+		}
+
+		r.Metrics[0].Accuracy = "approximate"
+		plan, e = Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
+		if e != nil {
+			t.Fatalf("%s approximate compile: %v", tc.op, e)
+		}
+		if want := "quantileTDigestIf(" + tc.level + ")"; !strings.Contains(plan.SQL, want) {
+			t.Fatalf("%s approximate SQL missing %s: %s", tc.op, want, plan.SQL)
+		}
+	}
+}
+
+func TestMetricPercentileValidationClosedSet(t *testing.T) {
+	numericField := &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}
+	for _, op := range []string{"p50", "p90", "p95", "p99"} {
+		exact := request(t, baseRequest)
+		exact.Subject = "uid"
+		exact.Metrics = []Metric{{Op: op, Field: numericField, Accuracy: "exact"}}
+		if e := Validate(&exact); e != nil {
+			t.Fatalf("%s exact must validate: %v", op, e)
+		}
+		approx := request(t, baseRequest)
+		approx.Subject = "uid"
+		approx.Metrics = []Metric{{Op: op, Field: numericField, Accuracy: "approximate"}}
+		if e := Validate(&approx); e != nil {
+			t.Fatalf("%s approximate must validate: %v", op, e)
+		}
+	}
+	// Non-percentile numeric ops still reject approximate accuracy.
+	sumRequest := request(t, baseRequest)
+	sumRequest.Subject = "uid"
+	sumRequest.Metrics = []Metric{{Op: "sum", Field: numericField, Accuracy: "approximate"}}
+	if e := Validate(&sumRequest); e == nil {
+		t.Fatal("sum approximate must be rejected")
+	}
+	// An unknown operator stays outside the closed set.
+	bad := request(t, baseRequest)
+	bad.Subject = "uid"
+	bad.Metrics = []Metric{{Op: "p42", Field: numericField, Accuracy: "exact"}}
+	if e := Validate(&bad); e == nil {
+		t.Fatal("unknown percentile op must be rejected")
+	}
+}
+
 func TestFunnelOrderingWindowAndEntity(t *testing.T) {
 	r := Request{Kind: "funnel", Funnel: &Funnel{Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, WindowSeconds: 30, SameEntity: []EntityField{{StepIndex: 0}, {StepIndex: 1}}}}
 	row := func(subject, id string, when, seq int64, session string, step int, entity string) map[string]any {

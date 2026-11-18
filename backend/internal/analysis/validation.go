@@ -133,7 +133,7 @@ func ValidateConfiguration(r *Request) error {
 	}
 	for i := range r.Metrics {
 		m := &r.Metrics[i]
-		if m.Op != "count" && m.Op != "unique" && m.Op != "sum" && m.Op != "avg" && m.Op != "min" && m.Op != "max" && m.Op != "p95" {
+		if m.Op != "count" && m.Op != "unique" && m.Op != "sum" && m.Op != "avg" && m.Op != "min" && m.Op != "max" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
 			return Invalid("INVALID_METRIC", "指标运算无效", "/metrics")
 		}
 		if m.Accuracy == "" {
@@ -142,7 +142,7 @@ func ValidateConfiguration(r *Request) error {
 		if m.Accuracy != "exact" && m.Accuracy != "approximate" {
 			return Invalid("INVALID_ACCURACY", "精度无效", "/metrics")
 		}
-		if m.Accuracy == "approximate" && m.Op != "unique" && m.Op != "p95" {
+		if m.Accuracy == "approximate" && m.Op != "unique" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
 			return Invalid("INVALID_ACCURACY", "此指标仅支持精确结果", "/metrics")
 		}
 		if m.Field != nil {
@@ -402,8 +402,9 @@ func validateRetention(r *Request) error {
 }
 
 // retentionWindow bounds the scan span to the requested matrix size. A
-// twelve-period week matrix is the largest v1 window at 84 days; the bounded
-// raw pull and ClickHouse read guards still cap the actual work.
+// twelve-period month matrix is the largest v1 window at 372 days using the
+// conservative 31-day period; the bounded raw pull and ClickHouse read guards
+// still cap the actual work.
 func retentionWindow(rt *Retention) time.Duration {
 	period := 24 * time.Hour
 	switch rt.Granularity {
