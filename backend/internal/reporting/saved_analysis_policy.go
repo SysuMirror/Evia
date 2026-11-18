@@ -53,6 +53,12 @@ func validateMetricReference(ref *MetricReference) error {
 	if ref.Version < 1 || ref.Version > analysis.MaxSafeInteger {
 		return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用版本无效", "/metric_ref/version")
 	}
+	// Validate the closed set but never write a default back: an omitted kind
+	// stays empty in storage and JSON so historical atomic references remain
+	// byte-identical; IsComposite treats both empty and "atomic" as atomic.
+	if _, e := NormalizedMetricRefKind(ref.Kind); e != nil {
+		return e
+	}
 	return nil
 }
 
@@ -225,6 +231,63 @@ func normalizeResolvedMetricDefinition(in SavedAnalysisDefinition) (SavedAnalysi
 	return out, nil
 }
 
+// ResolveCompositeMetricReference derives the stored definition for a saved
+// analysis pinned to an immutable composite formula metric version. A formula
+// DAG cannot be expressed as one atomic trend template, so the stored query is
+// a trend marker shell; the run enqueue path attaches the internal formula_ref
+// marker and the query worker expands the DAG at execution time. The storage
+// adapter must authorize and load that formula version in the same transaction
+// and confirm project and environment ownership before calling this function.
+func ResolveCompositeMetricReference(in SavedAnalysisDefinition, formula FormulaMetricVersion) (SavedAnalysisDefinition, error) {
+	normalized, e := NormalizeSavedAnalysisDefinition(in)
+	if e != nil {
+		return SavedAnalysisDefinition{}, e
+	}
+	if normalized.MetricRef == nil || !normalized.MetricRef.IsComposite() {
+		return SavedAnalysisDefinition{}, analysis.Invalid("INVALID_METRIC_REFERENCE", "定义没有复合指标引用", "/metric_ref")
+	}
+	ref := normalized.MetricRef
+	if formula.ProjectID == "" || formula.MetricID != ref.MetricID || formula.Version != ref.Version {
+		return SavedAnalysisDefinition{}, analysis.Invalid("METRIC_VERSION_NOT_FOUND", "复合指标版本与引用不匹配", "/metric_ref")
+	}
+	resolved := normalized
+	resolved.Query = analysis.Template{Kind: "trend"}
+	return normalizeResolvedCompositeDefinition(resolved)
+}
+
+// normalizeResolvedCompositeDefinition validates a stored definition whose
+// source is a composite formula metric. Its query is a marker shell rather than
+// an independently executable atomic template, so it must not pass the atomic
+// single-metric card checks; execution is driven solely by the formula marker.
+func normalizeResolvedCompositeDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
+	out, e := decodeSavedDefinition(in)
+	if e != nil {
+		return out, e
+	}
+	if e = validateSavedDefinitionMeta(in, &out); e != nil {
+		return out, e
+	}
+	if out.MetricRef == nil || !out.MetricRef.IsComposite() {
+		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "已解析定义缺少复合指标引用", "/metric_ref")
+	}
+	if e = validateMetricReference(out.MetricRef); e != nil {
+		return out, e
+	}
+	if out.Query.Kind != "trend" {
+		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "复合指标引用必须解析为趋势标记卡片", "/metric_ref")
+	}
+	if len(out.Query.EventVersions) != 0 || len(out.Query.Metrics) != 0 || out.Query.Interval != "" || len(out.Query.GroupBy) != 0 || out.Query.Filter != nil {
+		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "复合指标标记卡片不能携带原子查询体", "/metric_ref")
+	}
+	if out.Visualization.Kind != "metric" {
+		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
+	}
+	if e = boundSavedDefinition(out); e != nil {
+		return out, e
+	}
+	return out, nil
+}
+
 func savedHash(value any) (string, error) {
 	hash, e := canonical.Hash(value)
 	if e != nil {
@@ -307,6 +370,9 @@ func BuildSavedAnalysisValidation(snapshot SavedAnalysisSnapshot) (SavedAnalysis
 // resolved normalizer; inline rows keep the strict public normalizer.
 func NormalizeStoredSavedDefinition(in SavedAnalysisDefinition) (SavedAnalysisDefinition, error) {
 	if in.MetricRef != nil {
+		if in.MetricRef.IsComposite() {
+			return normalizeResolvedCompositeDefinition(in)
+		}
 		return normalizeResolvedMetricDefinition(in)
 	}
 	return NormalizeSavedAnalysisDefinition(in)

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
@@ -31,6 +32,19 @@ func (s *Store) verifySavedMetricPinTx(ctx context.Context, tx pgx.Tx, actor str
 	pin := snapshot.Dependencies.Metric
 	if pin == nil || pin.MetricID != ref.MetricID || pin.Version != ref.Version {
 		return analysis.Invalid("INVALID_ANALYSIS_DEPENDENCIES", "指标固定依赖与引用版本不匹配", "/metric_ref")
+	}
+	if ref.IsComposite() {
+		formula, e := readFormulaMetricVersionTx(ctx, tx, snapshot.ProjectID, pin.MetricID, pin.Version)
+		if e != nil {
+			return e
+		}
+		if formula.Environment != snapshot.Environment {
+			return analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+		}
+		if formula.DefinitionHash != pin.DefinitionHash {
+			return fault.New(fault.Conflict, "METRIC_PIN_CONFLICT", "指标固定版本内容已变化，无法运行旧分析")
+		}
+		return s.authorizeOperation(ctx, tx, actor, snapshot.ProjectID, formula.Environment, "metrics.read")
 	}
 	metric, e := readMetricVersionTx(ctx, tx, snapshot.ProjectID, pin.MetricID, pin.Version)
 	if e != nil {
@@ -73,9 +87,29 @@ func (s *Store) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project,
 	if e = s.verifySavedMetricPinTx(ctx, tx, actor, snapshot); e != nil {
 		return analysis.Job{}, e
 	}
-	request, e := snapshot.Definition.Query.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
-	if e != nil {
-		return analysis.Job{}, e
+	var request analysis.Request
+	if ref := snapshot.Definition.MetricRef; ref != nil && ref.IsComposite() {
+		// A composite pin cannot bind an atomic template: build the same
+		// internal marker request the formula run path uses, so the query
+		// worker expands the formula DAG through CompositeFormulaEngine.
+		if in.TimeRange.To.Sub(in.TimeRange.From) > 31*24*time.Hour {
+			return analysis.Job{}, analysis.Invalid("QUERY_COST_EXCEEDED", "查询时间范围超过预算", "/time_range")
+		}
+		if _, e = time.LoadLocation(in.Timezone); e != nil || len(in.Timezone) > 64 {
+			return analysis.Job{}, analysis.Invalid("INVALID_TIMEZONE", "请选择 IANA 时区", "/timezone")
+		}
+		request = analysis.Request{
+			Kind:        "trend",
+			Environment: snapshot.Environment,
+			TimeRange:   in.TimeRange,
+			Timezone:    in.Timezone,
+			Formula:     &analysis.FormulaJobRef{MetricID: ref.MetricID, Version: ref.Version},
+		}
+	} else {
+		request, e = snapshot.Definition.Query.Bind(snapshot.Environment, in.TimeRange, in.Timezone)
+		if e != nil {
+			return analysis.Job{}, e
+		}
 	}
 	if e = s.authorizeQuery(ctx, tx, actor, project, request.Environment, "queries.run", analysis.RequiresRawAccess(request)); e != nil {
 		return analysis.Job{}, e

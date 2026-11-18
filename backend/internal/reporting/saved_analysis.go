@@ -14,14 +14,44 @@ type SavedAnalysisVisualization struct {
 	Kind string `json:"kind"`
 }
 
+// Metric reference kind closed set. Kind is optional for backward
+// compatibility: an empty value normalizes to MetricRefKindAtomic.
+const (
+	MetricRefKindAtomic    = "atomic"
+	MetricRefKindComposite = "composite"
+)
+
 // MetricReference pins an immutable metric version as the data source of a
 // saved analysis. The exact version is fixed at publication and never resolves
 // implicitly to the latest metric. It is mutually exclusive with an inline
 // query on input; the storage adapter derives the executable query from the
-// referenced metric version inside the same authorized transaction.
+// referenced metric version inside the same authorized transaction. Kind
+// selects the target version table: atomic resolves metric_versions, composite
+// resolves formula_metric_versions and is executed through the internal
+// formula_ref marker rather than a derived atomic trend template.
 type MetricReference struct {
 	MetricID string `json:"metric_id"`
 	Version  int64  `json:"version"`
+	Kind     string `json:"kind,omitempty"`
+}
+
+// IsComposite reports whether the reference targets a composite formula metric
+// version. An empty kind is treated as atomic to keep historical rows valid.
+func (r MetricReference) IsComposite() bool {
+	return r.Kind == MetricRefKindComposite
+}
+
+// NormalizedMetricRefKind returns the closed-set kind, mapping an empty value
+// to atomic. Any non-empty value outside the closed set is rejected.
+func NormalizedMetricRefKind(kind string) (string, error) {
+	switch kind {
+	case "":
+		return MetricRefKindAtomic, nil
+	case MetricRefKindAtomic, MetricRefKindComposite:
+		return kind, nil
+	default:
+		return "", analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用类型无效", "/metric_ref/kind")
+	}
 }
 
 type SavedAnalysisDefinition struct {

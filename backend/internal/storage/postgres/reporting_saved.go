@@ -137,6 +137,19 @@ func (s *Store) resolveSavedDefinitionTx(ctx context.Context, tx pgx.Tx, actor, 
 	if in.MetricRef == nil {
 		return in, nil
 	}
+	if in.MetricRef.IsComposite() {
+		formula, e := readFormulaMetricVersionTx(ctx, tx, project, in.MetricRef.MetricID, in.MetricRef.Version)
+		if e != nil {
+			return in, e
+		}
+		if formula.Environment != environment {
+			return in, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+		}
+		if e = s.authorizeOperation(ctx, tx, actor, project, formula.Environment, "metrics.read"); e != nil {
+			return in, e
+		}
+		return reporting.ResolveCompositeMetricReference(in, formula)
+	}
 	metric, e := readMetricVersionTx(ctx, tx, project, in.MetricRef.MetricID, in.MetricRef.Version)
 	if e != nil {
 		return in, e
@@ -508,17 +521,30 @@ func savedAnalysisSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string,
 		return a.EventKey < b.EventKey || a.EventKey == b.EventKey && a.SchemaVersion < b.SchemaVersion
 	})
 	// A metric-referencing analysis pins the exact immutable metric version. The
-	// metric's own event versions are still recorded above, so the dependency set
-	// stays self-contained; the digest fails closed if the metric is unavailable.
+	// atomic metric's own event versions are still recorded above, so the
+	// dependency set stays self-contained; the digest fails closed if the metric
+	// is unavailable. A composite pin records the formula version digest instead;
+	// the formula's atomic leaves stay pinned inside the immutable formula version.
 	if ref := out.Draft.Definition.MetricRef; ref != nil {
-		metric, e := readMetricVersionTx(ctx, tx, project, ref.MetricID, ref.Version)
-		if e != nil {
-			return out, e
+		if ref.IsComposite() {
+			formula, e := readFormulaMetricVersionTx(ctx, tx, project, ref.MetricID, ref.Version)
+			if e != nil {
+				return out, e
+			}
+			if formula.Environment != out.Draft.Environment {
+				return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+			}
+			manifest.Metric = &reporting.MetricDependency{MetricID: formula.MetricID, Version: formula.Version, DefinitionHash: formula.DefinitionHash}
+		} else {
+			metric, e := readMetricVersionTx(ctx, tx, project, ref.MetricID, ref.Version)
+			if e != nil {
+				return out, e
+			}
+			if metric.Environment != out.Draft.Environment {
+				return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
+			}
+			manifest.Metric = &reporting.MetricDependency{MetricID: metric.MetricID, Version: metric.Version, DefinitionHash: metric.DefinitionHash}
 		}
-		if metric.Environment != out.Draft.Environment {
-			return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "指标引用必须属于同一项目与环境", "/metric_ref")
-		}
-		manifest.Metric = &reporting.MetricDependency{MetricID: metric.MetricID, Version: metric.Version, DefinitionHash: metric.DefinitionHash}
 	}
 	out.Dependencies = manifest
 	return out, nil

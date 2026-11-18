@@ -57,6 +57,18 @@ func NormalizeDashboardDefinition(in DashboardDefinition) (DashboardDefinition, 
 		if sourceKinds != 1 || !dashboardUUID.MatchString(w.ID) || ids[w.ID] || !dashboardText(w.Title, 128, false) {
 			return out, analysis.Invalid("INVALID_DASHBOARD_WIDGET", "组件标识、标题或固定引用版本无效", "/widgets")
 		}
+		if hasMetric {
+			// Dashboard metric widgets resolve only the atomic metric_versions
+			// table; composite formula refs are a separate work item and must
+			// fail closed here rather than reach the atomic resolver as no-row.
+			kind, e := NormalizedMetricRefKind(w.MetricRef.Kind)
+			if e != nil {
+				return out, e
+			}
+			if kind == MetricRefKindComposite {
+				return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "看板组件暂不支持复合公式指标引用", "/widgets/metric_ref/kind")
+			}
+		}
 		if hasTextCard {
 			if e := ValidateTextCardMarkdown(w.TextCard.Content); e != nil {
 				return out, e
