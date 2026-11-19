@@ -90,6 +90,10 @@ func TestRecordValidationCanonicalizationAndScope(t *testing.T) {
 			r.PropertiesJSON = json.RawMessage(`{"values":[` + strings.Repeat(`0,`, 20) + `0]}`)
 		}},
 		{"invalid time", func(r *ingestion.Record) { r.OccurredAt = time.Time{} }},
+		{"unknown navigation type", func(r *ingestion.Record) {
+			r.Context.NavigationType = "reload"
+			r.ContextJSON = json.RawMessage(`{"navigation_type":"reload"}`)
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testRecord()
@@ -98,6 +102,14 @@ func TestRecordValidationCanonicalizationAndScope(t *testing.T) {
 				t.Fatal("invalid record accepted")
 			}
 		})
+	}
+	for _, navigation := range NavigationTypes {
+		valid := testRecord()
+		valid.Context.NavigationType = navigation
+		valid.ContextJSON = json.RawMessage(`{"navigation_type":"` + navigation + `"}`)
+		if _, e := EncodeRecord(valid); e != nil {
+			t.Fatalf("navigation type %q must be accepted: %v", navigation, e)
+		}
 	}
 	for _, raw := range [][]byte{[]byte(`{"version":2,"record":{}}`), []byte(`{"version":1,"version":1,"record":{}}`), append(b, []byte(` {}`)...), []byte(strings.Repeat("x", MaxRecordBytes+1))} {
 		if _, e := DecodeRecord(raw); e == nil {
