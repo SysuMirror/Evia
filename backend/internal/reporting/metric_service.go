@@ -181,7 +181,7 @@ func (s *Metrics) EnqueueMetricVersion(ctx context.Context, actor, project, id s
 	if _, e := time.LoadLocation(in.Timezone); e != nil {
 		return analysis.Job{}, analysis.Invalid("INVALID_TIMEZONE", "时区无效", "/timezone")
 	}
-	if in.Interval != "" && in.Interval != "minute" && in.Interval != "hour" && in.Interval != "day" {
+	if in.Interval != "" && !analysis.ValidMetricInterval(in.Interval) {
 		return analysis.Job{}, analysis.Invalid("INVALID_INTERVAL", "请选择时间粒度", "/interval")
 	}
 

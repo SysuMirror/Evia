@@ -422,7 +422,7 @@ func metricSnapshotTx(ctx context.Context, tx pgx.Tx, project, id string, in rep
 	}
 	// The projection has no execution dates or timezone. Only configuration
 	// validation and catalog type resolution run, and derived types stay private.
-	template, e := reporting.MetricTemplate(out.Draft.Definition, reporting.MetricExecute{Interval: "day"})
+	template, e := reporting.MetricTemplate(out.Draft.Definition, reporting.MetricExecute{Interval: analysis.IntervalDay})
 	if e != nil {
 		return out, e
 	}

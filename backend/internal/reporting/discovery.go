@@ -68,9 +68,9 @@ var (
 	// advertised until the identity graph exists; discovery therefore lists
 	// only the implemented subjects.
 	discoverySubjects               = []string{analysis.SubjectUID, analysis.SubjectAnonymous}
-	discoveryIntervals              = []string{"minute", "hour", "day", "week"}
+	discoveryIntervals              = analysis.Intervals
 	discoveryFunnelModes            = []string{"ordered_with_interleaving"}
-	discoveryRetentionGranularities = []string{"day", "week", "month"}
+	discoveryRetentionGranularities = analysis.RetentionGranularities
 )
 
 type CatalogField struct {

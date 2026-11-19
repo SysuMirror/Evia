@@ -226,7 +226,7 @@ func MetricTemplate(definition MetricDefinition, execute MetricExecute) (analysi
 	if err != nil {
 		return analysis.Template{}, err
 	}
-	if execute.Interval != "" && execute.Interval != "minute" && execute.Interval != "hour" && execute.Interval != "day" {
+	if execute.Interval != "" && !analysis.ValidMetricInterval(execute.Interval) {
 		return analysis.Template{}, analysis.Invalid("INVALID_INTERVAL", "请选择时间粒度", "/interval")
 	}
 	filter := normalized.Filter

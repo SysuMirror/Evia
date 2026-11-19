@@ -165,7 +165,7 @@ func ValidateConfiguration(r *Request) error {
 		if len(r.Metrics) == 0 {
 			r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 		}
-		if r.Interval != "" && r.Interval != "minute" && r.Interval != "hour" && r.Interval != "day" && r.Interval != "week" {
+		if r.Interval != "" && !ValidInterval(r.Interval) {
 			return Invalid("INVALID_INTERVAL", "时间分组无效", "/interval")
 		}
 	} else if r.Interval != "" || len(r.Metrics) > 0 || len(r.GroupBy) > 0 {
@@ -381,7 +381,7 @@ func validateRetention(r *Request) error {
 	if rt == nil {
 		return Invalid("INVALID_RETENTION", "留存配置缺失", "/retention")
 	}
-	if rt.Granularity != "day" && rt.Granularity != "week" && rt.Granularity != "month" {
+	if !ValidRetentionGranularity(rt.Granularity) {
 		return Invalid("INVALID_RETENTION_GRANULARITY", "留存粒度必须是 day、week 或 month", "/retention/granularity")
 	}
 	if rt.Periods < 1 || rt.Periods > 12 {
@@ -409,9 +409,9 @@ func validateRetention(r *Request) error {
 func retentionWindow(rt *Retention) time.Duration {
 	period := 24 * time.Hour
 	switch rt.Granularity {
-	case "week":
+	case RetentionGranularityWeek:
 		period = 7 * 24 * time.Hour
-	case "month":
+	case RetentionGranularityMonth:
 		// Calendar months vary in length, so the scan window uses the
 		// conservative 31-day upper bound; cohort alignment itself is
 		// calendar-based inside the evaluator, not duration-based.

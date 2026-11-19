@@ -324,9 +324,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		groups := []string{}
 		if r.Interval != "" {
 			tz := p.bind("String", r.Timezone)
-			bucket := map[string]string{"minute": "toStartOfMinute", "hour": "toStartOfHour", "day": "toStartOfDay"}[r.Interval]
+			bucket := map[string]string{IntervalMinute: "toStartOfMinute", IntervalHour: "toStartOfHour", IntervalDay: "toStartOfDay"}[r.Interval]
 			bucketCall := bucket + "(event_time," + tz + ")"
-			if r.Interval == "week" {
+			if r.Interval == IntervalWeek {
 				// Mode 1 starts the bucket on Monday, matching the retention
 				// cohort calendar; the bound timezone keeps the edge local.
 				bucketCall = "toStartOfWeek(event_time,1," + tz + ")"

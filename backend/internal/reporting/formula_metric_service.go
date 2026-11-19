@@ -191,7 +191,7 @@ func (s *FormulaMetrics) EnqueueFormulaMetricVersion(ctx context.Context, actor,
 	if _, e := time.LoadLocation(in.Timezone); e != nil || len(in.Timezone) > 64 {
 		return analysis.Job{}, analysis.Invalid("INVALID_TIMEZONE", "请选择 IANA 时区", "/timezone")
 	}
-	if in.Interval != "" && in.Interval != "minute" && in.Interval != "hour" && in.Interval != "day" {
+	if in.Interval != "" && !analysis.ValidMetricInterval(in.Interval) {
 		return analysis.Job{}, analysis.Invalid("INVALID_INTERVAL", "请选择时间粒度", "/interval")
 	}
 	return s.store.EnqueueFormulaMetricVersion(ctx, actor, project, id, version, key, in)

@@ -129,13 +129,13 @@ func evaluateRetention(ctx context.Context, request Request, rows []map[string]a
 	for _, index := range indices {
 		aggregate := cohorts[index]
 		var cohortStart time.Time
-		if rt.Granularity == "month" {
+		if rt.Granularity == RetentionGranularityMonth {
 			// Origin is a first-of-month floor, so month AddDate lands on the
 			// cohort's first calendar month without day-overflow.
 			cohortStart = origin.AddDate(0, index, 0)
 		} else {
 			daysPerPeriod := 1
-			if rt.Granularity == "week" {
+			if rt.Granularity == RetentionGranularityWeek {
 				daysPerPeriod = 7
 			}
 			cohortStart = origin.AddDate(0, 0, index*daysPerPeriod)
@@ -172,9 +172,9 @@ func periodFloor(when time.Time, location *time.Location, granularity string) ti
 	year, month, day := local.Date()
 	midnight := time.Date(year, month, day, 0, 0, 0, 0, location)
 	switch granularity {
-	case "day":
+	case RetentionGranularityDay:
 		return midnight
-	case "month":
+	case RetentionGranularityMonth:
 		// Timezone-local first day of the calendar month at midnight.
 		return time.Date(year, month, 1, 0, 0, 0, 0, location)
 	}
@@ -187,13 +187,13 @@ func periodFloor(when time.Time, location *time.Location, granularity string) ti
 // uses ordinal day arithmetic rather than nanosecond division so DST shifts
 // cannot move the boundary by an hour.
 func periodOffset(origin, floor time.Time, granularity string) int {
-	if granularity == "month" {
+	if granularity == RetentionGranularityMonth {
 		// Both arguments are first-of-month floors, so the month ordinal
 		// difference is exact regardless of variable month length.
 		return floor.Year()*12 + int(floor.Month()) - origin.Year()*12 - int(origin.Month())
 	}
 	days := dayOrdinal(floor) - dayOrdinal(origin)
-	if granularity == "week" {
+	if granularity == RetentionGranularityWeek {
 		return days / 7
 	}
 	return days
