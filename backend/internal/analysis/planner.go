@@ -314,7 +314,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		return Plan{}, e
 	}
 	base += " AND " + predicate
-	plan := Plan{Parameters: p.params, Kind: r.Kind, Limit: r.Limit, Accuracy: "not_applicable"}
+	plan := Plan{Parameters: p.params, Kind: r.Kind, Limit: r.Limit, Accuracy: AccuracyNotApplicable}
 	switch r.Kind {
 	case "events", "journey":
 		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,context_json,properties_json" + base + " ORDER BY event_time,ifNull(session_id,''),ifNull(tab_id,''),ifNull(sequence,0),source_id,event_id LIMIT " + strconv.Itoa(r.Limit+1)
@@ -353,7 +353,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 				plan.Columns = append(plan.Columns, Column{Key: presence, Type: "boolean", Label: f.Key + " present"})
 			}
 		}
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		for i, m := range r.Metrics {
 			expression, e := p.metric(m, r.Subject)
 			if e != nil {
@@ -362,8 +362,8 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 			alias := fmt.Sprintf("metric_%d", i)
 			selectSQL = append(selectSQL, expression+" AS "+alias)
 			plan.Columns = append(plan.Columns, Column{Key: alias, Type: "number", Label: m.Op})
-			if m.Accuracy == "approximate" {
-				plan.Accuracy = "approximate"
+			if m.Accuracy == AccuracyApproximate {
+				plan.Accuracy = AccuracyApproximate
 			}
 		}
 		selectSQL = append(selectSQL, "if(count()=0,NULL,toUnixTimestamp64Nano(max(received_at))) AS watermark_ns")
@@ -397,7 +397,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		}
 		base += " AND isNotNull(" + subject + ") AND " + subject + "!='' AND (" + strings.Join(stepMatches, " OR ") + ")"
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "step_index", Type: "integer"}, {Key: "event_key", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "conversion_rate", Type: "number"}}
 	case "retention":
 		subject := "uid"
@@ -423,7 +423,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		}
 		base += " AND isNotNull(" + subject + ") AND " + subject + "!='' AND (" + strings.Join(matches, " OR ") + ")"
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}
 	case "segment":
 		subject := "uid"
@@ -449,7 +449,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		}
 		base += " AND isNotNull(" + subject + ") AND " + subject + "!='' AND " + eventMatch
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 	case "path":
 		subject := "uid"
@@ -479,7 +479,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		}
 		base += " AND isNotNull(" + subject + ") AND " + subject + "!=''"
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
 	case "attribution":
 		subject := "uid"
@@ -517,7 +517,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		// full causal sequence around the conversion stays available.
 		base += " AND isNotNull(" + subject + ") AND " + subject + "!=''"
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
-		plan.Accuracy = "exact"
+		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "touchpoint", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 		if r.Attribution.Model == AttributionModelLinear || r.Attribution.Model == AttributionModelPositionBased || r.Attribution.Model == AttributionModelTimeDecay {
 			// Weighted models report a fractional credit column that the
@@ -550,7 +550,7 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 	valid := "(" + field.scope + " AND " + field.present + " AND isNotNull(" + field.value + "))"
 	if m.Op == "unique" {
 		fn := "uniqExactIf"
-		if m.Accuracy == "approximate" {
+		if m.Accuracy == AccuracyApproximate {
 			fn = "uniqCombined64If"
 		}
 		return fn + "(" + field.value + "," + valid + ")", nil
@@ -562,7 +562,7 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 	fn, ok := functions[m.Op]
 	if level, isPercentile := percentileLevels[m.Op]; isPercentile {
 		fn = "quantileExactIf(" + level + ")"
-		if m.Accuracy == "approximate" {
+		if m.Accuracy == AccuracyApproximate {
 			fn = "quantileTDigestIf(" + level + ")"
 		}
 		ok = true

@@ -138,12 +138,12 @@ func ValidateConfiguration(r *Request) error {
 			return Invalid("INVALID_METRIC", "指标运算无效", "/metrics")
 		}
 		if m.Accuracy == "" {
-			m.Accuracy = "exact"
+			m.Accuracy = AccuracyExact
 		}
-		if m.Accuracy != "exact" && m.Accuracy != "approximate" {
+		if m.Accuracy != AccuracyExact && m.Accuracy != AccuracyApproximate {
 			return Invalid("INVALID_ACCURACY", "精度无效", "/metrics")
 		}
-		if m.Accuracy == "approximate" && m.Op != "unique" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
+		if m.Accuracy == AccuracyApproximate && m.Op != "unique" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
 			return Invalid("INVALID_ACCURACY", "此指标仅支持精确结果", "/metrics")
 		}
 		if m.Field != nil {
@@ -163,7 +163,7 @@ func ValidateConfiguration(r *Request) error {
 	}
 	if r.Kind == "trend" {
 		if len(r.Metrics) == 0 {
-			r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+			r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 		}
 		if r.Interval != "" && r.Interval != "minute" && r.Interval != "hour" && r.Interval != "day" && r.Interval != "week" {
 			return Invalid("INVALID_INTERVAL", "时间分组无效", "/interval")

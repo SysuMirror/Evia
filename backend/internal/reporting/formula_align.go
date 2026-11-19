@@ -215,12 +215,12 @@ func sameStrings(a, b []string) bool {
 // composite is approximate as soon as one operand is approximate, and the
 // reported watermark never exceeds the latest observed across leaves.
 func mergeFormulaMetadata(leaves map[MetricReference]analysis.Result, refs []MetricReference) analysis.Metadata {
-	metadata := analysis.Metadata{Accuracy: "exact", SampleRate: 1, CacheHit: false, GeneratedAt: time.Now().UTC()}
+	metadata := analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, CacheHit: false, GeneratedAt: time.Now().UTC()}
 	var coverage analysis.Coverage
 	for _, ref := range refs {
 		leaf := leaves[ref].Metadata
-		if leaf.Accuracy == "approximate" {
-			metadata.Accuracy = "approximate"
+		if leaf.Accuracy == analysis.AccuracyApproximate {
+			metadata.Accuracy = analysis.AccuracyApproximate
 		}
 		if leaf.DataWatermark != nil && (metadata.DataWatermark == nil || leaf.DataWatermark.After(*metadata.DataWatermark)) {
 			metadata.DataWatermark = leaf.DataWatermark
