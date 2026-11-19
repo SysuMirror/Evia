@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
@@ -98,7 +99,7 @@ func Validate(in Input, expectedRevision int64) error {
 	if len(in.Definition.Description) > MaxDescriptionLength {
 		return fault.New(fault.Invalid, "INVALID_REPORT_INPUT", "描述不能超过 2000 个字符")
 	}
-	if expectedRevision < CreateRevision || expectedRevision > 9007199254740991 {
+	if expectedRevision < CreateRevision || expectedRevision > canonical.MaxInteger {
 		return fault.New(fault.Invalid, "REVISION_REQUIRED", "必须提供有效修订")
 	}
 	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 128 {

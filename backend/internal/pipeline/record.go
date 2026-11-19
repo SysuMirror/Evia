@@ -16,13 +16,14 @@ import (
 	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 )
 
 const MaxRecordBytes = 64 * 1024
 const MaxBatchRecords = 500
-const maxInteger int64 = 9007199254740991
+const maxInteger int64 = canonical.MaxInteger
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 var eventPattern = regexp.MustCompile(`^(sys\.)?[a-z][a-z0-9_]{0,63}$`)

@@ -12,7 +12,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
-const MaxInteger int64 = 9007199254740991
+const MaxInteger int64 = canonical.MaxInteger
 
 var keyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 

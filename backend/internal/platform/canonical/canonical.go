@@ -11,7 +11,15 @@ import (
 	"math"
 )
 
-const MaxInteger int64 = 9007199254740991
+// MaxSafeInteger is the largest integer representable exactly as a JSON
+// number (2^53 - 1). It is untyped on purpose so the same bound works in both
+// integer comparisons and floating-point magnitude checks. Every package that
+// needs the JSON safe-integer bound must reference this value rather than
+// restating the literal, keeping one source of truth across the codebase.
+const MaxSafeInteger = 9007199254740991
+
+// MaxInteger is the typed JSON safe-integer bound for int64 contexts.
+const MaxInteger int64 = MaxSafeInteger
 
 // CanonicalJSON uses deterministic sorted object keys and rejects unsupported JSON
 // numbers. It is used for both request identity and immutable manifest hashes.

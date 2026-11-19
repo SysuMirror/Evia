@@ -43,7 +43,7 @@ func retentionRevision(r *http.Request) (int64, error) {
 	}
 	raw := r.Header.Get("If-Match")
 	n, err := strconv.ParseInt(raw[1:len(raw)-1], 10, 64)
-	if err != nil || n < 0 || n > 9007199254740991 {
+	if err != nil || n < 0 || n > canonical.MaxInteger {
 		return 0, fault.New(fault.Invalid, "REVISION_REQUIRED", "修订版本无效")
 	}
 	return n, nil

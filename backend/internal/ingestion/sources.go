@@ -14,12 +14,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 )
 
-const MaxRevision int64 = 9007199254740991
+const MaxRevision int64 = canonical.MaxInteger
 
 func Invalid(code, message string) error { return fault.New(fault.Invalid, code, message) }
 func ValidEnvironment(s string) bool {

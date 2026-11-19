@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 )
 
@@ -78,7 +79,7 @@ func (c Config) validate() error {
 	if c.ContractVersion != 1 || !uuidPattern.MatchString(c.RunID) || !uuidPattern.MatchString(c.ProjectID) || (c.SourceID != "" && !uuidPattern.MatchString(c.SourceID)) || c.Environment != env.Development || !keyPattern.MatchString(c.EventKey) {
 		return errors.New("invalid benchmark scope or contract version")
 	}
-	if c.SchemaVersion < 1 || c.SchemaVersion > 9007199254740991 || c.ReleaseRevision < 1 || c.ReleaseRevision > 9007199254740991 || c.UIDCardinality < 1 || c.UIDCardinality > 10000000 {
+	if c.SchemaVersion < 1 || c.SchemaVersion > canonical.MaxInteger || c.ReleaseRevision < 1 || c.ReleaseRevision > canonical.MaxInteger || c.UIDCardinality < 1 || c.UIDCardinality > 10000000 {
 		return errors.New("configuration numeric bounds exceeded")
 	}
 	if c.WriteKey == "" || len(c.WriteKey) > 128 || c.StartedAt.IsZero() || c.StartedAt.Location() != time.UTC {

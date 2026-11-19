@@ -10,7 +10,7 @@ import (
 
 // Membership revisions cover the complete project collection, including removals.
 // A cursor carrying a prior revision cannot silently mix membership snapshots.
-const MaxMembershipRevision int64 = 9007199254740991
+const MaxMembershipRevision int64 = canonical.MaxInteger
 
 // Project role closed set, mirrored by the ProjectMember* OpenAPI enums and
 // guarded by TestProjectRoleContractStaysAligned.

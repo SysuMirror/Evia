@@ -66,7 +66,7 @@ func (s *Settings) Update(ctx context.Context, actor, project string, revision i
 	if _, e := time.LoadLocation(in.Timezone); e != nil {
 		return ProjectSettings{}, fault.New(fault.Invalid, "INVALID_TIMEZONE", "请选择有效的 IANA 时区")
 	}
-	if revision < 1 || revision > 9007199254740991 {
+	if revision < 1 || revision > canonical.MaxInteger {
 		return ProjectSettings{}, fault.New(fault.Invalid, "REVISION_REQUIRED", "必须提供有效修订")
 	}
 	if e := machineKey(key); e != nil {

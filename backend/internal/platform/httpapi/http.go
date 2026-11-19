@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
@@ -187,7 +188,7 @@ func IfMatch(r *http.Request) (int64, error) {
 		return 0, fault.New(fault.Invalid, "REVISION_REQUIRED", "请提供带双引号的 If-Match 版本")
 	}
 	n, err := strconv.ParseInt(value[1:len(value)-1], 10, 64)
-	if err != nil || n < 1 || n > 9007199254740991 {
+	if err != nil || n < 1 || n > canonical.MaxInteger {
 		return 0, fault.New(fault.Invalid, "INVALID_REVISION", "版本必须为正整数")
 	}
 	return n, nil

@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
@@ -92,7 +93,7 @@ func validate(in Input, expectedRevision int64) error {
 	if in.RetentionDays < MinRetentionDays || in.RetentionDays > MaxRetentionDays {
 		return fault.New(fault.Invalid, "INVALID_RETENTION_INPUT", "保留天数必须在 30 到 3650 天之间")
 	}
-	if expectedRevision < CreateRevision || expectedRevision > 9007199254740991 {
+	if expectedRevision < CreateRevision || expectedRevision > canonical.MaxInteger {
 		return fault.New(fault.Invalid, "REVISION_REQUIRED", "必须提供有效修订")
 	}
 	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 128 {

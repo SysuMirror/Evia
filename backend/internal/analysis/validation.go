@@ -10,12 +10,14 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
-const MaxSafeInteger = 9007199254740991
+// MaxSafeInteger aliases the untyped canonical JSON safe-integer bound.
+const MaxSafeInteger = canonical.MaxSafeInteger
 
 var eventKey = regexp.MustCompile(`^(sys\.)?[a-z][a-z0-9_]{0,63}$`)
 var propertyKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)

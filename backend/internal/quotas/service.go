@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
@@ -46,7 +47,7 @@ func validate(in Input, expectedRevision int64) error {
 	if in.Burst < MinBurst || in.Burst > MaxBurst {
 		return fault.New(fault.Invalid, "INVALID_QUOTA_INPUT", "突发容量必须在 50 到 1000000 之间")
 	}
-	if expectedRevision < CreateRevision || expectedRevision > 9007199254740991 {
+	if expectedRevision < CreateRevision || expectedRevision > canonical.MaxInteger {
 		return fault.New(fault.Invalid, "REVISION_REQUIRED", "必须提供有效修订")
 	}
 	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 128 {

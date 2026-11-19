@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 )
 
 const Capability = "raw-facts-v1"
-const MaxRevision int64 = 9007199254740991
+const MaxRevision int64 = canonical.MaxInteger
 
 // ProjectReleaseEventLimit bounds the events inside one project release
 // manifest; reserved sys.* events never enter project manifests.
