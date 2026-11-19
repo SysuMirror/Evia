@@ -16,7 +16,7 @@ func trendTemplate() Template {
 }
 
 func funnelTemplate() Template {
-	return Template{Kind: QueryKindFunnel, Subject: SubjectUID, Funnel: &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
+	return Template{Kind: QueryKindFunnel, Subject: SubjectUID, Funnel: &Funnel{Mode: FunnelModeOrderedWithInterleaving, WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
 		{StepIndex: 0, Field: Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "item"}},
 		{StepIndex: 1, Field: Field{Kind: "property", EventKey: "closed", SchemaVersion: 2, Key: "item"}},
 	}}}
@@ -158,6 +158,9 @@ func TestTemplatePropertyDependenciesUseExactSelectedVersions(t *testing.T) {
 	funnel = funnelTemplate()
 	funnel.Funnel.Steps[0].SchemaVersion = 0
 	templateErrorCode(t, ValidateTemplate(&funnel), "INVALID_FUNNEL_STEP")
+	funnel = funnelTemplate()
+	funnel.Funnel.Mode = "ordered"
+	templateErrorCode(t, ValidateTemplate(&funnel), "INVALID_FUNNEL")
 	funnel = funnelTemplate()
 	funnel.EventVersions = []EventVersion{}
 	templateErrorCode(t, ValidateTemplate(&funnel), "INVALID_EVENT_SELECTION")

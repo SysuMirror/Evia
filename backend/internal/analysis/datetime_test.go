@@ -30,7 +30,7 @@ func TestResolvedDatetimeFiltersMatchPlannerValidation(t *testing.T) {
 					r.Filter = filter
 				case "nested funnel step":
 					r.Kind, r.Metrics, r.Subject = "funnel", nil, SubjectUID
-					r.Funnel = &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1, Filter: &Filter{Op: "and", Args: []*Filter{{Op: "or", Args: []*Filter{filter}}}}}, {EventKey: "closed", SchemaVersion: 1}}}
+					r.Funnel = &Funnel{Mode: FunnelModeOrderedWithInterleaving, WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1, Filter: &Filter{Op: "and", Args: []*Filter{{Op: "or", Args: []*Filter{filter}}}}}, {EventKey: "closed", SchemaVersion: 1}}}
 				}
 				resolvedError := CheckResolved(r)
 				plan, plannerError := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)

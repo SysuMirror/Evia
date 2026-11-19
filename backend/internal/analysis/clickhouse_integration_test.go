@@ -315,7 +315,7 @@ func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 	funnel.Kind = QueryKindFunnel
 	funnel.EventKeys = nil
 	funnel.Metrics = nil
-	funnel.Funnel = &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 30, Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, SameEntity: []EntityField{{StepIndex: 0, Field: Field{Kind: "property", Key: "item_id", EventKey: "open", SchemaVersion: 1, ResolvedType: "string"}}, {StepIndex: 1, Field: Field{Kind: "property", Key: "item_id", EventKey: "finish", SchemaVersion: 1, ResolvedType: "string"}}}}
+	funnel.Funnel = &Funnel{Mode: FunnelModeOrderedWithInterleaving, WindowSeconds: 30, Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, SameEntity: []EntityField{{StepIndex: 0, Field: Field{Kind: "property", Key: "item_id", EventKey: "open", SchemaVersion: 1, ResolvedType: "string"}}, {StepIndex: 1, Field: Field{Kind: "property", Key: "item_id", EventKey: "finish", SchemaVersion: 1, ResolvedType: "string"}}}}
 	result := execute(t, client, funnel)
 	if len(result.Rows) != 2 || result.Rows[0]["subjects"] != 7 || result.Rows[1]["subjects"] != 4 {
 		t.Fatal("ordered/window/entity funnel mismatch", result)

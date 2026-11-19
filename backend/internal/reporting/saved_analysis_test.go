@@ -245,12 +245,12 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 	if unchanged.ValidationHash == changed.ValidationHash {
 		t.Fatal("diff/content absent from acknowledgement")
 	}
-	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: analysis.QueryKindFunnel, Subject: analysis.SubjectUID, Funnel: &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: analysis.QueryKindFunnel}}
+	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: analysis.QueryKindFunnel, Subject: analysis.SubjectUID, Funnel: &analysis.Funnel{Mode: analysis.FunnelModeOrderedWithInterleaving, WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: analysis.QueryKindFunnel}}
 	fs := savedSnapshot(t, funnel)
 	b := fs.Draft.Definition
 	fs.Draft.PublishedVersion = 1
 	fs.Baseline = &SavedAnalysisVersion{AnalysisID: fs.Draft.ID, ProjectID: fs.Draft.ProjectID, Environment: fs.Draft.Environment, Version: 1, Definition: b}
-	fs.Draft.Definition.Query.Funnel = &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "closed", SchemaVersion: 1}, {EventKey: "opened", SchemaVersion: 1}}}
+	fs.Draft.Definition.Query.Funnel = &analysis.Funnel{Mode: analysis.FunnelModeOrderedWithInterleaving, WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "closed", SchemaVersion: 1}, {EventKey: "opened", SchemaVersion: 1}}}
 	f, e := BuildSavedAnalysisValidation(fs)
 	if e != nil || len(f.Diff) != 1 || f.Diff[0].Path != "/query/funnel" {
 		t.Fatal("funnel step ordering lost", f, e)

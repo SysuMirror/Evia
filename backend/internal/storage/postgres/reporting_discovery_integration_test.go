@@ -175,7 +175,7 @@ func TestReportingDryValidationTypedScalarsDependenciesAndNoWrites(t *testing.T)
 		}, "INVALID_FILTER_TYPE"},
 		{"invalid datetime nested funnel step", func(r *analysis.Request) {
 			r.Kind, r.Metrics, r.Subject, r.EventVersions, r.Filter = "funnel", nil, analysis.SubjectUID, nil, nil
-			r.Funnel = &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "page_opened", SchemaVersion: 1, Filter: &analysis.Filter{Op: "and", Args: []*analysis.Filter{{Op: "or", Args: []*analysis.Filter{{Op: "eq", Field: &analysis.Field{Kind: "system", Key: "event_time"}, Value: "not-a-date"}}}}}}, {EventKey: "page_opened", SchemaVersion: 1}}}
+			r.Funnel = &analysis.Funnel{Mode: analysis.FunnelModeOrderedWithInterleaving, WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "page_opened", SchemaVersion: 1, Filter: &analysis.Filter{Op: "and", Args: []*analysis.Filter{{Op: "or", Args: []*analysis.Filter{{Op: "eq", Field: &analysis.Field{Kind: "system", Key: "event_time"}, Value: "not-a-date"}}}}}}, {EventKey: "page_opened", SchemaVersion: 1}}}
 		}, "INVALID_FILTER_TYPE"},
 		{"unpublished exact count", func(r *analysis.Request) { r.Filter = nil; r.EventVersions[0].SchemaVersion = 99 }, "QUERY_EVENT_VERSION_NOT_PUBLISHED"},
 		{"wrong environment", func(r *analysis.Request) { r.Filter = nil; r.Environment = "production" }, "QUERY_EVENT_VERSION_NOT_PUBLISHED"},
