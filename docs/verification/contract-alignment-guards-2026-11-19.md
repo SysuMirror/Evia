@@ -31,10 +31,11 @@
 | 采集来源 kind（2）/status（2） | 10 个生产文件内联字面量 → `ingestion.SourceKind*/SourceStatus*` 常量 + 校验助手（独立切片，见 [source-vocabulary-closed-set](source-vocabulary-closed-set-2026-11-19.md)） | `Source*` 四 schema 的 6 个枚举属性 | 对齐 |
 | 事件事实类型（3） | validation 长布尔链内联字面量 → `catalog.FactKind*` 常量 + `ValidFactKind`（独立切片，见 [fact-kind-closed-set](fact-kind-closed-set-2026-11-19.md)） | `DraftInput.fact_kind` | 对齐 |
 | 查询结果精度（3） | planner/validation/公式对齐器内联字面量 → `analysis.Accuracy*` 常量 + `AccuracyValues/ValidAccuracy`（独立切片，见 [accuracy-closed-set](accuracy-closed-set-2026-11-19.md)） | `QueryResult.metadata.accuracy` | 对齐 |
+| 兼容性判定（3）/指标引用类型（2） | compatibility.go 8 个裸 return → `catalog.Compatibility*`；MetricRef 补 `MetricRefKinds` 切片（独立切片，见 [compat-refkind-closed-set](compat-refkind-closed-set-2026-11-19.md)） | `ValidationResult.compatibility` / `MetricReference.kind` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（15 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（17 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -51,6 +52,8 @@
 13. `ingestion.TestSourceVocabularyMatchesContract`：四个 Source schema 的 kind×3/status×3 枚举与 `SourceKinds`/`SourceStatuses` 集合相等，并锁定 3+3 覆盖数。
 14. `catalog.TestFactKindVocabularyMatchesContract`：`DraftInput.fact_kind` 枚举与 `FactKinds` 集合相等。
 15. `analysis.TestAccuracyVocabularyMatchesContract`：嵌套 `QueryResult.metadata.accuracy` 枚举与 `AccuracyValues` 集合相等。
+16. `catalog.TestCompatibilityVocabularyMatchesContract`：`ValidationResult.compatibility` 枚举与 `CompatibilityValues` 集合相等。
+17. `reporting.TestMetricReferenceKindVocabularyMatchesContract`：`MetricReference.kind` 枚举与 `MetricRefKinds` 集合相等。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -64,6 +67,7 @@
 - 采集来源词汇：分别向 `SourceKinds`/`SourceStatuses` 注入 `drift_probe` → kind/status 两条断言分支均报 drift 变红，还原复绿（详见独立验证记录）。
 - 事件事实类型：向 `FactKinds` 注入 `drift_probe` → 报 `fact kind drift ... Go 4 != contract 3` 变红，还原复绿（详见独立验证记录）。
 - 查询精度：向 `AccuracyValues` 注入 `drift_probe` → 报 `accuracy drift ... Go 4 != contract 3` 变红，还原复绿（详见独立验证记录）。
+- 兼容性/指标引用：分别向 `CompatibilityValues`、`MetricRefKinds` 注入 `drift_probe` → 两个守卫均报 drift 变红，还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
