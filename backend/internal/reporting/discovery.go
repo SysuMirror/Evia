@@ -67,7 +67,7 @@ var (
 	// only the implemented subjects.
 	discoverySubjects               = []string{analysis.SubjectUID, analysis.SubjectAnonymous}
 	discoveryIntervals              = analysis.Intervals
-	discoveryFunnelModes            = []string{"ordered_with_interleaving"}
+	discoveryFunnelModes            = analysis.FunnelModes
 	discoveryRetentionGranularities = analysis.RetentionGranularities
 )
 

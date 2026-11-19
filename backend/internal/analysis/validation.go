@@ -196,7 +196,7 @@ func ValidateConfiguration(r *Request) error {
 			return Invalid("SUBJECT_REQUIRED", "漏斗必须指定统计主体", "/subject")
 		}
 		f := r.Funnel
-		if f == nil || len(f.Steps) < 2 || len(f.Steps) > 8 || f.WindowSeconds < 1 || f.WindowSeconds > 604800 || f.Mode != "ordered_with_interleaving" {
+		if f == nil || len(f.Steps) < 2 || len(f.Steps) > 8 || f.WindowSeconds < 1 || f.WindowSeconds > 604800 || !ValidFunnelMode(f.Mode) {
 			return Invalid("INVALID_FUNNEL", "漏斗配置无效", "/funnel")
 		}
 		for i := range f.Steps {
