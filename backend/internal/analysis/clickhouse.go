@@ -140,7 +140,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		c.kill(queryID)
 		return Result{}, e
 	}
-	metadata := Metadata{Accuracy: plan.Accuracy, SampleRate: 1, Coverage: Coverage{TimeRange: r.TimeRange, State: "provisional", KnownGaps: []string{"pipeline_completeness_not_established", "identity_resolution_not_applied"}}, GeneratedAt: time.Now().UTC()}
+	metadata := Metadata{Accuracy: plan.Accuracy, SampleRate: 1, Coverage: Coverage{TimeRange: r.TimeRange, State: CoverageStateProvisional, KnownGaps: []string{"pipeline_completeness_not_established", "identity_resolution_not_applied"}}, GeneratedAt: time.Now().UTC()}
 	result := Result{Columns: plan.Columns, Rows: make([]map[string]any, 0), Metadata: metadata}
 	for _, row := range rows {
 		key := "received_at_ns"

@@ -229,7 +229,7 @@ func mergeFormulaMetadata(leaves map[MetricReference]analysis.Result, refs []Met
 	}
 	metadata.Coverage = coverage
 	if metadata.Coverage.State == "" {
-		metadata.Coverage.State = "provisional"
+		metadata.Coverage.State = analysis.CoverageStateProvisional
 	}
 	return metadata
 }
