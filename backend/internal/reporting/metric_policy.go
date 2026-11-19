@@ -84,9 +84,9 @@ func NormalizeMetricDefinition(in MetricDefinition) (MetricDefinition, error) {
 	})
 	validUnit := false
 	switch out.Aggregation.Op {
-	case "count":
+	case analysis.OpCount:
 		validUnit = out.Unit == "event"
-	case "unique":
+	case analysis.OpUnique:
 		if out.Aggregation.Field != nil {
 			validUnit = out.Unit == "distinct_value"
 		} else if out.Subject == analysis.SubjectUID {

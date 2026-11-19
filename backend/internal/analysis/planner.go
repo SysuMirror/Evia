@@ -530,7 +530,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 	return plan, nil
 }
 func (p *planner) metric(m Metric, subject string) (string, error) {
-	if m.Op == "count" {
+	if m.Op == OpCount {
 		return "count()", nil
 	}
 	var f Field
@@ -548,17 +548,17 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 		return "", e
 	}
 	valid := "(" + field.scope + " AND " + field.present + " AND isNotNull(" + field.value + "))"
-	if m.Op == "unique" {
+	if m.Op == OpUnique {
 		fn := "uniqExactIf"
 		if m.Accuracy == AccuracyApproximate {
 			fn = "uniqCombined64If"
 		}
 		return fn + "(" + field.value + "," + valid + ")", nil
 	}
-	functions := map[string]string{"sum": "sumIf", "avg": "avgIf", "min": "minIf", "max": "maxIf"}
+	functions := map[string]string{OpSum: "sumIf", OpAvg: "avgIf", OpMin: "minIf", OpMax: "maxIf"}
 	// Percentile operators map to their quantile level; the closed validation
 	// set guarantees every key here is reachable only with a numeric field.
-	percentileLevels := map[string]string{"p50": "0.50", "p90": "0.90", "p95": "0.95", "p99": "0.99"}
+	percentileLevels := map[string]string{OpP50: "0.50", OpP90: "0.90", OpP95: "0.95", OpP99: "0.99"}
 	fn, ok := functions[m.Op]
 	if level, isPercentile := percentileLevels[m.Op]; isPercentile {
 		fn = "quantileExactIf(" + level + ")"

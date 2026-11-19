@@ -162,7 +162,7 @@ func CheckResolved(r Request) error {
 			if strings.HasPrefix(m.Field.ResolvedType, "array:") {
 				return Invalid("UNSUPPORTED_METRIC_TYPE", "数组不能用作指标")
 			}
-			if m.Op != "unique" && m.Field.ResolvedType != "number" && m.Field.ResolvedType != "integer" {
+			if m.Op != OpUnique && m.Field.ResolvedType != "number" && m.Field.ResolvedType != "integer" {
 				return Invalid("INVALID_METRIC_TYPE", "数值指标需要数值字段")
 			}
 		}

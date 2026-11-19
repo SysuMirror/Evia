@@ -59,11 +59,9 @@ type Capabilities struct {
 // alignment tests compare them against the embedded OpenAPI bundle so a
 // schema-side vocabulary change can never silently diverge from discovery.
 var (
-	discoveryQueryKinds   = analysis.QueryKinds
-	discoveryAggregations = []string{
-		"count", "unique", "sum", "avg", "min", "max", "p50", "p90", "p95", "p99",
-	}
-	discoveryApproximateAggregations = []string{"unique", "p50", "p90", "p95", "p99"}
+	discoveryQueryKinds              = analysis.QueryKinds
+	discoveryAggregations            = analysis.Aggregations
+	discoveryApproximateAggregations = analysis.ApproximateAggregations
 	// resolved_person stays a contract-level reserved subject and is never
 	// advertised until the identity graph exists; discovery therefore lists
 	// only the implemented subjects.

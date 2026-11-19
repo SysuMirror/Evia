@@ -134,7 +134,7 @@ func ValidateConfiguration(r *Request) error {
 	}
 	for i := range r.Metrics {
 		m := &r.Metrics[i]
-		if m.Op != "count" && m.Op != "unique" && m.Op != "sum" && m.Op != "avg" && m.Op != "min" && m.Op != "max" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
+		if !ValidAggregation(m.Op) {
 			return Invalid("INVALID_METRIC", "指标运算无效", "/metrics")
 		}
 		if m.Accuracy == "" {
@@ -143,7 +143,7 @@ func ValidateConfiguration(r *Request) error {
 		if m.Accuracy != AccuracyExact && m.Accuracy != AccuracyApproximate {
 			return Invalid("INVALID_ACCURACY", "精度无效", "/metrics")
 		}
-		if m.Accuracy == AccuracyApproximate && m.Op != "unique" && m.Op != "p50" && m.Op != "p90" && m.Op != "p95" && m.Op != "p99" {
+		if m.Accuracy == AccuracyApproximate && !ValidApproximateAggregation(m.Op) {
 			return Invalid("INVALID_ACCURACY", "此指标仅支持精确结果", "/metrics")
 		}
 		if m.Field != nil {
@@ -151,19 +151,19 @@ func ValidateConfiguration(r *Request) error {
 				return e
 			}
 		}
-		if m.Op == "count" && m.Field != nil {
+		if m.Op == OpCount && m.Field != nil {
 			return Invalid("INVALID_METRIC", "count 统计事件数，不接受字段", "/metrics")
 		}
-		if m.Op != "count" && m.Op != "unique" && m.Field == nil {
+		if m.Op != OpCount && m.Op != OpUnique && m.Field == nil {
 			return Invalid("INVALID_METRIC", "此指标必须指定字段", "/metrics")
 		}
-		if m.Op == "unique" && m.Field == nil && r.Subject == "" {
+		if m.Op == OpUnique && m.Field == nil && r.Subject == "" {
 			return Invalid("SUBJECT_REQUIRED", "UV 必须指定 uid 或 anonymous 主体", "/subject")
 		}
 	}
 	if r.Kind == QueryKindTrend {
 		if len(r.Metrics) == 0 {
-			r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+			r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 		}
 		if r.Interval != "" && !ValidInterval(r.Interval) {
 			return Invalid("INVALID_INTERVAL", "时间分组无效", "/interval")
