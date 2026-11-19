@@ -55,7 +55,7 @@
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
 3. `reporting.TestDiscoveryVocabularyMatchesContract`：query kind/interval/保留粒度集合相等，funnel mode const 相等，主体子集，聚合枚举与近似聚合子集关系。
 4. `reporting.TestFormulaAndComparisonVocabularyMatchesContract`：公式 7 算子、比较 5 单位集合相等。
-5. `exporting.TestExportVocabularyMatchesContract`：三处格式枚举 + 五态作业状态。
+5. `exporting.TestExportVocabularyMatchesContract`：三处格式枚举（json/csv/ndjson/parquet 四值，parquet 于 2026-11-19 迁移 042 加宽，见 [export-parquet](export-parquet-2026-11-19.md)）+ 五态作业状态。
 6. `backfilling.TestBackfillStateMatchesContract`、`archiving.TestArchiveStatusMatchesContract`、`retention.TestSweepStatusMatchesContract`：各生命周期状态集合相等。
 7. `diagnostics.TestDiagnosticsStatusMatchesContract`：四个分区状态均为 Go 闭集子集，pipeline 分区恰为完整四态且独占 no_data。
 8. `control.TestCollectionQuotaVocabularyContract`：配额来源与运行态枚举相等。

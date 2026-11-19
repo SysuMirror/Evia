@@ -1,6 +1,6 @@
 # Parquet 导出依赖评估与设计备忘录
 
-> 状态：依赖评估已完成（2026-11-19，真实代理探针），语义方案待拍板后进入实现切片。
+> 状态：已落地（2026-11-19，迁移 042，方案 B 强类型映射）。实现与验证见 [export-parquet-2026-11-19](verification/export-parquet-2026-11-19.md)；依赖评估结论与类型映射理由保留如下。
 > 对应覆盖清单 `feature-coverage.md` 数据导出行的剩余项「parquet（需评估依赖）与对象存储适配」。
 > 对象存储适配仍属厂商环境阻塞（见 [production-readiness](production-readiness.md) 第 5 节），本备忘录只覆盖 parquet 格式本身。
 

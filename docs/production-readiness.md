@@ -75,8 +75,8 @@
 | 异地对象存储副本 | [object-storage-replication](verification/object-storage-replication-2026-11-12.md)：SigV4 与 botocore 字节级交叉验证 |
 | 备份完整性 | CH 原生 BACKUP/RESTORE + sha256 manifest，篡改/多余/缺失/外版本/空产物负例单测全覆盖 |
 
-**待外部环境**：parquet 格式、S3 多段上传、SSE-KMS 服务端加密与跨区域
-厂商特有行为——需真实厂商凭证与网络，SigV4 客户端本体已交叉验证。
+**待外部环境**：S3 多段上传、SSE-KMS 服务端加密与跨区域
+厂商特有行为——需真实厂商凭证与网络，SigV4 客户端本体已交叉验证。parquet 格式本身已闭环（2026-11-19，见 [export-parquet](verification/export-parquet-2026-11-19.md)），剩余的是 parquet 产物到对象存储的厂商侧适配。
 
 ## 6. 可观测性 —— 已闭环
 
@@ -94,7 +94,7 @@ Grafana 11 仪表盘、Alertmanager 路由，均经 `check_monitoring.py` 静态
 | 多租户连接池化大规模容量 | 高连接数基准环境 | 单查询护栏与聚合上界已证 |
 | 热键选键 + 514/728 复测 | 运营数据决策 | 专用列代码侧已完结，门控与探针齐备 |
 | 真实 Zipf 拟合指数 | 生产事件采样 | 参数化入口与闭集校验已交付 |
-| parquet/多段上传/SSE-KMS | 真实厂商环境 | SigV4 客户端与 fail-closed 编排已验证 |
+| ~~parquet 格式~~ / 多段上传/SSE-KMS | 真实厂商环境 | parquet 导出已闭环（迁移 042）；SigV4 客户端与 fail-closed 编排已验证，待真实凭证联调 |
 
 ## 结论
 
