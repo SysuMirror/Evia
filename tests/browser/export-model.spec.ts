@@ -46,6 +46,9 @@ test('format defaults to json and is carried into the export input', () => {
   const ndjson = toExportInput(form({ format: 'ndjson' }));
   expect(ndjson.errors).toEqual([]);
   expect(ndjson.input?.format).toBe('ndjson');
+  const parquet = toExportInput(form({ format: 'parquet' }));
+  expect(parquet.errors).toEqual([]);
+  expect(parquet.input?.format).toBe('parquet');
 });
 
 test('window ceiling follows the query kind budget', () => {

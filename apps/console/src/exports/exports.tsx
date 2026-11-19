@@ -67,6 +67,7 @@ const formatOptions: { value: ExportFormat; label: string }[] = [
   { value: 'json', label: 'JSON 完整结果文档' },
   { value: 'csv', label: 'CSV 表格（按结果列顺序）' },
   { value: 'ndjson', label: 'NDJSON 每行一条结果记录' },
+  { value: 'parquet', label: 'Parquet 强类型列存文件' },
 ];
 
 function shortJobID(jobID: string): string {
