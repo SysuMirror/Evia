@@ -80,7 +80,7 @@ func (s *Store) enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project st
 	if e := tx.QueryRow(ctx, `SELECT count(*) FROM analysis_query_jobs WHERE project_id=$1 AND state='queued' AND expires_at>clock_timestamp() AND queued_deadline>clock_timestamp()`, project).Scan(&queued); e != nil {
 		return analysis.Job{}, e
 	}
-	if queued >= 32 {
+	if queued >= analysis.BudgetProjectQueuedQueries {
 		return analysis.Job{}, fault.New(fault.Limited, "QUERY_CONCURRENCY_LIMIT", "项目查询队列已满，请稍后重试")
 	}
 	if e := resolveQueryFields(ctx, tx, project, &request); e != nil {

@@ -66,9 +66,9 @@ func Validate(r *Request) error {
 	if r.TimeRange.From.IsZero() || r.TimeRange.To.IsZero() || !r.TimeRange.From.Before(r.TimeRange.To) {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
-	window := 31 * 24 * time.Hour
+	window := time.Duration(BudgetTrendWindowSeconds) * time.Second
 	if r.Kind == QueryKindJourney || r.Kind == QueryKindEvents || r.Kind == QueryKindFunnel || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution {
-		window = 7 * 24 * time.Hour
+		window = time.Duration(BudgetOtherWindowSeconds) * time.Second
 	}
 	if r.Kind == QueryKindRetention {
 		// Structural policy must be settled before the window is derived from
@@ -111,13 +111,13 @@ func ValidateConfiguration(r *Request) error {
 	if r.Limit == 0 {
 		r.Limit = 200
 	}
-	if r.Limit < 1 || r.Limit > 500 {
+	if r.Limit < 1 || r.Limit > BudgetResultRows {
 		return Invalid("INVALID_LIMIT", "结果大小必须在 1 到 500 之间", "/limit")
 	}
 	if r.Cursor != "" {
 		return Invalid("UNSUPPORTED_QUERY_CURSOR", "此版本仅支持有界快照，请缩小时间范围", "/cursor")
 	}
-	if len(r.EventKeys) > 20 || len(r.GroupBy) > 3 || len(r.Metrics) > 10 {
+	if len(r.EventKeys) > BudgetEventSelections || len(r.GroupBy) > BudgetGroupFields || len(r.Metrics) > BudgetMetrics {
 		return Invalid("QUERY_COST_EXCEEDED", "事件、分组或指标数量超过预算")
 	}
 	if e := validateEventSelection(*r); e != nil {
@@ -196,7 +196,7 @@ func ValidateConfiguration(r *Request) error {
 			return Invalid("SUBJECT_REQUIRED", "漏斗必须指定统计主体", "/subject")
 		}
 		f := r.Funnel
-		if f == nil || len(f.Steps) < 2 || len(f.Steps) > 8 || f.WindowSeconds < 1 || f.WindowSeconds > 604800 || !ValidFunnelMode(f.Mode) {
+		if f == nil || len(f.Steps) < 2 || len(f.Steps) > BudgetFunnelSteps || f.WindowSeconds < 1 || f.WindowSeconds > BudgetFunnelWindowSeconds || !ValidFunnelMode(f.Mode) {
 			return Invalid("INVALID_FUNNEL", "漏斗配置无效", "/funnel")
 		}
 		for i := range f.Steps {
@@ -384,7 +384,7 @@ func validateRetention(r *Request) error {
 	if !ValidRetentionGranularity(rt.Granularity) {
 		return Invalid("INVALID_RETENTION_GRANULARITY", "留存粒度必须是 day、week 或 month", "/retention/granularity")
 	}
-	if rt.Periods < 1 || rt.Periods > 12 {
+	if rt.Periods < 1 || rt.Periods > BudgetRetentionMaxPeriods {
 		return Invalid("INVALID_RETENTION_PERIODS", "留存期数必须在 1 到 12 之间", "/retention/periods")
 	}
 	if len(r.EventKeys) > 0 {
@@ -444,11 +444,11 @@ func validateFilter(f *Filter, depth int, nodes *int) error {
 		return nil
 	}
 	*nodes++
-	if depth > 8 || *nodes > 100 {
+	if depth > BudgetFilterDepth || *nodes > BudgetFilterNodes {
 		return Invalid("QUERY_COST_EXCEEDED", "过滤深度或节点数量超过预算", "/filter")
 	}
 	if f.Op == "and" || f.Op == "or" {
-		if f.Field != nil || f.Value != nil || len(f.Args) < 1 || len(f.Args) > 20 {
+		if f.Field != nil || f.Value != nil || len(f.Args) < 1 || len(f.Args) > BudgetFilterArguments {
 			return Invalid("INVALID_FILTER", "逻辑过滤结构无效", "/filter")
 		}
 		for _, a := range f.Args {
@@ -481,7 +481,7 @@ func validateFilter(f *Filter, depth int, nodes *int) error {
 		return Invalid("INVALID_FILTER_VALUE", "过滤值不能为 null")
 	}
 	if a, ok := f.Value.([]any); ok {
-		if len(a) > 20 {
+		if len(a) > BudgetFilterValues {
 			return Invalid("INVALID_FILTER_VALUE", "值数组最多包含 20 个值")
 		}
 		kind := ""
@@ -534,7 +534,7 @@ func validateEventSelection(r Request) error {
 	if r.EventKeys != nil && r.EventVersions != nil {
 		return Invalid("INVALID_EVENT_SELECTION", "事件标识与固定事件版本不能同时指定", "/event_keys", "/event_versions")
 	}
-	if len(r.EventKeys) > 20 || len(r.EventVersions) > 20 {
+	if len(r.EventKeys) > BudgetEventSelections || len(r.EventVersions) > BudgetEventSelections {
 		return Invalid("QUERY_COST_EXCEEDED", "事件数量超过预算")
 	}
 	seen := map[string]bool{}

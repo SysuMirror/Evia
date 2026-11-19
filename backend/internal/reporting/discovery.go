@@ -225,7 +225,24 @@ func (s *Discovery) Capabilities(ctx context.Context, actor, project string) (Ca
 		FunnelModes:             discoveryFunnelModes,
 		RetentionGranularities:  discoveryRetentionGranularities,
 		FieldTypes:              []FieldCapability{},
-		Budgets:                 DiscoveryBudgets{31 * 86400, 7 * 86400, 20, 3, 10, 500, 8, 100, 20, 20, 8, 604800, 4, 32, 12, 372 * 86400},
+		Budgets: DiscoveryBudgets{
+			TrendWindowSeconds:        analysis.BudgetTrendWindowSeconds,
+			OtherWindowSeconds:        analysis.BudgetOtherWindowSeconds,
+			EventSelections:           analysis.BudgetEventSelections,
+			GroupFields:               analysis.BudgetGroupFields,
+			Metrics:                   analysis.BudgetMetrics,
+			ResultRows:                analysis.BudgetResultRows,
+			FilterDepth:               analysis.BudgetFilterDepth,
+			FilterNodes:               analysis.BudgetFilterNodes,
+			FilterArguments:           analysis.BudgetFilterArguments,
+			FilterValues:              analysis.BudgetFilterValues,
+			FunnelSteps:               analysis.BudgetFunnelSteps,
+			FunnelWindowSeconds:       analysis.BudgetFunnelWindowSeconds,
+			ProjectRunningQueries:     analysis.BudgetProjectRunningQueries,
+			ProjectQueuedQueries:      analysis.BudgetProjectQueuedQueries,
+			RetentionMaxPeriods:       analysis.BudgetRetentionMaxPeriods,
+			RetentionMaxWindowSeconds: analysis.BudgetRetentionMaxWindowSeconds,
+		},
 	}
 	for _, kind := range []string{"string", "boolean", "number", "integer", "datetime", "array:string", "array:boolean", "array:number", "array:integer"} {
 		c, _ := FieldCapabilities(kind)
