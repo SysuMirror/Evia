@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -44,10 +45,10 @@ func TestSavedAnalysisCompositeReferenceResolvesAndEnqueuesMarker(t *testing.T) 
 	}
 	// The stored query is a trend marker shell, never an atomic template.
 	q := created.Definition.Query
-	if q.Kind != "trend" || len(q.Metrics) != 0 || len(q.EventVersions) != 0 || q.Interval != "" || len(q.GroupBy) != 0 || q.Filter != nil {
+	if q.Kind != analysis.QueryKindTrend || len(q.Metrics) != 0 || len(q.EventVersions) != 0 || q.Interval != "" || len(q.GroupBy) != 0 || q.Filter != nil {
 		t.Fatalf("composite definition must carry an empty trend marker shell: %+v", q)
 	}
-	if created.Kind != "trend" {
+	if created.Kind != analysis.QueryKindTrend {
 		t.Fatalf("stored kind should follow the marker shell: %s", created.Kind)
 	}
 

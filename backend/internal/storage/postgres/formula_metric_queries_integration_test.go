@@ -89,7 +89,7 @@ func TestFormulaMetricLoadExecutionBuildsLeafRequests(t *testing.T) {
 		if request.Formula != nil {
 			t.Fatal("leaf request must not carry a formula marker")
 		}
-		if request.Kind != "trend" || request.Environment != "development" || len(request.EventVersions) != 1 {
+		if request.Kind != analysis.QueryKindTrend || request.Environment != "development" || len(request.EventVersions) != 1 {
 			t.Fatalf("leaf %+v request malformed: %+v", ref, request)
 		}
 		if !request.TimeRange.From.Equal(in.TimeRange.From) || request.Timezone != "UTC" {

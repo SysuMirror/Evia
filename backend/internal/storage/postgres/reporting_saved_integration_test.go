@@ -21,7 +21,7 @@ import (
 )
 
 func savedDefinition() reporting.SavedAnalysisDefinition {
-	return reporting.SavedAnalysisDefinition{Title: "Lesson count", Query: analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}}, Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"}}
+	return reporting.SavedAnalysisDefinition{Title: "Lesson count", Query: analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}}, Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"}}
 }
 func savedFixture(t *testing.T) (catalogFixture, reporting.SavedAnalysisDraft) {
 	t.Helper()
@@ -483,7 +483,7 @@ func TestSavedAnalysisRetentionPersistsAndPinsBoundarySteps(t *testing.T) {
 	if e != nil {
 		t.Fatalf("retention saved analysis must pass the widened kind check: %v", e)
 	}
-	if draft.Kind != "retention" {
+	if draft.Kind != analysis.QueryKindRetention {
 		t.Fatalf("stored kind = %q, want retention", draft.Kind)
 	}
 	validation := savedValidate(t, f, draft)
@@ -521,7 +521,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Plan segments",
 				Query: analysis.Template{
-					Kind: "segment", Subject: analysis.SubjectUID,
+					Kind: analysis.QueryKindSegment, Subject: analysis.SubjectUID,
 					Segment: &analysis.Segment{
 						Event: analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 						Field: analysis.Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "lesson_id"},
@@ -537,7 +537,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Onboarding paths",
 				Query: analysis.Template{
-					Kind: "path", Subject: analysis.SubjectUID,
+					Kind: analysis.QueryKindPath, Subject: analysis.SubjectUID,
 					Path: &analysis.Path{Depth: 3, StartEvent: &analysis.Step{EventKey: "open", SchemaVersion: 1}},
 				},
 				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
@@ -550,7 +550,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Full paths",
 				Query: analysis.Template{
-					Kind: "path", Subject: analysis.SubjectUID,
+					Kind: analysis.QueryKindPath, Subject: analysis.SubjectUID,
 					Path: &analysis.Path{Depth: 3},
 				},
 				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
@@ -563,7 +563,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Conversion attribution",
 				Query: analysis.Template{
-					Kind: "attribution", Subject: analysis.SubjectUID,
+					Kind: analysis.QueryKindAttribution, Subject: analysis.SubjectUID,
 					Attribution: &analysis.Attribution{
 						Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
 						Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}},

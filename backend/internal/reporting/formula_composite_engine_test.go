@@ -53,11 +53,11 @@ func TestCompositeEngineDelegatesOrdinaryRequest(t *testing.T) {
 	inner := &recordingEngine{results: map[string]analysis.Result{}}
 	loader := &stubFormulaLoader{}
 	engine := NewCompositeFormulaEngine(inner, loader)
-	ordinary := analysis.Request{Kind: "trend", Environment: "development"}
+	ordinary := analysis.Request{Kind: analysis.QueryKindTrend, Environment: "development"}
 	if _, e := engine.Execute(context.Background(), analysis.Scope{}, ordinary); e != nil {
 		t.Fatal(e)
 	}
-	if loader.called || len(inner.requests) != 1 || inner.requests[0].Kind != "trend" {
+	if loader.called || len(inner.requests) != 1 || inner.requests[0].Kind != analysis.QueryKindTrend {
 		t.Fatal("ordinary request must bypass the loader and reach the inner engine")
 	}
 }
@@ -73,8 +73,8 @@ func TestCompositeEngineFansOutFormula(t *testing.T) {
 	root := fRef("11111111-1111-4111-8111-111111111111", 1)
 	def := FormulaDefinition{Expression: fRatio(idA, idB), Unit: "number"}
 	leaves := map[MetricReference]analysis.Request{
-		refA: {Kind: "trend", Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
-		refB: {Kind: "trend", Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
+		refA: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
+		refB: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
 	}
 	loader := &stubFormulaLoader{plan: FormulaExecutionPlan{Root: root, Composite: map[MetricReference]FormulaDefinition{root: def}, AtomicRequests: leaves}}
 	engine := NewCompositeFormulaEngine(inner, loader)
@@ -115,8 +115,8 @@ func TestCompositeEngineEvaluatesNestedComposite(t *testing.T) {
 			refC: {Expression: fRatio(idA, idB), Unit: "number"},
 		},
 		AtomicRequests: map[MetricReference]analysis.Request{
-			refA: {Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}},
-			refB: {Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}},
+			refA: {Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}},
+			refB: {Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}},
 		},
 	}
 	engine := NewCompositeFormulaEngine(inner, &stubFormulaLoader{plan: plan})
@@ -150,8 +150,8 @@ func TestCompositeEngineAbortsOnLeafError(t *testing.T) {
 	root := fRef("11111111-1111-4111-8111-111111111111", 1)
 	inner := &recordingEngine{fail: errors.New("clickhouse down")}
 	leaves := map[MetricReference]analysis.Request{
-		fRef(idA, 1): {Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}},
-		fRef(idB, 1): {Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}},
+		fRef(idA, 1): {Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}},
+		fRef(idB, 1): {Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}},
 	}
 	plan := FormulaExecutionPlan{
 		Root:           root,

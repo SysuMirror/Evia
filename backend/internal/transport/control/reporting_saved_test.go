@@ -52,7 +52,7 @@ func (f *savedHTTPService) call(actor, project string) error {
 	return f.err
 }
 func savedResource() reporting.SavedAnalysis {
-	return reporting.SavedAnalysis{ID: savedID, ProjectID: projectID, Environment: "development", Title: "Daily opens", Kind: "trend", DraftRevision: 1, CreatedAt: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)}
+	return reporting.SavedAnalysis{ID: savedID, ProjectID: projectID, Environment: "development", Title: "Daily opens", Kind: analysis.QueryKindTrend, DraftRevision: 1, CreatedAt: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)}
 }
 func savedDraft() reporting.SavedAnalysisDraft {
 	var def reporting.SavedAnalysisDefinition
@@ -511,7 +511,7 @@ func TestSavedAnalysisHTTPMetricReferenceBoundary(t *testing.T) {
 		AnalysisID: savedID, ProjectID: projectID, Environment: "development", Version: 1, DraftRevision: 1,
 		Definition: reporting.SavedAnalysisDefinition{
 			Title:         "Metric card",
-			Query:         analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}, Limit: 200},
+			Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}, Limit: 200},
 			MetricRef:     &reporting.MetricReference{MetricID: metricRefID, Version: 1},
 			Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"},
 		},
@@ -546,7 +546,7 @@ func TestSavedAnalysisHTTPMetricReferenceBoundary(t *testing.T) {
 	}
 	metricDraft := reporting.SavedAnalysisDraft{
 		SavedAnalysis: reporting.SavedAnalysis{
-			ID: savedID, ProjectID: projectID, Environment: "development", Title: "Metric card", Kind: "trend",
+			ID: savedID, ProjectID: projectID, Environment: "development", Title: "Metric card", Kind: analysis.QueryKindTrend,
 			DraftRevision: 1, CreatedAt: savedResource().CreatedAt, UpdatedAt: savedResource().CreatedAt,
 		},
 		Definition: liveDefinition,

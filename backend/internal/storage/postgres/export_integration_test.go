@@ -52,7 +52,7 @@ func TestExportJobAuthorityIdempotencyAndLifecycle(t *testing.T) {
 	}
 
 	job, created, e := f.s.CreateExportJob(ctx, in)
-	if e != nil || !created || job.State != exporting.StateQueued || job.Request.Kind != "events" {
+	if e != nil || !created || job.State != exporting.StateQueued || job.Request.Kind != analysis.QueryKindEvents {
 		t.Fatal(job, e, created)
 	}
 	// Idempotent replay and conflict on reused key with another body.
@@ -69,7 +69,7 @@ func TestExportJobAuthorityIdempotencyAndLifecycle(t *testing.T) {
 	// Cancellation only applies to queued jobs.
 	cancelled, e := f.s.CancelExportJob(ctx, f.owner, f.project, job.JobID)
 	if e != nil || cancelled.State != exporting.StateCancelled || cancelled.FinishedAt == nil ||
-		cancelled.Request.Kind != "events" {
+		cancelled.Request.Kind != analysis.QueryKindEvents {
 		t.Fatal(cancelled, e)
 	}
 	if _, e = f.s.CancelExportJob(ctx, f.owner, f.project, job.JobID); e == nil {
@@ -134,7 +134,7 @@ func TestExportClaimCompleteFailAndLeaseGuard(t *testing.T) {
 		t.Fatal(claim, e)
 	}
 	// 回归：claim 扫描必须还原 request_json，否则 worker 会以零值请求编译失败。
-	if claim.Request.Kind != "events" || claim.Request.Environment != "development" || claim.Request.TimeRange.From.IsZero() {
+	if claim.Request.Kind != analysis.QueryKindEvents || claim.Request.Environment != "development" || claim.Request.TimeRange.From.IsZero() {
 		t.Fatalf("claimed job lost bounded request payload: %+v", claim.Request)
 	}
 	// Empty queue reports nil without an error.
@@ -157,7 +157,7 @@ func TestExportClaimCompleteFailAndLeaseGuard(t *testing.T) {
 	finished, e := f.s.GetExportJob(ctx, f.owner, f.project, job.JobID)
 	if e != nil || finished.State != exporting.StateCompleted || finished.ArtifactPath == nil ||
 		*finished.ArtifactSHA256 != artifact.SHA256 || *finished.ResultRows != 7 || finished.ExpiresAt == nil ||
-		finished.Request.Kind != "events" {
+		finished.Request.Kind != analysis.QueryKindEvents {
 		t.Fatalf("completed job wrong: %+v", finished)
 	}
 }
@@ -207,7 +207,7 @@ func TestExportDownloadGrantOneTimeRedemption(t *testing.T) {
 	}
 	// System-level job read used by the download endpoint works without actor.
 	systemJob, e := f.s.GetSystemExportJob(ctx, f.project, job.JobID)
-	if e != nil || systemJob.State != exporting.StateCompleted || systemJob.Request.Kind != "events" {
+	if e != nil || systemJob.State != exporting.StateCompleted || systemJob.Request.Kind != analysis.QueryKindEvents {
 		t.Fatal(systemJob, e)
 	}
 	redeemed, e := f.s.RedeemExportGrant(ctx, token)

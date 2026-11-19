@@ -127,7 +127,7 @@ func TestExportCreateValidatesAndMaps(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.JobID != exportJobID || out.State != exporting.StateCompleted {
 		t.Fatalf("bad response: %v body=%s", err, w.Body.String())
 	}
-	if svc.createInput.Name != "weekly" || svc.createInput.Request.Kind != "trend" || svc.createInput.IdempotencyKey != "export-http-key" {
+	if svc.createInput.Name != "weekly" || svc.createInput.Request.Kind != analysis.QueryKindTrend || svc.createInput.IdempotencyKey != "export-http-key" {
 		t.Fatalf("input mapping wrong: %+v", svc.createInput)
 	}
 }

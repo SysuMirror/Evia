@@ -13,7 +13,7 @@ import (
 )
 
 func savedDefinition() SavedAnalysisDefinition {
-	return SavedAnalysisDefinition{Title: "  Page visits  ", Query: analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}}, Visualization: SavedAnalysisVisualization{Kind: "metric"}}
+	return SavedAnalysisDefinition{Title: "  Page visits  ", Query: analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}}, Visualization: SavedAnalysisVisualization{Kind: "metric"}}
 }
 func savedSnapshot(t *testing.T, definition SavedAnalysisDefinition) SavedAnalysisSnapshot {
 	t.Helper()
@@ -23,27 +23,27 @@ func savedSnapshot(t *testing.T, definition SavedAnalysisDefinition) SavedAnalys
 	}
 	mode := "event_versions"
 	selected := normalized.Query.EventVersions
-	if normalized.Query.Kind == "funnel" {
+	if normalized.Query.Kind == analysis.QueryKindFunnel {
 		mode = "funnel_steps"
 		selected = nil
 		for _, step := range normalized.Query.Funnel.Steps {
 			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
 		}
 	}
-	if normalized.Query.Kind == "retention" {
+	if normalized.Query.Kind == analysis.QueryKindRetention {
 		mode = "retention_steps"
 		selected = nil
 		for _, step := range []analysis.Step{normalized.Query.Retention.StartEvent, normalized.Query.Retention.ReturnEvent} {
 			selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
 		}
 	}
-	if normalized.Query.Kind == "segment" {
+	if normalized.Query.Kind == analysis.QueryKindSegment {
 		mode = "segment_steps"
 		selected = nil
 		step := normalized.Query.Segment.Event
 		selected = append(selected, analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion})
 	}
-	if normalized.Query.Kind == "path" {
+	if normalized.Query.Kind == analysis.QueryKindPath {
 		selected = nil
 		if normalized.Query.Path.StartEvent != nil {
 			mode = "path_steps"
@@ -53,7 +53,7 @@ func savedSnapshot(t *testing.T, definition SavedAnalysisDefinition) SavedAnalys
 			mode = "all_events"
 		}
 	}
-	if normalized.Query.Kind == "attribution" {
+	if normalized.Query.Kind == analysis.QueryKindAttribution {
 		mode = "attribution_steps"
 		selected = nil
 		for _, step := range append([]analysis.Step{normalized.Query.Attribution.Conversion}, normalized.Query.Attribution.Touchpoints...) {
@@ -245,7 +245,7 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 	if unchanged.ValidationHash == changed.ValidationHash {
 		t.Fatal("diff/content absent from acknowledgement")
 	}
-	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: "funnel", Subject: analysis.SubjectUID, Funnel: &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: "funnel"}}
+	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: analysis.QueryKindFunnel, Subject: analysis.SubjectUID, Funnel: &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: analysis.QueryKindFunnel}}
 	fs := savedSnapshot(t, funnel)
 	b := fs.Draft.Definition
 	fs.Draft.PublishedVersion = 1
@@ -567,7 +567,7 @@ func TestSavedServiceRejectsMismatchedValidationSnapshot(t *testing.T) {
 }
 
 func TestSavedDefinitionSizeIncludesDefaultsAtPersistenceBoundary(t *testing.T) {
-	definition := SavedAnalysisDefinition{Title: "t", Description: strings.Repeat("d", 1037), Query: analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "opened", SchemaVersion: 1}}}, Visualization: SavedAnalysisVisualization{Kind: "metric"}}
+	definition := SavedAnalysisDefinition{Title: "t", Description: strings.Repeat("d", 1037), Query: analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "opened", SchemaVersion: 1}}}, Visualization: SavedAnalysisVisualization{Kind: "metric"}}
 	definition.Query.Filter = &analysis.Filter{Op: "and"}
 	for i := 0; i < 7; i++ {
 		values := make([]any, 18)

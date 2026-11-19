@@ -24,7 +24,7 @@ import (
 func savedRunDefinition() reporting.SavedAnalysisDefinition {
 	return reporting.SavedAnalysisDefinition{
 		Title: "Lesson total", Description: "Synthetic saved query",
-		Query:         analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}}},
+		Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}}},
 		Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"},
 	}
 }

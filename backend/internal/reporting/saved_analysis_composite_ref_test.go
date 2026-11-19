@@ -101,7 +101,7 @@ func TestResolveCompositeMetricReferenceBuildsMarkerShell(t *testing.T) {
 	if resolved.MetricRef == nil || !resolved.MetricRef.IsComposite() || resolved.MetricRef.Version != 2 {
 		t.Fatalf("composite provenance lost: %+v", resolved.MetricRef)
 	}
-	if resolved.Query.Kind != "trend" || len(resolved.Query.EventVersions) != 0 ||
+	if resolved.Query.Kind != analysis.QueryKindTrend || len(resolved.Query.EventVersions) != 0 ||
 		len(resolved.Query.Metrics) != 0 || resolved.Query.Interval != "" ||
 		len(resolved.Query.GroupBy) != 0 || resolved.Query.Filter != nil {
 		t.Fatalf("composite query must be an empty trend marker shell: %+v", resolved.Query)

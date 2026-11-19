@@ -23,8 +23,8 @@ func TestEvaluateFormulaPlanNestedAndSharedLeaves(t *testing.T) {
 			refC: {Expression: fRatio(idA, idB), Unit: "number"},
 		},
 		AtomicRequests: map[MetricReference]analysis.Request{
-			refA: {Kind: "trend"},
-			refB: {Kind: "trend"},
+			refA: {Kind: analysis.QueryKindTrend},
+			refB: {Kind: analysis.QueryKindTrend},
 		},
 	}
 	out, e := EvaluateFormulaPlan(plan, atomicResults)

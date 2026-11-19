@@ -104,7 +104,7 @@ func TestSavedAnalysisExportBindsSnapshotAndReplays(t *testing.T) {
 	if job.Source == nil || job.Source.AnalysisID != draft.ID || job.Source.Version != published.Version {
 		t.Fatalf("source witness missing: %+v", job.Source)
 	}
-	if job.Request.Environment != "development" || job.Request.Kind != "trend" {
+	if job.Request.Environment != "development" || job.Request.Kind != analysis.QueryKindTrend {
 		t.Fatalf("bound request mismatch: %+v", job.Request)
 	}
 	if !job.Request.TimeRange.From.Equal(r.TimeRange.From.UTC()) || !job.Request.TimeRange.To.Equal(r.TimeRange.To.UTC()) {

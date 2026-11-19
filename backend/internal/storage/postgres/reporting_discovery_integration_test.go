@@ -228,7 +228,7 @@ func TestReportingDryValidationTypedScalarsDependenciesAndNoWrites(t *testing.T)
 	}
 	_, e = svc.ValidateQuery(ctx, f.outsider, f.project, reportingRequest(t, request))
 	faultCode(t, e, "PROJECT_NOT_FOUND")
-	request.Kind = "events"
+	request.Kind = analysis.QueryKindEvents
 	request.Metrics = nil
 	_, e = svc.ValidateQuery(ctx, f.viewer, f.project, reportingRequest(t, request))
 	faultCode(t, e, "PROJECT_FORBIDDEN")
@@ -240,7 +240,7 @@ func TestReportingDryValidationTypedScalarsDependenciesAndNoWrites(t *testing.T)
 	}
 	_, e = svc.Capabilities(ctx, f.viewer, f.project)
 	faultCode(t, e, "PROJECT_NOT_FOUND")
-	request.Kind = "trend"
+	request.Kind = analysis.QueryKindTrend
 	_, e = svc.ValidateQuery(ctx, f.viewer, f.project, reportingRequest(t, request))
 	faultCode(t, e, "PROJECT_NOT_FOUND")
 }

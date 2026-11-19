@@ -95,7 +95,7 @@ func dashboardExecution() DashboardExecute {
 func TestDashboardRuntimeFiltersPreserveFixedPredicatesAndBoundVersions(t *testing.T) {
 	fixed := &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "system", Key: "uid"}, Value: "fixed"}
 	runtime := &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "enabled"}, Value: false}
-	version := SavedAnalysisVersion{Environment: "development", Definition: SavedAnalysisDefinition{Query: analysis.Template{Kind: "trend", EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Filter: fixed}}}
+	version := SavedAnalysisVersion{Environment: "development", Definition: SavedAnalysisDefinition{Query: analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Filter: fixed}}}
 	request, e := BindDashboardWidget(version, runtime, dashboardExecution())
 	if e != nil {
 		t.Fatal(e)

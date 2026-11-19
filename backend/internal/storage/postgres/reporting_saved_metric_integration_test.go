@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 )
 
@@ -50,13 +51,13 @@ func TestSavedAnalysisMetricReferenceResolvesPinsAndPublishes(t *testing.T) {
 		t.Fatalf("saved analysis timestamps must serialize as UTC: %s %s", created.CreatedAt, created.UpdatedAt)
 	}
 	q := created.Definition.Query
-	if q.Kind != "trend" || len(q.Metrics) != 1 || q.Metrics[0].Op != "count" || q.Interval != "" || len(q.GroupBy) != 0 {
+	if q.Kind != analysis.QueryKindTrend || len(q.Metrics) != 1 || q.Metrics[0].Op != "count" || q.Interval != "" || len(q.GroupBy) != 0 {
 		t.Fatalf("derived query is not a whole-range metric card: %+v", q)
 	}
 	if len(q.EventVersions) != 1 || q.EventVersions[0].EventKey != "lesson_opened" || q.EventVersions[0].SchemaVersion != 1 {
 		t.Fatalf("derived query lost the pinned event version: %+v", q.EventVersions)
 	}
-	if created.Kind != "trend" {
+	if created.Kind != analysis.QueryKindTrend {
 		t.Fatalf("stored kind should follow the derived query: %s", created.Kind)
 	}
 

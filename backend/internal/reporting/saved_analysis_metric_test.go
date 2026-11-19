@@ -57,7 +57,7 @@ func TestMetricReferenceInputIsAcceptedOnlyWithoutInlineQuery(t *testing.T) {
 	savedErrorCode(t, err, "INVALID_METRIC_REFERENCE")
 
 	both := metricRefDefinition()
-	both.Query.Kind = "trend"
+	both.Query.Kind = analysis.QueryKindTrend
 	both.Query.EventVersions = []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}
 	_, err = NormalizeSavedAnalysisDefinition(both)
 	savedErrorCode(t, err, "INVALID_METRIC_REFERENCE")
@@ -79,7 +79,7 @@ func TestResolveMetricReferenceDerivesImmutableTrendCard(t *testing.T) {
 	if resolved.MetricRef == nil || resolved.MetricRef.Version != 1 {
 		t.Fatal("provenance reference lost after resolution")
 	}
-	if resolved.Query.Kind != "trend" || len(resolved.Query.Metrics) != 1 || resolved.Query.Interval != "" || len(resolved.Query.GroupBy) != 0 {
+	if resolved.Query.Kind != analysis.QueryKindTrend || len(resolved.Query.Metrics) != 1 || resolved.Query.Interval != "" || len(resolved.Query.GroupBy) != 0 {
 		t.Fatalf("derived query is not a whole-range single metric card: %+v", resolved.Query)
 	}
 	if len(resolved.Query.EventVersions) != 1 || resolved.Query.EventVersions[0].EventKey != "page_opened" {
