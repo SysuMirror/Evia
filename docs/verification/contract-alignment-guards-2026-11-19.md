@@ -44,10 +44,11 @@
 | 产物语言（1，单值 enum） | artifacts wire 组装内联裸字符串 → control 包内 `artifactLanguage*` 常量 + 守卫；产物源码注释与路由保留 | `TypeScriptArtifact.language` | 对齐 |
 | 查询覆盖态（3，Go 子集 1） | clickhouse/formula 两处裸字符串 → `analysis.CoverageState*` 常量 + 子集守卫；预留态不提前命名 | `QueryResult.metadata.coverage.state` | 对齐（子集） |
 | 来源申请态（3，Go 可观测 2） | sources 裸字符串 → `ingestion.ApplicationState*` 常量 + 三 schema 子集守卫；派生 SQL CASE 保留、failed 预留 | `*/SourceIssued/Retention.application_state` | 对齐（子集） |
+| 发布生命周期态（5，Go 子集 1）/加速态（4，可观测 2） | catalog 裸字符串 → `catalog.Release*` 常量 + 双子集守卫；EventPlan status/SQL/幂等键保留 | `Release.state`/`acceleration_state` | 对齐（子集） |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（30 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（31 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -79,6 +80,7 @@
 28. `control.TestArtifactLanguageVocabularyContract`：`TypeScriptArtifact.language` 单值 enum 与包内 `artifactLanguages` 集合相等；生成源码注释与路由字符串不属 wire 词汇，刻意保留（独立切片，同上）。
 29. `analysis.TestCoverageStateVocabularyContract`：`QueryResult.metadata.coverage.state` 三值 enum 对 Go 子集 `analysis.CoverageStates`（当前仅 provisional）做子集断言；settled/partial 为契约预留态（独立切片，见 [subset-state-guards](subset-state-guards-2026-11-19.md)）。
 30. `ingestion.TestApplicationStateVocabularyContract`：Source/SourceIssued/Retention 三 schema 共享的 `application_state` enum 对 Go 可观测子集 `ingestion.ApplicationStates`（pending/applied）做子集断言；failed 无产出方，SQL CASE 派生字符串刻意保留（独立切片，同上）。
+31. `catalog.TestReleaseStateVocabularyContract`：`Release.state`（Go 子集仅 published，CHECK 002 同限）与 `acceleration_state`（Go 可观测 not_requested/building）分别对契约 enum 做子集断言；预留工作流态与 ready/failed 不提前命名（独立切片，见 [release-state-closed-set](release-state-closed-set-2026-11-19.md)）。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -103,11 +105,12 @@
 - 采集回执条目态：向 `ItemStatuses` 注入 `drift_probe`（分支数断言变红）、把 `ItemStatusRejected` 值改为 `drift_probe`（集合断言变红），两条分支独立验证后还原复绿（详见独立验证记录）。
 - 单值枚举（catalog 语义/artifact 语言）：分别向两个单值切片注入 `drift_probe` → 各报 `... drift: contract [x] != Go [x drift_probe]` 变红，还原复绿（详见独立验证记录）。
 - 子集态（coverage/application_state）：分别向两子集切片注入 `drift_probe` → 各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
+- 发布双态：分别向 `ReleaseStates`/`ReleaseAccelerationStates` 注入 `drift_probe` → 两条子集断言各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。
 
 ## 明确未做（边界）
 
