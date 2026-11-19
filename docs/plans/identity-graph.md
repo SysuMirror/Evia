@@ -30,7 +30,7 @@
 | 表 | 关键列 | 说明 |
 | --- | --- | --- |
 | `identity_edges` | (project_id, environment, uid, anonymous_id) PK；`first_seen_at`、`last_seen_at`、`first_revision`、`last_revision` | 从 `sys.identity_link` 事实折叠的边。append-only：同一对身份重复出现只更新 `last_seen_at`/`last_revision`，不新增行。**不含来源 event_id**——边是身份对的聚合事实，不是事件副本；重扫天然幂等。 |
-| `identity_persons` | (project_id, environment, resolved_person_id) PK；`state`（active/retired）；`superseded_by`（retired 时指向合并后的存活者）；`created_at`、`create_revision` | resolved person 的持久注册表。`resolved_person_id` 为 UUID，**一次性分配、永不复用**。合并时被吸收者置 retired 并留 redirect 链，查询解析链深度有界（建议 ≤8，超限 fail-closed 重建）。 |
+| `identity_persons` | (project_id, environment, resolved_person_id) PK；`state`（active/retired）；`superseded_by`（retired 时指向合并后的存活者）；`created_at`、`create_revision` | resolved person 的持久注册表。`resolved_person_id` 为 UUID，**一次性分配、永不复用**。合并时被吸收者置 retired 并留 redirect 链，查询解析链深度有界（≤16，超限 fail-closed 重建；2026-11-20 决策）。 |
 | `identity_person_members` | (project_id, environment, resolved_person_id, member_kind, member_value) PK；`first_seen_at`、`joined_revision` | 成员归属。`member_kind` 闭集 `uid`/`anonymous_id`。一人多成员（≥1 uid 且 ≥1 anonymous 为常态）。 |
 | `identity_revisions` | (project_id, environment, revision) PK，revision 为项目内 bigserial；`watermark_received_at`、`edge_count`、`person_count`、`member_count`、`state`（building/completed/failed）、`built_at`、`error_code` | 不可变快照目录。completed 行只读；failed 行保留失败码供诊断，下一次成功折叠产生新 revision，不覆盖。 |
 | `identity_fold_state` | (project_id, environment) PK；`last_completed_revision`、`scan_watermark`、租约列（generation/owner/until） | 折叠水位与 worker 租约，形状对齐 `erasure_jobs`/`export_jobs` 的 SKIP LOCKED 租约模式。 |
@@ -86,7 +86,7 @@ erasure 作业已有 `hiding→purging→rebuilding→completed` 状态机（`in
   - `unique`/计数主体：对成员集合构造有界映射表达式（`multiIf(uid IN (...), p, anonymous_id IN (...), p, ...)` 风格，参数绑定），distinct 按 resolved id 计——同一人多个 uid/anonymous 只计一次；
   - filter/journey 类主体列：trend/events 的身份过滤接受 resolved id 并展开为成员谓词（OR 连接，参数绑定）；
   - funnel/segment/path/attribution/retention 的按主体拉取：主体列从单列（uid 或 anonymous_id）变为「uid 列 ∪ anonymous_id 列」经映射表达式归一到 resolved id。
-- **预算**：新独立预算 `identity_expansion_members`（建议上限 256 成员/人，`docs/analysis.md` 预算表追加一行）；超限返回 `IDENTITY_EXPANSION_EXCEEDED`（新错误码），不静默截断成员。展开后的谓词参数不计入 filter 节点预算（它们不是用户过滤树），但计入查询整体参数绑定规模护栏。
+- **预算**：新独立预算 `identity_expansion_members`（上限 1024 成员/人，2026-11-20 决策从宽；`docs/analysis.md` 预算表追加一行）；超限返回 `IDENTITY_EXPANSION_EXCEEDED`（新错误码），不静默截断成员。展开后的谓词参数不计入 filter 节点预算（它们不是用户过滤树），但计入查询整体参数绑定规模护栏。
 - **journey/events 明细**：`events`（raw 行）允许 resolved_person（成员谓词过滤，需 `queries.raw.read`）；`journey` v1 拒绝（非目标），错误信息指向「用原始身份查 journey 或用 events 拉成员明细」。
 - revision 钉版一致性：展开集合在该 revision 的成员表快照上读取；查询执行期间新 revision 落地不影响已入队查询（成员集合在计划期物化进任务）。
 
@@ -119,6 +119,21 @@ erasure 作业已有 `hiding→purging→rebuilding→completed` 状态机（`in
 每片完成后更新 PROGRESS、覆盖清单（「未实现」→ 对应切片边界的「部分」）、`docs/identity.md`（新建模块文档）。
 
 ## 9. 风险与开放问题（需用户决策）
+
+### 决策记录（2026-11-20，用户授权自主拍板：限制从宽、确定性优先）
+
+| # | 问题 | 决策 | 理由 |
+| --- | --- | --- | --- |
+| Q1 | 成员展开上限取值 | **1024/人**（`IDENTITY_EXPANSION_EXCEEDED` 超限 fail-closed） | 用户明确要求限制从宽；1024 仍保有界（映射表达式与参数绑定规模可控），比建议缺省 256 放开一档，覆盖大账户多设备共用场景 |
+| Q2 | representative 合并规则 | 「创建 revision 更古老者存活，平局取 resolved_person_id 字典序小者」 | 确定性与稳定性优先：同事实序列任何重放同构，redirect 链保证钉版历史可解释；不引入成员类型偏好 |
+| Q3 | 省略 `identity_revision` 时取最新 | 省略=最新 completed revision，`metadata.identity_revision` 回填实际编号 | 契约已允许省略；最新 completed 是可解释缺省，陈旧性由 revision 元数据（水位）显式暴露而非隐藏 |
+| Q4 | 机器触发重建授权 | v1 仅 owner 人类（CSRF + Idempotency-Key）；迁移 044 与 `identity.rebuild` 机器授权留待自动化运维需求出现时补 | 控制封闭权限词汇增长；重建属运维破坏面较小的动作但暂无机器自动化场景 |
+| Q5 | revision 保留策略 | **保留最近 90 天或 1000 个 completed（取大）**，更早归档删除 | 限制从宽；切片①不实现清理（无删除路径），决策值先入文档，随保留策略切片落地时需要配套「钉住已删除 revision」的失效错误码 |
+| Q6 | 折叠事实来源 | v1 仅 `sys.identity_link`（browser 来源、经 `identify()` 显式声明） | 语义纯度优先：服务端事件的 uid+anonymous 不是显式身份声明，混入会弱化「用户确认过的关联」语义；后续版本可评估 |
+
+同批拍板的相关边界（同样从宽）：redirect 解析链深度上限 **16**（原建议 8）；折叠扫描 overlap 保持 1 小时；`identity-worker` 轮询 60s、租约 5 分钟（运维参数非用户限制，按工程缺省）。
+
+### 原开放问题清单（决策前存档）
 
 | # | 问题 | 建议缺省 | 风险 |
 | --- | --- | --- | --- |
