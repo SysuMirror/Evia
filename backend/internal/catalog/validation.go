@@ -68,10 +68,10 @@ func CheckDefinition(in DraftInput, publication bool) []Issue {
 		}
 		seen[v] = true
 	}
-	if in.FactKind != nil && text(in.FactKind) != "user_intent" && text(in.FactKind) != "client_observed" && text(in.FactKind) != "server_confirmed" || publication && in.FactKind == nil {
+	if in.FactKind != nil && !ValidFactKind(text(in.FactKind)) || publication && in.FactKind == nil {
 		add("/fact_kind", "事实类型无效")
 	}
-	if text(in.FactKind) == "server_confirmed" && seen[ingestion.SourceKindBrowser] {
+	if text(in.FactKind) == FactKindServerConfirmed && seen[ingestion.SourceKindBrowser] {
 		add("/allowed_source_kinds", "服务端确认事件不能允许浏览器来源")
 	}
 	if len(in.FieldMetadata) > 50 {
