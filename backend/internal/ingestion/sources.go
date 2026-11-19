@@ -157,7 +157,7 @@ func (s *SourceService) CreateSource(ctx context.Context, actor, project string,
 	if in.Kind == SourceKindServer && len(origins) != 0 {
 		return Issued{}, Invalid("INVALID_ORIGINS", "服务端来源不使用浏览器 Origin 配置")
 	}
-	src := Source{ID: ids.New(), ProjectID: project, Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: origins, Status: SourceStatusActive, Revision: 1, ApplicationState: "pending"}
+	src := Source{ID: ids.New(), ProjectID: project, Name: in.Name, Environment: in.Environment, Kind: in.Kind, AllowedOrigins: origins, Status: SourceStatusActive, Revision: 1, ApplicationState: ApplicationStatePending}
 	c, secret, e := s.credential(src.ID, in.Kind)
 	if e != nil {
 		return Issued{}, e
