@@ -178,7 +178,7 @@ func TestCatalogProjectsOnlyQueryableTopLevelTypedFields(t *testing.T) {
 	if !seen["count"].Required || seen["enabled"].Required || seen["tags"].Groupable || seen["date"].Type != "string" {
 		t.Fatal(fields)
 	}
-	if seen["count"].Metadata["description"] != "Synthetic count" || seen["enabled"].MissingSemantics != "absent_key" || seen["enabled"].NullSemantics != "present_but_not_a_typed_value" {
+	if seen["count"].Metadata["description"] != "Synthetic count" || seen["enabled"].MissingSemantics != CatalogMissingSemanticsAbsentKey || seen["enabled"].NullSemantics != CatalogNullSemanticsPresentButNotATypedValue {
 		t.Fatal(fields)
 	}
 }

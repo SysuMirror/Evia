@@ -98,7 +98,7 @@ func TestTypeScriptArtifactMapsFullResponse(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.Language != "typescript" || out.LanguageVersion != artifacts.LanguageVersion ||
+	if out.Language != artifactLanguageTypeScript || out.LanguageVersion != artifacts.LanguageVersion ||
 		out.EventCount != 1 || out.ByteSize != int64(artifact.ByteSize) || out.Checksum != artifact.Checksum {
 		t.Fatalf("artifact metadata wrong: %+v", out)
 	}
