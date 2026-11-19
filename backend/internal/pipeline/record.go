@@ -91,7 +91,7 @@ func normalizeRecord(r ingestion.Record) (ingestion.Record, error) {
 		}
 	}
 	switch r.Context.NavigationType {
-	case "", "initial", "push", "replace", "pop", "restore":
+	case "", NavigationInitial, NavigationPush, NavigationReplace, NavigationPop, NavigationRestore:
 	default:
 		return r, errInvalidRecord
 	}
