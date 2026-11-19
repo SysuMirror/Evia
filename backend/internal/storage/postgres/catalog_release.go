@@ -90,7 +90,7 @@ func (s *Store) CreateRelease(ctx context.Context, actor, project, key string, i
 	if metadata >= catalog.MaxInteger {
 		return catalog.Release{}, fault.New(fault.Conflict, "RELEASE_REVISION_EXHAUSTED", "发布版本已达到上限")
 	}
-	r := catalog.Release{ID: ids.New(), Revision: metadata + 1, Environment: in.Environment, State: "published", IngestionReady: false, AccelerationState: "not_requested"}
+	r := catalog.Release{ID: ids.New(), Revision: metadata + 1, Environment: in.Environment, State: catalog.ReleaseStatePublished, IngestionReady: false, AccelerationState: catalog.ReleaseAccelerationNotRequested}
 	manifest := releaseManifest{Format: "activity.event-plan.v1", Status: "published", ProjectKey: project, Environment: in.Environment, Revision: r.Revision, Events: make([]manifestEvent, 0, len(in.Events))}
 	for _, selected := range in.Events {
 		draft, e := readDraft(ctx, tx, project, selected.Key)
