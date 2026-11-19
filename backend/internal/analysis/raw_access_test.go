@@ -9,11 +9,11 @@ func TestRequiresRawAccess(t *testing.T) {
 		request Request
 		want    bool
 	}{
-		{"aggregate UID", Request{Kind: "trend", Subject: SubjectUID, Metrics: []Metric{{Op: "unique"}}}, false},
-		{"aggregate funnel", Request{Kind: "funnel", Subject: SubjectUID}, false},
-		{"events", Request{Kind: "events"}, true},
-		{"journey", Request{Kind: "journey"}, true},
-		{"explicit identity on count", Request{Kind: "trend", IdentityFilter: &IdentityFilter{}}, true},
+		{"aggregate UID", Request{Kind: QueryKindTrend, Subject: SubjectUID, Metrics: []Metric{{Op: "unique"}}}, false},
+		{"aggregate funnel", Request{Kind: QueryKindFunnel, Subject: SubjectUID}, false},
+		{"events", Request{Kind: QueryKindEvents}, true},
+		{"journey", Request{Kind: QueryKindJourney}, true},
+		{"explicit identity on count", Request{Kind: QueryKindTrend, IdentityFilter: &IdentityFilter{}}, true},
 		{"UID dimension", Request{GroupBy: []Field{*identity("uid")}}, true},
 		{"anonymous dimension", Request{GroupBy: []Field{*identity("anonymous_id")}}, true},
 		{"session dimension", Request{GroupBy: []Field{*identity("session_id")}}, true},
@@ -46,11 +46,11 @@ func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
 		name    string
 		request Request
 	}{
-		{"retention uid", Request{Kind: "retention", Subject: SubjectUID}},
-		{"retention anonymous", Request{Kind: "retention", Subject: SubjectAnonymous}},
-		{"segment uid", Request{Kind: "segment", Subject: SubjectUID}},
-		{"path uid", Request{Kind: "path", Subject: SubjectUID}},
-		{"attribution uid", Request{Kind: "attribution", Subject: SubjectUID}},
+		{"retention uid", Request{Kind: QueryKindRetention, Subject: SubjectUID}},
+		{"retention anonymous", Request{Kind: QueryKindRetention, Subject: SubjectAnonymous}},
+		{"segment uid", Request{Kind: QueryKindSegment, Subject: SubjectUID}},
+		{"path uid", Request{Kind: QueryKindPath, Subject: SubjectUID}},
+		{"attribution uid", Request{Kind: QueryKindAttribution, Subject: SubjectUID}},
 	}
 	for _, c := range aggregateSubjects {
 		t.Run(c.name+" aggregate is non-raw", func(t *testing.T) {
@@ -77,15 +77,15 @@ func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
 		},
 		{
 			"segment identity field",
-			Request{Kind: "segment", Subject: SubjectUID, Segment: &Segment{Field: *identity("anonymous_id")}},
+			Request{Kind: QueryKindSegment, Subject: SubjectUID, Segment: &Segment{Field: *identity("anonymous_id")}},
 		},
 		{
 			"path identity top-level filter",
-			Request{Kind: "path", Subject: SubjectUID, Filter: &Filter{Field: identity("session_id")}},
+			Request{Kind: QueryKindPath, Subject: SubjectUID, Filter: &Filter{Field: identity("session_id")}},
 		},
 		{
 			"attribution identity top-level filter",
-			Request{Kind: "attribution", Subject: SubjectUID, Filter: &Filter{Field: identity("uid")}},
+			Request{Kind: QueryKindAttribution, Subject: SubjectUID, Filter: &Filter{Field: identity("uid")}},
 		},
 	}
 	for _, c := range identityExposing {

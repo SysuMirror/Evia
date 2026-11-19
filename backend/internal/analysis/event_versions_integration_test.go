@@ -56,14 +56,14 @@ func TestClickHousePinnedEventVersionsFilterCountAndExactUV(t *testing.T) {
 	}
 	r.EventKeys = nil
 	r.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
-	r.Kind = "events"
+	r.Kind = QueryKindEvents
 	r.Metrics = nil
 	details := execute(t, client, r)
 	if len(details.Rows) != 2 {
 		t.Fatal("event details did not filter version", details)
 	}
 	uid := "two"
-	r.Kind = "journey"
+	r.Kind = QueryKindJourney
 	r.IdentityFilter = &IdentityFilter{UID: &uid}
 	if journey := execute(t, client, r); len(journey.Rows) != 0 {
 		t.Fatal("journey included an excluded version", journey)

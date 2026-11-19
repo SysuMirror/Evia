@@ -41,7 +41,7 @@ func TestNecessaryIdentityEquality(t *testing.T) {
 
 func TestIdentityCandidateSourceKeepsWinnerPredicatesOutside(t *testing.T) {
 	r := request(t, baseRequest)
-	r.Kind = "events"
+	r.Kind = QueryKindEvents
 	r.Filter = identityEquality("uid", "O'Hare; --")
 	plan, err := Compile("evia", "event_facts", Scope{ProjectID: "project-one", Environment: r.Environment}, r)
 	if err != nil {

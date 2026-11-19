@@ -25,7 +25,7 @@ func TestJourneyUIDUsesUnicodeCharacters(t *testing.T) {
 	}
 	for _, uid := range []string{string([]byte{0xff}), "user\x00name"} {
 		r := request(t, baseRequest)
-		r.Kind = "journey"
+		r.Kind = QueryKindJourney
 		r.Metrics = nil
 		r.Subject = SubjectUID
 		r.IdentityFilter = &IdentityFilter{UID: &uid}

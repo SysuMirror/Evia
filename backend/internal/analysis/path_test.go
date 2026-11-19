@@ -253,7 +253,7 @@ func TestPathSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		}
 		from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 		bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 7)}, "UTC")
-		if e != nil || bound.Kind != "path" || bound.Path == nil || bound.Path.Depth != 3 {
+		if e != nil || bound.Kind != QueryKindPath || bound.Path == nil || bound.Path.Depth != 3 {
 			t.Fatalf("path bind failed (start=%t): %v", hasStart, e)
 		}
 	}

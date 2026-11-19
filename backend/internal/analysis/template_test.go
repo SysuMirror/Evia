@@ -12,11 +12,11 @@ import (
 )
 
 func trendTemplate() Template {
-	return Template{Kind: "trend", EventVersions: []EventVersion{{EventKey: "opened", SchemaVersion: 1}}}
+	return Template{Kind: QueryKindTrend, EventVersions: []EventVersion{{EventKey: "opened", SchemaVersion: 1}}}
 }
 
 func funnelTemplate() Template {
-	return Template{Kind: "funnel", Subject: SubjectUID, Funnel: &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
+	return Template{Kind: QueryKindFunnel, Subject: SubjectUID, Funnel: &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
 		{StepIndex: 0, Field: Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "item"}},
 		{StepIndex: 1, Field: Field{Kind: "property", EventKey: "closed", SchemaVersion: 2, Key: "item"}},
 	}}}
@@ -52,7 +52,7 @@ func TestTemplateNormalizesWithoutExecutionContextOrDerivedTypes(t *testing.T) {
 	if e = ValidateTemplate(&template); e != nil {
 		t.Fatal(e)
 	}
-	r := Request{Kind: "trend", GroupBy: []Field{{Kind: "system", Key: "event_key"}}}
+	r := Request{Kind: QueryKindTrend, GroupBy: []Field{{Kind: "system", Key: "event_key"}}}
 	if e = ValidateConfiguration(&r); e != nil || r.GroupBy[0].ResolvedType != "string" || r.Limit != 200 || !r.TimeRange.From.IsZero() || r.Timezone != "" || r.Environment != "" {
 		t.Fatal("context-free validation added or required runtime context", r, e)
 	}
@@ -68,8 +68,8 @@ func TestTemplateRejectsUnsupportedOrUnpinnedConfiguration(t *testing.T) {
 		name, code string
 		change     func(*Template)
 	}{
-		{"event details", "UNSUPPORTED_QUERY_KIND", func(t *Template) { t.Kind = "events" }},
-		{"journey", "UNSUPPORTED_QUERY_KIND", func(t *Template) { t.Kind = "journey" }},
+		{"event details", "UNSUPPORTED_QUERY_KIND", func(t *Template) { t.Kind = QueryKindEvents }},
+		{"journey", "UNSUPPORTED_QUERY_KIND", func(t *Template) { t.Kind = QueryKindJourney }},
 		{"missing pins", "INVALID_EVENT_SELECTION", func(t *Template) { t.EventVersions = nil }},
 		{"empty pins", "INVALID_EVENT_SELECTION", func(t *Template) { t.EventVersions = []EventVersion{} }},
 		{"duplicate pair", "INVALID_EVENT_VERSIONS", func(t *Template) { t.EventVersions = append(t.EventVersions, t.EventVersions[0]) }},

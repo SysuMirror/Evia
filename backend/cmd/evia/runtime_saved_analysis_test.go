@@ -32,7 +32,7 @@ func (s *runtimeSavedStore) ListSavedAnalyses(_ context.Context, actor, project,
 	}
 	s.reads++
 	now := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
-	return []reporting.SavedAnalysis{{ID: runtimeSavedID, ProjectID: project, Environment: environment, Title: "Synthetic saved count", Kind: "trend", DraftRevision: 1, PublishedVersion: 1, CreatedAt: now, UpdatedAt: now}}, nil
+	return []reporting.SavedAnalysis{{ID: runtimeSavedID, ProjectID: project, Environment: environment, Title: "Synthetic saved count", Kind: analysis.QueryKindTrend, DraftRevision: 1, PublishedVersion: 1, CreatedAt: now, UpdatedAt: now}}, nil
 }
 
 func (s *runtimeSavedStore) EnqueueSavedAnalysisVersion(ctx context.Context, actor, project, id string, version int64, key string, in reporting.SavedAnalysisExecute) (analysis.Job, error) {

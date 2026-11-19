@@ -312,7 +312,7 @@ func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 		t.Fatal("journey links lost", contextData)
 	}
 	funnel := aggregateRequest(t)
-	funnel.Kind = "funnel"
+	funnel.Kind = QueryKindFunnel
 	funnel.EventKeys = nil
 	funnel.Metrics = nil
 	funnel.Funnel = &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 30, Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, SameEntity: []EntityField{{StepIndex: 0, Field: Field{Kind: "property", Key: "item_id", EventKey: "open", SchemaVersion: 1, ResolvedType: "string"}}, {StepIndex: 1, Field: Field{Kind: "property", Key: "item_id", EventKey: "finish", SchemaVersion: 1, ResolvedType: "string"}}}}
@@ -432,7 +432,7 @@ func TestClickHouseRetentionMatrix(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "retention", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindRetention, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day(7, 0), To: day(11, 0)},
 		Timezone:  "UTC",
 		Retention: &Retention{
@@ -538,7 +538,7 @@ func TestClickHouseRetentionMonthCohorts(t *testing.T) {
 	seedRows(t, client, append(rows, outsider))
 
 	r := Request{
-		Kind: "retention", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindRetention, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: at(2026, time.November, 1, 0), To: at(2027, time.February, 1, 0)},
 		Timezone:  "UTC",
 		Retention: &Retention{
@@ -619,7 +619,7 @@ func TestClickHouseSegmentation(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "segment", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindSegment, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Segment: &Segment{
@@ -701,7 +701,7 @@ func TestClickHousePathAggregation(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "path", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindPath, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Path:      &Path{Depth: 3},
@@ -789,7 +789,7 @@ func TestClickHouseAttribution(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "attribution", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindAttribution, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Attribution: &Attribution{
@@ -872,7 +872,7 @@ func TestClickHouseFirstTouchAttribution(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "attribution", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindAttribution, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Attribution: &Attribution{
@@ -938,7 +938,7 @@ func TestClickHouseLinearAttribution(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "attribution", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindAttribution, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Attribution: &Attribution{
@@ -1013,7 +1013,7 @@ func TestClickHouseTimeDecayAttribution(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "attribution", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindAttribution, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Attribution: &Attribution{
@@ -1096,7 +1096,7 @@ func TestClickHousePositionBasedAttribution(t *testing.T) {
 	seedRows(t, client, rows)
 
 	r := Request{
-		Kind: "attribution", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindAttribution, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Attribution: &Attribution{
@@ -1173,7 +1173,7 @@ func TestClickHousePathCollapseRepeats(t *testing.T) {
 	seedRows(t, client, rows)
 
 	base := Request{
-		Kind: "path", Environment: "development", Subject: SubjectUID,
+		Kind: QueryKindPath, Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: day, To: day.Add(24 * time.Hour)},
 		Timezone:  "UTC",
 		Path:      &Path{Depth: 3},

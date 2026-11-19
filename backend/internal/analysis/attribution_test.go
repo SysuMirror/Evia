@@ -801,7 +801,7 @@ func TestAttributionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 	}
 	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	bound, e := template.Bind("development", TimeRange{From: from, To: from.AddDate(0, 0, 7)}, "UTC")
-	if e != nil || bound.Kind != "attribution" || bound.Attribution == nil {
+	if e != nil || bound.Kind != QueryKindAttribution || bound.Attribution == nil {
 		t.Fatalf("attribution bind failed: %v", e)
 	}
 	for _, tc := range []struct {

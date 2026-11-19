@@ -216,7 +216,7 @@ func TestMetricPercentileValidationClosedSet(t *testing.T) {
 }
 
 func TestFunnelOrderingWindowAndEntity(t *testing.T) {
-	r := Request{Kind: "funnel", Funnel: &Funnel{Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, WindowSeconds: 30, SameEntity: []EntityField{{StepIndex: 0}, {StepIndex: 1}}}}
+	r := Request{Kind: QueryKindFunnel, Funnel: &Funnel{Steps: []Step{{EventKey: "open", SchemaVersion: 1}, {EventKey: "finish", SchemaVersion: 1}}, WindowSeconds: 30, SameEntity: []EntityField{{StepIndex: 0}, {StepIndex: 1}}}}
 	row := func(subject, id string, when, seq int64, session string, step int, entity string) map[string]any {
 		return map[string]any{"subject_id": subject, "event_id": id, "source_id": "s", "event_time_ns": when * 1000000, "sequence": seq, "session_id": session, "tab_id": "tab-one", "step_0": step == 0, "step_1": step == 1, "entity_0": entity, "entity_1": entity}
 	}
