@@ -96,7 +96,7 @@ func TestCatalogAuthorizationRevisionAndPagination(t *testing.T) {
 	_, e = f.svc.ValidateSample(ctx, f.viewer, f.project, "lesson_opened", 1, map[string]any{})
 	faultCode(t, e, "DRAFT_REVISION_CONFLICT")
 	result, e := f.svc.ValidateSample(ctx, f.viewer, f.project, "lesson_opened", d.Revision, map[string]any{"lesson_id": "wrong"})
-	if e != nil || result.Valid || len(result.Issues) != 1 || result.Issues[0].Path != "/lesson_id" || result.Compatibility != "initial" {
+	if e != nil || result.Valid || len(result.Issues) != 1 || result.Issues[0].Path != "/lesson_id" || result.Compatibility != catalog.CompatibilityInitial {
 		t.Fatal(result, e)
 	}
 	f.event(t, "alpha")
@@ -201,7 +201,7 @@ func TestCatalogImmutablePublicationIdempotencyAndScope(t *testing.T) {
 		t.Fatal(newRelease, e)
 	}
 	result, e := f.svc.ValidateSample(ctx, f.viewer, f.project, "lesson_opened", newDraft.Revision, map[string]any{"lesson_id": 1})
-	if e != nil || result.Compatibility != "compatible" || !result.Valid {
+	if e != nil || result.Compatibility != catalog.CompatibilityCompatible || !result.Valid {
 		t.Fatal(result, e)
 	}
 	var active, metadata int64

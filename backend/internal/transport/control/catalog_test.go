@@ -170,7 +170,7 @@ func TestCatalogSuccessContracts(t *testing.T) {
 		valid bool
 	}{{`{"draft_revision":1,"sample_properties":{"title":"Home"}}`, true}, {`{"draft_revision":1,"sample_properties":{"title":12}}`, false}} {
 		out = catalogStatus(t, catalogRequest(h, "POST", catalogEventsURL+"/page_opened/validate", sample.body, nil), 200)
-		if out["valid"] != sample.valid || out["compatibility"] != "initial" {
+		if out["valid"] != sample.valid || out["compatibility"] != catalog.CompatibilityInitial {
 			t.Fatal(out)
 		}
 	}
