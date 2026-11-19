@@ -300,7 +300,7 @@ func ProjectFields(in PublishedDefinition) []CatalogField {
 		if meta == nil {
 			meta = map[string]any{}
 		}
-		out = append(out, CatalogField{Field: analysis.Field{Kind: "property", EventKey: in.Event.EventKey, SchemaVersion: in.Event.SchemaVersion, Key: key}, Type: kind, Required: required[key], Nullable: false, MissingSemantics: "absent_key", NullSemantics: "present_but_not_a_typed_value", FilterOperators: capability.FilterOperators, Groupable: capability.Groupable, MetricOperations: capability.MetricOperations, Metadata: meta})
+		out = append(out, CatalogField{Field: analysis.Field{Kind: "property", EventKey: in.Event.EventKey, SchemaVersion: in.Event.SchemaVersion, Key: key}, Type: kind, Required: required[key], Nullable: false, MissingSemantics: CatalogMissingSemanticsAbsentKey, NullSemantics: CatalogNullSemanticsPresentButNotATypedValue, FilterOperators: capability.FilterOperators, Groupable: capability.Groupable, MetricOperations: capability.MetricOperations, Metadata: meta})
 	}
 	return out
 }

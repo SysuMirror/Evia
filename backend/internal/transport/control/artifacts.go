@@ -51,7 +51,7 @@ func (a *ArtifactAPI) getTypeScript(w http.ResponseWriter, r *http.Request, acto
 		Environment:     plan.Environment,
 		ReleaseRevision: plan.Revision,
 		ManifestHash:    plan.ManifestHash,
-		Language:        "typescript",
+		Language:        artifactLanguageTypeScript,
 		LanguageVersion: artifacts.LanguageVersion,
 		EventCount:      int64(artifact.EventCount),
 		ByteSize:        int64(artifact.ByteSize),
