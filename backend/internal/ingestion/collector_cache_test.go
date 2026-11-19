@@ -330,7 +330,7 @@ func TestPropertyValidationCrossingPlanCacheDeadlineRechecksEligibility(t *testi
 				t.Fatal("cache deadline rejected an eligible item", status, out, e, queue.calls, len(queue.records))
 			}
 			for _, item := range out.Results {
-				if item.Status != "accepted" || item.Error != nil {
+				if item.Status != ItemStatusAccepted || item.Error != nil {
 					t.Fatal("same revision received a partial cache-expiry rejection", out)
 				}
 			}
@@ -369,7 +369,7 @@ func TestValidAdmissionRetainsDurableAcknowledgementAfterInFlightLeaseExpiry(t *
 	q := &inFlightQueue{until: until}
 	c.queue = q
 	out, status, e := c.Collect(context.Background(), batchOf(eventJSON(validEvent())), browserAuth())
-	if e != nil || status != 202 || out.Results[0].Status != "accepted" || q.records != 1 || !q.admitted.Before(until) || time.Now().Before(until) {
+	if e != nil || status != 202 || out.Results[0].Status != ItemStatusAccepted || q.records != 1 || !q.admitted.Before(until) || time.Now().Before(until) {
 		t.Fatal("valid in-flight acknowledgement was spuriously invalidated", status, e, out, q.admitted, until)
 	}
 }

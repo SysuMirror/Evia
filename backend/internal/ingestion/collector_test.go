@@ -96,7 +96,7 @@ func TestCollectionPartialAcknowledgementAndVerifiedScope(t *testing.T) {
 	if e != nil || status != 202 || len(out.Results) != 3 || len(queue.records) != 1 || queue.calls != 1 {
 		t.Fatal(status, out, e)
 	}
-	if out.Results[0].Status != "accepted" || out.Results[1].Error.Code != "PROPERTY_SCHEMA_MISMATCH" || out.Results[1].Error.Retryable || out.Results[2].Error.Code != "INVALID_EVENT" || out.Results[2].EventID != "" {
+	if out.Results[0].Status != ItemStatusAccepted || out.Results[1].Error.Code != "PROPERTY_SCHEMA_MISMATCH" || out.Results[1].Error.Retryable || out.Results[2].Error.Code != "INVALID_EVENT" || out.Results[2].EventID != "" {
 		t.Fatal("partial results lost invalid item semantics", out)
 	}
 	r := queue.records[0]

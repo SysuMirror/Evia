@@ -50,7 +50,7 @@ func TestSystemEventAcceptedWithoutProjectPlan(t *testing.T) {
 		t.Fatalf("system events must be accepted: status=%d err=%v out=%+v", status, err, out)
 	}
 	for i, result := range out.Results {
-		if result.Status != "accepted" {
+		if result.Status != ItemStatusAccepted {
 			t.Fatalf("result %d not accepted: %+v", i, result)
 		}
 	}

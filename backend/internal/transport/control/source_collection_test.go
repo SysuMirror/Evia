@@ -124,7 +124,7 @@ func TestCollectorHTTPPartialResultsMediaCORSAndDurability(t *testing.T) {
 			if e := json.Unmarshal(w.Body.Bytes(), &receipt); e != nil {
 				t.Fatal(e)
 			}
-			if len(receipt.Results) != 2 || receipt.Results[0].Status != "accepted" || receipt.Results[1].Error == nil || receipt.Results[1].Error.Retryable {
+			if len(receipt.Results) != 2 || receipt.Results[0].Status != ingestion.ItemStatusAccepted || receipt.Results[1].Error == nil || receipt.Results[1].Error.Retryable {
 				t.Fatal(receipt)
 			}
 		})

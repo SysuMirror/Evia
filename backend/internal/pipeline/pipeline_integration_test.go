@@ -459,7 +459,7 @@ func TestSystemEventsFlowCollectorKafkaClickHouse(t *testing.T) {
 		t.Fatalf("system event collection failed: status=%d err=%v", status, e)
 	}
 	for i, result := range receipt.Results {
-		if result.Status != "accepted" {
+		if result.Status != ingestion.ItemStatusAccepted {
 			t.Fatalf("event %d not accepted: %+v", i, result)
 		}
 	}
