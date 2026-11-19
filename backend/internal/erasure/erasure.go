@@ -19,6 +19,17 @@ const (
 	StateFailed     = "failed"
 )
 
+// ErasureStates is the single Go-side source of truth for the six erasure
+// job lifecycle states, mirrored by the ErasureJob.state OpenAPI enum and
+// guarded by TestErasureStateVocabularyMatchesContract. Raw SQL keeps its own
+// string literals because they live inside query text and are covered by the
+// erasure_jobs CHECK constraint in migration 015; every Go-side comparison or
+// Job.State assignment must use the State* constants.
+var ErasureStates = []string{
+	StateQueued, StateHiding, StatePurging,
+	StateRebuilding, StateCompleted, StateFailed,
+}
+
 const (
 	SubjectUID         = "uid"
 	SubjectAnonymousID = "anonymous_id"
