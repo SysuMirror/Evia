@@ -8,7 +8,7 @@ import (
 )
 
 func fResult(columns []analysis.Column, rows ...map[string]any) analysis.Result {
-	return analysis.Result{Columns: columns, Rows: rows, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, Coverage: analysis.Coverage{State: "provisional"}}}
+	return analysis.Result{Columns: columns, Rows: rows, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, Coverage: analysis.Coverage{State: analysis.CoverageStateProvisional}}}
 }
 
 func TestEvaluateFormulaWholeSegment(t *testing.T) {

@@ -175,7 +175,7 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 			t.Fatal(key, got, want)
 		}
 	}
-	if result.Metadata.Accuracy != AccuracyExact || result.Metadata.DataWatermark == nil || result.Metadata.Coverage.State != "provisional" {
+	if result.Metadata.Accuracy != AccuracyExact || result.Metadata.DataWatermark == nil || result.Metadata.Coverage.State != CoverageStateProvisional {
 		t.Fatal(result.Metadata)
 	}
 	if result.Metadata.DataWatermark.Format(time.RFC3339Nano) != "2026-11-07T10:00:06.000000123Z" {

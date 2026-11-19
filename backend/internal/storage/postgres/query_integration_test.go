@@ -28,7 +28,7 @@ func queryRequest(t *testing.T, kind string) analysis.Request {
 	return r
 }
 func queryOutcome(id string, r analysis.Request) analysis.Outcome {
-	return analysis.Outcome{Result: &analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "observed", Type: "number"}}, Rows: []map[string]any{{"observed": 0, "enabled": false, "unknown": nil}}, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: r.TimeRange, State: "provisional", KnownGaps: []string{"synthetic_lifecycle_fixture"}}, GeneratedAt: time.Now().UTC()}}}
+	return analysis.Outcome{Result: &analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "observed", Type: "number"}}, Rows: []map[string]any{{"observed": 0, "enabled": false, "unknown": nil}}, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: r.TimeRange, State: analysis.CoverageStateProvisional, KnownGaps: []string{"synthetic_lifecycle_fixture"}}, GeneratedAt: time.Now().UTC()}}}
 }
 func TestQueryJobsAuthorizationLeasesAndCancellation(t *testing.T) {
 	f := catalogDB(t)
