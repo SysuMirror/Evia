@@ -46,7 +46,7 @@ func catalogDB(t *testing.T) catalogFixture {
 	return f
 }
 func publishable() catalog.DraftInput {
-	return catalog.DraftInput{DisplayName: catalogString("Lesson opened"), Schema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}}, Trigger: catalogString("When the lesson opens"), AllowedSourceKinds: []string{ingestion.SourceKindBrowser}, FactKind: catalogString("user_intent"), ExampleProperties: map[string]any{"lesson_id": 1}}
+	return catalog.DraftInput{DisplayName: catalogString("Lesson opened"), Schema: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"lesson_id": map[string]any{"type": "integer", "minimum": 1}}, "required": []any{"lesson_id"}}, Trigger: catalogString("When the lesson opens"), AllowedSourceKinds: []string{ingestion.SourceKindBrowser}, FactKind: catalogString(catalog.FactKindUserIntent), ExampleProperties: map[string]any{"lesson_id": 1}}
 }
 func (f catalogFixture) event(t *testing.T, key string) catalog.Draft {
 	t.Helper()

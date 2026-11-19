@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
@@ -233,8 +234,8 @@ func TestPublicConfigCompatibleUpgradeAndBoundedOldRevision(t *testing.T) {
 }
 
 func TestPublicConfigMetadataMeaningChangeKeepsPriorRevision(t *testing.T) {
-	prior := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "ms"}}}}}
-	next := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: "user_intent", Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "s"}}}}}
+	prior := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: catalog.FactKindUserIntent, Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "ms"}}}}}
+	next := manifest{Events: []manifestEvent{{Key: "opened", Kinds: []string{ingestion.SourceKindBrowser}, FactKind: catalog.FactKindUserIntent, Schema: schema(), FieldMetadata: map[string]any{"duration": map[string]any{"unit": "s"}}}}}
 	if canUpgrade(prior, next, ingestion.SourceKindBrowser) {
 		t.Fatal("same JSON type silently changed measurement meaning")
 	}

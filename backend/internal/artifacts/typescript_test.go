@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 )
 
@@ -35,7 +36,7 @@ func samplePlan() ReleasePlan {
 					},
 				},
 				AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer},
-				FactKind:           "user_intent",
+				FactKind:           catalog.FactKindUserIntent,
 			},
 			{
 				Key:           "quiz_answered",

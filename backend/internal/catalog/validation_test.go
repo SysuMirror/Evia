@@ -77,7 +77,7 @@ func TestUnsupportedAndUnboundedSchema(t *testing.T) {
 	}
 }
 func TestCompatibilityClassification(t *testing.T) {
-	before := DraftInput{Schema: testSchema(t, validSchema), AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer}, FactKind: str("user_intent")}
+	before := DraftInput{Schema: testSchema(t, validSchema), AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer}, FactKind: str(FactKindUserIntent)}
 	if got := Compatibility(nil, before); got != "initial" {
 		t.Fatal(got)
 	}
@@ -103,7 +103,7 @@ func TestCompatibilityClassification(t *testing.T) {
 		t.Fatal("source removal compatible")
 	}
 	next = before
-	next.FactKind = str("server_confirmed")
+	next.FactKind = str(FactKindServerConfirmed)
 	if Compatibility(&before, next) != "breaking" {
 		t.Fatal("semantic change compatible")
 	}
