@@ -45,7 +45,7 @@ func TestMachineLifecycleIsolationAndHashOnlyRecovery(t *testing.T) {
 	}
 	var kind, digest string
 	var accounts int
-	if e = f.s.Pool.QueryRow(ctx, `SELECT kind FROM principals WHERE id=$1`, identity.PrincipalID).Scan(&kind); e != nil || kind != "machine" {
+	if e = f.s.Pool.QueryRow(ctx, `SELECT kind FROM principals WHERE id=$1`, identity.PrincipalID).Scan(&kind); e != nil || kind != access.PrincipalKindMachine {
 		t.Fatal("missing registry machine", e)
 	}
 	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE id=$1`, identity.PrincipalID).Scan(&accounts); e != nil || accounts != 0 {

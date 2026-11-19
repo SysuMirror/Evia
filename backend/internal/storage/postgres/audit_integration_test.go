@@ -36,7 +36,7 @@ func TestAuditLogAuthorizationAndCurrentMembership(t *testing.T) {
 	_, e := svc.List(ctx, f.viewer, f.otherProject, filter, nil, 10)
 	faultCode(t, e, "PROJECT_NOT_FOUND")
 	items, e := svc.List(ctx, f.owner, f.project, filter, nil, 10)
-	if e != nil || len(items) != 1 || items[0].ProjectID != f.project || items[0].ActorKind != "human" || items[0].CredentialID != nil {
+	if e != nil || len(items) != 1 || items[0].ProjectID != f.project || items[0].ActorKind != access.PrincipalKindHuman || items[0].CredentialID != nil {
 		t.Fatalf("owner read: %#v, %v", items, e)
 	}
 	for _, identity := range []access.Identity{{}, {PrincipalID: f.owner, ProjectID: f.project, Permissions: []string{access.PermissionProjectRead}}} {
@@ -137,7 +137,7 @@ func TestAuditLogMachineOperationSafeAttributionAndNoReadAudit(t *testing.T) {
 		t.Fatalf("machine operation not returned: %#v %v", items, e)
 	}
 	entry := items[0]
-	if entry.ActorKind != "machine" || entry.ActorID != identity.PrincipalID || entry.CredentialID == nil || *entry.CredentialID != issued.Credential.ID || entry.ResourceKey != "audit_operation" {
+	if entry.ActorKind != access.PrincipalKindMachine || entry.ActorID != identity.PrincipalID || entry.CredentialID == nil || *entry.CredentialID != issued.Credential.ID || entry.ResourceKey != "audit_operation" {
 		t.Fatalf("incorrect safe attribution: %#v", entry)
 	}
 	_, e = f.s.ListAuditLogs(mctx, identity.PrincipalID, f.project, filter, nil, 10)

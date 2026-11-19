@@ -57,7 +57,7 @@ func TestAccountProvisionNoOverwriteAndNoAuthority(t *testing.T) {
 	err = s.Pool.QueryRow(ctx, `SELECT p.kind,e.actor_kind,e.target_id::text,(SELECT count(*) FROM account_provision_events),
 	(SELECT count(*) FROM project_members WHERE user_id=$1),(SELECT count(*) FROM sessions WHERE user_id=$1)
 	FROM principals p JOIN account_provision_events e ON e.target_id=p.id WHERE p.id=$1`, user.ID).Scan(&kind, &actorKind, &target, &events, &memberships, &sessions)
-	if err != nil || kind != "human" || actorKind != "operator" || target != user.ID || events != 1 || memberships != 0 || sessions != 0 {
+	if err != nil || kind != access.PrincipalKindHuman || actorKind != "operator" || target != user.ID || events != 1 || memberships != 0 || sessions != 0 {
 		t.Fatal("provisioning registry/audit/scope boundary failed", kind, actorKind, events, memberships, sessions, err)
 	}
 	if _, err = access.ProvisionAccount(ctx, s, "NEW.ACCOUNT", "Replacement", "different-password-42"); err == nil || fault.Public(err).Code != "ACCOUNT_USERNAME_EXISTS" {

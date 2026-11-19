@@ -406,7 +406,7 @@ func TestGovernanceMembershipPaginationRevisionAndScope(t *testing.T) {
 }
 
 func auditFixture(id string) access.AuditEntry {
-	return access.AuditEntry{ID: id, ProjectID: projectID, ActorID: userID, ActorKind: "human", Action: "project.settings.update", ResourceKey: projectID, OccurredAt: time.Date(2026, 11, 8, 12, 0, 0, 123456000, time.UTC)}
+	return access.AuditEntry{ID: id, ProjectID: projectID, ActorID: userID, ActorKind: access.PrincipalKindHuman, Action: "project.settings.update", ResourceKey: projectID, OccurredAt: time.Date(2026, 11, 8, 12, 0, 0, 123456000, time.UTC)}
 }
 
 func TestGovernanceAuditPaginationCanonicalFiltersAndWire(t *testing.T) {
