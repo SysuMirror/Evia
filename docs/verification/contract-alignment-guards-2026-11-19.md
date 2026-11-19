@@ -49,7 +49,7 @@
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（32 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（33 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -83,6 +83,7 @@
 30. `ingestion.TestApplicationStateVocabularyContract`：Source/SourceIssued/Retention 三 schema 共享的 `application_state` enum 对 Go 可观测子集 `ingestion.ApplicationStates`（pending/applied）做子集断言；failed 无产出方，SQL CASE 派生字符串刻意保留（独立切片，同上）。
 31. `catalog.TestReleaseStateVocabularyContract`：`Release.state`（Go 子集仅 published，CHECK 002 同限）与 `acceleration_state`（Go 可观测 not_requested/building）分别对契约 enum 做子集断言；预留工作流态与 ready/failed 不提前命名（独立切片，见 [release-state-closed-set](release-state-closed-set-2026-11-19.md)）。
 32. `access.TestPrincipalKindVocabularyContract`：`ProjectAuditEntry.actor_kind` 两值 enum 与 `access.PrincipalKinds`（human/machine，即 principals.kind）集合相等；Go 只读不写，存储侧由迁移 010 CHECK 兜底，SQL/Role 哨兵/operator 刻意保留（独立切片，见 [principal-kind-closed-set](principal-kind-closed-set-2026-11-19.md)）。
+33. `reporting.TestDiscoveryBudgetsMatchEnforcementAndContract`（首个**数值型**守卫）：16 个 discovery 广告预算逐字段等于 `analysis.Budget*` 执行常量，且全部落在契约 `AnalysisCapabilities.budgets` 的安全整数 minimum/maximum 内并锁定 16 项覆盖数；配 `analysis.TestRetentionMaxWindowMatchesAdvertisedBudget` 钉死窗口公式（独立切片，见 [discovery-budgets-single-source](discovery-budgets-single-source-2026-11-19.md)）。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -109,11 +110,12 @@
 - 子集态（coverage/application_state）：分别向两子集切片注入 `drift_probe` → 各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
 - 发布双态：分别向 `ReleaseStates`/`ReleaseAccelerationStates` 注入 `drift_probe` → 两条子集断言各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
 - 主体类别：向 `PrincipalKinds` 注入 `drift_probe`（长度断言变红）、把 `PrincipalKindMachine` 值改为 `drift_probe`（逐元素断言变红），双分支独立验证后还原复绿（详见独立验证记录）。
+- 查询预算：discovery 构造改字面量（广告/执行漂移变红）、预算超 2^53-1（契约界变红）、窗口月公式 31→30（不变量变红），三分支独立验证后还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。主体类别切片：`/tmp/evia-check/principal-kind/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.7s、零 FAIL，audit/machine/provision 专项 20+ 测显式 PASS）。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。主体类别切片：`/tmp/evia-check/principal-kind/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.7s、零 FAIL，audit/machine/provision 专项 20+ 测显式 PASS）。查询预算切片：`/tmp/evia-check/budgets/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（247.8s、零 FAIL，队列准入专项显式 PASS）。
 
 ## 已评估但不设守卫的词汇（2026-11-19 全量审计，183 个字符串词汇逐项过堂）
 
@@ -131,7 +133,7 @@
 
 ## 明确未做（边界）
 
-- 守卫只覆盖**枚举型闭集**；数值预算（31 天窗口、500 行等）仍由 `DiscoveryBudgets` 与契约描述分别维护，未机械比对——预算变更通常伴随语义评审，且部分预算仅存在于 Go 侧。
+- 枚举型闭集由 #1-#32 覆盖；**数值预算**已由 #33 机械对齐（广告预算==analysis 执行常量+契约安全整数界），但契约只携带通用安全整数界、产品限额值仍只存在于 Go 侧这一形状未变；未广告的内部限额（路径深度、请求体字节等）按刻意边界不纳入。
 - `query-request.schema.json` 原始文件未单独 embed；守卫统一消费 OpenAPI 生成的 bundle 内联副本，codegen 漂移由 `generated-check` 门禁拦截。
 - 不改变任何运行时行为、契约内容或 API 形状；本切片是可维护性/防回归工程。
 - ~~`QueryJob.state` 六态提取~~ 已完成（2026-11-19 独立切片）：常量落在 `analysis.JobState*`，raw SQL/迁移字面量刻意保留，由 DB CHECK 与契约守卫双侧兜底，详见 [queryjob-state-closed-set](queryjob-state-closed-set-2026-11-19.md)。
