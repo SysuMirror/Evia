@@ -88,10 +88,11 @@ func TestRenderCSVRejectsEmptyColumnsAndUnknownTypes(t *testing.T) {
 func TestNormalizeFormatVocabulary(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
-		"":       FormatJSON,
-		"json":   FormatJSON,
-		"csv":    FormatCSV,
-		"ndjson": FormatNDJSON,
+		"":        FormatJSON,
+		"json":    FormatJSON,
+		"csv":     FormatCSV,
+		"ndjson":  FormatNDJSON,
+		"parquet": FormatParquet,
 	}
 	for input, want := range cases {
 		got, err := NormalizeFormat(input)
@@ -99,7 +100,7 @@ func TestNormalizeFormatVocabulary(t *testing.T) {
 			t.Fatalf("NormalizeFormat(%q) = %q, %v", input, got, err)
 		}
 	}
-	if _, err := NormalizeFormat("parquet"); err == nil {
+	if _, err := NormalizeFormat("avro"); err == nil {
 		t.Fatal("unknown format must be rejected")
 	}
 }

@@ -77,7 +77,7 @@ func TestNormalizeFormatAcceptsNDJSONAndRejectsUnknown(t *testing.T) {
 			t.Fatalf("format %q normalized to %q", format, got)
 		}
 	}
-	if _, err := NormalizeFormat("parquet"); err == nil {
+	if _, err := NormalizeFormat("avro"); err == nil {
 		t.Fatal("unknown export format must be rejected")
 	}
 }

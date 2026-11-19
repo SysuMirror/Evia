@@ -63,7 +63,7 @@ func assertSameSet(t *testing.T, label string, want, got []string) {
 // closed sets against the embedded OpenAPI component schemas. A new format or
 // lifecycle state added on only one side fails the build.
 func TestExportVocabularyMatchesContract(t *testing.T) {
-	formats := []string{FormatJSON, FormatCSV, FormatNDJSON}
+	formats := []string{FormatJSON, FormatCSV, FormatNDJSON, FormatParquet}
 	assertSameSet(t, "export format", formats, enumFromBundle(t, "ExportInput", "format"))
 	assertSameSet(t, "saved export format", formats, enumFromBundle(t, "SavedAnalysisExportInput", "format"))
 	assertSameSet(t, "export job format", formats, enumFromBundle(t, "ExportJob", "format"))

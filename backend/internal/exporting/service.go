@@ -31,8 +31,10 @@ func NormalizeFormat(format string) (string, error) {
 		return FormatCSV, nil
 	case FormatNDJSON:
 		return FormatNDJSON, nil
+	case FormatParquet:
+		return FormatParquet, nil
 	default:
-		return "", invalid("导出格式仅支持 json、csv 或 ndjson")
+		return "", invalid("导出格式仅支持 json、csv、ndjson 或 parquet")
 	}
 }
 

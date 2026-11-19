@@ -39,7 +39,7 @@ func TestValidateSavedAnalysisExportInputRejectsBadShapes(t *testing.T) {
 	cases := map[string]func(SavedAnalysisExportInput) SavedAnalysisExportInput{
 		"bad project uuid": func(in SavedAnalysisExportInput) SavedAnalysisExportInput { in.ProjectID = "nope"; return in },
 		"bad actor uuid":   func(in SavedAnalysisExportInput) SavedAnalysisExportInput { in.ActorID = "nope"; return in },
-		"bad format":       func(in SavedAnalysisExportInput) SavedAnalysisExportInput { in.Format = "parquet"; return in },
+		"bad format":       func(in SavedAnalysisExportInput) SavedAnalysisExportInput { in.Format = "avro"; return in },
 		"empty name":       func(in SavedAnalysisExportInput) SavedAnalysisExportInput { in.Name = ""; return in },
 		"overlong name": func(in SavedAnalysisExportInput) SavedAnalysisExportInput {
 			in.Name = strings.Repeat("x", MaxNameLength+1)

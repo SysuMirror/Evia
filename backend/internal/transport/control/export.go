@@ -349,6 +349,8 @@ func artifactMediaType(format string) (string, string) {
 		return "text/csv; charset=utf-8", ".csv"
 	case exporting.FormatNDJSON:
 		return "application/x-ndjson; charset=utf-8", ".ndjson"
+	case exporting.FormatParquet:
+		return "application/vnd.apache.parquet", ".parquet"
 	default:
 		return "application/json; charset=utf-8", ".json"
 	}

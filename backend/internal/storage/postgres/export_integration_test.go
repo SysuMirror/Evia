@@ -97,7 +97,7 @@ func TestExportCSVFormatPersistedAndReplayed(t *testing.T) {
 	}
 	// The closed vocabulary is enforced at the storage boundary.
 	bad := exportInput(f, "export-bad-format")
-	bad.Format = "parquet"
+	bad.Format = "avro"
 	if _, _, e = f.s.CreateExportJob(ctx, bad); e == nil {
 		t.Fatal("unsupported format must be rejected")
 	}
@@ -119,6 +119,25 @@ func TestExportNDJSONFormatPersistedAndReplayed(t *testing.T) {
 	claim, e := f.s.ClaimExportJob(ctx, "export-worker-ndjson", time.Minute)
 	if e != nil || claim == nil || claim.Format != exporting.FormatNDJSON {
 		t.Fatalf("claimed ndjson job lost format: %+v err=%v", claim, e)
+	}
+}
+
+func TestExportParquetFormatPersistedAndReplayed(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	in := exportInput(f, "export-parquet")
+	in.Format = exporting.FormatParquet
+	job, created, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || !created || job.Format != exporting.FormatParquet {
+		t.Fatalf("parquet job not persisted through migration 042 CHECK: %+v err=%v", job, e)
+	}
+	replay, _, e := f.s.CreateExportJob(ctx, in)
+	if e != nil || replay.Format != exporting.FormatParquet {
+		t.Fatalf("parquet replay mismatch: %+v err=%v", replay, e)
+	}
+	claim, e := f.s.ClaimExportJob(ctx, "export-worker-parquet", time.Minute)
+	if e != nil || claim == nil || claim.Format != exporting.FormatParquet {
+		t.Fatalf("claimed parquet job lost format: %+v err=%v", claim, e)
 	}
 }
 

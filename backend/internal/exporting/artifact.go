@@ -73,6 +73,8 @@ func (s *FileArtifactStore) Write(_ context.Context, jobID, format string, resul
 		payload, err = renderCSV(result)
 	case FormatNDJSON:
 		payload, err = renderNDJSON(result)
+	case FormatParquet:
+		payload, err = renderParquet(result)
 	default:
 		payload, err = json.MarshalIndent(result, "", "  ")
 	}

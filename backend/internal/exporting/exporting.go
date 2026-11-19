@@ -26,6 +26,9 @@ const (
 	FormatCSV = "csv"
 	// FormatNDJSON renders one compact JSON result record per line.
 	FormatNDJSON = "ndjson"
+	// FormatParquet materializes a strongly typed columnar Parquet file;
+	// cells that cannot satisfy the column type fail closed.
+	FormatParquet = "parquet"
 	// MaxAttempts bounds worker retries before a job is parked as failed.
 	MaxAttempts = 5
 	// MaxNameLength bounds the human-readable export name.
