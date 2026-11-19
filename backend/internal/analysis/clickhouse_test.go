@@ -118,7 +118,7 @@ func TestEngineCatalogDrivesCompileWithoutConnecting(t *testing.T) {
 	}
 	r := request(t, baseRequest)
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
-	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 	plan, err := CompileWithCatalog(engine.database, engine.table, Scope{ProjectID: "p", Environment: r.Environment}, r, engine.catalog)
 	if err != nil {
 		t.Fatal(err)

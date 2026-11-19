@@ -128,7 +128,7 @@ func TestPinnedEventVersionFieldsMustBelongToSelection(t *testing.T) {
 				case "group":
 					r.GroupBy = []Field{field}
 				case "metric":
-					r.Metrics = []Metric{{Op: "sum", Field: &field, Accuracy: "exact"}}
+					r.Metrics = []Metric{{Op: "sum", Field: &field, Accuracy: AccuracyExact}}
 				}
 				_, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 				if (e == nil) != selected {

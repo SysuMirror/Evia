@@ -8,7 +8,7 @@ import (
 )
 
 func fResult(columns []analysis.Column, rows ...map[string]any) analysis.Result {
-	return analysis.Result{Columns: columns, Rows: rows, Metadata: analysis.Metadata{Accuracy: "exact", Coverage: analysis.Coverage{State: "provisional"}}}
+	return analysis.Result{Columns: columns, Rows: rows, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, Coverage: analysis.Coverage{State: "provisional"}}}
 }
 
 func TestEvaluateFormulaWholeSegment(t *testing.T) {
@@ -152,14 +152,14 @@ func TestEvaluateFormulaMergesConservativeMetadata(t *testing.T) {
 	idA, idB := fUUID(1), fUUID(2)
 	columns := []analysis.Column{{Key: formulaValueColumn, Type: "number"}}
 	leaves := map[MetricReference]analysis.Result{
-		fRef(idA, 1): {Columns: columns, Rows: []map[string]any{{formulaValueColumn: 1.0}}, Metadata: analysis.Metadata{Accuracy: "exact"}},
-		fRef(idB, 1): {Columns: columns, Rows: []map[string]any{{formulaValueColumn: 2.0}}, Metadata: analysis.Metadata{Accuracy: "approximate"}},
+		fRef(idA, 1): {Columns: columns, Rows: []map[string]any{{formulaValueColumn: 1.0}}, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact}},
+		fRef(idB, 1): {Columns: columns, Rows: []map[string]any{{formulaValueColumn: 2.0}}, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyApproximate}},
 	}
 	out, err := EvaluateFormulaResult(FormulaDefinition{Expression: fRatio(idA, idB), Unit: "number"}, leaves)
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
-	if out.Metadata.Accuracy != "approximate" {
+	if out.Metadata.Accuracy != analysis.AccuracyApproximate {
 		t.Fatalf("metadata %+v", out.Metadata)
 	}
 }

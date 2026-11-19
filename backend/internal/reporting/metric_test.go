@@ -69,7 +69,7 @@ func TestMetricNormalizationPinsAndOwnsConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if normalized.Title != "Visits" || normalized.Aggregation.Accuracy != "exact" || normalized.Filter.Field.ResolvedType != "" || normalized.EventVersions[0].EventKey != "a_opened" {
+	if normalized.Title != "Visits" || normalized.Aggregation.Accuracy != analysis.AccuracyExact || normalized.Filter.Field.ResolvedType != "" || normalized.EventVersions[0].EventKey != "a_opened" {
 		t.Fatalf("normalization %+v", normalized)
 	}
 	normalized.EventVersions[0].EventKey = "changed"
@@ -241,7 +241,7 @@ func TestMetricWholeWindowUniqueKeepsExactSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != "uid" || len(request.Metrics) != 1 || request.Metrics[0].Op != "unique" || request.Metrics[0].Accuracy != "exact" {
+	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != "uid" || len(request.Metrics) != 1 || request.Metrics[0].Op != "unique" || request.Metrics[0].Accuracy != analysis.AccuracyExact {
 		t.Fatalf("whole-window unique %+v", request)
 	}
 }

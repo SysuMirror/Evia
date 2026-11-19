@@ -97,7 +97,7 @@ func TestSavedDefinitionStrictParsingPreservesFalseZeroAndRejectsRuntimeFields(t
 		if e != nil {
 			t.Fatal(e)
 		}
-		if result.Title != "Visits" || result.Description != "" || !strings.Contains(string(encoded), `"value":`+scalar) || result.Query.Limit != 200 || result.Query.Metrics[0].Accuracy != "exact" {
+		if result.Title != "Visits" || result.Description != "" || !strings.Contains(string(encoded), `"value":`+scalar) || result.Query.Limit != 200 || result.Query.Metrics[0].Accuracy != analysis.AccuracyExact {
 			t.Fatalf("normalization changed scalar or defaults: %s", encoded)
 		}
 		for _, field := range []string{`"environment":"development"`, `"time_range":{}`, `"timezone":"UTC"`, `"identity_filter":{}`, `"identity_revision":1`, `"cursor":"x"`, `"event_keys":["page_opened"]`} {
@@ -581,7 +581,7 @@ func TestSavedDefinitionSizeIncludesDefaultsAtPersistenceBoundary(t *testing.T) 
 		t.Fatal(e)
 	}
 	expanded := definition
-	expanded.Query.Metrics = []analysis.Metric{{Op: "count", Accuracy: "exact"}}
+	expanded.Query.Metrics = []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}
 	expanded.Query.Limit = 200
 	expected, e := json.Marshal(expanded)
 	if e != nil {

@@ -53,7 +53,7 @@ func (f *analysisFake) Result(_ context.Context, a, p, id string) (analysis.Resu
 	for i := 0; i < f.rowCount; i++ {
 		rows = append(rows, map[string]any{"seq": i})
 	}
-	return analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "seq", Type: "integer"}}, Rows: rows, Metadata: analysis.Metadata{Accuracy: "exact", SampleRate: 1, Coverage: analysis.Coverage{TimeRange: analysis.TimeRange{From: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}, State: "provisional", KnownGaps: []string{"pipeline_completeness_not_established"}}, GeneratedAt: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}}, e
+	return analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "seq", Type: "integer"}}, Rows: rows, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: analysis.TimeRange{From: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}, State: "provisional", KnownGaps: []string{"pipeline_completeness_not_established"}}, GeneratedAt: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}}, e
 }
 func analysisHandler(t *testing.T, f *analysisFake, access *catalogAccess) http.Handler {
 	t.Helper()

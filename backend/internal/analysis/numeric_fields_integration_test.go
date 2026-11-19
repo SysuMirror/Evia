@@ -96,7 +96,7 @@ func TestClickHousePercentileLevels(t *testing.T) {
 	for op, level := range map[string]float64{"p50": 51, "p90": 91, "p95": 96, "p99": 100} {
 		r := request(t, baseRequest)
 		r.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
-		r.Metrics = []Metric{{Op: op, Field: &field, Accuracy: "exact"}}
+		r.Metrics = []Metric{{Op: op, Field: &field, Accuracy: AccuracyExact}}
 		got := trendPlanRows(t, client, r, "event_facts")
 		if len(got) != 1 {
 			t.Fatalf("%s expected one aggregate row, got %v", op, got)
@@ -110,7 +110,7 @@ func TestClickHousePercentileLevels(t *testing.T) {
 			t.Fatalf("%s exact percentile=%v want %v (%v)", op, value, level, err)
 		}
 		// Approximate TDigest must still resolve to a finite in-range number.
-		r.Metrics[0].Accuracy = "approximate"
+		r.Metrics[0].Accuracy = AccuracyApproximate
 		approx := trendPlanRows(t, client, r, "event_facts")
 		approxNumber, ok := approx[0]["metric_0"].(json.Number)
 		if !ok {

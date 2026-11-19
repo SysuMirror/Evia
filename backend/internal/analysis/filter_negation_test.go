@@ -35,7 +35,7 @@ func TestFilterNegationPlannerSQLPreservesGuard(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := request(t, baseRequest)
-			r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+			r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 			r.Filter = &Filter{Op: tc.op, Field: tc.field, Value: tc.value}
 			plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 			if e != nil {
@@ -56,7 +56,7 @@ func TestFilterNegationPlannerSQLPreservesGuard(t *testing.T) {
 	// Empty not_in keeps the guard but drops membership: every present/valid row
 	// matches, while an empty in still collapses to the constant-false "0".
 	r := request(t, baseRequest)
-	r.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 	r.Filter = &Filter{Op: "not_in", Field: resolvedProperty("title", "string"), Value: []any{}}
 	plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 	if e != nil {

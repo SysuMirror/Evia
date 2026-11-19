@@ -36,7 +36,7 @@ func TestTemplateNormalizesWithoutExecutionContextOrDerivedTypes(t *testing.T) {
 	if e := ValidateTemplate(&template); e != nil {
 		t.Fatal(e)
 	}
-	if template.Limit != 200 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" || template.Metrics[0].Accuracy != "exact" || template.GroupBy[0].ResolvedType != "" {
+	if template.Limit != 200 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" || template.Metrics[0].Accuracy != AccuracyExact || template.GroupBy[0].ResolvedType != "" {
 		t.Fatal("template defaults or public field projection changed", template)
 	}
 	encoded, e := json.Marshal(template)

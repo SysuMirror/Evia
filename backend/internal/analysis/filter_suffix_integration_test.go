@@ -26,7 +26,7 @@ func TestClickHouseSuffixFiltersKeepMissingExcluded(t *testing.T) {
 
 	base := request(t, baseRequest)
 	base.EventVersions = []EventVersion{{EventKey: "suffixkey", SchemaVersion: 1}}
-	base.Metrics = []Metric{{Op: "count", Accuracy: "exact"}}
+	base.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 	field := &Field{Kind: "property", EventKey: "suffixkey", SchemaVersion: 1, Key: "file", ResolvedType: "string"}
 	count := func(op string) float64 {
 		r := base

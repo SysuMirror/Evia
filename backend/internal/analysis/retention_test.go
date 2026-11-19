@@ -458,7 +458,7 @@ func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
 	if strings.Contains(plan.SQL, "'sign_up'") || strings.Contains(plan.SQL, "'login'") {
 		t.Fatal("event identities must be bound parameters, not inline literals")
 	}
-	if len(plan.Columns) != 5 || plan.Columns[0].Key != "cohort_index" || plan.Accuracy != "exact" {
+	if len(plan.Columns) != 5 || plan.Columns[0].Key != "cohort_index" || plan.Accuracy != AccuracyExact {
 		t.Fatalf("retention result contract wrong: %+v", plan.Columns)
 	}
 
