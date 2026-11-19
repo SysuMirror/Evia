@@ -112,6 +112,20 @@
 
 `go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。
 
+## 已评估但不设守卫的词汇（2026-11-19 全量审计，183 个字符串词汇逐项过堂）
+
+环境类 54 处由 #11 统一覆盖；结构性 JSON Schema 关键字（`kind=system/property`、`format` 单值、`QueryRequest.allOf` 条件 const、已守卫的 CollectResponse 分支）不属业务闭包。以下逐项记录不设独立守卫的证据，避免重复审计：
+
+| 词汇 | 契约位置 | 证据与结论 |
+| --- | --- | --- |
+| 审计结果 allowed/denied/failed | `AuditEntry.result` | Go 读模型 `access.AuditEntry` 无 Result 字段，全仓无 Go 产出方；审计裁决由存储/外部侧写入，Go 仅透传条目元数据。零 Go 产出，不设守卫。 |
+| 事件计划状态 draft_example_not_published/published | `EventPlan.status` | Go 仅在 manifest 序列化时产出 `published`（catalog_release.go 的 releaseManifest）；`draft_example_not_published` 全仓无产出，是契约自带示例标记。后续如开放草稿计划，按 #29-31 子集范式补守卫。 |
+| 成员四值 owner/developer/analyst/viewer | `Member(Input).role` | developer/analyst 全仓无 Go 产出；在役项目成员走 `ProjectMember*.role` 三值（owner/editor/viewer），已由 #2 守卫。Member 为遗留契约形状，不设守卫。 |
+| 诊断阶段五值 | `Diagnostic.stage` | identity_resolved/queryable 等在 Go 生产代码零命中；管线诊断对外只发 #7 覆盖的 status 四态，stage 为未落地的管线内部分期。零 Go 产出，不设守卫。 |
+| 审计主体 human/machine | `ProjectAuditEntry.actor_kind` | 由迁移 010/011 的 SQL 触发器与 principals.kind 派生写入，Go 只读（`access.AuditEntry.ActorKind`）。与 principals.kind、项目 Role 标记词汇交织，读模型守卫拆独立切片处理，不在本批混入。 |
+| 保存分析类别 trend/funnel | `SavedAnalysis(Kind)/Draft.kind` | 该值由查询/可视化类别（#20 QueryKind 与 VisualizationKinds 守卫）投影派生，非独立词汇；漂移会被既有守卫先行拦截。 |
+| 覆盖 settled/partial、申请 failed、发布 draft/validating/publishing/failed 与加速 ready/failed | 对应 enum | 契约预留、Go 当前无产出/无观测点，已由 #29-31 子集守卫覆盖"Go 不得越界、契约不得收窄"两个方向，不提前命名死常量。 |
+
 ## 明确未做（边界）
 
 - 守卫只覆盖**枚举型闭集**；数值预算（31 天窗口、500 行等）仍由 `DiscoveryBudgets` 与契约描述分别维护，未机械比对——预算变更通常伴随语义评审，且部分预算仅存在于 Go 侧。
