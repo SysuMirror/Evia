@@ -263,7 +263,7 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 	}
 	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 	r.TimeRange = aggregateRequest(t).TimeRange
-	r.Interval = "hour"
+	r.Interval = IntervalHour
 	bucket := execute(t, client, r)
 	if len(bucket.Rows) != 1 || bucket.Rows[0]["bucket"] != "2026-11-07T10:00:00Z" {
 		t.Fatal(bucket)
@@ -438,7 +438,7 @@ func TestClickHouseRetentionMatrix(t *testing.T) {
 		Retention: &Retention{
 			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
 			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "day", Periods: 4,
+			Granularity: RetentionGranularityDay, Periods: 4,
 		},
 	}
 	result := execute(t, client, r)
@@ -544,7 +544,7 @@ func TestClickHouseRetentionMonthCohorts(t *testing.T) {
 		Retention: &Retention{
 			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
 			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "month", Periods: 3,
+			Granularity: RetentionGranularityMonth, Periods: 3,
 		},
 	}
 	result := execute(t, client, r)

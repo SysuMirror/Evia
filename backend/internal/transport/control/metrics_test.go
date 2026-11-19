@@ -170,7 +170,7 @@ func TestMetricHTTPRoutesContractsAndRevisions(t *testing.T) {
 			}
 		})
 	}
-	if f.id != metricID || f.version != 1 || f.key != "execute-key" || f.revision != 1 || f.execution.Timezone != "UTC" || f.execution.Interval != "day" {
+	if f.id != metricID || f.version != 1 || f.key != "execute-key" || f.revision != 1 || f.execution.Timezone != "UTC" || f.execution.Interval != analysis.IntervalDay {
 		t.Fatal("scope or precondition not forwarded", f)
 	}
 }

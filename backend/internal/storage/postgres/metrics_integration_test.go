@@ -464,7 +464,7 @@ func TestMetricArchiveLifecycleAndMutationGuards(t *testing.T) {
 		t.Fatalf("publish must reject archived metric: %v", e)
 	}
 	from := archived.ArchivedAt.UTC()
-	execute := reporting.MetricExecute{TimeRange: analysis.TimeRange{From: from, To: from.Add(time.Hour)}, Timezone: "UTC", Interval: "hour"}
+	execute := reporting.MetricExecute{TimeRange: analysis.TimeRange{From: from, To: from.Add(time.Hour)}, Timezone: "UTC", Interval: analysis.IntervalHour}
 	if _, e = f.s.EnqueueMetricVersion(ctx, f.owner, f.project, d.ID, 1, ids.New(), execute); e == nil || faultPublicCode(e) != "METRIC_ARCHIVED" {
 		t.Fatalf("run enqueue must reject archived metric: %v", e)
 	}

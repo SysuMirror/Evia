@@ -51,7 +51,7 @@ func metricRunFixture(t *testing.T) (catalogFixture, reporting.MetricVersion, re
 		t.Fatal(e)
 	}
 	r := queryRequest(t, "trend")
-	return f, metricRunPublish(t, f, draft), reporting.MetricExecute{TimeRange: r.TimeRange, Timezone: r.Timezone, Interval: "hour"}
+	return f, metricRunPublish(t, f, draft), reporting.MetricExecute{TimeRange: r.TimeRange, Timezone: r.Timezone, Interval: analysis.IntervalHour}
 }
 
 func assertMetricRunCounts(t *testing.T, f catalogFixture, wanted int) {
@@ -348,7 +348,7 @@ func TestMetricWholeWindowAggregatePersistsAndBindsSeparateFromDaily(t *testing.
 		t.Fatal("whole-window UV gained buckets", plan.SQL)
 	}
 	daily := in
-	daily.Interval = "day"
+	daily.Interval = analysis.IntervalDay
 	_, e = f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, 1, "window", daily)
 	faultCode(t, e, "IDEMPOTENCY_CONFLICT")
 	if _, e = f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, 1, "daily", daily); e != nil {

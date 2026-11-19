@@ -187,7 +187,7 @@ func TestFormulaMetricServiceEnqueueRejectsBoundaries(t *testing.T) {
 		t.Fatal("expected window rejection")
 	}
 	badInterval := formulaServiceExecute()
-	badInterval.Interval = "week"
+	badInterval.Interval = analysis.IntervalWeek
 	if _, e := svc.EnqueueFormulaMetricVersion(ctx, "actor", "project-one", "formula-one", 1, "run-key", badInterval); e == nil {
 		t.Fatal("expected interval rejection")
 	}

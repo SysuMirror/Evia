@@ -42,7 +42,7 @@ func TestEvaluateRetentionDayCohortMatrix(t *testing.T) {
 	day := func(dayOfMonth, hour int) time.Time {
 		return time.Date(2026, 11, dayOfMonth, hour, 0, 0, 0, time.UTC)
 	}
-	request := retentionRequest("day", 4)
+	request := retentionRequest(RetentionGranularityDay, 4)
 	rows := []map[string]any{
 		// Cohort 0: u1 and u2 enter on Nov 1.
 		retentionRow("u1", day(1, 9), true, true),
@@ -119,7 +119,7 @@ func TestEvaluateRetentionWeekAlignmentUsesTimezone(t *testing.T) {
 		Timezone:  "Asia/Shanghai",
 		Retention: &Retention{
 			StartEvent: Step{EventKey: "sign_up", SchemaVersion: 1}, ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "week", Periods: 2,
+			Granularity: RetentionGranularityWeek, Periods: 2,
 		},
 	}
 	rows := []map[string]any{
@@ -160,7 +160,7 @@ func monthRequest(periods int) Request {
 		Retention: &Retention{
 			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
 			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "month",
+			Granularity: RetentionGranularityMonth,
 			Periods:     periods,
 		},
 	}
@@ -243,7 +243,7 @@ func TestEvaluateRetentionMonthAlignmentUsesTimezone(t *testing.T) {
 		Timezone:  "Asia/Shanghai",
 		Retention: &Retention{
 			StartEvent: Step{EventKey: "sign_up", SchemaVersion: 1}, ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "month", Periods: 2,
+			Granularity: RetentionGranularityMonth, Periods: 2,
 		},
 	}
 	rows := []map[string]any{
@@ -269,7 +269,7 @@ func TestEvaluateRetentionMonthAlignmentUsesTimezone(t *testing.T) {
 }
 
 func TestEvaluateRetentionHandlesEdgeCases(t *testing.T) {
-	request := retentionRequest("day", 2)
+	request := retentionRequest(RetentionGranularityDay, 2)
 	for _, tc := range []struct {
 		name string
 		rows []map[string]any
@@ -365,7 +365,7 @@ func TestRetentionValidationClosedSet(t *testing.T) {
 		{"event keys pinned at top level", func(r *Request) { r.EventKeys = []string{"login"} }, "INVALID_EVENT_SELECTION"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := retentionRequest("day", 4)
+			r := retentionRequest(RetentionGranularityDay, 4)
 			tc.edit(&r)
 			e := Validate(&r)
 			var problem *fault.Error
@@ -383,7 +383,7 @@ func retentionTemplate() Template {
 		Retention: &Retention{
 			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
 			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
-			Granularity: "day",
+			Granularity: RetentionGranularityDay,
 			Periods:     4,
 		},
 	}
@@ -442,7 +442,7 @@ func TestRetentionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 }
 
 func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
-	r := retentionRequest("day", 4)
+	r := retentionRequest(RetentionGranularityDay, 4)
 	plan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, r)
 	if e != nil {
 		t.Fatal(e)
@@ -462,7 +462,7 @@ func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
 		t.Fatalf("retention result contract wrong: %+v", plan.Columns)
 	}
 
-	anonymous := retentionRequest("day", 4)
+	anonymous := retentionRequest(RetentionGranularityDay, 4)
 	anonymous.Subject = SubjectAnonymous
 	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
 	if e != nil {

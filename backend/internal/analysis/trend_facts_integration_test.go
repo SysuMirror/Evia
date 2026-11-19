@@ -153,7 +153,7 @@ func TestClickHouseNarrowTrendMatchesFullWinnerView(t *testing.T) {
 		{"missing null zero grouping", func(r *Request) { r.GroupBy = []Field{*propertyField("score", "number")} }, ""},
 		{"UID and bucket grouping", func(r *Request) {
 			r.GroupBy = []Field{{Kind: "system", Key: "uid", ResolvedType: "string"}}
-			r.Interval = "minute"
+			r.Interval = IntervalMinute
 		}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

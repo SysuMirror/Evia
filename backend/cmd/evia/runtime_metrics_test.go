@@ -37,7 +37,7 @@ func (s *runtimeMetricStore) ListMetrics(_ context.Context, actor, project, envi
 }
 
 func (s *runtimeMetricStore) EnqueueMetricVersion(ctx context.Context, actor, project, id string, version int64, key string, in reporting.MetricExecute) (analysis.Job, error) {
-	if actor != runtimeActor || project != runtimeProject || id != runtimeMetricID || version != 1 || key != "synthetic-metric-run" || in.Timezone != "UTC" || in.Interval != "" && in.Interval != "day" {
+	if actor != runtimeActor || project != runtimeProject || id != runtimeMetricID || version != 1 || key != "synthetic-metric-run" || in.Timezone != "UTC" || in.Interval != "" && in.Interval != analysis.IntervalDay {
 		panic("metric execution lost immutable version or request scope")
 	}
 	return s.EnqueueQuery(ctx, actor, project, analysis.Request{})

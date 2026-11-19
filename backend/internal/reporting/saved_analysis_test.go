@@ -141,7 +141,7 @@ func TestSavedDefinitionNormalizationClonesAndValidatesCharts(t *testing.T) {
 		savedErrorCode(t, e, "INVALID_VISUALIZATION")
 	}
 	d := savedDefinition()
-	d.Query.Interval = "day"
+	d.Query.Interval = analysis.IntervalDay
 	d.Visualization.Kind = "line"
 	if _, e := NormalizeSavedAnalysisDefinition(d); e != nil {
 		t.Fatal(e)
@@ -266,7 +266,7 @@ func retentionSavedDefinition() SavedAnalysisDefinition {
 			Retention: &analysis.Retention{
 				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 2},
-				Granularity: "day",
+				Granularity: analysis.RetentionGranularityDay,
 				Periods:     4,
 			},
 		},

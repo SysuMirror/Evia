@@ -115,7 +115,7 @@ func TestFormulaMetricEnqueueRejectsUnknownVersionAndWindow(t *testing.T) {
 		t.Fatal("expected window budget rejection")
 	}
 	badInterval := formulaExecuteInput()
-	badInterval.Interval = "week"
+	badInterval.Interval = analysis.IntervalWeek
 	if _, e := f.s.EnqueueFormulaMetricVersion(ctx, f.owner, f.project, version.MetricID, version.Version, "bad-interval", badInterval); e == nil {
 		t.Fatal("expected interval rejection")
 	}

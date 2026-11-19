@@ -111,12 +111,12 @@ func TestMetricStrictDefinitionContract(t *testing.T) {
 func TestMetricTemplateCombinesFiltersAndOwnsRuntime(t *testing.T) {
 	d := metricDefinition()
 	d.Filter = &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "enabled"}, Value: false}
-	execute := MetricExecute{Interval: "day", GroupBy: []analysis.Field{{Kind: "system", Key: "event_key"}}, Filter: &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}, Value: 0}, Limit: 20}
+	execute := MetricExecute{Interval: analysis.IntervalDay, GroupBy: []analysis.Field{{Kind: "system", Key: "event_key"}}, Filter: &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}, Value: 0}, Limit: 20}
 	template, err := MetricTemplate(d, execute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if template.Filter.Op != "and" || len(template.Filter.Args) != 2 || template.Interval != "day" || template.Limit != 20 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" {
+	if template.Filter.Op != "and" || len(template.Filter.Args) != 2 || template.Interval != analysis.IntervalDay || template.Limit != 20 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" {
 		t.Fatalf("template %+v", template)
 	}
 	template.Filter.Args[1].Field.Key = "changed"
@@ -124,7 +124,7 @@ func TestMetricTemplateCombinesFiltersAndOwnsRuntime(t *testing.T) {
 	if execute.Filter.Field.Key != "score" || execute.GroupBy[0].Key != "event_key" {
 		t.Fatal("runtime aliases caller")
 	}
-	for _, bad := range []MetricExecute{{Interval: "week"}, {Interval: "hour", Limit: 501}, {Interval: "day", GroupBy: []analysis.Field{{Kind: "property", EventKey: "page_opened", SchemaVersion: 2, Key: "score"}}}} {
+	for _, bad := range []MetricExecute{{Interval: analysis.IntervalWeek}, {Interval: analysis.IntervalHour, Limit: 501}, {Interval: analysis.IntervalDay, GroupBy: []analysis.Field{{Kind: "property", EventKey: "page_opened", SchemaVersion: 2, Key: "score"}}}} {
 		if _, err := MetricTemplate(d, bad); err == nil {
 			t.Fatal("invalid runtime accepted", bad)
 		}
@@ -208,8 +208,8 @@ func TestMetricServiceBoundsAndAvailabilityBeforeWrites(t *testing.T) {
 		t.Fatalf("pagination %d %v", store.limit, err)
 	}
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	valid := MetricExecute{TimeRange: analysis.TimeRange{From: now, To: now.Add(time.Hour)}, Timezone: "UTC", Interval: "hour"}
-	for _, mutate := range []func(*MetricExecute){func(e *MetricExecute) { e.Interval = "week" }, func(e *MetricExecute) { e.Timezone = "Local" }, func(e *MetricExecute) { e.TimeRange.To = e.TimeRange.From.Add(32 * 24 * time.Hour) }, func(e *MetricExecute) { e.Limit = 501 }} {
+	valid := MetricExecute{TimeRange: analysis.TimeRange{From: now, To: now.Add(time.Hour)}, Timezone: "UTC", Interval: analysis.IntervalHour}
+	for _, mutate := range []func(*MetricExecute){func(e *MetricExecute) { e.Interval = analysis.IntervalWeek }, func(e *MetricExecute) { e.Timezone = "Local" }, func(e *MetricExecute) { e.TimeRange.To = e.TimeRange.From.Add(32 * 24 * time.Hour) }, func(e *MetricExecute) { e.Limit = 501 }} {
 		bad := valid
 		mutate(&bad)
 		calls := store.calls

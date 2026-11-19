@@ -45,7 +45,7 @@ func markerRequest() analysis.Request {
 		Formula:     &analysis.FormulaJobRef{MetricID: "11111111-1111-4111-8111-111111111111", Version: 1},
 		TimeRange:   analysis.TimeRange{},
 		Timezone:    "UTC",
-		Interval:    "day",
+		Interval:    analysis.IntervalDay,
 	}
 }
 
@@ -93,7 +93,7 @@ func TestCompositeEngineFansOutFormula(t *testing.T) {
 	if out.Rows[0][formulaValueColumn] != 5.0 {
 		t.Fatalf("expected ratio 5, got %#v", out.Rows[0][formulaValueColumn])
 	}
-	if loader.execute.Interval != "day" || loader.execute.Timezone != "UTC" {
+	if loader.execute.Interval != analysis.IntervalDay || loader.execute.Timezone != "UTC" {
 		t.Fatalf("runtime parameters not forwarded: %+v", loader.execute)
 	}
 }

@@ -179,7 +179,7 @@ func TestMetricCompiledRequestPreservesFiltersAndUnitValues(t *testing.T) {
 	}
 	v := metricRunPublish(t, f, d)
 	request := queryRequest(t, "trend")
-	in := reporting.MetricExecute{TimeRange: request.TimeRange, Timezone: "UTC", Interval: "hour", Filter: &analysis.Filter{Op: "lte", Field: field, Value: 11}}
+	in := reporting.MetricExecute{TimeRange: request.TimeRange, Timezone: "UTC", Interval: analysis.IntervalHour, Filter: &analysis.Filter{Op: "lte", Field: field, Value: 11}}
 	job, e := f.s.EnqueueMetricVersion(ctx, f.viewer, f.project, v.MetricID, 1, "filters", in)
 	if e != nil {
 		t.Fatal(e)

@@ -146,7 +146,7 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	if !hasAttribution {
 		t.Fatalf("attribution must be advertised in query kinds: %v", capabilities.QueryKinds)
 	}
-	wantGranularities := []string{"day", "week", "month"}
+	wantGranularities := analysis.RetentionGranularities
 	if len(capabilities.RetentionGranularities) != len(wantGranularities) {
 		t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
 	}
@@ -217,7 +217,7 @@ func TestCapabilitiesAdvertiseWeekInterval(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	want := map[string]bool{"minute": false, "hour": false, "day": false, "week": false}
+	want := map[string]bool{analysis.IntervalMinute: false, analysis.IntervalHour: false, analysis.IntervalDay: false, analysis.IntervalWeek: false}
 	for _, interval := range capabilities.Intervals {
 		if _, known := want[interval]; known {
 			want[interval] = true

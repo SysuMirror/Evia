@@ -13,10 +13,10 @@ func TestTrendWeekIntervalPlannerSQL(t *testing.T) {
 		interval string
 		want     string
 	}{
-		{"minute", "toStartOfMinute(event_time,"},
-		{"hour", "toStartOfHour(event_time,"},
-		{"day", "toStartOfDay(event_time,"},
-		{"week", "toStartOfWeek(event_time,1,"},
+		{IntervalMinute, "toStartOfMinute(event_time,"},
+		{IntervalHour, "toStartOfHour(event_time,"},
+		{IntervalDay, "toStartOfDay(event_time,"},
+		{IntervalWeek, "toStartOfWeek(event_time,1,"},
 	}
 	for _, tc := range cases {
 		r := request(t, baseRequest)
@@ -40,7 +40,7 @@ func TestTrendWeekIntervalPlannerSQL(t *testing.T) {
 func TestTrendIntervalValidationClosedSet(t *testing.T) {
 	if e := Validate(func() *Request {
 		r := request(t, baseRequest)
-		r.Interval = "week"
+		r.Interval = IntervalWeek
 		return &r
 	}()); e != nil {
 		t.Fatalf("week interval must validate: %v", e)

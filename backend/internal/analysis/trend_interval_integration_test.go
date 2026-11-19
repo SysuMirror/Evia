@@ -32,7 +32,7 @@ func TestClickHouseWeekIntervalBuckets(t *testing.T) {
 		r := request(t, baseRequest)
 		r.EventVersions = []EventVersion{{EventKey: "weekbucket", SchemaVersion: 1}}
 		r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
-		r.Interval = "week"
+		r.Interval = IntervalWeek
 		r.Timezone = tz
 		r.TimeRange.From = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 		r.TimeRange.To = time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)

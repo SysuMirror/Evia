@@ -473,7 +473,7 @@ func TestSavedAnalysisRetentionPersistsAndPinsBoundarySteps(t *testing.T) {
 			Retention: &analysis.Retention{
 				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 1},
-				Granularity: "day",
+				Granularity: analysis.RetentionGranularityDay,
 				Periods:     4,
 			},
 		},
