@@ -21,6 +21,10 @@ const (
 	MetricRefKindComposite = "composite"
 )
 
+// MetricRefKinds is the single Go-side source of truth for the two metric
+// reference kinds; empty input normalizes to atomic separately.
+var MetricRefKinds = []string{MetricRefKindAtomic, MetricRefKindComposite}
+
 // MetricReference pins an immutable metric version as the data source of a
 // saved analysis. The exact version is fixed at publication and never resolves
 // implicitly to the latest metric. It is mutually exclusive with an inline
