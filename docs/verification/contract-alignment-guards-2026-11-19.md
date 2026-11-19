@@ -35,10 +35,11 @@
 | 查询主体（2+预留 1） | validation/planner/metric_policy 六处重复闭集判断 → `analysis.Subject*` 常量 + `Subjects/ValidSubject`（独立切片，见 [subject-closed-set](subject-closed-set-2026-11-19.md)） | `MetricDefinition.subject` / `QueryRequest.subject` | 对齐 |
 | 浏览器导航类型（5） | record.go 裸 switch → `pipeline.Navigation*` 常量 + `NavigationTypes`（独立切片，见 [navigation-closed-set](navigation-closed-set-2026-11-19.md)） | `EventEnvelope.context.navigation_type` | 对齐 |
 | 查询类型（8，双副本收敛） | analysis 内联链与 reporting discovery 两份副本 → `analysis.QueryKind*` + `QueryKinds/ValidQueryKind`，discovery 切片改为别名（独立切片，见 [query-kind-closed-set](query-kind-closed-set-2026-11-19.md)） | `QueryRequest.kind` | 对齐 |
+| 查询间隔（4）/留存粒度（3，双副本收敛） | analysis/planner/retention 与 reporting 指标服务内联链 → `analysis.Interval*`/`RetentionGranularity*`，指标 3 值子集命名化，discovery 切片改别名（独立切片，见 [interval-granularity-closed-set](interval-granularity-closed-set-2026-11-19.md)） | `QueryRequest.interval` / `QueryRequest.retention.granularity` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（20 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（22 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -60,6 +61,8 @@
 18. `analysis.TestSubjectVocabularyMatchesContract`：`MetricDefinition.subject` 与 `Subjects` 集合相等，`QueryRequest.subject` 恰为 `Subjects` 加预留值 `resolved_person`。
 19. `pipeline.TestNavigationTypeVocabularyMatchesContract`：嵌套 `EventEnvelope.context.navigation_type` 枚举与 `NavigationTypes` 集合相等。
 20. `analysis.TestQueryKindVocabularyMatchesContract`：`QueryRequest.kind` 枚举与 `QueryKinds` 集合相等；与 discovery 守卫经别名共享同一真相源，变异时双守卫同时变红。
+21. `analysis.TestIntervalVocabularyMatchesContract`：`QueryRequest.interval` 枚举与 `Intervals` 集合相等。
+22. `analysis.TestRetentionGranularityVocabularyMatchesContract`：嵌套 `QueryRequest.retention.granularity` 枚举与 `RetentionGranularities` 集合相等。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -77,6 +80,7 @@
 - 查询主体：向 `Subjects` 注入 `drift_probe`（metric 分支变红）、把预留常量改为 `drift_probe`（query 分支变红），双分支独立验证后还原复绿（详见独立验证记录）。
 - 浏览器导航：向 `NavigationTypes` 注入 `drift_probe` → 报 `navigation type drift ... Go 6 != contract 5` 变红，还原复绿（详见独立验证记录）。
 - 查询类型：向 `QueryKinds` 注入 `drift_probe` → analysis 域守卫与 reporting discovery 守卫同时报 drift 变红，证明双副本已收敛，还原复绿（详见独立验证记录）。
+- 间隔/留存粒度：同时向两闭集注入 `drift_probe` → 两个新域守卫与 discovery 守卫三处同时报 drift 变红，还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
