@@ -75,19 +75,19 @@ func (template Template) request() (Request, error) {
 
 func (template Template) validatedRequest() (Request, error) {
 	switch template.Kind {
-	case "trend":
+	case QueryKindTrend:
 		if len(template.EventVersions) == 0 {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存趋势分析必须固定事件版本", "/event_versions")
 		}
-	case "funnel":
+	case QueryKindFunnel:
 		if template.EventVersions != nil {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存漏斗分析通过步骤固定事件版本", "/event_versions")
 		}
-	case "retention":
+	case QueryKindRetention:
 		if template.EventVersions != nil {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存留存分析通过起止事件固定事件版本", "/event_versions")
 		}
-	case "segment", "path", "attribution":
+	case QueryKindSegment, QueryKindPath, QueryKindAttribution:
 		if template.EventVersions != nil {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存高级分析通过类型化步骤固定事件版本", "/event_versions")
 		}

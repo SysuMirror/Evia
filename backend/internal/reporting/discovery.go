@@ -59,9 +59,7 @@ type Capabilities struct {
 // alignment tests compare them against the embedded OpenAPI bundle so a
 // schema-side vocabulary change can never silently diverge from discovery.
 var (
-	discoveryQueryKinds = []string{
-		"events", "trend", "funnel", "journey", "retention", "segment", "path", "attribution",
-	}
+	discoveryQueryKinds   = analysis.QueryKinds
 	discoveryAggregations = []string{
 		"count", "unique", "sum", "avg", "min", "max", "p50", "p90", "p95", "p99",
 	}

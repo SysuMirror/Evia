@@ -3,7 +3,7 @@ package analysis
 // RequiresRawAccess identifies requests that expose or select individual
 // identities. Aggregate subjects alone (UV and funnel counts) do not expose them.
 func RequiresRawAccess(request Request) bool {
-	if request.Kind == "events" || request.Kind == "journey" || request.IdentityFilter != nil {
+	if request.Kind == QueryKindEvents || request.Kind == QueryKindJourney || request.IdentityFilter != nil {
 		return true
 	}
 	raw := false

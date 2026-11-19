@@ -278,7 +278,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 	}
 	p := planner{params: map[string]string{}, catalog: catalog}
 	source := "`" + database + "`.`" + table + "`"
-	if r.Kind == "trend" && table == "event_facts" {
+	if r.Kind == QueryKindTrend && table == "event_facts" {
 		var e error
 		source, e = p.trendFactsSource(database, scope, r)
 		if e != nil {
@@ -316,10 +316,10 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 	base += " AND " + predicate
 	plan := Plan{Parameters: p.params, Kind: r.Kind, Limit: r.Limit, Accuracy: AccuracyNotApplicable}
 	switch r.Kind {
-	case "events", "journey":
+	case QueryKindEvents, QueryKindJourney:
 		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,context_json,properties_json" + base + " ORDER BY event_time,ifNull(session_id,''),ifNull(tab_id,''),ifNull(sequence,0),source_id,event_id LIMIT " + strconv.Itoa(r.Limit+1)
 		plan.Columns = []Column{{Key: "event_key", Type: "string"}, {Key: "event_time", Type: "datetime"}, {Key: "uid", Type: "string"}, {Key: "anonymous_id", Type: "string"}, {Key: "context", Type: "object"}, {Key: "properties", Type: "object"}}
-	case "trend":
+	case QueryKindTrend:
 		selectSQL := []string{}
 		groups := []string{}
 		if r.Interval != "" {
@@ -372,7 +372,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 			plan.SQL += " GROUP BY " + strings.Join(groups, ",") + " ORDER BY " + strings.Join(groups, ",")
 		}
 		plan.SQL += " LIMIT " + strconv.Itoa(r.Limit+1)
-	case "funnel":
+	case QueryKindFunnel:
 		subject := "uid"
 		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
@@ -399,7 +399,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "step_index", Type: "integer"}, {Key: "event_key", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "conversion_rate", Type: "number"}}
-	case "retention":
+	case QueryKindRetention:
 		subject := "uid"
 		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
@@ -425,7 +425,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}
-	case "segment":
+	case QueryKindSegment:
 		subject := "uid"
 		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
@@ -451,7 +451,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,event_id LIMIT 100001"
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
-	case "path":
+	case QueryKindPath:
 		subject := "uid"
 		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
@@ -481,7 +481,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
-	case "attribution":
+	case QueryKindAttribution:
 		subject := "uid"
 		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"

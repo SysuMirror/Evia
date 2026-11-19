@@ -79,7 +79,7 @@ func (a *AnalysisAPI) createKind(w http.ResponseWriter, r *http.Request, s autho
 		if e = json.Unmarshal(raw, &kind); e != nil {
 			return e
 		}
-		if kind.Kind != "journey" {
+		if kind.Kind != analysis.QueryKindJourney {
 			return analysis.Invalid("INVALID_QUERY_KIND", "轨迹接口必须使用 journey 查询", "/kind")
 		}
 	}

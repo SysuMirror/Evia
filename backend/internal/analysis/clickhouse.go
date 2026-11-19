@@ -144,7 +144,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 	result := Result{Columns: plan.Columns, Rows: make([]map[string]any, 0), Metadata: metadata}
 	for _, row := range rows {
 		key := "received_at_ns"
-		if r.Kind == "trend" {
+		if r.Kind == QueryKindTrend {
 			key = "watermark_ns"
 		}
 		if v, ok := integer(row[key]); ok {
@@ -154,7 +154,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 			}
 		}
 	}
-	if r.Kind == "funnel" {
+	if r.Kind == QueryKindFunnel {
 		if len(rows) > 100000 {
 			return Result{}, Invalid("QUERY_COST_EXCEEDED", "漏斗明细超过执行预算，请缩小范围")
 		}
@@ -164,7 +164,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		}
 		return result, nil
 	}
-	if r.Kind == "retention" {
+	if r.Kind == QueryKindRetention {
 		if len(rows) > 100000 {
 			return Result{}, Invalid("QUERY_COST_EXCEEDED", "留存明细超过执行预算，请缩小范围")
 		}
@@ -174,7 +174,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		}
 		return result, nil
 	}
-	if r.Kind == "segment" {
+	if r.Kind == QueryKindSegment {
 		if len(rows) > 100000 {
 			return Result{}, Invalid("QUERY_COST_EXCEEDED", "分群明细超过执行预算，请缩小范围")
 		}
@@ -184,7 +184,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		}
 		return result, nil
 	}
-	if r.Kind == "path" {
+	if r.Kind == QueryKindPath {
 		if len(rows) > 100000 {
 			return Result{}, Invalid("QUERY_COST_EXCEEDED", "路径明细超过执行预算，请缩小范围")
 		}
@@ -194,7 +194,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		}
 		return result, nil
 	}
-	if r.Kind == "attribution" {
+	if r.Kind == QueryKindAttribution {
 		if len(rows) > 100000 {
 			return Result{}, Invalid("QUERY_COST_EXCEEDED", "归因明细超过执行预算，请缩小范围")
 		}
@@ -208,7 +208,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		return Result{}, Invalid("QUERY_RESULT_LIMIT_EXCEEDED", "结果超过行数限制，请缩小范围")
 	}
 	for _, row := range rows {
-		if r.Kind == "trend" {
+		if r.Kind == QueryKindTrend {
 			delete(row, "watermark_ns")
 			if v, ok := integer(row["bucket_ms"]); ok {
 				row["bucket"] = time.UnixMilli(v).UTC().Format(time.RFC3339Nano)

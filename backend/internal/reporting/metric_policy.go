@@ -73,7 +73,7 @@ func NormalizeMetricDefinition(in MetricDefinition) (MetricDefinition, error) {
 	if e = analysis.WalkFields(&fields, func(field *analysis.Field) error { field.ResolvedType = ""; return nil }); e != nil {
 		return out, e
 	}
-	template := analysis.Template{Kind: "trend", EventVersions: out.EventVersions, Filter: fields.Filter, Subject: out.Subject, Metrics: fields.Metrics}
+	template := analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: out.EventVersions, Filter: fields.Filter, Subject: out.Subject, Metrics: fields.Metrics}
 	if e = analysis.ValidateTemplate(&template); e != nil {
 		return out, e
 	}
@@ -237,7 +237,7 @@ func MetricTemplate(definition MetricDefinition, execute MetricExecute) (analysi
 			filter = &analysis.Filter{Op: "and", Args: []*analysis.Filter{filter, execute.Filter}}
 		}
 	}
-	template := analysis.Template{Kind: "trend", EventVersions: normalized.EventVersions, Filter: filter, Subject: normalized.Subject, Metrics: []analysis.Metric{normalized.Aggregation}, Interval: execute.Interval, GroupBy: execute.GroupBy, Limit: execute.Limit}
+	template := analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: normalized.EventVersions, Filter: filter, Subject: normalized.Subject, Metrics: []analysis.Metric{normalized.Aggregation}, Interval: execute.Interval, GroupBy: execute.GroupBy, Limit: execute.Limit}
 	if err = analysis.ValidateTemplate(&template); err != nil {
 		return analysis.Template{}, err
 	}

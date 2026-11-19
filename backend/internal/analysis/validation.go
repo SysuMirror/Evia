@@ -51,7 +51,7 @@ func Parse(raw []byte, validator Validator) (Request, error) {
 	return out, nil
 }
 func Validate(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
+	if !ValidQueryKind(r.Kind) {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if !env.Valid(r.Environment) {
@@ -67,10 +67,10 @@ func Validate(r *Request) error {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
 	window := 31 * 24 * time.Hour
-	if r.Kind == "journey" || r.Kind == "events" || r.Kind == "funnel" || r.Kind == "segment" || r.Kind == "path" || r.Kind == "attribution" {
+	if r.Kind == QueryKindJourney || r.Kind == QueryKindEvents || r.Kind == QueryKindFunnel || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution {
 		window = 7 * 24 * time.Hour
 	}
-	if r.Kind == "retention" {
+	if r.Kind == QueryKindRetention {
 		// Structural policy must be settled before the window is derived from
 		// granularity and periods, otherwise malformed values mask the real
 		// configuration error. ValidateConfiguration is idempotent, so the
@@ -99,7 +99,7 @@ func Validate(r *Request) error {
 // system field types. It does not validate environment, time range or timezone;
 // execution callers must use Validate with the actual execution context.
 func ValidateConfiguration(r *Request) error {
-	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
+	if !ValidQueryKind(r.Kind) {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
 	if r.IdentityRevision != nil || r.Subject == SubjectResolvedPerson {
@@ -161,7 +161,7 @@ func ValidateConfiguration(r *Request) error {
 			return Invalid("SUBJECT_REQUIRED", "UV 必须指定 uid 或 anonymous 主体", "/subject")
 		}
 	}
-	if r.Kind == "trend" {
+	if r.Kind == QueryKindTrend {
 		if len(r.Metrics) == 0 {
 			r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
 		}
@@ -171,7 +171,7 @@ func ValidateConfiguration(r *Request) error {
 	} else if r.Interval != "" || len(r.Metrics) > 0 || len(r.GroupBy) > 0 {
 		return Invalid("INVALID_QUERY_OPTIONS", "此查询类型不接受分组、指标或间隔")
 	}
-	if r.Kind == "journey" {
+	if r.Kind == QueryKindJourney {
 		if r.Subject == "" {
 			return Invalid("SUBJECT_REQUIRED", "轨迹必须指定 uid 或 anonymous 主体", "/subject")
 		}
@@ -191,7 +191,7 @@ func ValidateConfiguration(r *Request) error {
 			return Invalid("INVALID_IDENTITY_FILTER", "匿名身份过滤必须匹配 anonymous 主体", "/identity_filter")
 		}
 	}
-	if r.Kind == "funnel" {
+	if r.Kind == QueryKindFunnel {
 		if r.Subject == "" {
 			return Invalid("SUBJECT_REQUIRED", "漏斗必须指定统计主体", "/subject")
 		}
@@ -225,28 +225,28 @@ func ValidateConfiguration(r *Request) error {
 	} else if r.Funnel != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有漏斗查询接受 funnel 参数", "/funnel")
 	}
-	if r.Kind == "retention" {
+	if r.Kind == QueryKindRetention {
 		if e := validateRetention(r); e != nil {
 			return e
 		}
 	} else if r.Retention != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有留存查询接受 retention 参数", "/retention")
 	}
-	if r.Kind == "segment" {
+	if r.Kind == QueryKindSegment {
 		if e := validateSegment(r); e != nil {
 			return e
 		}
 	} else if r.Segment != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有分群查询接受 segment 参数", "/segment")
 	}
-	if r.Kind == "path" {
+	if r.Kind == QueryKindPath {
 		if e := validatePath(r); e != nil {
 			return e
 		}
 	} else if r.Path != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有路径查询接受 path 参数", "/path")
 	}
-	if r.Kind == "attribution" {
+	if r.Kind == QueryKindAttribution {
 		if e := validateAttribution(r); e != nil {
 			return e
 		}
@@ -544,7 +544,7 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == "funnel" || r.Kind == "retention" || r.Kind == "segment" || r.Kind == "path" || r.Kind == "attribution") {
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == QueryKindFunnel || r.Kind == QueryKindRetention || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution) {
 		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群、路径或归因查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {

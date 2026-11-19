@@ -119,13 +119,13 @@ func validateInlineVisualization(out *SavedAnalysisDefinition) error {
 	case VisualizationTable:
 		valid = true
 	case VisualizationMetric:
-		valid = q.Kind == "trend" && len(q.Metrics) == 1 && len(q.GroupBy) == 0 && q.Interval == ""
+		valid = q.Kind == analysis.QueryKindTrend && len(q.Metrics) == 1 && len(q.GroupBy) == 0 && q.Interval == ""
 	case VisualizationLine:
-		valid = q.Kind == "trend" && q.Interval != ""
+		valid = q.Kind == analysis.QueryKindTrend && q.Interval != ""
 	case VisualizationBar:
-		valid = q.Kind == "trend" && (len(q.GroupBy) > 0 || q.Interval != "")
+		valid = q.Kind == analysis.QueryKindTrend && (len(q.GroupBy) > 0 || q.Interval != "")
 	case VisualizationFunnel:
-		valid = q.Kind == "funnel"
+		valid = q.Kind == analysis.QueryKindFunnel
 	}
 	if !valid {
 		return analysis.Invalid("INVALID_VISUALIZATION", "图表类型与分析配置不兼容", "/visualization/kind")
@@ -241,7 +241,7 @@ func normalizeResolvedMetricDefinition(in SavedAnalysisDefinition) (SavedAnalysi
 		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用分析当前仅支持指标卡片", "/visualization/kind")
 	}
 	q := out.Query
-	if q.Kind != "trend" || len(q.Metrics) != 1 || len(q.GroupBy) != 0 || q.Interval != "" {
+	if q.Kind != analysis.QueryKindTrend || len(q.Metrics) != 1 || len(q.GroupBy) != 0 || q.Interval != "" {
 		return out, analysis.Invalid("INVALID_VISUALIZATION", "指标引用必须解析为单值指标卡片", "/visualization/kind")
 	}
 	if e = boundSavedDefinition(out); e != nil {
@@ -270,7 +270,7 @@ func ResolveCompositeMetricReference(in SavedAnalysisDefinition, formula Formula
 		return SavedAnalysisDefinition{}, analysis.Invalid("METRIC_VERSION_NOT_FOUND", "复合指标版本与引用不匹配", "/metric_ref")
 	}
 	resolved := normalized
-	resolved.Query = analysis.Template{Kind: "trend"}
+	resolved.Query = analysis.Template{Kind: analysis.QueryKindTrend}
 	return normalizeResolvedCompositeDefinition(resolved)
 }
 
@@ -292,7 +292,7 @@ func normalizeResolvedCompositeDefinition(in SavedAnalysisDefinition) (SavedAnal
 	if e = validateMetricReference(out.MetricRef); e != nil {
 		return out, e
 	}
-	if out.Query.Kind != "trend" {
+	if out.Query.Kind != analysis.QueryKindTrend {
 		return out, analysis.Invalid("INVALID_METRIC_REFERENCE", "复合指标引用必须解析为趋势标记卡片", "/metric_ref")
 	}
 	if len(out.Query.EventVersions) != 0 || len(out.Query.Metrics) != 0 || out.Query.Interval != "" || len(out.Query.GroupBy) != 0 || out.Query.Filter != nil {
@@ -427,24 +427,24 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 	for _, v := range template.EventVersions {
 		selected[v] = true
 	}
-	if template.Kind == "funnel" {
+	if template.Kind == analysis.QueryKindFunnel {
 		mode = SelectionModeFunnelSteps
 		for _, step := range template.Funnel.Steps {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
-	if template.Kind == "retention" {
+	if template.Kind == analysis.QueryKindRetention {
 		mode = SelectionModeRetentionSteps
 		for _, step := range []analysis.Step{template.Retention.StartEvent, template.Retention.ReturnEvent} {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
-	if template.Kind == "segment" {
+	if template.Kind == analysis.QueryKindSegment {
 		mode = SelectionModeSegmentSteps
 		step := template.Segment.Event
 		selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 	}
-	if template.Kind == "path" {
+	if template.Kind == analysis.QueryKindPath {
 		if template.Path.StartEvent != nil {
 			mode = SelectionModePathSteps
 			step := *template.Path.StartEvent
@@ -455,7 +455,7 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 			mode = SelectionModeAllEvents
 		}
 	}
-	if template.Kind == "attribution" {
+	if template.Kind == analysis.QueryKindAttribution {
 		mode = SelectionModeAttributionSteps
 		for _, step := range append([]analysis.Step{template.Attribution.Conversion}, template.Attribution.Touchpoints...) {
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
