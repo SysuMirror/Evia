@@ -78,16 +78,16 @@ func TestUnsupportedAndUnboundedSchema(t *testing.T) {
 }
 func TestCompatibilityClassification(t *testing.T) {
 	before := DraftInput{Schema: testSchema(t, validSchema), AllowedSourceKinds: []string{ingestion.SourceKindBrowser, ingestion.SourceKindServer}, FactKind: str(FactKindUserIntent)}
-	if got := Compatibility(nil, before); got != "initial" {
+	if got := Compatibility(nil, before); got != CompatibilityInitial {
 		t.Fatal(got)
 	}
 	for _, tc := range []struct{ name, from, to, want string }{
-		{"same", `"minimum":1`, `"minimum":1`, "compatible"},
-		{"relax", `"minimum":1`, `"minimum":0`, "compatible"},
-		{"tighten", `"minimum":1`, `"minimum":2`, "breaking"},
-		{"new required", `"required":["lesson_id"]`, `"required":["lesson_id","labels"]`, "breaking"},
-		{"remove required", `"required":["lesson_id"]`, `"required":[]`, "compatible"},
-		{"change type", `"type":"integer"`, `"type":"number"`, "compatible"},
+		{"same", `"minimum":1`, `"minimum":1`, CompatibilityCompatible},
+		{"relax", `"minimum":1`, `"minimum":0`, CompatibilityCompatible},
+		{"tighten", `"minimum":1`, `"minimum":2`, CompatibilityBreaking},
+		{"new required", `"required":["lesson_id"]`, `"required":["lesson_id","labels"]`, CompatibilityBreaking},
+		{"remove required", `"required":["lesson_id"]`, `"required":[]`, CompatibilityCompatible},
+		{"change type", `"type":"integer"`, `"type":"number"`, CompatibilityCompatible},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			next := before
@@ -99,12 +99,12 @@ func TestCompatibilityClassification(t *testing.T) {
 	}
 	next := before
 	next.AllowedSourceKinds = []string{ingestion.SourceKindServer}
-	if Compatibility(&before, next) != "breaking" {
+	if Compatibility(&before, next) != CompatibilityBreaking {
 		t.Fatal("source removal compatible")
 	}
 	next = before
 	next.FactKind = str(FactKindServerConfirmed)
-	if Compatibility(&before, next) != "breaking" {
+	if Compatibility(&before, next) != CompatibilityBreaking {
 		t.Fatal("semantic change compatible")
 	}
 }

@@ -4,7 +4,7 @@ package catalog
 // remains accepted, and source/fact semantics retain their prior meaning.
 func Compatibility(previous *DraftInput, next DraftInput) string {
 	if previous == nil {
-		return "initial"
+		return CompatibilityInitial
 	}
 	// Until semantic metadata has a typed contract, any metadata change may
 	// alter interpretation (for example duration milliseconds versus seconds).
@@ -13,7 +13,7 @@ func Compatibility(previous *DraftInput, next DraftInput) string {
 	beforeMetadata, beforeError := Hash(previous.FieldMetadata)
 	afterMetadata, afterError := Hash(next.FieldMetadata)
 	if beforeError != nil || afterError != nil || beforeMetadata != afterMetadata {
-		return "breaking"
+		return CompatibilityBreaking
 	}
 	for _, kind := range previous.AllowedSourceKinds {
 		found := false
@@ -21,11 +21,11 @@ func Compatibility(previous *DraftInput, next DraftInput) string {
 			found = found || v == kind
 		}
 		if !found {
-			return "breaking"
+			return CompatibilityBreaking
 		}
 	}
 	if text(previous.FactKind) != text(next.FactKind) {
-		return "breaking"
+		return CompatibilityBreaking
 	}
 	oldProperties, _ := object(previous.Schema["properties"])
 	newProperties, _ := object(next.Schema["properties"])
@@ -39,20 +39,20 @@ func Compatibility(previous *DraftInput, next DraftInput) string {
 	for _, v := range a {
 		k, _ := v.(string)
 		if !oldRequired[k] {
-			return "breaking"
+			return CompatibilityBreaking
 		}
 	}
 	if bound(next.Schema, "maxProperties", 50) < bound(previous.Schema, "maxProperties", 50) {
-		return "breaking"
+		return CompatibilityBreaking
 	}
 	for k, v := range oldProperties {
 		before, _ := object(v)
 		after, ok := object(newProperties[k])
 		if !ok || !propertyCompatible(before, after) {
-			return "breaking"
+			return CompatibilityBreaking
 		}
 	}
-	return "compatible"
+	return CompatibilityCompatible
 }
 func propertyCompatible(a, b map[string]any) bool {
 	if a["type"] != b["type"] && !(a["type"] == "integer" && b["type"] == "number") {
