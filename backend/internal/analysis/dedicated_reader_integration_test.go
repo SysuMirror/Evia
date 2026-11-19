@@ -184,14 +184,14 @@ func TestClickHouseDedicatedTrendMatchesDocumentTrend(t *testing.T) {
 
 	metrics := base
 	metrics.Metrics = []Metric{
-		{Op: "count"}, {Op: "sum", Field: &valueField}, {Op: "avg", Field: &valueField},
-		{Op: "min", Field: &valueField}, {Op: "max", Field: &valueField},
+		{Op: OpCount}, {Op: OpSum, Field: &valueField}, {Op: OpAvg, Field: &valueField},
+		{Op: OpMin, Field: &valueField}, {Op: OpMax, Field: &valueField},
 	}
 	queries = append(queries, metrics)
 
 	grouped := base
 	grouped.GroupBy = []Field{titleField}
-	grouped.Metrics = []Metric{{Op: "count"}}
+	grouped.Metrics = []Metric{{Op: OpCount}}
 	queries = append(queries, grouped)
 
 	for _, filter := range []Filter{
@@ -202,7 +202,7 @@ func TestClickHouseDedicatedTrendMatchesDocumentTrend(t *testing.T) {
 	} {
 		r := base
 		r.Filter = &filter
-		r.Metrics = []Metric{{Op: "count"}}
+		r.Metrics = []Metric{{Op: OpCount}}
 		queries = append(queries, r)
 	}
 

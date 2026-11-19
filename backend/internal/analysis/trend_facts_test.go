@@ -14,12 +14,12 @@ func TestTrendWinnerProjectsOnlyRequiredColumns(t *testing.T) {
 		{"count", func(*Request) {}, nil},
 		{"event keys", func(r *Request) { r.EventKeys = []string{"opened"} }, []string{"event_key"}},
 		{"versions", func(r *Request) { r.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 2}} }, []string{"event_key", "schema_version"}},
-		{"UID subject", func(r *Request) { r.Subject = SubjectUID; r.Metrics = []Metric{{Op: "unique"}} }, []string{"uid"}},
-		{"anonymous subject", func(r *Request) { r.Subject = SubjectAnonymous; r.Metrics = []Metric{{Op: "unique"}} }, []string{"anonymous_id"}},
+		{"UID subject", func(r *Request) { r.Subject = SubjectUID; r.Metrics = []Metric{{Op: OpUnique}} }, []string{"uid"}},
+		{"anonymous subject", func(r *Request) { r.Subject = SubjectAnonymous; r.Metrics = []Metric{{Op: OpUnique}} }, []string{"anonymous_id"}},
 		{"identity filter", func(r *Request) { uid := "synthetic"; r.IdentityFilter = &IdentityFilter{UID: &uid} }, []string{"uid"}},
 		{"anonymous identity filter", func(r *Request) { id := "synthetic"; r.IdentityFilter = &IdentityFilter{AnonymousID: &id} }, []string{"anonymous_id"}},
 		{"property metric", func(r *Request) {
-			r.Metrics = []Metric{{Op: "sum", Field: &Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "score", ResolvedType: "number"}}}
+			r.Metrics = []Metric{{Op: OpSum, Field: &Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "score", ResolvedType: "number"}}}
 		}, []string{"event_key", "schema_version", "properties_json"}},
 		{"nested filters", func(r *Request) {
 			r.Filter = &Filter{Op: "or", Args: []*Filter{{Op: "eq", Field: &Field{Kind: "system", Key: "uid", ResolvedType: "string"}, Value: "one"}, {Op: "is_missing", Field: &Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "score", ResolvedType: "number"}}}}

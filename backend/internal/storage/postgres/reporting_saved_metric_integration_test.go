@@ -51,7 +51,7 @@ func TestSavedAnalysisMetricReferenceResolvesPinsAndPublishes(t *testing.T) {
 		t.Fatalf("saved analysis timestamps must serialize as UTC: %s %s", created.CreatedAt, created.UpdatedAt)
 	}
 	q := created.Definition.Query
-	if q.Kind != analysis.QueryKindTrend || len(q.Metrics) != 1 || q.Metrics[0].Op != "count" || q.Interval != "" || len(q.GroupBy) != 0 {
+	if q.Kind != analysis.QueryKindTrend || len(q.Metrics) != 1 || q.Metrics[0].Op != analysis.OpCount || q.Interval != "" || len(q.GroupBy) != 0 {
 		t.Fatalf("derived query is not a whole-range metric card: %+v", q)
 	}
 	if len(q.EventVersions) != 1 || q.EventVersions[0].EventKey != "lesson_opened" || q.EventVersions[0].SchemaVersion != 1 {
@@ -169,7 +169,7 @@ func TestSavedAnalysisMetricReferenceStaysImmutableAcrossMetricRepublish(t *test
 	if e != nil {
 		t.Fatal(e)
 	}
-	if v2.Definition.MetricRef.Version != 2 || v2.Definition.Query.Metrics[0].Op != "count" {
+	if v2.Definition.MetricRef.Version != 2 || v2.Definition.Query.Metrics[0].Op != analysis.OpCount {
 		t.Fatalf("metric v2 reference not resolved: %+v", v2.Definition)
 	}
 }

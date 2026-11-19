@@ -270,7 +270,7 @@ func TestPathSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		{"unpinned start event", "INVALID_PATH_START_EVENT", func(t *Template) {
 			t.Path.StartEvent = &Step{EventKey: "open", SchemaVersion: 0}
 		}},
-		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: OpCount}} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			invalid := pathTemplate(nil)

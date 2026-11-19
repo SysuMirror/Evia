@@ -17,7 +17,7 @@ import (
 )
 
 func metricRunDefinition() reporting.MetricDefinition {
-	return reporting.MetricDefinition{Title: "Lesson total", Description: "Synthetic metric query", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}, Unit: "number"}
+	return reporting.MetricDefinition{Title: "Lesson total", Description: "Synthetic metric query", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: analysis.OpSum, Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}, Unit: "number"}
 }
 
 func metricRunPublish(t *testing.T, f catalogFixture, draft reporting.MetricDraft) reporting.MetricVersion {
@@ -155,7 +155,7 @@ func TestMetricQueryExactVersionBindingScopeAndSharedQueue(t *testing.T) {
 		t.Fatal(e)
 	}
 	draft.Definition.Title = "Updated count"
-	draft.Definition.Aggregation = analysis.Metric{Op: "count"}
+	draft.Definition.Aggregation = analysis.Metric{Op: analysis.OpCount}
 	draft.Definition.Unit = "event"
 	draft, e = f.s.SaveMetricDraft(ctx, f.owner, f.project, first.MetricID, draft.DraftRevision, draft.Definition)
 	if e != nil {
@@ -173,7 +173,7 @@ func TestMetricQueryExactVersionBindingScopeAndSharedQueue(t *testing.T) {
 	if e = f.s.Pool.QueryRow(ctx, `SELECT request FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&data); e != nil {
 		t.Fatal(e)
 	}
-	if e = json.Unmarshal(data, &bound); e != nil || bound.Metrics[0].Op != "sum" || bound.Metrics[0].Field.ResolvedType != "integer" || bound.EventVersions[0].SchemaVersion != 1 || bound.Environment != "development" || !bound.TimeRange.From.Equal(in.TimeRange.From) || bound.Timezone != in.Timezone {
+	if e = json.Unmarshal(data, &bound); e != nil || bound.Metrics[0].Op != analysis.OpSum || bound.Metrics[0].Field.ResolvedType != "integer" || bound.EventVersions[0].SchemaVersion != 1 || bound.Environment != "development" || !bound.TimeRange.From.Equal(in.TimeRange.From) || bound.Timezone != in.Timezone {
 		t.Fatal("old snapshot or real execution context was not bound", bound, e)
 	}
 	_, e = f.s.EnqueueMetricVersion(ctx, f.owner, f.otherProject, first.MetricID, 1, "wrong-project", in)
@@ -316,7 +316,7 @@ func TestMetricWholeWindowAggregatePersistsAndBindsSeparateFromDaily(t *testing.
 	f, d := metricFixture(t)
 	ctx := context.Background()
 	definition := metricDefinition()
-	definition.Aggregation = analysis.Metric{Op: "unique"}
+	definition.Aggregation = analysis.Metric{Op: analysis.OpUnique}
 	definition.Unit = "raw_uid"
 	d, e := f.s.SaveMetricDraft(ctx, f.owner, f.project, d.ID, 1, definition)
 	if e != nil {
@@ -337,7 +337,7 @@ func TestMetricWholeWindowAggregatePersistsAndBindsSeparateFromDaily(t *testing.
 	if e = json.Unmarshal(data, &request); e != nil {
 		t.Fatal(e)
 	}
-	if request.Interval != "" || request.Metrics[0].Op != "unique" || request.Subject != analysis.SubjectUID {
+	if request.Interval != "" || request.Metrics[0].Op != analysis.OpUnique || request.Subject != analysis.SubjectUID {
 		t.Fatal(request)
 	}
 	plan, e := analysis.Compile("evia", "event_facts", analysis.Scope{ProjectID: f.project, Environment: "development"}, request)

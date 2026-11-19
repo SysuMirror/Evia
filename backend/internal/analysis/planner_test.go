@@ -60,7 +60,7 @@ func TestPlannerBindsValuesAndPreservesScopedMissingSemantics(t *testing.T) {
 	r := request(t, baseRequest)
 	attack := "' OR 1=1; DROP TABLE event_facts_raw --"
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 2, Key: "title", ResolvedType: "string"}, Value: attack}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	plan, e := Compile("testdb", "event_facts", Scope{ProjectID: "project-secret", Environment: "development"}, r)
 	if e != nil {
 		t.Fatal(e)
@@ -97,7 +97,7 @@ func TestPlannerBindsValuesAndPreservesScopedMissingSemantics(t *testing.T) {
 func TestPlannerPropertyExpressionsGateOnLosslessLayout(t *testing.T) {
 	r := request(t, baseRequest)
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 2, Key: "title", ResolvedType: "string"}, Value: "Home"}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	plan, e := Compile("testdb", "event_facts", Scope{ProjectID: "project-secret", Environment: "development"}, r)
 	if e != nil {
 		t.Fatal(e)
@@ -127,7 +127,7 @@ func TestPlannerPropertyExpressionsGateOnLosslessLayout(t *testing.T) {
 func TestMetricPrecisionAndTypes(t *testing.T) {
 	r := request(t, baseRequest)
 	r.Subject = SubjectUID
-	r.Metrics = []Metric{{Op: "unique", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpUnique, Accuracy: AccuracyExact}}
 	plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 	if e != nil || plan.Accuracy != AccuracyExact || !strings.Contains(plan.SQL, "uniqExactIf") {
 		t.Fatal(plan, e)
@@ -137,11 +137,11 @@ func TestMetricPrecisionAndTypes(t *testing.T) {
 	if e != nil || plan.Accuracy != AccuracyApproximate || !strings.Contains(plan.SQL, "uniqCombined64If") {
 		t.Fatal(plan, e)
 	}
-	r.Metrics = []Metric{{Op: "sum", Field: &Field{Kind: "system", Key: "uid", ResolvedType: "string"}}}
+	r.Metrics = []Metric{{Op: OpSum, Field: &Field{Kind: "system", Key: "uid", ResolvedType: "string"}}}
 	if _, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r); e == nil {
 		t.Fatal("string sum accepted")
 	}
-	r.Metrics = []Metric{{Op: "count"}}
+	r.Metrics = []Metric{{Op: OpCount}}
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", Key: "enabled", EventKey: "lesson_opened", SchemaVersion: 1, ResolvedType: "boolean"}, Value: json.Number("0")}
 	if _, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r); e == nil {
 		t.Fatal("zero coerced into false")
@@ -202,7 +202,7 @@ func TestMetricPercentileValidationClosedSet(t *testing.T) {
 	// Non-percentile numeric ops still reject approximate accuracy.
 	sumRequest := request(t, baseRequest)
 	sumRequest.Subject = SubjectUID
-	sumRequest.Metrics = []Metric{{Op: "sum", Field: numericField, Accuracy: AccuracyApproximate}}
+	sumRequest.Metrics = []Metric{{Op: OpSum, Field: numericField, Accuracy: AccuracyApproximate}}
 	if e := Validate(&sumRequest); e == nil {
 		t.Fatal("sum approximate must be rejected")
 	}

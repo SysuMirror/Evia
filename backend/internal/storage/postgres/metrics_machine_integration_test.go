@@ -192,7 +192,7 @@ func TestMetricCompiledRequestPreservesFiltersAndUnitValues(t *testing.T) {
 	if e = json.Unmarshal(data, &bound); e != nil {
 		t.Fatal(e)
 	}
-	if bound.Filter == nil || bound.Filter.Op != "and" || len(bound.Filter.Args) != 2 || bound.Filter.Args[0].Op != "gte" || bound.Filter.Args[1].Op != "lte" || bound.Metrics[0].Op != "sum" || bound.Metrics[0].Field.ResolvedType != "integer" {
+	if bound.Filter == nil || bound.Filter.Op != "and" || len(bound.Filter.Args) != 2 || bound.Filter.Args[0].Op != "gte" || bound.Filter.Args[1].Op != "lte" || bound.Metrics[0].Op != analysis.OpSum || bound.Metrics[0].Field.ResolvedType != "integer" {
 		t.Fatal(bound)
 	}
 	plan, e := analysis.Compile("evia", "event_facts", analysis.Scope{ProjectID: f.project, Environment: "development"}, bound)

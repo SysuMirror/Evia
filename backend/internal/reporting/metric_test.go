@@ -12,7 +12,7 @@ import (
 )
 
 func metricDefinition() MetricDefinition {
-	return MetricDefinition{Title: "  Visits  ", Subject: analysis.SubjectUID, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
+	return MetricDefinition{Title: "  Visits  ", Subject: analysis.SubjectUID, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Aggregation: analysis.Metric{Op: analysis.OpCount}, Unit: "event"}
 }
 func metricSnapshot(t *testing.T) MetricSnapshot {
 	t.Helper()
@@ -78,7 +78,7 @@ func TestMetricNormalizationPinsAndOwnsConfiguration(t *testing.T) {
 	if d.EventVersions[0].EventKey != "page_opened" || d.Filter.Field.Key != "score" || d.Filter.Value.([]any)[0] != 0 {
 		t.Fatal("normalization shares input")
 	}
-	for _, mutate := range []func(*MetricDefinition){func(d *MetricDefinition) { d.EventVersions = nil }, func(d *MetricDefinition) { d.EventVersions[0].SchemaVersion = 0 }, func(d *MetricDefinition) { d.Subject = "" }, func(d *MetricDefinition) { d.Subject = analysis.SubjectResolvedPerson }, func(d *MetricDefinition) { d.Aggregation.Op = "formula" }, func(d *MetricDefinition) { d.Aggregation = analysis.Metric{Op: "sum"} }, func(d *MetricDefinition) { d.Filter.Field.SchemaVersion = 2 }} {
+	for _, mutate := range []func(*MetricDefinition){func(d *MetricDefinition) { d.EventVersions = nil }, func(d *MetricDefinition) { d.EventVersions[0].SchemaVersion = 0 }, func(d *MetricDefinition) { d.Subject = "" }, func(d *MetricDefinition) { d.Subject = analysis.SubjectResolvedPerson }, func(d *MetricDefinition) { d.Aggregation.Op = "formula" }, func(d *MetricDefinition) { d.Aggregation = analysis.Metric{Op: analysis.OpSum} }, func(d *MetricDefinition) { d.Filter.Field.SchemaVersion = 2 }} {
 		bad := metricDefinition()
 		bad.Filter = &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}, Value: 0}
 		mutate(&bad)
@@ -116,7 +116,7 @@ func TestMetricTemplateCombinesFiltersAndOwnsRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if template.Filter.Op != "and" || len(template.Filter.Args) != 2 || template.Interval != analysis.IntervalDay || template.Limit != 20 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" {
+	if template.Filter.Op != "and" || len(template.Filter.Args) != 2 || template.Interval != analysis.IntervalDay || template.Limit != 20 || len(template.Metrics) != 1 || template.Metrics[0].Op != analysis.OpCount {
 		t.Fatalf("template %+v", template)
 	}
 	template.Filter.Args[1].Field.Key = "changed"
@@ -153,7 +153,7 @@ func TestMetricValidationBindsScopeRevisionDependenciesAndSemanticDiff(t *testin
 	snapshot.Draft.PublishedVersion = 1
 	snapshot.Baseline = &MetricVersion{MetricID: snapshot.Draft.ID, ProjectID: snapshot.Draft.ProjectID, Environment: snapshot.Draft.Environment, Version: 1, Definition: snapshot.Draft.Definition}
 	snapshot.Draft.Definition.Subject = analysis.SubjectAnonymous
-	snapshot.Draft.Definition.Aggregation = analysis.Metric{Op: "unique"}
+	snapshot.Draft.Definition.Aggregation = analysis.Metric{Op: analysis.OpUnique}
 	snapshot.Draft.Definition.Unit = "anonymous_id"
 	got, err := BuildMetricValidation(snapshot)
 	if err != nil {
@@ -230,7 +230,7 @@ func TestMetricServiceBoundsAndAvailabilityBeforeWrites(t *testing.T) {
 
 func TestMetricWholeWindowUniqueKeepsExactSubject(t *testing.T) {
 	d := metricDefinition()
-	d.Aggregation = analysis.Metric{Op: "unique"}
+	d.Aggregation = analysis.Metric{Op: analysis.OpUnique}
 	d.Unit = "raw_uid"
 	template, err := MetricTemplate(d, MetricExecute{})
 	if err != nil {
@@ -241,7 +241,7 @@ func TestMetricWholeWindowUniqueKeepsExactSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != analysis.SubjectUID || len(request.Metrics) != 1 || request.Metrics[0].Op != "unique" || request.Metrics[0].Accuracy != analysis.AccuracyExact {
+	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != analysis.SubjectUID || len(request.Metrics) != 1 || request.Metrics[0].Op != analysis.OpUnique || request.Metrics[0].Accuracy != analysis.AccuracyExact {
 		t.Fatalf("whole-window unique %+v", request)
 	}
 }

@@ -19,7 +19,7 @@ func publishDashboardMetric(t *testing.T, f catalogFixture) reporting.MetricDraf
 		Title:         "Dashboard metric",
 		EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}},
 		Subject:       analysis.SubjectUID,
-		Aggregation:   analysis.Metric{Op: "count"},
+		Aggregation:   analysis.Metric{Op: analysis.OpCount},
 		Unit:          "event",
 	}
 	created, e := f.s.CreateMetric(ctx, f.owner, f.project, "dash-metric-create", reporting.MetricCreate{Environment: "development", Definition: def})

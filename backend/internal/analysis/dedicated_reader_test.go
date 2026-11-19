@@ -152,7 +152,7 @@ func TestPlannerFieldEmitsDedicatedTierOnlyWhenCatalogInjected(t *testing.T) {
 func TestCompileWithCatalogDefaultsByteIdenticalAndEnablesGate(t *testing.T) {
 	r := request(t, baseRequest)
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	scope := Scope{ProjectID: "project-secret", Environment: "development"}
 
 	legacy, err := Compile("testdb", "event_facts", scope, r)
@@ -187,7 +187,7 @@ func TestCompileWithCatalogDefaultsByteIdenticalAndEnablesGate(t *testing.T) {
 func TestCompileWithCatalogUnmatchedFieldStaysIdentical(t *testing.T) {
 	r := request(t, baseRequest)
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "other_event", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	scope := Scope{ProjectID: "project-secret", Environment: "development"}
 
 	legacy, err := Compile("testdb", "event_facts", scope, r)
@@ -210,7 +210,7 @@ func TestTrendTupleAppendsDedicatedColumnsOnlyOnCatalogHit(t *testing.T) {
 		r := request(t, baseRequest) // baseRequest is a trend query
 		r.EventVersions = []EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}
 		r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
-		r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+		r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 		return r
 	}
 
@@ -252,7 +252,7 @@ func TestTrendTupleIgnoresNonCatalogProperty(t *testing.T) {
 	r := request(t, baseRequest)
 	r.EventVersions = []EventVersion{{EventKey: "other_event", SchemaVersion: 1}}
 	r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "property", EventKey: "other_event", SchemaVersion: 1, Key: "title", ResolvedType: "string"}, Value: "Home"}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 
 	legacy, err := Compile("testdb", "event_facts", scope, r)
 	if err != nil {

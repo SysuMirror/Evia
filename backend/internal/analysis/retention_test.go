@@ -427,7 +427,7 @@ func TestRetentionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		{"bad granularity", "INVALID_RETENTION_GRANULARITY", func(t *Template) { t.Retention.Granularity = "hour" }},
 		{"periods out of range", "INVALID_RETENTION_PERIODS", func(t *Template) { t.Retention.Periods = 13 }},
 		{"unpinned start event", "INVALID_RETENTION_STEP", func(t *Template) { t.Retention.StartEvent.SchemaVersion = 0 }},
-		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: OpCount}} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			invalid := retentionTemplate()

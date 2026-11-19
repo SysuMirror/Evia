@@ -66,7 +66,7 @@ func TestClickHousePropertyLayoutReaderMatchesLegacyDocument(t *testing.T) {
 	base := request(t, baseRequest)
 	base.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
 	metrics := base
-	metrics.Metrics = []Metric{{Op: "count"}, {Op: "sum", Field: &valueField}, {Op: "avg", Field: &valueField}, {Op: "min", Field: &valueField}, {Op: "max", Field: &valueField}, {Op: "p95", Field: &valueField}}
+	metrics.Metrics = []Metric{{Op: OpCount}, {Op: OpSum, Field: &valueField}, {Op: OpAvg, Field: &valueField}, {Op: OpMin, Field: &valueField}, {Op: OpMax, Field: &valueField}, {Op: OpP95, Field: &valueField}}
 	requests = append(requests, metrics)
 	for _, filter := range []Filter{
 		{Op: "gte", Field: &valueField, Value: json.Number("0")},

@@ -17,7 +17,7 @@ func TestFilterSuffixPlannerSQLPreservesGuard(t *testing.T) {
 	}
 	for _, tc := range cases {
 		r := request(t, baseRequest)
-		r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+		r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 		r.Filter = &Filter{Op: tc.op, Field: resolvedProperty("title", "string"), Value: ".csv"}
 		plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 		if e != nil {

@@ -588,7 +588,7 @@ func TestDashboardVersionsRunExactPinnedAnalysisSnapshots(t *testing.T) {
 		t.Fatal(e)
 	}
 	saved.Definition.Title = "New saved analysis"
-	saved.Definition.Query.Metrics = []analysis.Metric{{Op: "count"}}
+	saved.Definition.Query.Metrics = []analysis.Metric{{Op: analysis.OpCount}}
 	saved, e = f.s.SaveSavedAnalysisDraft(ctx, f.owner, f.project, analysisID, 1, saved.Definition)
 	if e != nil {
 		t.Fatal(e)

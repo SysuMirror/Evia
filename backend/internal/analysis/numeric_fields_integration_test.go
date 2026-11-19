@@ -41,7 +41,7 @@ func TestClickHouseNumericFieldsIncludeJSONDoubleWithoutCoercion(t *testing.T) {
 				base := request(t, baseRequest)
 				base.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 1}}
 				r := base
-				r.Metrics = []Metric{{Op: "count"}, {Op: "sum", Field: &field}, {Op: "avg", Field: &field}, {Op: "min", Field: &field}, {Op: "max", Field: &field}, {Op: "p95", Field: &field}}
+				r.Metrics = []Metric{{Op: OpCount}, {Op: OpSum, Field: &field}, {Op: OpAvg, Field: &field}, {Op: OpMin, Field: &field}, {Op: OpMax, Field: &field}, {Op: OpP95, Field: &field}}
 				got := trendPlanRows(t, client, r, table)
 				if len(got) != 1 {
 					t.Fatal("expected one aggregate", got)

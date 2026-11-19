@@ -21,7 +21,7 @@ func TestTrendWeekIntervalPlannerSQL(t *testing.T) {
 	for _, tc := range cases {
 		r := request(t, baseRequest)
 		r.Interval = tc.interval
-		r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+		r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 		plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 		if e != nil {
 			t.Fatalf("%s compile: %v", tc.interval, e)

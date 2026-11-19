@@ -24,7 +24,7 @@ import (
 func savedRunDefinition() reporting.SavedAnalysisDefinition {
 	return reporting.SavedAnalysisDefinition{
 		Title: "Lesson total", Description: "Synthetic saved query",
-		Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}}},
+		Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: analysis.OpSum, Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}}},
 		Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"},
 	}
 }
@@ -164,7 +164,7 @@ func TestSavedAnalysisQueryExactVersionBindingScopeAndSharedQueue(t *testing.T) 
 		t.Fatal(e)
 	}
 	draft.Definition.Title = "Updated count"
-	draft.Definition.Query.Metrics = []analysis.Metric{{Op: "count"}}
+	draft.Definition.Query.Metrics = []analysis.Metric{{Op: analysis.OpCount}}
 	draft, e = f.s.SaveSavedAnalysisDraft(ctx, f.owner, f.project, first.AnalysisID, draft.DraftRevision, draft.Definition)
 	if e != nil {
 		t.Fatal(e)
@@ -181,7 +181,7 @@ func TestSavedAnalysisQueryExactVersionBindingScopeAndSharedQueue(t *testing.T) 
 	if e = f.s.Pool.QueryRow(ctx, `SELECT request FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&data); e != nil {
 		t.Fatal(e)
 	}
-	if e = json.Unmarshal(data, &bound); e != nil || bound.Metrics[0].Op != "sum" || bound.Metrics[0].Field.ResolvedType != "integer" || bound.EventVersions[0].SchemaVersion != 1 || bound.Environment != "development" || !bound.TimeRange.From.Equal(in.TimeRange.From) || bound.Timezone != in.Timezone {
+	if e = json.Unmarshal(data, &bound); e != nil || bound.Metrics[0].Op != analysis.OpSum || bound.Metrics[0].Field.ResolvedType != "integer" || bound.EventVersions[0].SchemaVersion != 1 || bound.Environment != "development" || !bound.TimeRange.From.Equal(in.TimeRange.From) || bound.Timezone != in.Timezone {
 		t.Fatal("old snapshot or real execution context was not bound", bound, e)
 	}
 	_, e = f.s.EnqueueSavedAnalysisVersion(ctx, f.owner, f.otherProject, first.AnalysisID, 1, "wrong-project", in)

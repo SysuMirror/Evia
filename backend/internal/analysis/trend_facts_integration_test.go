@@ -147,9 +147,9 @@ func TestClickHouseNarrowTrendMatchesFullWinnerView(t *testing.T) {
 		}, "0"},
 		{"typed metrics", func(r *Request) {
 			r.Subject = SubjectUID
-			r.Metrics = []Metric{{Op: "count"}, {Op: "unique"}, {Op: "sum", Field: propertyField("score", "number")}, {Op: "avg", Field: propertyField("score", "number")}, {Op: "p95", Field: propertyField("score", "number")}}
+			r.Metrics = []Metric{{Op: OpCount}, {Op: OpUnique}, {Op: OpSum, Field: propertyField("score", "number")}, {Op: OpAvg, Field: propertyField("score", "number")}, {Op: OpP95, Field: propertyField("score", "number")}}
 		}, "8"},
-		{"anonymous subject", func(r *Request) { r.Subject = SubjectAnonymous; r.Metrics = []Metric{{Op: "count"}, {Op: "unique"}} }, "8"},
+		{"anonymous subject", func(r *Request) { r.Subject = SubjectAnonymous; r.Metrics = []Metric{{Op: OpCount}, {Op: OpUnique}} }, "8"},
 		{"missing null zero grouping", func(r *Request) { r.GroupBy = []Field{*propertyField("score", "number")} }, ""},
 		{"UID and bucket grouping", func(r *Request) {
 			r.GroupBy = []Field{{Kind: "system", Key: "uid", ResolvedType: "string"}}

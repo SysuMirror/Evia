@@ -233,7 +233,7 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 		t.Fatal("set reordering changed meaning", unchanged, e)
 	}
 	snapshot.Draft.Definition.Title = "New title"
-	snapshot.Draft.Definition.Query.Metrics = []analysis.Metric{{Op: "unique"}}
+	snapshot.Draft.Definition.Query.Metrics = []analysis.Metric{{Op: analysis.OpUnique}}
 	snapshot.Draft.Definition.Query.Subject = analysis.SubjectUID
 	changed, e := BuildSavedAnalysisValidation(snapshot)
 	if e != nil {
@@ -581,7 +581,7 @@ func TestSavedDefinitionSizeIncludesDefaultsAtPersistenceBoundary(t *testing.T) 
 		t.Fatal(e)
 	}
 	expanded := definition
-	expanded.Query.Metrics = []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}
+	expanded.Query.Metrics = []analysis.Metric{{Op: analysis.OpCount, Accuracy: analysis.AccuracyExact}}
 	expanded.Query.Limit = 200
 	expected, e := json.Marshal(expanded)
 	if e != nil {

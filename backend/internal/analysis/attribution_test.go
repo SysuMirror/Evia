@@ -815,7 +815,7 @@ func TestAttributionSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
 		{"window out of range", "INVALID_ATTRIBUTION_WINDOW", func(t *Template) { t.Attribution.WindowSeconds = 0 }},
 		{"unknown model", "INVALID_ATTRIBUTION_MODEL", func(t *Template) { t.Attribution.Model = "data_driven" }},
-		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: OpCount}} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			invalid := attributionTemplate()

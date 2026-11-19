@@ -31,7 +31,7 @@ func TestClickHouseWeekIntervalBuckets(t *testing.T) {
 	query := func(tz string) map[string]float64 {
 		r := request(t, baseRequest)
 		r.EventVersions = []EventVersion{{EventKey: "weekbucket", SchemaVersion: 1}}
-		r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+		r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 		r.Interval = IntervalWeek
 		r.Timezone = tz
 		r.TimeRange.From = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)

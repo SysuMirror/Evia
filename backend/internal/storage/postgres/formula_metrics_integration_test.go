@@ -31,7 +31,7 @@ func formulaDB(t *testing.T) formulaFixture {
 		t.Fatal(e)
 	}
 	createAtomic := func(title string) reporting.MetricDraft {
-		def := reporting.MetricDefinition{Title: title, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
+		def := reporting.MetricDefinition{Title: title, EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: analysis.OpCount}, Unit: "event"}
 		created, e := f.s.CreateMetric(ctx, f.owner, f.project, "create-"+title, reporting.MetricCreate{Environment: "development", Definition: def})
 		if e != nil {
 			t.Fatal(e)
@@ -230,7 +230,7 @@ func publishMillisecondMetric(t *testing.T, f formulaFixture) reporting.MetricDr
 		Title:         "Lesson duration ms",
 		EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}},
 		Subject:       analysis.SubjectUID,
-		Aggregation:   analysis.Metric{Op: "sum", Field: field},
+		Aggregation:   analysis.Metric{Op: analysis.OpSum, Field: field},
 		Unit:          "millisecond",
 	}
 	created, e := f.s.CreateMetric(ctx, f.owner, f.project, "create-duration-ms", reporting.MetricCreate{Environment: "development", Definition: def})

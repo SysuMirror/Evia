@@ -27,7 +27,7 @@ func TestClickHouseNegationFiltersKeepMissingExcluded(t *testing.T) {
 
 	base := request(t, baseRequest)
 	base.EventVersions = []EventVersion{{EventKey: "negated", SchemaVersion: 1}}
-	base.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	base.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	field := func(key, kind string) *Field {
 		return &Field{Kind: "property", EventKey: "negated", SchemaVersion: 1, Key: key, ResolvedType: kind}
 	}

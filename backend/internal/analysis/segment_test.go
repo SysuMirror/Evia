@@ -239,7 +239,7 @@ func TestSegmentSavedTemplateValidatesPinsAndBinds(t *testing.T) {
 		{"missing segment block", "INVALID_SEGMENT", func(t *Template) { t.Segment = nil }},
 		{"missing subject", "SUBJECT_REQUIRED", func(t *Template) { t.Subject = "" }},
 		{"unpinned segment event", "INVALID_SEGMENT_EVENT", func(t *Template) { t.Segment.Event.SchemaVersion = 0 }},
-		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: "count"}} }},
+		{"trend-only metrics", "INVALID_QUERY_OPTIONS", func(t *Template) { t.Metrics = []Metric{{Op: OpCount}} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			invalid := segmentTemplate()

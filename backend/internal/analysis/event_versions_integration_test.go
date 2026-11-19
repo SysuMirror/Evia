@@ -26,7 +26,7 @@ func TestClickHousePinnedEventVersionsFilterCountAndExactUV(t *testing.T) {
 	seedRows(t, client, append(rows, foreignProject, foreignEnvironment))
 	r := request(t, baseRequest)
 	r.Subject = SubjectUID
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}, {Op: "unique", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}, {Op: OpUnique, Accuracy: AccuracyExact}}
 	for _, tc := range []struct {
 		name     string
 		versions []EventVersion

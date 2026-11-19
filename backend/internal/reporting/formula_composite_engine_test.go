@@ -73,8 +73,8 @@ func TestCompositeEngineFansOutFormula(t *testing.T) {
 	root := fRef("11111111-1111-4111-8111-111111111111", 1)
 	def := FormulaDefinition{Expression: fRatio(idA, idB), Unit: "number"}
 	leaves := map[MetricReference]analysis.Request{
-		refA: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
-		refB: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count"}}},
+		refA: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idA, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: analysis.OpCount}}},
+		refB: {Kind: analysis.QueryKindTrend, Environment: "development", EventVersions: []analysis.EventVersion{{EventKey: idB, SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: analysis.OpCount}}},
 	}
 	loader := &stubFormulaLoader{plan: FormulaExecutionPlan{Root: root, Composite: map[MetricReference]FormulaDefinition{root: def}, AtomicRequests: leaves}}
 	engine := NewCompositeFormulaEngine(inner, loader)

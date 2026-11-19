@@ -36,7 +36,7 @@ func TestTemplateNormalizesWithoutExecutionContextOrDerivedTypes(t *testing.T) {
 	if e := ValidateTemplate(&template); e != nil {
 		t.Fatal(e)
 	}
-	if template.Limit != 200 || len(template.Metrics) != 1 || template.Metrics[0].Op != "count" || template.Metrics[0].Accuracy != AccuracyExact || template.GroupBy[0].ResolvedType != "" {
+	if template.Limit != 200 || len(template.Metrics) != 1 || template.Metrics[0].Op != OpCount || template.Metrics[0].Accuracy != AccuracyExact || template.GroupBy[0].ResolvedType != "" {
 		t.Fatal("template defaults or public field projection changed", template)
 	}
 	encoded, e := json.Marshal(template)
@@ -79,7 +79,7 @@ func TestTemplateRejectsUnsupportedOrUnpinnedConfiguration(t *testing.T) {
 		{"unsafe version", "INVALID_EVENT_VERSIONS", func(t *Template) { t.EventVersions[0].SchemaVersion = MaxSafeInteger + 1 }},
 		{"event injection", "INVALID_EVENT_VERSIONS", func(t *Template) { t.EventVersions[0].EventKey = "opened') OR 1=1" }},
 		{"server field type", "INVALID_FIELD", func(t *Template) { t.GroupBy = []Field{{Kind: "system", Key: "uid", ResolvedType: "string"}} }},
-		{"UV without subject", "SUBJECT_REQUIRED", func(t *Template) { t.Metrics = []Metric{{Op: "unique"}} }},
+		{"UV without subject", "SUBJECT_REQUIRED", func(t *Template) { t.Metrics = []Metric{{Op: OpUnique}} }},
 		{"unknown interval", "INVALID_INTERVAL", func(t *Template) { t.Interval = "year" }},
 		{"too many groups", "QUERY_COST_EXCEEDED", func(t *Template) { t.GroupBy = make([]Field, 4) }},
 		{"too many metrics", "QUERY_COST_EXCEEDED", func(t *Template) { t.Metrics = make([]Metric, 11) }},
@@ -104,7 +104,7 @@ func TestTemplateRejectsUnsupportedOrUnpinnedConfiguration(t *testing.T) {
 	}
 	maximum.GroupBy = []Field{{Kind: "system", Key: "uid"}, {Kind: "system", Key: "event_key"}, {Kind: "system", Key: "anonymous_id"}}
 	for range 10 {
-		maximum.Metrics = append(maximum.Metrics, Metric{Op: "count"})
+		maximum.Metrics = append(maximum.Metrics, Metric{Op: OpCount})
 	}
 	maximum.Limit = 500
 	if e := ValidateTemplate(&maximum); e != nil {
@@ -128,7 +128,7 @@ func TestTemplatePropertyDependenciesUseExactSelectedVersions(t *testing.T) {
 				case "group":
 					template.GroupBy = []Field{field}
 				case "metric":
-					template.Metrics = []Metric{{Op: "sum", Field: &field}}
+					template.Metrics = []Metric{{Op: OpSum, Field: &field}}
 				case "funnel global filter":
 					template = funnelTemplate()
 					template.Filter = filter
@@ -181,7 +181,7 @@ func TestTemplateBindingClonesConfigurationAndPreservesScalars(t *testing.T) {
 		bound.Filter.Args[0].Value = "changed"
 		bound.Filter.Args[0].Field.Key = "changed"
 		bound.GroupBy[0].Key = "uid"
-		bound.Metrics[0].Op = "unique"
+		bound.Metrics[0].Op = OpUnique
 		if template.EventVersions[0].EventKey != "opened" || template.Filter.Args[0].Value != value || template.Filter.Args[0].Field.Key != "value" || template.GroupBy[0].Key != "event_key" || template.GroupBy[0].ResolvedType != "" || template.Metrics != nil || template.Limit != 0 {
 			t.Fatal("binding mutated saved configuration", template)
 		}
@@ -221,7 +221,7 @@ func TestTemplateBindRequiresActualValidRuntimeContext(t *testing.T) {
 	_, e := template.Bind("development", TimeRange{From: when, To: when.Add(8 * 24 * time.Hour)}, "UTC")
 	templateErrorCode(t, e, "QUERY_COST_EXCEEDED")
 	invalid := trendTemplate()
-	invalid.Metrics = []Metric{{Op: "count", Field: &Field{Kind: "system", Key: "uid"}}}
+	invalid.Metrics = []Metric{{Op: OpCount, Field: &Field{Kind: "system", Key: "uid"}}}
 	templateErrorCode(t, ValidateTemplate(&invalid), "INVALID_METRIC")
 	if invalid.Metrics[0].Accuracy != "" || invalid.Metrics[0].Field.ResolvedType != "" || invalid.Limit != 0 {
 		t.Fatal("failed validation mutated caller configuration", invalid)

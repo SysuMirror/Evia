@@ -151,7 +151,7 @@ func TestCompositeMarkerShellRejectsAtomicBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved.Query.Metrics = []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}
+	resolved.Query.Metrics = []analysis.Metric{{Op: analysis.OpCount, Accuracy: analysis.AccuracyExact}}
 	if _, err = normalizeResolvedCompositeDefinition(resolved); err == nil {
 		t.Fatal("composite marker shell must reject an atomic metric body")
 	} else {

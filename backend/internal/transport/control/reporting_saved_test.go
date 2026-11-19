@@ -511,7 +511,7 @@ func TestSavedAnalysisHTTPMetricReferenceBoundary(t *testing.T) {
 		AnalysisID: savedID, ProjectID: projectID, Environment: "development", Version: 1, DraftRevision: 1,
 		Definition: reporting.SavedAnalysisDefinition{
 			Title:         "Metric card",
-			Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: "count", Accuracy: analysis.AccuracyExact}}, Limit: 200},
+			Query:         analysis.Template{Kind: analysis.QueryKindTrend, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Metrics: []analysis.Metric{{Op: analysis.OpCount, Accuracy: analysis.AccuracyExact}}, Limit: 200},
 			MetricRef:     &reporting.MetricReference{MetricID: metricRefID, Version: 1},
 			Visualization: reporting.SavedAnalysisVisualization{Kind: "metric"},
 		},

@@ -187,7 +187,7 @@ func TestQueryPropertyResolutionAndUnpublishedVersion(t *testing.T) {
 	ctx := context.Background()
 	draft := f.event(t, "lesson_opened")
 	request := queryRequest(t, "trend")
-	request.Metrics = []analysis.Metric{{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}, Accuracy: analysis.AccuracyExact}}
+	request.Metrics = []analysis.Metric{{Op: analysis.OpSum, Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}, Accuracy: analysis.AccuracyExact}}
 	_, e := f.s.EnqueueQuery(ctx, f.viewer, f.project, request)
 	faultCode(t, e, "QUERY_EVENT_VERSION_NOT_PUBLISHED")
 	if _, e = f.svc.CreateRelease(ctx, f.owner, f.project, "definition", releaseInput("lesson_opened", draft.Revision)); e != nil {

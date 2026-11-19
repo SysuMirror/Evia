@@ -9,7 +9,7 @@ func TestRequiresRawAccess(t *testing.T) {
 		request Request
 		want    bool
 	}{
-		{"aggregate UID", Request{Kind: QueryKindTrend, Subject: SubjectUID, Metrics: []Metric{{Op: "unique"}}}, false},
+		{"aggregate UID", Request{Kind: QueryKindTrend, Subject: SubjectUID, Metrics: []Metric{{Op: OpUnique}}}, false},
 		{"aggregate funnel", Request{Kind: QueryKindFunnel, Subject: SubjectUID}, false},
 		{"events", Request{Kind: QueryKindEvents}, true},
 		{"journey", Request{Kind: QueryKindJourney}, true},
@@ -20,7 +20,7 @@ func TestRequiresRawAccess(t *testing.T) {
 		{"page dimension", Request{GroupBy: []Field{*identity("page_view_id")}}, true},
 		{"operation dimension", Request{GroupBy: []Field{*identity("operation_id")}}, true},
 		{"nested filter", Request{Filter: &Filter{Op: "or", Args: []*Filter{{Op: "and", Args: []*Filter{{Field: identity("uid")}}}}}}, true},
-		{"metric", Request{Metrics: []Metric{{Op: "unique", Field: identity("uid")}}}, true},
+		{"metric", Request{Metrics: []Metric{{Op: OpUnique, Field: identity("uid")}}}, true},
 		{"step filter", Request{Funnel: &Funnel{Steps: []Step{{Filter: &Filter{Field: identity("uid")}}}}}, true},
 		{"entity field", Request{Funnel: &Funnel{SameEntity: []EntityField{{Field: *identity("uid")}}}}, true},
 		{"property name is user schema", Request{GroupBy: []Field{{Kind: "property", Key: "uid"}}}, false},

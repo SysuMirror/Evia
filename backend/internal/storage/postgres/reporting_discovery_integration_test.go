@@ -185,7 +185,7 @@ func TestReportingDryValidationTypedScalarsDependenciesAndNoWrites(t *testing.T)
 			r.GroupBy = []analysis.Field{{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "tags"}}
 		}, "UNSUPPORTED_GROUP_TYPE"},
 		{"boolean numeric aggregation", func(r *analysis.Request) {
-			r.Metrics = []analysis.Metric{{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "enabled"}}}
+			r.Metrics = []analysis.Metric{{Op: analysis.OpSum, Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "enabled"}}}
 		}, "INVALID_METRIC_TYPE"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

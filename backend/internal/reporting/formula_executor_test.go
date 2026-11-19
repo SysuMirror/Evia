@@ -27,7 +27,7 @@ func formulaLeafBuild(ref MetricReference) analysis.Request {
 		Kind:          "trend",
 		Environment:   "development",
 		EventVersions: []analysis.EventVersion{{EventKey: ref.MetricID, SchemaVersion: ref.Version}},
-		Metrics:       []analysis.Metric{{Op: "count"}},
+		Metrics:       []analysis.Metric{{Op: analysis.OpCount}},
 	}
 }
 

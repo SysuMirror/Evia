@@ -168,7 +168,7 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 
 	seedRows(t, client, rows)
 	r := aggregateRequest(t)
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}, {Op: "unique", Accuracy: AccuracyExact}, {Op: "sum", Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: "avg", Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: "min", Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: "max", Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: "p95", Field: property("score", "number"), Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}, {Op: OpUnique, Accuracy: AccuracyExact}, {Op: OpSum, Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: OpAvg, Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: OpMin, Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: OpMax, Field: property("score", "number"), Accuracy: AccuracyExact}, {Op: OpP95, Field: property("score", "number"), Accuracy: AccuracyExact}}
 	result := execute(t, client, r)
 	for key, want := range map[string]float64{"metric_0": 6, "metric_1": 2, "metric_2": 35, "metric_3": 8.75, "metric_4": 0, "metric_5": 20, "metric_6": 20} {
 		if got := metricNumber(t, result, key); got != want {
@@ -181,12 +181,12 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 	if result.Metadata.DataWatermark.Format(time.RFC3339Nano) != "2026-11-07T10:00:06.000000123Z" {
 		t.Fatal("watermark lost precision or included replay instead of winner", result.Metadata.DataWatermark)
 	}
-	r.Metrics = []Metric{{Op: "unique", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpUnique, Accuracy: AccuracyExact}}
 	r.Subject = SubjectAnonymous
 	if got := metricNumber(t, execute(t, client, r), "metric_0"); got != 3 {
 		t.Fatal("anonymous identity boundary", got)
 	}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	for _, tc := range []struct {
 		name, op, kind string
 		value          any
@@ -248,20 +248,20 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 		t.Fatal("grouping collapsed missing/null/zero", groups)
 	}
 	r.GroupBy = nil
-	r.Metrics = []Metric{{Op: "unique", Accuracy: AccuracyApproximate}}
+	r.Metrics = []Metric{{Op: OpUnique, Accuracy: AccuracyApproximate}}
 	r.Subject = SubjectUID
 	approximate := execute(t, client, r)
 	if metricNumber(t, approximate, "metric_0") != 2 || approximate.Metadata.Accuracy != AccuracyApproximate {
 		t.Fatal(approximate)
 	}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	r.TimeRange.From = time.Date(2026, 11, 7, 10, 0, 0, 500000, time.UTC)
 	r.TimeRange.To = time.Date(2026, 11, 7, 10, 0, 1, 500000, time.UTC)
-	r.Metrics = []Metric{{Op: "sum", Field: property("score", "number"), Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpSum, Field: property("score", "number"), Accuracy: AccuracyExact}}
 	if got := metricNumber(t, execute(t, client, r), "metric_0"); got != 5 {
 		t.Fatal("sub-millisecond half-open boundaries rounded", got)
 	}
-	r.Metrics = []Metric{{Op: "count", Accuracy: AccuracyExact}}
+	r.Metrics = []Metric{{Op: OpCount, Accuracy: AccuracyExact}}
 	r.TimeRange = aggregateRequest(t).TimeRange
 	r.Interval = IntervalHour
 	bucket := execute(t, client, r)
