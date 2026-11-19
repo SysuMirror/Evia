@@ -806,6 +806,35 @@ type FormulaMetricVersionList struct {
 	NextCursor *string                `json:"next_cursor"`
 }
 
+type IdentityMember struct {
+	MemberKind     string `json:"member_kind"`
+	MemberValue    string `json:"member_value"`
+	FirstSeenAt    string `json:"first_seen_at"`
+	JoinedRevision int64  `json:"joined_revision"`
+}
+
+type IdentityResolution struct {
+	Revision         int64            `json:"revision"`
+	ResolvedPersonID string           `json:"resolved_person_id"`
+	Members          []IdentityMember `json:"members"`
+}
+
+type IdentityRevision struct {
+	Revision            int64   `json:"revision"`
+	WatermarkReceivedAt *string `json:"watermark_received_at,omitempty"`
+	EdgeCount           int64   `json:"edge_count"`
+	PersonCount         int64   `json:"person_count"`
+	MemberCount         int64   `json:"member_count"`
+	State               string  `json:"state"`
+	BuiltAt             *string `json:"built_at,omitempty"`
+	ErrorCode           *string `json:"error_code,omitempty"`
+}
+
+type IdentityRevisionList struct {
+	Items      []IdentityRevision `json:"items"`
+	NextCursor *string            `json:"next_cursor,omitempty"`
+}
+
 type LoginInput struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

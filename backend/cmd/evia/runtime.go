@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/identity"
+
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/analysis"
 	"github.com/howtomakeaname/Evia/backend/internal/archiving"
@@ -242,6 +244,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Settings = access.NewSettings(store)
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Erasure = store
+	api.Identity = store
 	retentionService := retention.NewServiceWithSweepReader(store, store)
 	api.Retention = retentionService
 	api.RetentionSweeps = retentionService
@@ -641,6 +644,28 @@ func erasureWorkerRuntime(ctx context.Context, c config.Config, store *postgres.
 	}
 	logger.Info("erasure worker starting")
 	return supervise(ctx, append(metricsTasks(c, "erasure-worker", registry), task{name: "erasure worker", run: worker.Run}), 15*time.Second)
+}
+
+func identityWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		logger.Error("identity worker startup probe failed", "error", err.Error())
+		return stageError("identity worker startup", err)
+	}
+	scanner, err := pipeline.NewIdentityLinkScanner(sinkConfig(c, client), client)
+	if err != nil {
+		return stageError("identity link scanner configuration", err)
+	}
+	registry := observe.NewRegistry("identity-worker")
+	worker := identity.NewWorker(store, scanner, store, newIdentityMetricsObserver(registry), identity.WorkerOptions{
+		Worker: c.InstanceID + "-" + ids.New(),
+	})
+	logger.Info("identity worker starting")
+	return supervise(ctx, append(metricsTasks(c, "identity-worker", registry), task{name: "identity worker", run: worker.Run}), 15*time.Second)
 }
 
 func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {

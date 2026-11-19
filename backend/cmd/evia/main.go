@@ -28,10 +28,10 @@ func main() {
 
 func execute(ctx context.Context, args []string, get func(string) string, logger *slog.Logger) error {
 	if len(args) != 1 {
-		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | retention-worker | export-worker | backfill-worker | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password | account-audit")
+		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | identity-worker | retention-worker | export-worker | backfill-worker | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password | account-audit")
 	}
 	command := args[0]
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" && command != "account-audit" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" && command != "account-audit" {
 		return errors.New("unknown command")
 	}
 	var cfg config.Config
@@ -107,6 +107,8 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 		return queryWorkers(ctx, cfg, store, logger)
 	case "erasure-worker":
 		return erasureWorkerRuntime(ctx, cfg, store, logger)
+	case "identity-worker":
+		return identityWorkerRuntime(ctx, cfg, store, logger)
 	case "retention-worker":
 		return retentionWorkerRuntime(ctx, cfg, store, logger)
 	case "export-worker":
