@@ -95,6 +95,15 @@
 
 这些守卫不消费 OpenAPI bundle，故不并入上方 33 项编号；它们与契约守卫互补，覆盖「常量 vs 常量」「常量 vs 嵌入夹具」两类漂移。
 
+## 跨语言契约锚点守卫（2026-11-19 增补，Go 与控制台 TS 双侧）
+
+上述 33 项与组合根守卫都是 Go 单语言内对齐；同日增补第三类守卫，把控制台 TypeScript 预提交常量也机械钉到契约，同时覆盖「Go 常量 vs 契约」与「TS 常量 vs 契约」两个漂移方向，契约（Go 侧嵌入 bundle、TS 侧原始 JSON 文件）是双侧共同规范源。详见 [cross-language-budget-guards](cross-language-budget-guards-2026-11-19.md)：
+
+- `exporting.TestExportBudgetsMatchContract`（Go，读 `wire.Schemas` bundle 的 `$defs`）：`ExportInput.name`/`SavedAnalysisExportInput.name` 的 `maxLength` == `exporting.MaxNameLength`(200)，`QueryRequest.limit.maximum` == `analysis.BudgetResultRows`(500)，`QueryRequest.event_keys.maxItems` == `analysis.BudgetEventSelections`(20)，四条断言各自携带独立失败信息。
+- Playwright `console export limits stay pinned to the canonical contracts`（`tests/browser/export-model.spec.ts`，经根 tsconfig 的 `resolveJsonModule` 直接 import `contracts/` 原始契约 JSON）：`EXPORT_NAME_MAX`/`SAVED_EXPORT_NAME_MAX`/`EXPORT_LIMIT_MAX`/`MAX_EVENT_KEYS` 四个 TS 常量分别等于契约数值；配套把 `MAX_EVENT_KEYS` 由模块私有改为导出（仅可见性变化，无行为改动）。
+
+该类守卫不并入 #1-#33 编号：编号项统一消费 Go 嵌入 bundle，而 TS 侧守卫运行在 Node/Playwright 进程、直接读取仓库内契约文件，归属独立的跨语言类别；七个断言分支的变异红绿与逐字节还原证据见独立验证记录。
+
 ## 守卫有效性取证（变异红绿）
 
 - reporting：临时给 `discoveryQueryKinds` 注入 `drift_probe` → 守卫报 `query kind drift: contract 8 != Go 9` 变红，还原复绿。
@@ -125,7 +134,7 @@
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。主体类别切片：`/tmp/evia-check/principal-kind/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.7s、零 FAIL，audit/machine/provision 专项 20+ 测显式 PASS）。查询预算切片：`/tmp/evia-check/budgets/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（247.8s、零 FAIL，队列准入专项显式 PASS）。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。主体类别切片：`/tmp/evia-check/principal-kind/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.7s、零 FAIL，audit/machine/provision 专项 20+ 测显式 PASS）。查询预算切片：`/tmp/evia-check/budgets/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（247.8s、零 FAIL，队列准入专项显式 PASS）。跨语言预算锚点切片：`/tmp/evia-check/xlang/make-check.log`（EXIT=0、零 FAIL，Go 33 包、client 51、sdk 63）与 Playwright `export-model` 17/17；七分支变异（Go 三、TS 四）的精确红灯报错与还原核查见 [cross-language-budget-guards](cross-language-budget-guards-2026-11-19.md)。
 
 ## 已评估但不设守卫的词汇（2026-11-19 全量审计，183 个字符串词汇逐项过堂）
 
@@ -143,7 +152,7 @@
 
 ## 明确未做（边界）
 
-- 枚举型闭集由 #1-#32 覆盖；**数值预算**已由 #33 机械对齐（广告预算==analysis 执行常量+契约安全整数界），但契约只携带通用安全整数界、产品限额值仍只存在于 Go 侧这一形状未变；未广告的内部限额（路径深度、请求体字节等）按刻意边界不纳入。
+- 枚举型闭集由 #1-#32 覆盖；**数值预算**由 #33 机械对齐（广告预算==analysis 执行常量+契约安全整数界）。导出链路三个契约已携带显式数值约束的预算（名称 200、行数 500、事件键 20）另由跨语言锚点守卫把 Go 与控制台 TS 双侧副本钉死（见上节与 [cross-language-budget-guards](cross-language-budget-guards-2026-11-19.md)）；其余未广告内部限额（路径深度、请求体字节等）契约只携带通用安全整数界、产品限额值仍只存在于 Go 侧，按刻意边界不纳入。
 - `query-request.schema.json` 原始文件未单独 embed；守卫统一消费 OpenAPI 生成的 bundle 内联副本，codegen 漂移由 `generated-check` 门禁拦截。
 - 不改变任何运行时行为、契约内容或 API 形状；本切片是可维护性/防回归工程。
 - ~~`QueryJob.state` 六态提取~~ 已完成（2026-11-19 独立切片）：常量落在 `analysis.JobState*`，raw SQL/迁移字面量刻意保留，由 DB CHECK 与契约守卫双侧兜底，详见 [queryjob-state-closed-set](queryjob-state-closed-set-2026-11-19.md)。
