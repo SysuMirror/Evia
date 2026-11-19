@@ -45,10 +45,11 @@
 | 查询覆盖态（3，Go 子集 1） | clickhouse/formula 两处裸字符串 → `analysis.CoverageState*` 常量 + 子集守卫；预留态不提前命名 | `QueryResult.metadata.coverage.state` | 对齐（子集） |
 | 来源申请态（3，Go 可观测 2） | sources 裸字符串 → `ingestion.ApplicationState*` 常量 + 三 schema 子集守卫；派生 SQL CASE 保留、failed 预留 | `*/SourceIssued/Retention.application_state` | 对齐（子集） |
 | 发布生命周期态（5，Go 子集 1）/加速态（4，可观测 2） | catalog 裸字符串 → `catalog.Release*` 常量 + 双子集守卫；EventPlan status/SQL/幂等键保留 | `Release.state`/`acceleration_state` | 对齐（子集） |
+| 主体类别（2，读模型） | 测试裸比较 → `access.PrincipalKind*` 常量 + 集合相等守卫；Go 只读 principals.kind，迁移 010 CHECK 兜底（独立切片，见 [principal-kind-closed-set](principal-kind-closed-set-2026-11-19.md)） | `ProjectAuditEntry.actor_kind` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（31 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（32 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -81,6 +82,7 @@
 29. `analysis.TestCoverageStateVocabularyContract`：`QueryResult.metadata.coverage.state` 三值 enum 对 Go 子集 `analysis.CoverageStates`（当前仅 provisional）做子集断言；settled/partial 为契约预留态（独立切片，见 [subset-state-guards](subset-state-guards-2026-11-19.md)）。
 30. `ingestion.TestApplicationStateVocabularyContract`：Source/SourceIssued/Retention 三 schema 共享的 `application_state` enum 对 Go 可观测子集 `ingestion.ApplicationStates`（pending/applied）做子集断言；failed 无产出方，SQL CASE 派生字符串刻意保留（独立切片，同上）。
 31. `catalog.TestReleaseStateVocabularyContract`：`Release.state`（Go 子集仅 published，CHECK 002 同限）与 `acceleration_state`（Go 可观测 not_requested/building）分别对契约 enum 做子集断言；预留工作流态与 ready/failed 不提前命名（独立切片，见 [release-state-closed-set](release-state-closed-set-2026-11-19.md)）。
+32. `access.TestPrincipalKindVocabularyContract`：`ProjectAuditEntry.actor_kind` 两值 enum 与 `access.PrincipalKinds`（human/machine，即 principals.kind）集合相等；Go 只读不写，存储侧由迁移 010 CHECK 兜底，SQL/Role 哨兵/operator 刻意保留（独立切片，见 [principal-kind-closed-set](principal-kind-closed-set-2026-11-19.md)）。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -106,11 +108,12 @@
 - 单值枚举（catalog 语义/artifact 语言）：分别向两个单值切片注入 `drift_probe` → 各报 `... drift: contract [x] != Go [x drift_probe]` 变红，还原复绿（详见独立验证记录）。
 - 子集态（coverage/application_state）：分别向两子集切片注入 `drift_probe` → 各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
 - 发布双态：分别向 `ReleaseStates`/`ReleaseAccelerationStates` 注入 `drift_probe` → 两条子集断言各报 `Go value "drift_probe" absent from contract [...]` 变红，还原复绿（详见独立验证记录）。
+- 主体类别：向 `PrincipalKinds` 注入 `drift_probe`（长度断言变红）、把 `PrincipalKindMachine` 值改为 `drift_probe`（逐元素断言变红），双分支独立验证后还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。单值枚举切片：`/tmp/evia-check/single-value/make-check.log`（EXIT=0、零 FAIL），仅触及 unit-tested 包。子集态切片：`/tmp/evia-check/subset/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.6s、零 FAIL，application state 专项显式 PASS）。发布双态切片：`/tmp/evia-check/release-state/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（248.4s、零 FAIL，catalog 专项 6 测显式 PASS）。主体类别切片：`/tmp/evia-check/principal-kind/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（246.7s、零 FAIL，audit/machine/provision 专项 20+ 测显式 PASS）。
 
 ## 已评估但不设守卫的词汇（2026-11-19 全量审计，183 个字符串词汇逐项过堂）
 
@@ -122,7 +125,7 @@
 | 事件计划状态 draft_example_not_published/published | `EventPlan.status` | Go 仅在 manifest 序列化时产出 `published`（catalog_release.go 的 releaseManifest）；`draft_example_not_published` 全仓无产出，是契约自带示例标记。后续如开放草稿计划，按 #29-31 子集范式补守卫。 |
 | 成员四值 owner/developer/analyst/viewer | `Member(Input).role` | developer/analyst 全仓无 Go 产出；在役项目成员走 `ProjectMember*.role` 三值（owner/editor/viewer），已由 #2 守卫。Member 为遗留契约形状，不设守卫。 |
 | 诊断阶段五值 | `Diagnostic.stage` | identity_resolved/queryable 等在 Go 生产代码零命中；管线诊断对外只发 #7 覆盖的 status 四态，stage 为未落地的管线内部分期。零 Go 产出，不设守卫。 |
-| 审计主体 human/machine | `ProjectAuditEntry.actor_kind` | 由迁移 010/011 的 SQL 触发器与 principals.kind 派生写入，Go 只读（`access.AuditEntry.ActorKind`）。与 principals.kind、项目 Role 标记词汇交织，读模型守卫拆独立切片处理，不在本批混入。 |
+| ~~审计主体 human/machine~~ | ~~`ProjectAuditEntry.actor_kind`~~ | 已收口（2026-11-19 独立切片 #32）：`access.PrincipalKinds` + 集合相等守卫，详见 [principal-kind-closed-set](principal-kind-closed-set-2026-11-19.md)。注意区分三个相邻词汇：内部 Role 哨兵 `"machine"`（不进契约）、provision 事件 `operator`（独立 CHECK）、幂等键测试值。 |
 | 保存分析类别 trend/funnel | `SavedAnalysis(Kind)/Draft.kind` | 该值由查询/可视化类别（#20 QueryKind 与 VisualizationKinds 守卫）投影派生，非独立词汇；漂移会被既有守卫先行拦截。 |
 | 覆盖 settled/partial、申请 failed、发布 draft/validating/publishing/failed 与加速 ready/failed | 对应 enum | 契约预留、Go 当前无产出/无观测点，已由 #29-31 子集守卫覆盖"Go 不得越界、契约不得收窄"两个方向，不提前命名死常量。 |
 
