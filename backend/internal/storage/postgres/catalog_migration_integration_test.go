@@ -179,7 +179,7 @@ func TestCatalogUpgradeFromPopulated002(t *testing.T) {
 	}
 	svc := catalog.New(s)
 	release, e := svc.GetRelease(ctx, legacy.actor, legacy.project, legacy.releaseID)
-	if e != nil || release.ManifestHash != legacy.manifestHash || release.IngestionReady || release.AccelerationState != "not_requested" || release.Revision != 1 {
+	if e != nil || release.ManifestHash != legacy.manifestHash || release.IngestionReady || release.AccelerationState != catalog.ReleaseAccelerationNotRequested || release.Revision != 1 {
 		t.Fatal("backfilled release/status differs", release, e)
 	}
 	events, e := svc.ListEvents(ctx, legacy.actor, legacy.project, "development", "", 10)
@@ -197,7 +197,7 @@ func TestCatalogUpgradeFromPopulated002(t *testing.T) {
 		t.Fatal("delivery status not independently mutable", e)
 	}
 	built, e := svc.CreateRelease(ctx, legacy.actor, legacy.project, "after-upgrade", legacy.input)
-	if e != nil || built.Revision != 2 || built.IngestionReady || built.AccelerationState != "not_requested" {
+	if e != nil || built.Revision != 2 || built.IngestionReady || built.AccelerationState != catalog.ReleaseAccelerationNotRequested {
 		t.Fatal("publication after upgrade failed", built, e)
 	}
 	var active, metadata int64
@@ -223,7 +223,7 @@ func TestCatalogUpgradeRollsBackInvalidLegacyMembership(t *testing.T) {
 	}
 	var ready bool
 	var state, hash string
-	if e := s.Pool.QueryRow(ctx, `SELECT ingestion_ready,acceleration_state,manifest_hash FROM catalog_releases WHERE id=$1`, legacy.releaseID).Scan(&ready, &state, &hash); e != nil || ready || state != "not_requested" || hash != legacy.manifestHash {
+	if e := s.Pool.QueryRow(ctx, `SELECT ingestion_ready,acceleration_state,manifest_hash FROM catalog_releases WHERE id=$1`, legacy.releaseID).Scan(&ready, &state, &hash); e != nil || ready || state != catalog.ReleaseAccelerationNotRequested || hash != legacy.manifestHash {
 		t.Fatal("failed upgrade changed legacy data", ready, state, hash, e)
 	}
 	if _, e := s.Pool.Exec(ctx, `DELETE FROM catalog_releases WHERE id=$1`, legacy.releaseID); e == nil {

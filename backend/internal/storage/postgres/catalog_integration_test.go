@@ -140,7 +140,7 @@ func TestCatalogImmutablePublicationIdempotencyAndScope(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if r.Revision != 1 || r.State != "published" || r.IngestionReady || r.AccelerationState != "not_requested" || len(r.ManifestHash) != 64 {
+	if r.Revision != 1 || r.State != catalog.ReleaseStatePublished || r.IngestionReady || r.AccelerationState != catalog.ReleaseAccelerationNotRequested || len(r.ManifestHash) != 64 {
 		t.Fatal(r)
 	}
 	repeated, e := f.svc.CreateRelease(ctx, f.owner, f.project, "build-1", in)
@@ -391,7 +391,7 @@ func TestCatalogReleaseMembershipAndDeliverySeparation(t *testing.T) {
 		t.Fatal(e)
 	}
 	status, e := f.svc.GetRelease(ctx, f.viewer, f.project, r.ID)
-	if e != nil || status.IngestionReady || status.AccelerationState != "building" || status.ManifestHash != r.ManifestHash || status.State != "published" {
+	if e != nil || status.IngestionReady || status.AccelerationState != catalog.ReleaseAccelerationBuilding || status.ManifestHash != r.ManifestHash || status.State != catalog.ReleaseStatePublished {
 		t.Fatal(status, e)
 	}
 	list, e := f.svc.ListReleases(ctx, f.viewer, f.project, "development", "", 10)

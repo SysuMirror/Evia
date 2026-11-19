@@ -68,7 +68,7 @@ func catalogEvent() catalog.Event {
 	return catalog.Event{TypeID: 1, Key: "page_opened", DisplayName: "Page opened"}
 }
 func catalogRelease() catalog.Release {
-	return catalog.Release{ID: catalogReleaseID, Revision: 1, Environment: "development", State: "published", IngestionReady: false, AccelerationState: "not_requested", ManifestHash: strings.Repeat("a", 64)}
+	return catalog.Release{ID: catalogReleaseID, Revision: 1, Environment: "development", State: catalog.ReleaseStatePublished, IngestionReady: false, AccelerationState: catalog.ReleaseAccelerationNotRequested, ManifestHash: strings.Repeat("a", 64)}
 }
 func (f *catalogStore) CreateEvent(_ context.Context, actor, project string, in catalog.EventInput) (catalog.Event, error) {
 	return catalog.Event{TypeID: 1, Key: in.Key, DisplayName: in.DisplayName}, f.call(actor, project)
@@ -175,7 +175,7 @@ func TestCatalogSuccessContracts(t *testing.T) {
 		}
 	}
 	out = catalogStatus(t, catalogRequest(h, "POST", catalogReleasesURL, catalogReleaseBody, map[string]string{"Idempotency-Key": "release-1"}), 202)
-	if out["ingestion_ready"] != false || out["state"] != "published" || f.idempotency != "release-1" {
+	if out["ingestion_ready"] != false || out["state"] != catalog.ReleaseStatePublished || f.idempotency != "release-1" {
 		t.Fatal("release metadata incorrectly reports activation", out)
 	}
 	catalogStatus(t, catalogRequest(h, "GET", catalogReleasesURL+"/"+catalogReleaseID, "", nil), 200)
