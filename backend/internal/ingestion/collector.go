@@ -285,7 +285,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 	batchPlans := map[int64]compiledPlan{}
 	planErrors := map[int64]error{}
 	for i, raw := range batch.Events {
-		result := ItemResult{Index: i, Status: "rejected"}
+		result := ItemResult{Index: i, Status: ItemStatusRejected}
 		reject := func(code string, retry bool, paths ...string) {
 			result.Error = &ItemError{Code: code, Retryable: retry, FieldPaths: paths}
 			rejected[code]++
@@ -370,7 +370,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 			records = append(records, Record{ProjectID: source.Source.ProjectID, SourceID: source.Source.ID, SourceKind: source.Source.Kind, Environment: source.Source.Environment, ReceivedAt: now, EventID: event.ID, EventKey: event.Key, SchemaVersion: event.Version, ReleaseRevision: event.Revision, OccurredAt: event.Occurred.UTC(), UID: event.Identity.UID, AnonymousID: event.Identity.AnonymousID, Context: eventContext, ContextJSON: event.Context, PropertiesJSON: event.Properties, SDKName: event.SDK.Name, SDKVersion: event.SDK.Version})
 			systemItems[len(records)-1] = true
 			itemIndices = append(itemIndices, i)
-			result.Status = "accepted"
+			result.Status = ItemStatusAccepted
 			out.Results[i] = result
 			continue
 		}
@@ -447,7 +447,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 		// revision-level check refreshes eligibility before queue admission.
 		records = append(records, Record{ProjectID: source.Source.ProjectID, SourceID: source.Source.ID, SourceKind: source.Source.Kind, Environment: source.Source.Environment, ReceivedAt: now, EventID: event.ID, EventKey: event.Key, SchemaVersion: event.Version, ReleaseRevision: event.Revision, OccurredAt: event.Occurred.UTC(), UID: event.Identity.UID, AnonymousID: event.Identity.AnonymousID, Context: eventContext, ContextJSON: event.Context, PropertiesJSON: event.Properties, SDKName: event.SDK.Name, SDKVersion: event.SDK.Version})
 		itemIndices = append(itemIndices, i)
-		result.Status = "accepted"
+		result.Status = ItemStatusAccepted
 		out.Results[i] = result
 	}
 	// Recheck immediately before queue admission: slow batch validation must not
@@ -480,7 +480,7 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 		}
 		if !admittedRevisions[record.ReleaseRevision] {
 			item := &out.Results[itemIndices[j]]
-			item.Status = "rejected"
+			item.Status = ItemStatusRejected
 			item.Error = &ItemError{Code: "SCHEMA_NOT_READY", Retryable: true, FieldPaths: []string{"release_revision"}}
 			rejected["SCHEMA_NOT_READY"]++
 			retryable = true
