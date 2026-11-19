@@ -40,3 +40,19 @@ func TestUnsafeJSONRejected(t *testing.T) {
 		}
 	}
 }
+
+// TestSafeIntegerBoundPinned pins the JSON safe-integer bound to its
+// mathematical value (2^53 - 1) and keeps the typed and untyped exports equal,
+// so the single source of truth referenced across the codebase cannot drift.
+func TestSafeIntegerBoundPinned(t *testing.T) {
+	const want = int64(1<<53 - 1)
+	if MaxSafeInteger != want {
+		t.Fatalf("MaxSafeInteger=%v must equal 2^53-1=%d", MaxSafeInteger, want)
+	}
+	if MaxInteger != want {
+		t.Fatalf("MaxInteger=%d must equal 2^53-1=%d", MaxInteger, want)
+	}
+	if int64(MaxSafeInteger) != MaxInteger {
+		t.Fatal("untyped MaxSafeInteger and typed MaxInteger diverge")
+	}
+}
