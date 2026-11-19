@@ -28,7 +28,7 @@ type sourceServiceFake struct {
 }
 
 func sourceResource() ingestion.Source {
-	return ingestion.Source{ID: catalogReleaseID, ProjectID: projectID, Name: "Synthetic", Kind: ingestion.SourceKindServer, Environment: "development", WriteKey: "public-key", Revision: 1, Status: ingestion.SourceStatusActive, ApplicationState: "pending", AllowedOrigins: []string{}}
+	return ingestion.Source{ID: catalogReleaseID, ProjectID: projectID, Name: "Synthetic", Kind: ingestion.SourceKindServer, Environment: "development", WriteKey: "public-key", Revision: 1, Status: ingestion.SourceStatusActive, ApplicationState: ingestion.ApplicationStatePending, AllowedOrigins: []string{}}
 }
 func (f *sourceServiceFake) CreateSource(context.Context, string, string, ingestion.SourceInput) (ingestion.Issued, error) {
 	f.calls++

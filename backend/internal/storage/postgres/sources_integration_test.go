@@ -39,7 +39,7 @@ func TestSourceAuthorizationScopeRevisionsAndAudit(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if created.SecretOnce != "" || created.Source.Revision != 1 || created.Source.ApplicationState != "pending" {
+	if created.SecretOnce != "" || created.Source.Revision != 1 || created.Source.ApplicationState != ingestion.ApplicationStatePending {
 		t.Fatal("invalid browser source", created)
 	}
 	_, e = svc.GetSource(ctx, f.outsider, f.project, created.Source.ID)
@@ -201,11 +201,11 @@ func TestSourceApplicationStateAndCrossInstanceRevocationBound(t *testing.T) {
 		t.Fatal(e)
 	}
 	updated, e := svc.UpdateSource(ctx, f.owner, f.project, created.Source.ID, 1, ingestion.SourceUpdate{Status: sourceString(ingestion.SourceStatusDisabled)})
-	if e != nil || updated.ApplicationState != "pending" {
+	if e != nil || updated.ApplicationState != ingestion.ApplicationStatePending {
 		t.Fatal(updated, e)
 	}
 	observed, e := svc.GetSource(ctx, f.owner, f.project, created.Source.ID)
-	if e != nil || observed.ApplicationState != "pending" {
+	if e != nil || observed.ApplicationState != ingestion.ApplicationStatePending {
 		t.Fatal("first postcommit observation must remain pending", observed, e)
 	}
 	// A separate process has no local invalidation. Its fixed two-second cache
@@ -214,7 +214,7 @@ func TestSourceApplicationStateAndCrossInstanceRevocationBound(t *testing.T) {
 	defer timer.Stop()
 	<-timer.C
 	observed, e = svc.GetSource(ctx, f.owner, f.project, created.Source.ID)
-	if e != nil || observed.ApplicationState != "applied" {
+	if e != nil || observed.ApplicationState != ingestion.ApplicationStateApplied {
 		t.Fatal("bounded distribution never became applied", observed, e)
 	}
 	resolved, e := cache.ResolveSource(ctx, created.Source.WriteKey)
