@@ -2154,7 +2154,7 @@ export interface components {
              * @default json
              * @enum {string}
              */
-            format: "json" | "csv" | "ndjson";
+            format: "json" | "csv" | "ndjson" | "parquet";
             query: components["schemas"]["query-request.schema"];
             /** Format: date-time */
             artifact_expiry_at?: string | null;
@@ -2168,7 +2168,7 @@ export interface components {
             environment: "development" | "staging" | "production";
             name: string;
             /** @enum {string} */
-            format: "json" | "csv" | "ndjson";
+            format: "json" | "csv" | "ndjson" | "parquet";
             /** @enum {string} */
             state: "queued" | "running" | "completed" | "failed" | "cancelled";
             error_code: string | null;
@@ -3401,11 +3401,11 @@ export interface components {
         SavedAnalysisExportInput: {
             name: string;
             /**
-             * @description 导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录；缺省为 json。
+             * @description 导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录，parquet 按列类型物化强类型列存（不可映射类型 fail-closed）；缺省为 json。
              * @default json
              * @enum {string}
              */
-            format: "json" | "csv" | "ndjson";
+            format: "json" | "csv" | "ndjson" | "parquet";
             time_range: components["schemas"]["time_range"];
             timezone: components["schemas"]["timezone"];
             /** Format: date-time */

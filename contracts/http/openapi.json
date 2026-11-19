@@ -21752,7 +21752,8 @@
             "enum": [
               "json",
               "csv",
-              "ndjson"
+              "ndjson",
+              "parquet"
             ],
             "default": "json"
           },
@@ -21802,7 +21803,8 @@
             "enum": [
               "json",
               "csv",
-              "ndjson"
+              "ndjson",
+              "parquet"
             ]
           },
           "state": {
@@ -27356,10 +27358,11 @@
             "enum": [
               "json",
               "csv",
-              "ndjson"
+              "ndjson",
+              "parquet"
             ],
             "default": "json",
-            "description": "导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录；缺省为 json。"
+            "description": "导出产物格式：json 物化完整结果文档，csv 渲染表格行，ndjson 每行一条紧凑记录，parquet 按列类型物化强类型列存（不可映射类型 fail-closed）；缺省为 json。"
           },
           "time_range": {
             "$ref": "../query/query-request.schema.json#/properties/time_range"
