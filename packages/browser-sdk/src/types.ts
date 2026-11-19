@@ -49,6 +49,23 @@ export interface ClientOptions {
    * original event_id and the collector deduplicates stable source/event IDs.
    */
   persistQueue?: boolean;
+  /**
+   * Opt-in cross-document session continuity. When enabled the session scope
+   * (session id, tab id, sequence and last activity) is mirrored onto a
+   * tab-scoped storage port, so a reload or hard navigation within the same
+   * tab continues the same session instead of starting a new one. Closing the
+   * tab or opening a new one still starts a fresh session, and reset()
+   * discards the persisted scope. Defaults to false so the per-document
+   * session scope stays byte-identical.
+   */
+  persistSession?: boolean;
+  /**
+   * Tab-scoped storage port used by persistSession; the browser sessionStorage
+   * is used by default. Passing null disables the port, so enabling
+   * persistSession without a usable port fails closed at construction instead
+   * of silently losing continuity.
+   */
+  sessionStorage?: StoragePort | null;
   /** Injectable browser capabilities, also useful for deterministic tests. */
   clock?: Clock;
   randomUUID?: () => string;

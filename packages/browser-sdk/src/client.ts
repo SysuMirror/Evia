@@ -135,6 +135,41 @@ function storageDefault(): StoragePort | null {
     return null;
   }
 }
+// The session scope must stay isolated per tab: a shared port would let two
+// live tabs emit colliding sequences into one session and break journey
+// ordering, so continuity deliberately defaults to sessionStorage.
+function sessionStorageDefault(): StoragePort | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+const sessionSnapshotFormat = 'evia.session.v1';
+interface PersistedSession {
+  format: typeof sessionSnapshotFormat;
+  session_id: string;
+  tab_id: string;
+  sequence: number;
+  last_activity: number;
+}
+function isPersistedSession(value: unknown): value is PersistedSession {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.format === sessionSnapshotFormat &&
+    typeof candidate.session_id === 'string' &&
+    uuidPattern.test(candidate.session_id) &&
+    typeof candidate.tab_id === 'string' &&
+    uuidPattern.test(candidate.tab_id) &&
+    typeof candidate.sequence === 'number' &&
+    Number.isInteger(candidate.sequence) &&
+    candidate.sequence >= 0 &&
+    candidate.sequence <= Number.MAX_SAFE_INTEGER &&
+    typeof candidate.last_activity === 'number' &&
+    Number.isFinite(candidate.last_activity)
+  );
+}
 function freezeConfig(config: PublicConfig): PublicConfig {
   const pending: { value: object; depth: number }[] = [{ value: config, depth: 0 }];
   while (pending.length) {
@@ -164,6 +199,9 @@ class Client implements BrowserClient {
   private readonly storageKey: string;
   private readonly persistQueue: boolean;
   private readonly queueStorageKey: string;
+  private readonly persistSession: boolean;
+  private readonly sessionStorage: StoragePort | null;
+  private readonly sessionStorageKey: string;
   private readonly configTtl: number;
   private readonly flushInterval: number;
   private readonly retryBase: number;
@@ -261,6 +299,12 @@ class Client implements BrowserClient {
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     this.persistQueue = options.persistQueue === true;
     this.queueStorageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:queue`;
+    this.persistSession = options.persistSession === true;
+    this.sessionStorage =
+      options.sessionStorage === undefined ? sessionStorageDefault() : options.sessionStorage;
+    if (this.persistSession && !this.sessionStorage)
+      throw new EviaSDKError('SESSION_STORAGE_UNAVAILABLE');
+    this.sessionStorageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:session`;
     let stored: string | null = null;
     try {
       stored = this.storage?.getItem(this.storageKey) ?? null;
@@ -269,9 +313,12 @@ class Client implements BrowserClient {
     }
     this.anonymousId = stored && uuidPattern.test(stored) ? stored : this.uuid();
     this.persistAnonymous();
-    this.tabId = this.uuid();
-    this.sessionId = this.uuid();
-    this.lastActivity = this.clock.now();
+    const scope = this.restoreSessionScope();
+    this.tabId = scope?.tab_id ?? this.uuid();
+    this.sessionId = scope?.session_id ?? this.uuid();
+    this.sequence = scope?.sequence ?? 0;
+    this.lastActivity = scope?.last_activity ?? this.clock.now();
+    this.persistSessionState();
     this.page = this.newPage({ navigationType: 'initial' });
     if (
       options.lifecycle !== false &&
@@ -317,6 +364,48 @@ class Client implements BrowserClient {
       this.storage?.setItem(this.storageKey, this.anonymousId);
     } catch {
       /* memory fallback */
+    }
+  }
+
+  // restoreSessionScope reloads the tab-scoped session snapshot written by a
+  // previous document in this tab. The snapshot is restored verbatim — the
+  // idle-timeout rotation stays lazy in touchSession(), so the first activity
+  // after a long absence observes the same idle end + rotation as the live
+  // in-memory path. Malformed or foreign snapshots fail soft to a fresh scope.
+  private restoreSessionScope(): PersistedSession | null {
+    if (!this.persistSession || !this.sessionStorage) return null;
+    let raw: string | null = null;
+    try {
+      raw = this.sessionStorage.getItem(this.sessionStorageKey);
+    } catch {
+      return null;
+    }
+    if (!raw) return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    return isPersistedSession(parsed) ? parsed : null;
+  }
+
+  // persistSessionState mirrors the mutable session scope onto the tab-scoped
+  // port. It is write-through and fail-soft like the queue mirror: a storage
+  // error degrades this reload's continuity but never breaks collection.
+  private persistSessionState(): void {
+    if (!this.persistSession || !this.sessionStorage) return;
+    try {
+      const snapshot: PersistedSession = {
+        format: sessionSnapshotFormat,
+        session_id: this.sessionId,
+        tab_id: this.tabId,
+        sequence: this.sequence,
+        last_activity: this.lastActivity,
+      };
+      this.sessionStorage.setItem(this.sessionStorageKey, JSON.stringify(snapshot));
+    } catch {
+      /* memory fallback: continuity resumes on the next successful write */
     }
   }
 
@@ -538,6 +627,9 @@ class Client implements BrowserClient {
       sdk: { name: 'evia-browser', version: '0.1.0' },
       properties: copied,
     };
+    // The sequence has advanced past this point even if size checks reject
+    // the event, so the mirror reflects the same monotonic truth as memory.
+    this.persistSessionState();
     const reserved = byteLength(
       JSON.stringify({
         ...draft,
@@ -608,6 +700,7 @@ class Client implements BrowserClient {
     this.sessionId = this.uuid();
     this.lastActivity = this.clock.now();
     this.page = this.newPage({ navigationType: 'initial' });
+    this.persistSessionState();
     this.emitAutoPageView();
   }
 
@@ -629,6 +722,7 @@ class Client implements BrowserClient {
       });
     }
     this.lastActivity = now;
+    this.persistSessionState();
   }
 
   private checkLink(link: NavigationLink): void {
@@ -1032,5 +1126,6 @@ class Client implements BrowserClient {
     this.destroyed = true;
     for (const remove of this.cleanup) remove();
     this.cleanup.length = 0;
+    this.persistSessionState();
   }
 }

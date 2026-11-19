@@ -1761,3 +1761,300 @@ test('a failing storage port fails soft and keeps in-memory delivery working', a
   assert.equal((await emission.result).status, 'accepted');
   client.destroy();
 });
+
+// --- cross-document session continuity (persistSession) ---
+
+const sessionStorageKey = `evia:${projectId}:development:public-example:session`;
+const readSession = (port: StoragePort): Record<string, unknown> | null => {
+  const raw = port.getItem(sessionStorageKey);
+  return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+};
+
+test('persistSession continues the session scope across a simulated reload', async () => {
+  const port = new MapStorage();
+  const delivered: Body[] = [];
+  const handler = (body: Body) => {
+    delivered.push(body);
+    return receipt(body);
+  };
+  const first = setup(handler, { sessionStorage: port, persistSession: true });
+  await first.client.init();
+  first.client.emit('page_opened');
+  first.client.emit('item_opened');
+  await pump();
+  await first.client.flush();
+  const scopeA = first.client.emit('page_opened');
+  await pump();
+  await first.client.flush();
+  assert.equal((await scopeA.result).status, 'accepted');
+  const eventA = delivered[0]!.events[0] as any;
+  first.client.destroy();
+
+  // Same tab, new document: the scope is restored verbatim.
+  const second = setup(handler, { sessionStorage: port, persistSession: true });
+  const emission = second.client.emit('page_opened');
+  await pump();
+  await second.client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  const continued = delivered[2]!.events[0] as any;
+  assert.equal(continued.context.session_id, eventA.context.session_id);
+  assert.equal(continued.context.tab_id, eventA.context.tab_id);
+  // The sequence is strictly monotonic across the document boundary.
+  assert.equal(continued.context.sequence, eventA.context.sequence + 3);
+  const snapshot = readSession(port)!;
+  assert.equal(snapshot.format, 'evia.session.v1');
+  assert.equal(snapshot.session_id, eventA.context.session_id);
+  assert.equal(snapshot.tab_id, eventA.context.tab_id);
+  second.client.destroy();
+});
+
+test('session persistence is opt-in and writes no session key by default', async () => {
+  const port = new MapStorage();
+  const { client } = setup((body) => receipt(body), { sessionStorage: port });
+  await client.init();
+  client.emit('page_opened');
+  await pump();
+  await client.flush();
+  assert.equal(
+    port.keys().some((key) => key.endsWith(':session')),
+    false,
+  );
+  client.destroy();
+});
+
+test('a restored idle session rotates lazily exactly like the live path', async () => {
+  const port = new MapStorage();
+  const delivered: Body[] = [];
+  const handler = (body: Body) => {
+    delivered.push(body);
+    return receipt(body);
+  };
+  const first = setupSession(handler, {
+    sessionStorage: port,
+    persistSession: true,
+    autoSessionEnd: true,
+  });
+  const before = first.client.emit('page_opened');
+  await pump();
+  await first.client.flush();
+  assert.equal((await before.result).status, 'accepted');
+  const expiredSession = (delivered[0]!.events[0] as any).context.session_id;
+  first.client.destroy();
+
+  // Rehydrate long after the timeout: construction restores verbatim and does
+  // not emit; the first activity observes the idle end with the old session.
+  const second = setupSession(handler, {
+    sessionStorage: port,
+    persistSession: true,
+    autoSessionEnd: true,
+  });
+  await second.clock.advance(24 * 60 * 60 * 1000);
+  await second.client.init();
+  const after = second.client.emit('page_opened');
+  await pump();
+  await second.client.flush();
+  assert.equal((await after.result).status, 'accepted');
+  const endEvent = delivered[1]!.events.find(
+    (event) => (event as any).event_key === 'sys.session_end',
+  ) as any;
+  const freshEvent = delivered[1]!.events.find(
+    (event) => (event as any).event_key === 'page_opened',
+  ) as any;
+  assert.equal(endEvent.context.session_id, expiredSession);
+  assert.equal(endEvent.properties.reason, 'idle');
+  assert.notEqual(freshEvent.context.session_id, expiredSession);
+  assert.equal(freshEvent.context.tab_id, endEvent.context.tab_id);
+  second.client.destroy();
+});
+
+test('reset discards the persisted session scope for the next document', async () => {
+  const port = new MapStorage();
+  const first = setup(() => receipt({ batch_id: 'b', events: [] }), {
+    sessionStorage: port,
+    persistSession: true,
+  });
+  await first.client.init();
+  const scopeBefore = readSession(port)!;
+  first.client.reset();
+  const scopeAfter = readSession(port)!;
+  assert.notEqual(scopeAfter.session_id, scopeBefore.session_id);
+  assert.equal(scopeAfter.tab_id, scopeBefore.tab_id);
+  first.client.destroy();
+
+  const second = setup((body) => receipt(body), {
+    sessionStorage: port,
+    persistSession: true,
+  });
+  const snapshot = readSession(port)!;
+  assert.equal(snapshot.session_id, scopeAfter.session_id);
+  second.client.destroy();
+});
+
+test('two tabs stay isolated because their session ports are separate', async () => {
+  const tabA = new MapStorage();
+  const tabB = new MapStorage();
+  const a = setup((body) => receipt(body), { sessionStorage: tabA, persistSession: true });
+  // Distinct uuid stream: isolation must come from the ports, not from a
+  // shared deterministic generator.
+  let id = 500;
+  const b = setup((body) => receipt(body), {
+    sessionStorage: tabB,
+    persistSession: true,
+    randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+  });
+  await a.client.init();
+  await b.client.init();
+  a.client.emit('page_opened');
+  b.client.emit('page_opened');
+  await pump();
+  const scopeA = readSession(tabA)!;
+  const scopeB = readSession(tabB)!;
+  assert.notEqual(scopeA.session_id, scopeB.session_id);
+  assert.notEqual(scopeA.tab_id, scopeB.tab_id);
+  a.client.destroy();
+  b.client.destroy();
+});
+
+test('corrupt or foreign session snapshots fail soft to a fresh scope', async () => {
+  for (const raw of [
+    'not json',
+    JSON.stringify({ format: 'evia.queue.v1', session_id: 'x' }),
+    JSON.stringify({
+      format: 'evia.session.v1',
+      session_id: 'not-a-uuid',
+      tab_id: '00000000-0000-4000-8000-0000000000aa',
+      sequence: 3,
+      last_activity: 1,
+    }),
+    JSON.stringify({
+      format: 'evia.session.v1',
+      session_id: '00000000-0000-4000-8000-0000000000aa',
+      tab_id: '00000000-0000-4000-8000-0000000000bb',
+      sequence: -1,
+      last_activity: 1,
+    }),
+  ]) {
+    const port = new MapStorage();
+    port.setItem(sessionStorageKey, raw);
+    const { client } = setup((body) => receipt(body), {
+      sessionStorage: port,
+      persistSession: true,
+    });
+    const snapshot = readSession(port)!;
+    assert.equal(snapshot.format, 'evia.session.v1');
+    assert.match(String(snapshot.session_id), /^[0-9a-f-]{36}$/);
+    assert.equal(snapshot.sequence, 0);
+    assert.notEqual(snapshot.session_id, 'not-a-uuid');
+    client.destroy();
+  }
+});
+
+test('persistSession without a usable session port fails closed at construction', () => {
+  assert.throws(
+    () =>
+      setup(() => receipt({ batch_id: 'b', events: [] }), {
+        sessionStorage: null,
+        persistSession: true,
+      }),
+    (error: unknown) =>
+      error instanceof EviaSDKError && error.code === 'SESSION_STORAGE_UNAVAILABLE',
+  );
+});
+
+test('session storage failures degrade softly and never break collection', async () => {
+  const throwing: StoragePort = {
+    getItem: () => {
+      throw new Error('denied');
+    },
+    setItem: () => {
+      throw new Error('denied');
+    },
+  };
+  const { client } = setup((body) => receipt(body), {
+    sessionStorage: throwing,
+    persistSession: true,
+  });
+  await client.init();
+  const emission = client.emit('page_opened');
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  client.destroy();
+});
+
+test('rehydrated queue events keep their original session while new events continue it', async () => {
+  const port = new MapStorage();
+  const store = new MapStorage();
+  const delivered: Body[] = [];
+  const handler = (body: Body) => {
+    delivered.push(body);
+    return receipt(body);
+  };
+  const first = setup(handler, {
+    storage: store,
+    sessionStorage: port,
+    persistQueue: true,
+    persistSession: true,
+  });
+  await first.client.init();
+  const durable = first.client.emit('page_opened');
+  await pump();
+  const durableContext = (
+    JSON.parse(store.getItem(queueStorageKey)!) as {
+      entries: { draft: { context: { session_id: string; sequence: number } } }[];
+    }
+  ).entries[0]!.draft.context;
+  assert.equal(durableContext.sequence, 1);
+  // Abrupt unload: destroy() would drain the durable queue, so the first
+  // client is simply abandoned exactly like a real reload does.
+
+  const second = setup(handler, {
+    storage: store,
+    sessionStorage: port,
+    persistQueue: true,
+    persistSession: true,
+  });
+  assert.equal(second.client.pending, 1);
+  await second.client.init();
+  const fresh = second.client.emit('page_opened');
+  await pump();
+  await second.client.flush();
+  // The first client was destroyed before delivery, so its own outcome promise
+  // settles as dropped; the durable outcome is the collector receipt below.
+  assert.equal((await fresh.result).status, 'accepted');
+  const rehydrated = delivered[0]!.events.find(
+    (event) => (event as any).event_id === durable.eventId,
+  ) as any;
+  const continued = delivered[0]!.events.find(
+    (event) => (event as any).event_id === fresh.eventId,
+  ) as any;
+  assert.ok(rehydrated, 'the rehydrated event must be delivered');
+  // The rehydrated snapshot is immutable history; the new document continues
+  // the same session with a strictly greater sequence.
+  assert.equal(rehydrated.context.session_id, durableContext.session_id);
+  assert.equal(continued.context.session_id, durableContext.session_id);
+  assert.equal(continued.context.sequence, 2);
+  assert.equal(continued.context.tab_id, rehydrated.context.tab_id);
+  second.client.destroy();
+});
+
+test('a persisted exhausted sequence keeps failing closed after restore', async () => {
+  const port = new MapStorage();
+  port.setItem(
+    sessionStorageKey,
+    JSON.stringify({
+      format: 'evia.session.v1',
+      session_id: '00000000-0000-4000-8000-0000000000aa',
+      tab_id: '00000000-0000-4000-8000-0000000000bb',
+      sequence: Number.MAX_SAFE_INTEGER,
+      last_activity: Date.parse('2026-11-09T12:00:00Z'),
+    }),
+  );
+  const { client } = setup((body) => receipt(body), {
+    sessionStorage: port,
+    persistSession: true,
+  });
+  await client.init();
+  assert.throws(() => client.emit('page_opened'), /SEQUENCE_EXHAUSTED/);
+  client.destroy();
+});
