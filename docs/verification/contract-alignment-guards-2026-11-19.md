@@ -85,6 +85,16 @@
 32. `access.TestPrincipalKindVocabularyContract`：`ProjectAuditEntry.actor_kind` 两值 enum 与 `access.PrincipalKinds`（human/machine，即 principals.kind）集合相等；Go 只读不写，存储侧由迁移 010 CHECK 兜底，SQL/Role 哨兵/operator 刻意保留（独立切片，见 [principal-kind-closed-set](principal-kind-closed-set-2026-11-19.md)）。
 33. `reporting.TestDiscoveryBudgetsMatchEnforcementAndContract`（首个**数值型**守卫）：16 个 discovery 广告预算逐字段等于 `analysis.Budget*` 执行常量，且全部落在契约 `AnalysisCapabilities.budgets` 的安全整数 minimum/maximum 内并锁定 16 项覆盖数；配 `analysis.TestRetentionMaxWindowMatchesAdvertisedBudget` 钉死窗口公式（独立切片，见 [discovery-budgets-single-source](discovery-budgets-single-source-2026-11-19.md)）。
 
+## 组合根单一真相源守卫（2026-11-19 增补，不读契约 bundle）
+
+除 33 个读嵌入 bundle 的契约守卫外，另在 `cmd/evia` 组合根与 `platform/canonical` 增加跨包不变量守卫，防止「同值多副本」漂移，详见 [canonical-bounds](canonical-bounds-2026-11-19.md)：
+
+- `canonical.TestSafeIntegerBoundPinned`：JSON 安全整数界钉到数学值 `1<<53-1`，无类型/typed 导出相等；
+- `cmd/evia.TestSafeIntegerBoundIsSingleSource`：ingestion/catalog/delivery/access/analysis 五个本地别名逐一等于 `canonical.MaxInteger`（9 处原独立字面量已收敛为别名）；
+- `cmd/evia.TestReservedEventLimitPinsEmbeddedCatalog`：`delivery.ReservedEventLimit`/`PublicConfigEventLimit` 与嵌入 `SystemCatalog` 实际规则数绑定。
+
+这些守卫不消费 OpenAPI bundle，故不并入上方 33 项编号；它们与契约守卫互补，覆盖「常量 vs 常量」「常量 vs 嵌入夹具」两类漂移。
+
 ## 守卫有效性取证（变异红绿）
 
 - reporting：临时给 `discoveryQueryKinds` 注入 `drift_probe` → 守卫报 `query kind drift: contract 8 != Go 9` 变红，还原复绿。
