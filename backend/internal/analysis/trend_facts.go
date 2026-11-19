@@ -34,7 +34,7 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 	}
 	for _, metric := range request.Metrics {
 		if metric.Op == "unique" && metric.Field == nil {
-			if request.Subject == "anonymous" {
+			if request.Subject == SubjectAnonymous {
 				needed["anonymous_id"] = true
 			} else {
 				needed["uid"] = true

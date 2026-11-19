@@ -57,10 +57,10 @@ func Validate(r *Request) error {
 	if !env.Valid(r.Environment) {
 		return Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 	}
-	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
+	if r.IdentityRevision != nil || r.Subject == SubjectResolvedPerson {
 		return Invalid("IDENTITY_RESOLUTION_UNAVAILABLE", "尚无可查询的身份关联版本", "/subject")
 	}
-	if r.Subject != "" && r.Subject != "uid" && r.Subject != "anonymous" {
+	if r.Subject != "" && !ValidSubject(r.Subject) {
 		return Invalid("INVALID_SUBJECT", "统计主体无效", "/subject")
 	}
 	if r.TimeRange.From.IsZero() || r.TimeRange.To.IsZero() || !r.TimeRange.From.Before(r.TimeRange.To) {
@@ -102,10 +102,10 @@ func ValidateConfiguration(r *Request) error {
 	if r.Kind != "events" && r.Kind != "trend" && r.Kind != "journey" && r.Kind != "funnel" && r.Kind != "retention" && r.Kind != "segment" && r.Kind != "path" && r.Kind != "attribution" {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
-	if r.IdentityRevision != nil || r.Subject == "resolved_person" {
+	if r.IdentityRevision != nil || r.Subject == SubjectResolvedPerson {
 		return Invalid("IDENTITY_RESOLUTION_UNAVAILABLE", "尚无可查询的身份关联版本", "/subject")
 	}
-	if r.Subject != "" && r.Subject != "uid" && r.Subject != "anonymous" {
+	if r.Subject != "" && !ValidSubject(r.Subject) {
 		return Invalid("INVALID_SUBJECT", "统计主体无效", "/subject")
 	}
 	if r.Limit == 0 {
@@ -184,10 +184,10 @@ func ValidateConfiguration(r *Request) error {
 		if (f.UID == nil) == (f.AnonymousID == nil) {
 			return Invalid("INVALID_IDENTITY_FILTER", "必须指定且仅指定一个身份", "/identity_filter")
 		}
-		if f.UID != nil && (!utf8.ValidString(*f.UID) || strings.ContainsRune(*f.UID, 0) || strings.TrimSpace(*f.UID) == "" || utf8.RuneCountInString(*f.UID) > 128 || r.Subject != "uid") {
+		if f.UID != nil && (!utf8.ValidString(*f.UID) || strings.ContainsRune(*f.UID, 0) || strings.TrimSpace(*f.UID) == "" || utf8.RuneCountInString(*f.UID) > 128 || r.Subject != SubjectUID) {
 			return Invalid("INVALID_IDENTITY_FILTER", "UID 过滤必须匹配 uid 主体", "/identity_filter")
 		}
-		if f.AnonymousID != nil && (len(*f.AnonymousID) != 36 || r.Subject != "anonymous") {
+		if f.AnonymousID != nil && (len(*f.AnonymousID) != 36 || r.Subject != SubjectAnonymous) {
 			return Invalid("INVALID_IDENTITY_FILTER", "匿名身份过滤必须匹配 anonymous 主体", "/identity_filter")
 		}
 	}
@@ -260,7 +260,7 @@ func ValidateConfiguration(r *Request) error {
 // anonymous subject, a fixed depth of 2..8 events, and an optional pinned
 // start event. Every malformed value fails closed.
 func validatePath(r *Request) error {
-	if r.Subject != "uid" && r.Subject != "anonymous" {
+	if !ValidSubject(r.Subject) {
 		return Invalid("SUBJECT_REQUIRED", "路径查询必须指定 uid 或 anonymous 统计主体", "/subject")
 	}
 	p := r.Path
@@ -291,7 +291,7 @@ func validatePath(r *Request) error {
 // pinned touchpoints that never reuse the conversion pair, and a 1..604800
 // second lookback window. Every malformed value fails closed.
 func validateAttribution(r *Request) error {
-	if r.Subject != "uid" && r.Subject != "anonymous" {
+	if !ValidSubject(r.Subject) {
 		return Invalid("SUBJECT_REQUIRED", "归因查询必须指定 uid 或 anonymous 统计主体", "/subject")
 	}
 	a := r.Attribution
@@ -346,7 +346,7 @@ func validateAttribution(r *Request) error {
 // per-subject value becomes that subject's unique group label. Arrays and
 // datetimes are rejected because they do not define a unique label.
 func validateSegment(r *Request) error {
-	if r.Subject != "uid" && r.Subject != "anonymous" {
+	if !ValidSubject(r.Subject) {
 		return Invalid("SUBJECT_REQUIRED", "分群查询必须指定 uid 或 anonymous 统计主体", "/subject")
 	}
 	sg := r.Segment
@@ -374,7 +374,7 @@ func validateSegment(r *Request) error {
 // pinned event versions on both boundary steps. Every malformed value fails
 // closed.
 func validateRetention(r *Request) error {
-	if r.Subject != "uid" && r.Subject != "anonymous" {
+	if !ValidSubject(r.Subject) {
 		return Invalid("SUBJECT_REQUIRED", "留存查询必须指定 uid 或 anonymous 统计主体", "/subject")
 	}
 	rt := r.Retention

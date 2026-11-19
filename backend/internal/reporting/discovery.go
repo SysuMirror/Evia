@@ -69,7 +69,7 @@ var (
 	// resolved_person stays a contract-level reserved subject and is never
 	// advertised until the identity graph exists; discovery therefore lists
 	// only the implemented subjects.
-	discoverySubjects               = []string{"uid", "anonymous"}
+	discoverySubjects               = []string{analysis.SubjectUID, analysis.SubjectAnonymous}
 	discoveryIntervals              = []string{"minute", "hour", "day", "week"}
 	discoveryFunnelModes            = []string{"ordered_with_interleaving"}
 	discoveryRetentionGranularities = []string{"day", "week", "month"}

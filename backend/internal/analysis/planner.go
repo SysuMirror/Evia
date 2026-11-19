@@ -374,7 +374,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.SQL += " LIMIT " + strconv.Itoa(r.Limit+1)
 	case "funnel":
 		subject := "uid"
-		if r.Subject == "anonymous" {
+		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
 		}
 		selectSQL := []string{subject + " AS subject_id", "event_id", "source_id", "session_id", "tab_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns", "ifNull(sequence,0) AS sequence"}
@@ -401,7 +401,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Columns = []Column{{Key: "step_index", Type: "integer"}, {Key: "event_key", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "conversion_rate", Type: "number"}}
 	case "retention":
 		subject := "uid"
-		if r.Subject == "anonymous" {
+		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
 		}
 		selectSQL := []string{subject + " AS subject_id", "event_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns"}
@@ -427,7 +427,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}
 	case "segment":
 		subject := "uid"
-		if r.Subject == "anonymous" {
+		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
 		}
 		value, e := p.field(r.Segment.Field)
@@ -453,7 +453,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 	case "path":
 		subject := "uid"
-		if r.Subject == "anonymous" {
+		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
 		}
 		selectSQL := []string{
@@ -483,7 +483,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
 	case "attribution":
 		subject := "uid"
-		if r.Subject == "anonymous" {
+		if r.Subject == SubjectAnonymous {
 			subject = "anonymous_id"
 		}
 		selectSQL := []string{
@@ -538,7 +538,7 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 		f = *m.Field
 	} else {
 		key := "uid"
-		if subject == "anonymous" {
+		if subject == SubjectAnonymous {
 			key = "anonymous_id"
 		}
 		f = Field{Kind: "system", Key: key, ResolvedType: "string"}

@@ -65,7 +65,7 @@ func NormalizeMetricDefinition(in MetricDefinition) (MetricDefinition, error) {
 	if !utf8.ValidString(in.Description) || utf8.RuneCountInString(out.Description) > 2000 || strings.ContainsRune(out.Description, 0) {
 		return out, analysis.Invalid("INVALID_DESCRIPTION", "描述格式无效或超过长度限制", "/description")
 	}
-	if out.Subject != "uid" && out.Subject != "anonymous" {
+	if !analysis.ValidSubject(out.Subject) {
 		return out, analysis.Invalid("INVALID_SUBJECT", "指标必须选择身份主体", "/subject")
 	}
 	// Strip execution-only state on the owned copy before structural checks.
@@ -89,7 +89,7 @@ func NormalizeMetricDefinition(in MetricDefinition) (MetricDefinition, error) {
 	case "unique":
 		if out.Aggregation.Field != nil {
 			validUnit = out.Unit == "distinct_value"
-		} else if out.Subject == "uid" {
+		} else if out.Subject == analysis.SubjectUID {
 			validUnit = out.Unit == "raw_uid"
 		} else {
 			validUnit = out.Unit == "anonymous_id"
