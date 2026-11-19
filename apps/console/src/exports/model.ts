@@ -17,7 +17,7 @@ export const EXPORT_NAME_MAX = 200;
 export const EXPORT_LIMIT_MIN = 1;
 export const EXPORT_LIMIT_MAX = 500;
 const EVENT_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
-const MAX_EVENT_KEYS = 20;
+export const MAX_EVENT_KEYS = 20;
 
 /** Mirrors the server-side query budget: events span at most 7 days, trends 31. */
 export function maxWindowDays(kind: ExportKind): number {

@@ -13,8 +13,14 @@ import {
   parseEventKeys,
   toExportInput,
   validateExportForm,
+  EXPORT_NAME_MAX,
+  EXPORT_LIMIT_MAX,
+  MAX_EVENT_KEYS,
   type ExportFormState,
 } from '../../apps/console/src/exports/model';
+import { SAVED_EXPORT_NAME_MAX } from '../../apps/console/src/saved-analysis-run/export-model';
+import queryContract from '../../contracts/query/query-request.schema.json';
+import openapiContract from '../../contracts/http/openapi.json';
 import {
   buildSavedExportInput,
   defaultSavedExportForm,
@@ -188,4 +194,31 @@ test('default saved export form derives its name from the immutable title', () =
   const form = defaultSavedExportForm(version);
   expect(form.name).toBe('课程完课率 导出');
   expect(form.format).toBe('json');
+});
+
+// Cross-language drift guard: the console keeps TypeScript limit copies for
+// pre-submit validation; they must stay identical to the numeric constraints
+// in the canonical contracts that the Go server enforces.
+test('console export limits stay pinned to the canonical contracts', () => {
+  const query = queryContract as {
+    properties: {
+      limit: { maximum: number };
+      event_keys: { maxItems: number };
+    };
+  };
+  expect(EXPORT_LIMIT_MAX).toBe(query.properties.limit.maximum);
+  expect(MAX_EVENT_KEYS).toBe(query.properties.event_keys.maxItems);
+
+  const schemas = (
+    openapiContract as {
+      components: {
+        schemas: {
+          ExportInput: { properties: { name: { maxLength: number } } };
+          SavedAnalysisExportInput: { properties: { name: { maxLength: number } } };
+        };
+      };
+    }
+  ).components.schemas;
+  expect(EXPORT_NAME_MAX).toBe(schemas.ExportInput.properties.name.maxLength);
+  expect(SAVED_EXPORT_NAME_MAX).toBe(schemas.SavedAnalysisExportInput.properties.name.maxLength);
 });
