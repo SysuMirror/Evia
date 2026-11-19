@@ -39,10 +39,11 @@
 | 聚合算子（10，双副本收敛） | validation/planner/metric_policy 内联链与 SQL 函数 map → `analysis.Op*` 常量 + `Aggregations/ValidAggregation`，近似算子子集命名化，discovery 切片改别名（独立切片，见 [aggregation-closed-set](aggregation-closed-set-2026-11-19.md)） | `QueryRequest.metrics.items.op` | 对齐 |
 | 漏斗模式（1，双副本收敛） | validation 裸字符串比较与 discovery 内联切片 → `analysis.FunnelMode*` 常量 + `FunnelModes/ValidFunnelMode`，discovery 切片改别名（独立切片，见 [funnel-mode-closed-set](funnel-mode-closed-set-2026-11-19.md)）；契约形态为 `const` 单值 | `QueryRequest.funnel.mode` | 对齐 |
 | 擦除作业态（6） | `erasure.State*` 常量早已统一 Go 侧引用，本切片补 `ErasureStates` 单一真相源与契约守卫；raw SQL 保留、迁移 015 CHECK 兜底（独立切片，见 [erasure-state-closed-set](erasure-state-closed-set-2026-11-19.md)） | `ErasureJob.state` | 对齐 |
+| 采集回执条目态（2，sum type） | collector 4 处裸赋值 + 跨包 5 处裸比较 → `ingestion.ItemStatus*` 常量 + `ItemStatuses`，守卫遍历 oneOf 双分支 const（独立切片，见 [item-result-status-closed-set](item-result-status-closed-set-2026-11-19.md)） | `CollectResponse.results.items.oneOf[*].status` | 对齐 |
 
 除上一切片修复的机器权限外，**未发现新的内容漂移**；但发现三处闭集以内联字面量分散维护（discovery 能力清单、项目角色、配额词汇），先行重构为包级单一真相源，行为逐字节不变（仅常量替换，`go build`/既有测试全绿）。
 
-## 常驻守卫（25 个测试，全部读嵌入 bundle、零外部依赖）
+## 常驻守卫（26 个测试，全部读嵌入 bundle、零外部依赖）
 
 1. `access.TestMachinePermissionContractStaysAlignedWithClosedSet`（上一切片）：权限枚举 + 三 schema maxItems。
 2. `access.TestProjectRoleContractStaysAligned`：三个 `ProjectMember*` schema 的 role 枚举 == `ProjectRoles`。
@@ -69,6 +70,7 @@
 23. `analysis.TestAggregationVocabularyMatchesContract`：嵌套 `QueryRequest.metrics.items.op` 枚举与 `Aggregations` 集合相等；与 discovery 守卫经别名共享真相源。
 24. `analysis.TestFunnelModeVocabularyMatchesContract`：嵌套 `QueryRequest.funnel.mode` 在契约中是 JSON Schema `const` 单值（非 enum 数组），断言 `FunnelModes` 恰为该单值集合；与 discovery 守卫的 const 分支经 `analysis.FunnelModes` 别名共享真相源，另由 `template_test.go` 的 `INVALID_FUNNEL` 负例覆盖校验器拒绝路径。
 25. `erasure.TestErasureStateVocabularyMatchesContract`：`ErasureJob.state` 六态枚举与 `erasure.ErasureStates` 集合相等；存储侧副本由迁移 015 的 erasure_jobs CHECK 约束兜底，raw SQL 字面量刻意保留（独立切片，见 [erasure-state-closed-set](erasure-state-closed-set-2026-11-19.md)）。
+26. `ingestion.TestItemResultStatusVocabularyMatchesContract`：`CollectResponse.results.items.oneOf` 双分支的 `status.const`（accepted/rejected）与 `ingestion.ItemStatuses` 集合相等，分支数与常量值两条断言独立防漂移；HTTP body 子串见证刻意保留（独立切片，见 [item-result-status-closed-set](item-result-status-closed-set-2026-11-19.md)）。
 
 ## 守卫有效性取证（变异红绿）
 
@@ -90,11 +92,12 @@
 - 聚合算子：向 `Aggregations` 注入 `drift_probe` → analysis 域守卫与 discovery 守卫同时报 drift 变红，还原复绿（详见独立验证记录）。
 - 漏斗模式：向 `FunnelModes` 注入 `drift_probe` → analysis 域守卫与 discovery 守卫同时报 `funnel mode drift ... contract const "ordered_with_interleaving" != Go [...]` 变红；短路 validation 闭集判断 → 新增 `INVALID_FUNNEL` 负例报 `wanted INVALID_FUNNEL, got <nil>` 变红，还原复绿（详见独立验证记录）。
 - 擦除作业态：向 `ErasureStates` 注入 `drift_probe` → 报 `erasure state drift ... Go [completed drift_probe failed ...]` 变红，还原复绿（详见独立验证记录）。
+- 采集回执条目态：向 `ItemStatuses` 注入 `drift_probe`（分支数断言变红）、把 `ItemStatusRejected` 值改为 `drift_probe`（集合断言变红），两条分支独立验证后还原复绿（详见独立验证记录）。
 - 所有变异通过文件备份还原，`grep DriftProbe/drift_probe` 确认零残留。
 
 ## 验证
 
-`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。
+`go test` 覆盖 7 个包全部新守卫；全量 `make check` EXIT=0、零 FAIL（Go 32 包、client 51、sdk 63、console 18、生产构建）。日志：`/tmp/evia-check/contract-guards/make-check.log`、`/tmp/evia-check/formula-units/make-check.log`（公式单位切片第二轮全量门禁）。漏斗模式切片全量门禁日志：`/tmp/evia-check/funnel/make-check.log`（EXIT=0、零 FAIL），真实依赖回归 `ch-integration.log`（84.5s）、`pg-integration.log`（250.9s）同目录。擦除作业态切片：`/tmp/evia-check/erasure/make-check.log`（EXIT=0、零 FAIL）与 `pg-integration.log`（250.4s，erasure 专项 5 测显式 PASS）。采集回执条目态切片：`/tmp/evia-check/item-status/make-check.log`（EXIT=0、零 FAIL），pipeline 核心两测显式 PASS，两个环境门控失败与切片无关。
 
 ## 明确未做（边界）
 
