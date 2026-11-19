@@ -477,3 +477,16 @@ func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
 		t.Fatalf("anonymous retention must not read the uid column: %s", anonymousPlan.SQL)
 	}
 }
+
+// TestRetentionMaxWindowMatchesAdvertisedBudget proves the conservative
+// retentionWindow upper bound (max periods at the 31-day month period) stays
+// identical to the budget advertised through discovery capabilities.
+func TestRetentionMaxWindowMatchesAdvertisedBudget(t *testing.T) {
+	window := retentionWindow(&Retention{
+		Granularity: RetentionGranularityMonth,
+		Periods:     BudgetRetentionMaxPeriods,
+	})
+	if int64(window/time.Second) != int64(BudgetRetentionMaxWindowSeconds) {
+		t.Fatalf("retention max window %d != advertised budget %d", int64(window/time.Second), BudgetRetentionMaxWindowSeconds)
+	}
+}

@@ -155,7 +155,7 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 			t.Fatalf("retention granularities wrong: %v", capabilities.RetentionGranularities)
 		}
 	}
-	if capabilities.Budgets.RetentionMaxPeriods != 12 || capabilities.Budgets.RetentionMaxWindowSeconds != 372*86400 {
+	if capabilities.Budgets.RetentionMaxPeriods != analysis.BudgetRetentionMaxPeriods || capabilities.Budgets.RetentionMaxWindowSeconds != analysis.BudgetRetentionMaxWindowSeconds {
 		t.Fatalf("retention budgets wrong: %+v", capabilities.Budgets)
 	}
 }
