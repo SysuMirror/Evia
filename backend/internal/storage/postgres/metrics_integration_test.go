@@ -18,7 +18,7 @@ import (
 )
 
 func metricDefinition() reporting.MetricDefinition {
-	return reporting.MetricDefinition{Title: "Lesson count", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: "uid", Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
+	return reporting.MetricDefinition{Title: "Lesson count", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
 }
 func metricFixture(t *testing.T) (catalogFixture, reporting.MetricDraft) {
 	t.Helper()

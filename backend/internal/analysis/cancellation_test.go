@@ -27,7 +27,7 @@ func TestJourneyUIDUsesUnicodeCharacters(t *testing.T) {
 		r := request(t, baseRequest)
 		r.Kind = "journey"
 		r.Metrics = nil
-		r.Subject = "uid"
+		r.Subject = SubjectUID
 		r.IdentityFilter = &IdentityFilter{UID: &uid}
 		if e := Validate(&r); e == nil {
 			t.Fatal("invalid UTF-8/NUL UID accepted")

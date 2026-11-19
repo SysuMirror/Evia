@@ -15,7 +15,7 @@ func attributionRequest(window int64) Request {
 	return Request{
 		Kind:        "attribution",
 		Environment: "development",
-		Subject:     "uid",
+		Subject:     SubjectUID,
 		TimeRange:   TimeRange{From: from, To: from.AddDate(0, 0, 7)},
 		Timezone:    "UTC",
 		Attribution: &Attribution{
@@ -229,7 +229,7 @@ func TestAttributionPlannerEmitsMarkersAndSubjectPull(t *testing.T) {
 	}
 
 	anonymous := attributionRequest(86400)
-	anonymous.Subject = "anonymous"
+	anonymous.Subject = SubjectAnonymous
 	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
 	if e != nil {
 		t.Fatal(e)
@@ -781,7 +781,7 @@ func TestPositionBasedValidationAndPlannerContract(t *testing.T) {
 func attributionTemplate() Template {
 	return Template{
 		Kind:    "attribution",
-		Subject: "uid",
+		Subject: SubjectUID,
 		Attribution: &Attribution{
 			Conversion:    Step{EventKey: "buy", SchemaVersion: 1},
 			Touchpoints:   []Step{{EventKey: "ad_click", SchemaVersion: 1}},

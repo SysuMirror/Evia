@@ -469,7 +469,7 @@ func TestSavedAnalysisRetentionPersistsAndPinsBoundarySteps(t *testing.T) {
 		Title: "Signup retention",
 		Query: analysis.Template{
 			Kind:    "retention",
-			Subject: "uid",
+			Subject: analysis.SubjectUID,
 			Retention: &analysis.Retention{
 				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 1},
@@ -521,7 +521,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Plan segments",
 				Query: analysis.Template{
-					Kind: "segment", Subject: "uid",
+					Kind: "segment", Subject: analysis.SubjectUID,
 					Segment: &analysis.Segment{
 						Event: analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 						Field: analysis.Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "lesson_id"},
@@ -537,7 +537,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Onboarding paths",
 				Query: analysis.Template{
-					Kind: "path", Subject: "uid",
+					Kind: "path", Subject: analysis.SubjectUID,
 					Path: &analysis.Path{Depth: 3, StartEvent: &analysis.Step{EventKey: "open", SchemaVersion: 1}},
 				},
 				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
@@ -550,7 +550,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Full paths",
 				Query: analysis.Template{
-					Kind: "path", Subject: "uid",
+					Kind: "path", Subject: analysis.SubjectUID,
 					Path: &analysis.Path{Depth: 3},
 				},
 				Visualization: reporting.SavedAnalysisVisualization{Kind: "table"},
@@ -563,7 +563,7 @@ func TestSavedAnalysisAdvancedKindsPersistWithTypedPins(t *testing.T) {
 			definition: reporting.SavedAnalysisDefinition{
 				Title: "Conversion attribution",
 				Query: analysis.Template{
-					Kind: "attribution", Subject: "uid",
+					Kind: "attribution", Subject: analysis.SubjectUID,
 					Attribution: &analysis.Attribution{
 						Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
 						Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}},

@@ -234,7 +234,7 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 	}
 	snapshot.Draft.Definition.Title = "New title"
 	snapshot.Draft.Definition.Query.Metrics = []analysis.Metric{{Op: "unique"}}
-	snapshot.Draft.Definition.Query.Subject = "uid"
+	snapshot.Draft.Definition.Query.Subject = analysis.SubjectUID
 	changed, e := BuildSavedAnalysisValidation(snapshot)
 	if e != nil {
 		t.Fatal(e)
@@ -245,7 +245,7 @@ func TestSavedValidationDiffPreservesOrderedMeaningAndNormalizesOnlySets(t *test
 	if unchanged.ValidationHash == changed.ValidationHash {
 		t.Fatal("diff/content absent from acknowledgement")
 	}
-	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: "funnel", Subject: "uid", Funnel: &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: "funnel"}}
+	funnel := SavedAnalysisDefinition{Title: "Conversion", Query: analysis.Template{Kind: "funnel", Subject: analysis.SubjectUID, Funnel: &analysis.Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []analysis.Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}}}, Visualization: SavedAnalysisVisualization{Kind: "funnel"}}
 	fs := savedSnapshot(t, funnel)
 	b := fs.Draft.Definition
 	fs.Draft.PublishedVersion = 1
@@ -262,7 +262,7 @@ func retentionSavedDefinition() SavedAnalysisDefinition {
 		Title: "Signup retention",
 		Query: analysis.Template{
 			Kind:    "retention",
-			Subject: "uid",
+			Subject: analysis.SubjectUID,
 			Retention: &analysis.Retention{
 				StartEvent:  analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 				ReturnEvent: analysis.Step{EventKey: "login", SchemaVersion: 2},
@@ -321,7 +321,7 @@ func segmentSavedDefinition() SavedAnalysisDefinition {
 		Title: "Plan segments",
 		Query: analysis.Template{
 			Kind:    "segment",
-			Subject: "uid",
+			Subject: analysis.SubjectUID,
 			Segment: &analysis.Segment{
 				Event: analysis.Step{EventKey: "sign_up", SchemaVersion: 1},
 				Field: analysis.Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "plan"},
@@ -367,7 +367,7 @@ func pathSavedDefinition(start *analysis.Step) SavedAnalysisDefinition {
 		Title: "Onboarding paths",
 		Query: analysis.Template{
 			Kind:    "path",
-			Subject: "uid",
+			Subject: analysis.SubjectUID,
 			Path:    &analysis.Path{Depth: 3, StartEvent: start},
 		},
 		Visualization: SavedAnalysisVisualization{Kind: "table"},
@@ -404,7 +404,7 @@ func attributionSavedDefinition() SavedAnalysisDefinition {
 		Title: "Conversion attribution",
 		Query: analysis.Template{
 			Kind:    "attribution",
-			Subject: "uid",
+			Subject: analysis.SubjectUID,
 			Attribution: &analysis.Attribution{
 				Conversion:    analysis.Step{EventKey: "buy", SchemaVersion: 1},
 				Touchpoints:   []analysis.Step{{EventKey: "ad_click", SchemaVersion: 1}, {EventKey: "email_open", SchemaVersion: 2}},

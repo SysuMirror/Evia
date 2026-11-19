@@ -17,7 +17,7 @@ import (
 )
 
 func metricRunDefinition() reporting.MetricDefinition {
-	return reporting.MetricDefinition{Title: "Lesson total", Description: "Synthetic metric query", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: "uid", Aggregation: analysis.Metric{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}, Unit: "number"}
+	return reporting.MetricDefinition{Title: "Lesson total", Description: "Synthetic metric query", EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}}, Subject: analysis.SubjectUID, Aggregation: analysis.Metric{Op: "sum", Field: &analysis.Field{Kind: "property", EventKey: "lesson_opened", SchemaVersion: 1, Key: "lesson_id"}}, Unit: "number"}
 }
 
 func metricRunPublish(t *testing.T, f catalogFixture, draft reporting.MetricDraft) reporting.MetricVersion {
@@ -337,7 +337,7 @@ func TestMetricWholeWindowAggregatePersistsAndBindsSeparateFromDaily(t *testing.
 	if e = json.Unmarshal(data, &request); e != nil {
 		t.Fatal(e)
 	}
-	if request.Interval != "" || request.Metrics[0].Op != "unique" || request.Subject != "uid" {
+	if request.Interval != "" || request.Metrics[0].Op != "unique" || request.Subject != analysis.SubjectUID {
 		t.Fatal(request)
 	}
 	plan, e := analysis.Compile("evia", "event_facts", analysis.Scope{ProjectID: f.project, Environment: "development"}, request)

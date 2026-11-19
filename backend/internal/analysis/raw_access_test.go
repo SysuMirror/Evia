@@ -9,8 +9,8 @@ func TestRequiresRawAccess(t *testing.T) {
 		request Request
 		want    bool
 	}{
-		{"aggregate UID", Request{Kind: "trend", Subject: "uid", Metrics: []Metric{{Op: "unique"}}}, false},
-		{"aggregate funnel", Request{Kind: "funnel", Subject: "uid"}, false},
+		{"aggregate UID", Request{Kind: "trend", Subject: SubjectUID, Metrics: []Metric{{Op: "unique"}}}, false},
+		{"aggregate funnel", Request{Kind: "funnel", Subject: SubjectUID}, false},
 		{"events", Request{Kind: "events"}, true},
 		{"journey", Request{Kind: "journey"}, true},
 		{"explicit identity on count", Request{Kind: "trend", IdentityFilter: &IdentityFilter{}}, true},
@@ -46,11 +46,11 @@ func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
 		name    string
 		request Request
 	}{
-		{"retention uid", Request{Kind: "retention", Subject: "uid"}},
-		{"retention anonymous", Request{Kind: "retention", Subject: "anonymous"}},
-		{"segment uid", Request{Kind: "segment", Subject: "uid"}},
-		{"path uid", Request{Kind: "path", Subject: "uid"}},
-		{"attribution uid", Request{Kind: "attribution", Subject: "uid"}},
+		{"retention uid", Request{Kind: "retention", Subject: SubjectUID}},
+		{"retention anonymous", Request{Kind: "retention", Subject: SubjectAnonymous}},
+		{"segment uid", Request{Kind: "segment", Subject: SubjectUID}},
+		{"path uid", Request{Kind: "path", Subject: SubjectUID}},
+		{"attribution uid", Request{Kind: "attribution", Subject: SubjectUID}},
 	}
 	for _, c := range aggregateSubjects {
 		t.Run(c.name+" aggregate is non-raw", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
 			"retention identity step filter",
 			Request{
 				Kind:    "retention",
-				Subject: "uid",
+				Subject: SubjectUID,
 				Retention: &Retention{
 					StartEvent:  Step{Filter: &Filter{Field: identity("uid")}},
 					ReturnEvent: Step{},
@@ -77,15 +77,15 @@ func TestRequiresRawAccessInProcessEvaluators(t *testing.T) {
 		},
 		{
 			"segment identity field",
-			Request{Kind: "segment", Subject: "uid", Segment: &Segment{Field: *identity("anonymous_id")}},
+			Request{Kind: "segment", Subject: SubjectUID, Segment: &Segment{Field: *identity("anonymous_id")}},
 		},
 		{
 			"path identity top-level filter",
-			Request{Kind: "path", Subject: "uid", Filter: &Filter{Field: identity("session_id")}},
+			Request{Kind: "path", Subject: SubjectUID, Filter: &Filter{Field: identity("session_id")}},
 		},
 		{
 			"attribution identity top-level filter",
-			Request{Kind: "attribution", Subject: "uid", Filter: &Filter{Field: identity("uid")}},
+			Request{Kind: "attribution", Subject: SubjectUID, Filter: &Filter{Field: identity("uid")}},
 		},
 	}
 	for _, c := range identityExposing {

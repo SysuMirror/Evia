@@ -18,7 +18,7 @@ func publishDashboardMetric(t *testing.T, f catalogFixture) reporting.MetricDraf
 	def := reporting.MetricDefinition{
 		Title:         "Dashboard metric",
 		EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}},
-		Subject:       "uid",
+		Subject:       analysis.SubjectUID,
 		Aggregation:   analysis.Metric{Op: "count"},
 		Unit:          "event",
 	}

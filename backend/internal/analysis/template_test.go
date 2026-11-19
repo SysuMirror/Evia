@@ -16,7 +16,7 @@ func trendTemplate() Template {
 }
 
 func funnelTemplate() Template {
-	return Template{Kind: "funnel", Subject: "uid", Funnel: &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
+	return Template{Kind: "funnel", Subject: SubjectUID, Funnel: &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 2}}, SameEntity: []EntityField{
 		{StepIndex: 0, Field: Field{Kind: "property", EventKey: "opened", SchemaVersion: 1, Key: "item"}},
 		{StepIndex: 1, Field: Field{Kind: "property", EventKey: "closed", SchemaVersion: 2, Key: "item"}},
 	}}}
@@ -85,7 +85,7 @@ func TestTemplateRejectsUnsupportedOrUnpinnedConfiguration(t *testing.T) {
 		{"too many metrics", "QUERY_COST_EXCEEDED", func(t *Template) { t.Metrics = make([]Metric, 11) }},
 		{"too many events", "QUERY_COST_EXCEEDED", func(t *Template) { t.EventVersions = make([]EventVersion, 21) }},
 		{"row budget", "INVALID_LIMIT", func(t *Template) { t.Limit = 501 }},
-		{"resolved identity", "IDENTITY_RESOLUTION_UNAVAILABLE", func(t *Template) { t.Subject = "resolved_person" }},
+		{"resolved identity", "IDENTITY_RESOLUTION_UNAVAILABLE", func(t *Template) { t.Subject = SubjectResolvedPerson }},
 		{"bad JSON value", "INVALID_QUERY", func(t *Template) {
 			t.Filter = &Filter{Op: "eq", Field: &Field{Kind: "system", Key: "uid"}, Value: make(chan string)}
 		}},

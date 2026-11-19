@@ -12,7 +12,7 @@ import (
 )
 
 func metricDefinition() MetricDefinition {
-	return MetricDefinition{Title: "  Visits  ", Subject: "uid", EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
+	return MetricDefinition{Title: "  Visits  ", Subject: analysis.SubjectUID, EventVersions: []analysis.EventVersion{{EventKey: "page_opened", SchemaVersion: 1}}, Aggregation: analysis.Metric{Op: "count"}, Unit: "event"}
 }
 func metricSnapshot(t *testing.T) MetricSnapshot {
 	t.Helper()
@@ -78,7 +78,7 @@ func TestMetricNormalizationPinsAndOwnsConfiguration(t *testing.T) {
 	if d.EventVersions[0].EventKey != "page_opened" || d.Filter.Field.Key != "score" || d.Filter.Value.([]any)[0] != 0 {
 		t.Fatal("normalization shares input")
 	}
-	for _, mutate := range []func(*MetricDefinition){func(d *MetricDefinition) { d.EventVersions = nil }, func(d *MetricDefinition) { d.EventVersions[0].SchemaVersion = 0 }, func(d *MetricDefinition) { d.Subject = "" }, func(d *MetricDefinition) { d.Subject = "resolved_person" }, func(d *MetricDefinition) { d.Aggregation.Op = "formula" }, func(d *MetricDefinition) { d.Aggregation = analysis.Metric{Op: "sum"} }, func(d *MetricDefinition) { d.Filter.Field.SchemaVersion = 2 }} {
+	for _, mutate := range []func(*MetricDefinition){func(d *MetricDefinition) { d.EventVersions = nil }, func(d *MetricDefinition) { d.EventVersions[0].SchemaVersion = 0 }, func(d *MetricDefinition) { d.Subject = "" }, func(d *MetricDefinition) { d.Subject = analysis.SubjectResolvedPerson }, func(d *MetricDefinition) { d.Aggregation.Op = "formula" }, func(d *MetricDefinition) { d.Aggregation = analysis.Metric{Op: "sum"} }, func(d *MetricDefinition) { d.Filter.Field.SchemaVersion = 2 }} {
 		bad := metricDefinition()
 		bad.Filter = &analysis.Filter{Op: "eq", Field: &analysis.Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}, Value: 0}
 		mutate(&bad)
@@ -152,7 +152,7 @@ func TestMetricValidationBindsScopeRevisionDependenciesAndSemanticDiff(t *testin
 	}
 	snapshot.Draft.PublishedVersion = 1
 	snapshot.Baseline = &MetricVersion{MetricID: snapshot.Draft.ID, ProjectID: snapshot.Draft.ProjectID, Environment: snapshot.Draft.Environment, Version: 1, Definition: snapshot.Draft.Definition}
-	snapshot.Draft.Definition.Subject = "anonymous"
+	snapshot.Draft.Definition.Subject = analysis.SubjectAnonymous
 	snapshot.Draft.Definition.Aggregation = analysis.Metric{Op: "unique"}
 	snapshot.Draft.Definition.Unit = "anonymous_id"
 	got, err := BuildMetricValidation(snapshot)
@@ -241,7 +241,7 @@ func TestMetricWholeWindowUniqueKeepsExactSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != "uid" || len(request.Metrics) != 1 || request.Metrics[0].Op != "unique" || request.Metrics[0].Accuracy != analysis.AccuracyExact {
+	if request.Interval != "" || len(request.GroupBy) != 0 || request.Subject != analysis.SubjectUID || len(request.Metrics) != 1 || request.Metrics[0].Op != "unique" || request.Metrics[0].Accuracy != analysis.AccuracyExact {
 		t.Fatalf("whole-window unique %+v", request)
 	}
 }

@@ -15,7 +15,7 @@ func pathRequest(depth int) Request {
 	return Request{
 		Kind:        "path",
 		Environment: "development",
-		Subject:     "uid",
+		Subject:     SubjectUID,
 		TimeRange:   TimeRange{From: from, To: from.AddDate(0, 0, 7)},
 		Timezone:    "UTC",
 		Path:        &Path{Depth: depth},
@@ -222,7 +222,7 @@ func TestPathPlannerEmitsBoundedSubjectPull(t *testing.T) {
 	}
 
 	anonymous := pathRequest(2)
-	anonymous.Subject = "anonymous"
+	anonymous.Subject = SubjectAnonymous
 	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
 	if e != nil {
 		t.Fatal(e)
@@ -236,7 +236,7 @@ func TestPathPlannerEmitsBoundedSubjectPull(t *testing.T) {
 func pathTemplate(start *Step) Template {
 	return Template{
 		Kind:    "path",
-		Subject: "uid",
+		Subject: SubjectUID,
 		Path:    &Path{Depth: 3, StartEvent: start},
 	}
 }

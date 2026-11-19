@@ -16,7 +16,7 @@ func retentionRequest(granularity string, periods int) Request {
 	return Request{
 		Kind:        "retention",
 		Environment: "development",
-		Subject:     "uid",
+		Subject:     SubjectUID,
 		TimeRange:   TimeRange{From: from, To: from.AddDate(0, 0, periods)},
 		Timezone:    "UTC",
 		Retention: &Retention{
@@ -114,7 +114,7 @@ func TestEvaluateRetentionWeekAlignmentUsesTimezone(t *testing.T) {
 	// Monday 2026-11-02 local starts the first cohort; the matrix covers two weeks.
 	from := time.Date(2026, 11, 2, 0, 0, 0, 0, shanghai)
 	request := Request{
-		Kind: "retention", Environment: "development", Subject: "uid",
+		Kind: "retention", Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: from, To: from.AddDate(0, 0, 14)},
 		Timezone:  "Asia/Shanghai",
 		Retention: &Retention{
@@ -154,7 +154,7 @@ func monthRequest(periods int) Request {
 	return Request{
 		Kind:        "retention",
 		Environment: "development",
-		Subject:     "uid",
+		Subject:     SubjectUID,
 		TimeRange:   TimeRange{From: from, To: time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)},
 		Timezone:    "UTC",
 		Retention: &Retention{
@@ -238,7 +238,7 @@ func TestEvaluateRetentionMonthAlignmentUsesTimezone(t *testing.T) {
 	}
 	from := time.Date(2026, 11, 1, 0, 0, 0, 0, shanghai)
 	request := Request{
-		Kind: "retention", Environment: "development", Subject: "uid",
+		Kind: "retention", Environment: "development", Subject: SubjectUID,
 		TimeRange: TimeRange{From: from, To: from.AddDate(0, 2, 0)},
 		Timezone:  "Asia/Shanghai",
 		Retention: &Retention{
@@ -379,7 +379,7 @@ func TestRetentionValidationClosedSet(t *testing.T) {
 func retentionTemplate() Template {
 	return Template{
 		Kind:    "retention",
-		Subject: "uid",
+		Subject: SubjectUID,
 		Retention: &Retention{
 			StartEvent:  Step{EventKey: "sign_up", SchemaVersion: 1},
 			ReturnEvent: Step{EventKey: "login", SchemaVersion: 1},
@@ -463,7 +463,7 @@ func TestRetentionPlannerEmitsBoundedRawPull(t *testing.T) {
 	}
 
 	anonymous := retentionRequest("day", 4)
-	anonymous.Subject = "anonymous"
+	anonymous.Subject = SubjectAnonymous
 	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
 	if e != nil {
 		t.Fatal(e)

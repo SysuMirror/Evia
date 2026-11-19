@@ -29,7 +29,7 @@ func TestResolvedDatetimeFiltersMatchPlannerValidation(t *testing.T) {
 					filter.Value = []any{"2026-11-07T10:00:00Z", tc.value}
 					r.Filter = filter
 				case "nested funnel step":
-					r.Kind, r.Metrics, r.Subject = "funnel", nil, "uid"
+					r.Kind, r.Metrics, r.Subject = "funnel", nil, SubjectUID
 					r.Funnel = &Funnel{Mode: "ordered_with_interleaving", WindowSeconds: 60, Steps: []Step{{EventKey: "opened", SchemaVersion: 1, Filter: &Filter{Op: "and", Args: []*Filter{{Op: "or", Args: []*Filter{filter}}}}}, {EventKey: "closed", SchemaVersion: 1}}}
 				}
 				resolvedError := CheckResolved(r)

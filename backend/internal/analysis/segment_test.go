@@ -15,7 +15,7 @@ func segmentRequest() Request {
 	return Request{
 		Kind:        "segment",
 		Environment: "development",
-		Subject:     "uid",
+		Subject:     SubjectUID,
 		TimeRange:   TimeRange{From: from, To: from.AddDate(0, 0, 7)},
 		Timezone:    "UTC",
 		Segment: &Segment{
@@ -194,7 +194,7 @@ func TestSegmentPlannerEmitsBoundedSubjectPull(t *testing.T) {
 	}
 
 	anonymous := segmentRequest()
-	anonymous.Subject = "anonymous"
+	anonymous.Subject = SubjectAnonymous
 	anonymousPlan, e := Compile("analytics", "event_facts", Scope{ProjectID: "project-one", Environment: "development"}, anonymous)
 	if e != nil {
 		t.Fatal(e)
@@ -208,7 +208,7 @@ func TestSegmentPlannerEmitsBoundedSubjectPull(t *testing.T) {
 func segmentTemplate() Template {
 	return Template{
 		Kind:    "segment",
-		Subject: "uid",
+		Subject: SubjectUID,
 		Segment: &Segment{
 			Event: Step{EventKey: "sign_up", SchemaVersion: 1},
 			Field: Field{Kind: "property", EventKey: "sign_up", SchemaVersion: 1, Key: "plan"},

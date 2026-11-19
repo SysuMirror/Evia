@@ -126,7 +126,7 @@ func TestPlannerPropertyExpressionsGateOnLosslessLayout(t *testing.T) {
 }
 func TestMetricPrecisionAndTypes(t *testing.T) {
 	r := request(t, baseRequest)
-	r.Subject = "uid"
+	r.Subject = SubjectUID
 	r.Metrics = []Metric{{Op: "unique", Accuracy: AccuracyExact}}
 	plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 	if e != nil || plan.Accuracy != AccuracyExact || !strings.Contains(plan.SQL, "uniqExactIf") {
@@ -162,7 +162,7 @@ func TestMetricPercentileQuantileLevels(t *testing.T) {
 		{"p99", "0.99"},
 	} {
 		r := request(t, baseRequest)
-		r.Subject = "uid"
+		r.Subject = SubjectUID
 		r.Metrics = []Metric{{Op: tc.op, Field: numericField, Accuracy: AccuracyExact}}
 		plan, e := Compile("db", "event_facts", Scope{ProjectID: "p", Environment: r.Environment}, r)
 		if e != nil {
@@ -187,13 +187,13 @@ func TestMetricPercentileValidationClosedSet(t *testing.T) {
 	numericField := &Field{Kind: "property", EventKey: "page_opened", SchemaVersion: 1, Key: "score"}
 	for _, op := range []string{"p50", "p90", "p95", "p99"} {
 		exact := request(t, baseRequest)
-		exact.Subject = "uid"
+		exact.Subject = SubjectUID
 		exact.Metrics = []Metric{{Op: op, Field: numericField, Accuracy: AccuracyExact}}
 		if e := Validate(&exact); e != nil {
 			t.Fatalf("%s exact must validate: %v", op, e)
 		}
 		approx := request(t, baseRequest)
-		approx.Subject = "uid"
+		approx.Subject = SubjectUID
 		approx.Metrics = []Metric{{Op: op, Field: numericField, Accuracy: AccuracyApproximate}}
 		if e := Validate(&approx); e != nil {
 			t.Fatalf("%s approximate must validate: %v", op, e)
@@ -201,14 +201,14 @@ func TestMetricPercentileValidationClosedSet(t *testing.T) {
 	}
 	// Non-percentile numeric ops still reject approximate accuracy.
 	sumRequest := request(t, baseRequest)
-	sumRequest.Subject = "uid"
+	sumRequest.Subject = SubjectUID
 	sumRequest.Metrics = []Metric{{Op: "sum", Field: numericField, Accuracy: AccuracyApproximate}}
 	if e := Validate(&sumRequest); e == nil {
 		t.Fatal("sum approximate must be rejected")
 	}
 	// An unknown operator stays outside the closed set.
 	bad := request(t, baseRequest)
-	bad.Subject = "uid"
+	bad.Subject = SubjectUID
 	bad.Metrics = []Metric{{Op: "p42", Field: numericField, Accuracy: AccuracyExact}}
 	if e := Validate(&bad); e == nil {
 		t.Fatal("unknown percentile op must be rejected")

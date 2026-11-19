@@ -47,7 +47,7 @@ func publishedMetricInEnvironment(t *testing.T, f catalogFixture, environment, n
 	def := reporting.MetricDefinition{
 		Title:         "Cross env metric " + environment,
 		EventVersions: []analysis.EventVersion{{EventKey: "lesson_opened", SchemaVersion: 1}},
-		Subject:       "uid",
+		Subject:       analysis.SubjectUID,
 		Aggregation:   analysis.Metric{Op: "count"},
 		Unit:          "event",
 	}

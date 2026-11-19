@@ -14,8 +14,8 @@ func TestTrendWinnerProjectsOnlyRequiredColumns(t *testing.T) {
 		{"count", func(*Request) {}, nil},
 		{"event keys", func(r *Request) { r.EventKeys = []string{"opened"} }, []string{"event_key"}},
 		{"versions", func(r *Request) { r.EventVersions = []EventVersion{{EventKey: "opened", SchemaVersion: 2}} }, []string{"event_key", "schema_version"}},
-		{"UID subject", func(r *Request) { r.Subject = "uid"; r.Metrics = []Metric{{Op: "unique"}} }, []string{"uid"}},
-		{"anonymous subject", func(r *Request) { r.Subject = "anonymous"; r.Metrics = []Metric{{Op: "unique"}} }, []string{"anonymous_id"}},
+		{"UID subject", func(r *Request) { r.Subject = SubjectUID; r.Metrics = []Metric{{Op: "unique"}} }, []string{"uid"}},
+		{"anonymous subject", func(r *Request) { r.Subject = SubjectAnonymous; r.Metrics = []Metric{{Op: "unique"}} }, []string{"anonymous_id"}},
 		{"identity filter", func(r *Request) { uid := "synthetic"; r.IdentityFilter = &IdentityFilter{UID: &uid} }, []string{"uid"}},
 		{"anonymous identity filter", func(r *Request) { id := "synthetic"; r.IdentityFilter = &IdentityFilter{AnonymousID: &id} }, []string{"anonymous_id"}},
 		{"property metric", func(r *Request) {

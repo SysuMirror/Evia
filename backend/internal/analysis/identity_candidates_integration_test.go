@@ -140,7 +140,7 @@ func TestClickHouseIdentityCandidatesPreserveFullWinner(t *testing.T) {
 						r := request(t, baseRequest)
 						r.Kind = kind
 						if kind == "funnel" {
-							r.Subject = "uid"
+							r.Subject = SubjectUID
 							r.Funnel = &Funnel{Steps: []Step{{EventKey: "opened", SchemaVersion: 1}, {EventKey: "closed", SchemaVersion: 1}}, WindowSeconds: 60, Mode: "ordered"}
 						}
 						tc.edit(&r)

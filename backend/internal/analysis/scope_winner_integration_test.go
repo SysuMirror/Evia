@@ -45,7 +45,7 @@ func TestClickHouseTrendScopeConstantsPreserveAuthorizationAndWinners(t *testing
 						r.Filter = &Filter{Op: "eq", Field: &Field{Kind: "system", Key: "uid", ResolvedType: "string"}, Value: "loser"}
 					case "nullable loser":
 						uid := "late-nonnull"
-						r.Subject, r.IdentityFilter = "uid", &IdentityFilter{UID: &uid}
+						r.Subject, r.IdentityFilter = SubjectUID, &IdentityFilter{UID: &uid}
 					}
 					read := func(table string) []byte {
 						t.Helper()

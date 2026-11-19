@@ -17,7 +17,7 @@ func TestQueryPinnedVersionsValidatePublishedMembershipWithoutProperties(t *test
 	other := f.event(t, "closed")
 	for _, op := range []string{"count", "unique"} {
 		r := queryRequest(t, "trend")
-		r.Subject = "uid"
+		r.Subject = analysis.SubjectUID
 		r.Metrics = []analysis.Metric{{Op: op, Accuracy: analysis.AccuracyExact}}
 		r.EventVersions = []analysis.EventVersion{{EventKey: "opened", SchemaVersion: 1}}
 		_, e := f.s.EnqueueQuery(ctx, f.viewer, f.project, r)
@@ -41,7 +41,7 @@ func TestQueryPinnedVersionsValidatePublishedMembershipWithoutProperties(t *test
 	for _, op := range []string{"count", "unique"} {
 		t.Run(op, func(t *testing.T) {
 			r := queryRequest(t, "trend")
-			r.Subject = "uid"
+			r.Subject = analysis.SubjectUID
 			r.Metrics = []analysis.Metric{{Op: op, Accuracy: analysis.AccuracyExact}}
 			for _, tc := range []struct {
 				name, environment, project string
