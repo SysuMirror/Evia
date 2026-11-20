@@ -114,7 +114,7 @@ erasure 作业已有 `hiding→purging→rebuilding→completed` 状态机（`in
 | 1. 图构建只读闭环 ✅（2026-11-20 交付，见 [docs/identity.md](../identity.md)；审计操作码待 erasure 联动切片一并闭集化） | 迁移 043、`internal/identity` 领域 + PG 存储、`identity-worker` 折叠、revision/resolve API + 契约 codegen、权限接线、审计、Prometheus 指标 | 无 | 真实 ClickHouse 合成 `sys.identity_link`（含重放与迟到事实）→ 真实 PG revision 构建：单调合并、redirect、水位幂等、租约重认领、failed revision 语义、屏障查询失败 fail-closed；HTTP 全链（401/403/404/分页/幂等）。此片不触碰查询验证器，`IDENTITY_RESOLUTION_UNAVAILABLE` 原样。 |
 | 2. 查询集成 ✅（2026-11-20 交付，见 [docs/identity.md](../identity.md)；resolve/钉版暂仅最新修订的修订记录见 §7） | `subject=resolved_person` + `identity_revision` 计划期展开、成员预算与两个新错误码、`metadata.identity_revision` 回填、journey 拒绝边界 | 1 | 先红后绿：现有拒绝用例改造；真实 CH+PG 合并身份的 trend/unique/funnel/segment 对照（手工展开的等价 SQL 结果一致）；超成员预算 fail-closed；同 revision 钉版不受并发新 revision 影响；race 全量通过。 |
 | 3. erasure 屏障闭环 ✅（2026-11-20 交付） | erasure rebuilding 联动退役、折叠/回补双向屏障、恢复不复活 | 1（与 2 可并行，但都改 `internal/identity`，需错峰或分文件所有权） | 真实链路：删除 → 图退役/重组 → 回补旧事实 → 不复活；屏障失败中止折叠；审计完整。 |
-| 4. 控制台与文档 | 身份修订工作区（revision 表、resolve 查找、状态徽标、失败诊断）、导航门控 | 1（API），2（查询侧展示） | Playwright 全栈：列表/查找/错误态/权限拒绝态；桌面+移动截图；`docs/` 全套同步。 |
+| 4. 控制台与文档 ✅（2026-11-20 交付） | 身份修订工作区（revision 表、resolve 查找、状态徽标、失败诊断）、导航门控 | 1（API），2（查询侧展示） | Playwright 全栈：列表/查找/错误态/权限拒绝态；桌面+移动截图；`docs/` 全套同步。 |
 
 每片完成后更新 PROGRESS、覆盖清单（「未实现」→ 对应切片边界的「部分」）、`docs/identity.md`（新建模块文档）。
 

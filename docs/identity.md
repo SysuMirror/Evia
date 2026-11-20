@@ -26,9 +26,14 @@
 
 erasure 作业 rebuilding 阶段在完成校验后调用 `RetireIdentitySubject`：删除命中主体的一切边与成员行；仅含该主体的人直接删除注册行，共享组件则整人保守退役（无 redirect）并清空成员行，剩余身份在下一轮折叠中以全新 `resolved_person_id` 重组（折叠从不把退役者视为成员所有者）。真实链路验证：删除 → 图退役 → 重放旧事实 → 不复活（屏障拦截）、幸存者换新 ID 重组；审计追加 `identity.graph_retired`。
 
+## 已交付（切片④：控制台身份工作区）
+
+- 「身份修订」工作区（`apps/console/src/identity`）：修订历史表（编号/状态徽标/折叠水位/边/人/成员计数/构建时间/失败错误码，签名游标分页）与身份解析表单（uid/anonymous 二选一，客户端校验匿名 UUID；解析最新完成修订，成员表含类型/标识/首见/加入修订）。权限门控：导航与页面按 `queries.read` 投影（人类任意在役成员可见），解析动作要求 `queries.raw.read`（owner/editor），无权限给出明确错误态；未知身份呈现「尚未进入身份图」错误态。
+- 共享 API 客户端新增 `listIdentityRevisions`/`getIdentityRevision`/`resolveIdentityMember`；人类项目权限投影补 `queries.read`（全员）与 `queries.raw.read`（owner/editor），机器权限不变。
+- 验证：模型单测 6 例（表单校验/状态词表/最新完成修订选择/解析摘要/格式化退化）；全栈浏览器 spec（`EVIA_E2E_FULL_STACK` 门控）：真实 SDK `autoIdentityLink` 双设备 → identity-worker 折叠 → 工作区列表/跨设备解析/404 错误态全链通过；桌面/解析结果/移动端真实截图（验证记录）。
+
 ## 尚未交付（按规划切片推进）
 
-- 切片④：控制台身份修订工作区。
 - 历史修订成员快照（或 delta 重放）：resolve 与查询钉版暂仅最新 completed 修订。
 - 保留策略清理（决策：90 天或 1000 个取大）尚未实现，v1 不删除修订。
 
