@@ -85,7 +85,7 @@ func TestTemplateRejectsUnsupportedOrUnpinnedConfiguration(t *testing.T) {
 		{"too many metrics", "QUERY_COST_EXCEEDED", func(t *Template) { t.Metrics = make([]Metric, 11) }},
 		{"too many events", "QUERY_COST_EXCEEDED", func(t *Template) { t.EventVersions = make([]EventVersion, 21) }},
 		{"row budget", "INVALID_LIMIT", func(t *Template) { t.Limit = 501 }},
-		{"resolved identity", "IDENTITY_RESOLUTION_UNAVAILABLE", func(t *Template) { t.Subject = SubjectResolvedPerson }},
+		{"resolved funnel without pin is fine but unknown interval is not", "INVALID_INTERVAL", func(t *Template) { t.Subject = SubjectResolvedPerson; t.Interval = "year" }},
 		{"bad JSON value", "INVALID_QUERY", func(t *Template) {
 			t.Filter = &Filter{Op: "eq", Field: &Field{Kind: "system", Key: "uid"}, Value: make(chan string)}
 		}},

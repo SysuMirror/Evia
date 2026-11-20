@@ -41,6 +41,12 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 			}
 		}
 	}
+	if request.Subject == SubjectResolvedPerson {
+		// The plan-time identity mapping reads both raw identity columns;
+		// the winner tuple must carry them or the outer multiIf would
+		// reference unprojected columns.
+		needed["uid"], needed["anonymous_id"] = true, true
+	}
 	dedicatedNeeded := map[string]bool{}
 	if e := WalkFields(&request, func(field *Field) error {
 		if field.Kind == "property" {

@@ -62,13 +62,10 @@ var (
 	discoveryQueryKinds              = analysis.QueryKinds
 	discoveryAggregations            = analysis.Aggregations
 	discoveryApproximateAggregations = analysis.ApproximateAggregations
-	// resolved_person stays a contract-level reserved subject and is never
-	// advertised until the identity graph exists; discovery therefore lists
-	// only the implemented subjects.
-	discoverySubjects               = []string{analysis.SubjectUID, analysis.SubjectAnonymous}
-	discoveryIntervals              = analysis.Intervals
-	discoveryFunnelModes            = analysis.FunnelModes
-	discoveryRetentionGranularities = analysis.RetentionGranularities
+	discoverySubjects                = analysis.QuerySubjects
+	discoveryIntervals               = analysis.Intervals
+	discoveryFunnelModes             = analysis.FunnelModes
+	discoveryRetentionGranularities  = analysis.RetentionGranularities
 )
 
 type CatalogField struct {

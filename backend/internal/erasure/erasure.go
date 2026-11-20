@@ -131,4 +131,9 @@ type Store interface {
 	Fail(ctx context.Context, claim Claim, code string) error
 	// ErasedSubjects resolves tombstones for a batch of candidate identities.
 	ErasedSubjects(ctx context.Context, project, environment string, uids, anonymousIDs []string) (ErasedSet, error)
+	// RetireIdentitySubject removes the erased identity's derived identity
+	// graph state during rebuilding: subject edges and membership rows are
+	// deleted, and affected persons are retired conservatively (never
+	// re-merged by inference). The step must succeed before completion.
+	RetireIdentitySubject(ctx context.Context, claim Claim) error
 }

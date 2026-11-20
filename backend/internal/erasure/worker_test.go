@@ -12,16 +12,19 @@ import (
 )
 
 type fakeWorkerStore struct {
-	claim       *Claim
-	claimErr    error
-	beginErr    error
-	advanceErr  error
-	completeErr error
-	failErr     error
-	transitions []string
-	failedCode  string
-	completed   int
-	begun       int
+	claim          *Claim
+	claimErr       error
+	beginErr       error
+	advanceErr     error
+	completeErr    error
+	failErr        error
+	transitions    []string
+	failedCode     string
+	completed      int
+	begun          int
+	retired        int
+	retiredSubject [2]string
+	retireErr      error
 }
 
 func (s *fakeWorkerStore) CreateJob(context.Context, Input) (Job, bool, error) { panic("unused") }
@@ -61,6 +64,11 @@ func (s *fakeWorkerStore) Fail(_ context.Context, _ Claim, code string) error {
 func (s *fakeWorkerStore) ErasedSubjects(context.Context, string, string, []string, []string) (ErasedSet, error) {
 	panic("unused")
 }
+func (s *fakeWorkerStore) RetireIdentitySubject(_ context.Context, claim Claim) error {
+	s.retired++
+	s.retiredSubject = [2]string{claim.SubjectKind, claim.SubjectValue}
+	return s.retireErr
+}
 
 type fakeDeleter struct {
 	deleteErr error
@@ -91,6 +99,30 @@ func sampleClaim() *Claim {
 		JobID: "88888888-8888-4888-8888-888888888888", ProjectID: "project", Environment: "development",
 		SubjectKind: SubjectUID, SubjectValue: "user-1", State: StateHiding,
 	}}
+}
+
+func TestErasureWorkerRetiresIdentityGraphBeforeCompletion(t *testing.T) {
+	store := &fakeWorkerStore{claim: &Claim{Job: Job{State: StateHiding, SubjectKind: SubjectUID, SubjectValue: "u1"}}}
+	worker := &Worker{Store: store, Deleter: &fakeDeleter{}}
+	worked, e := worker.RunOnce(context.Background())
+	if e != nil || !worked || store.completed != 1 || store.retired != 1 {
+		t.Fatalf("lifecycle wrong: worked=%v completed=%d retired=%d e=%v", worked, store.completed, store.retired, e)
+	}
+	if store.retiredSubject != [2]string{SubjectUID, "u1"} {
+		t.Fatalf("retirement subject wrong: %v", store.retiredSubject)
+	}
+}
+
+func TestErasureWorkerRetirementFailureParksJob(t *testing.T) {
+	store := &fakeWorkerStore{
+		claim:     &Claim{Job: Job{State: StateHiding, SubjectKind: SubjectAnonymousID, SubjectValue: "a1"}},
+		retireErr: fault.New(fault.Unavailable, "IDENTITY_RETIRE_FAILED", "身份图退役失败"),
+	}
+	worker := &Worker{Store: store, Deleter: &fakeDeleter{}}
+	worked, e := worker.RunOnce(context.Background())
+	if e != nil || !worked || store.completed != 0 || store.failedCode != "IDENTITY_RETIRE_FAILED" {
+		t.Fatalf("retirement failure must park the job: completed=%d code=%q e=%v", store.completed, store.failedCode, e)
+	}
 }
 
 func TestErasureWorkerHappyPathLifecycle(t *testing.T) {

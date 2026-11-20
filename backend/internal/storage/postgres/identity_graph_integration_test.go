@@ -4,9 +4,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/identity"
 )
 
@@ -230,4 +234,183 @@ type fixedLinkFacts struct {
 
 func (f *fixedLinkFacts) ScanLinks(_ context.Context, _ identity.Scope, _ time.Time, _ int) ([]identity.LinkScan, bool, error) {
 	return f.links, true, nil
+}
+
+func TestIdentityMemberCatalogServesPlanExpansion(t *testing.T) {
+	f := identityDB(t)
+	ctx := context.Background()
+	if latest, e := f.s.LatestCompletedRevision(ctx, f.scope); e != nil || latest != 0 {
+		t.Fatalf("empty scope must report revision 0: %d %v", latest, e)
+	}
+	first := f.foldOnce(t, []identity.LinkScan{linkScan("u1", "11111111-1111-4111-8111-111111111111", time.Now().UTC())})
+	person := first.NewPersons[0].ResolvedPersonID
+	if latest, e := f.s.LatestCompletedRevision(ctx, f.scope); e != nil || latest != 1 {
+		t.Fatalf("latest revision wrong: %d %v", latest, e)
+	}
+	members, e := f.s.ExpansionMembers(ctx, f.scope, 1, person)
+	if e != nil || len(members) != 2 {
+		t.Fatalf("expansion wrong: %+v %v", members, e)
+	}
+	// Unknown pins and stale revisions fail closed.
+	if _, e = f.s.ExpansionMembers(ctx, f.scope, 1, "99999999-9999-4999-8999-999999999999"); e == nil {
+		t.Fatal("unknown person must fail")
+	}
+	if _, e = f.s.ExpansionMembers(ctx, f.scope, 0, person); e == nil {
+		t.Fatal("missing revision must fail")
+	}
+}
+
+func TestIdentityErasureRetiresGraphAndPreventsResurrection(t *testing.T) {
+	f := identityDB(t)
+	ctx := context.Background()
+	// One person owns u1, u2 and two devices; u2 also links a third device
+	// through a second component merged by a bridge pair.
+	f.foldOnce(t, []identity.LinkScan{
+		linkScan("u1", "11111111-1111-4111-8111-111111111111", time.Now().UTC()),
+		linkScan("u2", "22222222-2222-4222-8222-222222222222", time.Now().UTC()),
+	})
+	merged := f.foldOnce(t, []identity.LinkScan{
+		linkScan("u2", "11111111-1111-4111-8111-111111111111", time.Now().UTC()),
+	})
+	person := *merged.Retire[0].SupersededBy
+
+	// Drive the real erasure lifecycle for u1 with a stub fact deleter.
+	job, _, e := f.s.CreateJob(ctx, erasureInput(f.catalogFixture, "identity-retire-1", "uid", "u1"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	worker := &erasure.Worker{Store: f.s, Deleter: &stubFactDeleter{}, ID: "erasure-test", Lease: time.Minute}
+	if worked, e := worker.RunOnce(ctx); e != nil || !worked {
+		t.Fatalf("erasure lifecycle failed: %v %v", worked, e)
+	}
+	finished, e := f.s.GetJob(ctx, f.owner, f.project, job.JobID)
+	if e != nil || finished.State != erasure.StateCompleted {
+		t.Fatalf("erasure job did not complete: %+v %v", finished, e)
+	}
+
+	// The contaminated person retired without a redirect; its surviving member
+	// rows are gone and only the untouched bridge edges remain for later
+	// re-grouping.
+	var state string
+	var superseded *string
+	if e = f.s.Pool.QueryRow(ctx, `SELECT state,superseded_by::text FROM identity_persons
+	 WHERE project_id=$1 AND environment='development' AND resolved_person_id=$2`, f.project, person).Scan(&state, &superseded); e != nil {
+		t.Fatal(e)
+	}
+	if state != identity.PersonRetired || superseded != nil {
+		t.Fatalf("contaminated person must retire without redirect: %s %v", state, superseded)
+	}
+	var members int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_person_members WHERE project_id=$1`, f.project).Scan(&members); e != nil || members != 0 {
+		t.Fatalf("membership must be empty after retirement: %d %v", members, e)
+	}
+	var edges int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_edges WHERE project_id=$1 AND uid='u1'`, f.project).Scan(&edges); e != nil || edges != 0 {
+		t.Fatalf("erased subject edges must be gone: %d %v", edges, e)
+	}
+
+	// Replaying the erased identity's facts cannot resurrect it: the barrier
+	// skips the tombstoned pair and survivors regroup under a fresh person.
+	facts := &fixedLinkFacts{links: []identity.LinkScan{
+		linkScan("u1", "11111111-1111-4111-8111-111111111111", time.Now().UTC().Add(time.Minute)),
+		linkScan("u2", "22222222-2222-4222-8222-222222222222", time.Now().UTC().Add(time.Minute)),
+	}}
+	identity.NewWorker(f.s, facts, f.s, identity.NoopObserver{}, identity.WorkerOptions{Worker: "resurrection-test"}).RunOnce(ctx)
+	var resurrected int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_person_members WHERE project_id=$1 AND member_value='u1'`, f.project).Scan(&resurrected); e != nil || resurrected != 0 {
+		t.Fatalf("erased identity resurrected into the graph: %d %v", resurrected, e)
+	}
+	var regrouped int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_person_members WHERE project_id=$1 AND member_value='u2'`, f.project).Scan(&regrouped); e != nil || regrouped != 1 {
+		t.Fatalf("survivor must regroup under a fresh person: %d %v", regrouped, e)
+	}
+}
+
+func TestIdentityQueryExpansionMaterialization(t *testing.T) {
+	f := identityDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	first := f.foldOnce(t, []identity.LinkScan{
+		linkScan("u1", "11111111-1111-4111-8111-111111111111", now),
+		linkScan("u2", "22222222-2222-4222-8222-222222222222", now),
+	})
+	person := first.NewPersons[0].ResolvedPersonID
+	f.foldOnce(t, []identity.LinkScan{linkScan("u2", "11111111-1111-4111-8111-111111111111", now.Add(time.Minute))})
+
+	// Unpinned resolved trend materializes the whole-graph mapping and the
+	// latest revision into the durable request.
+	trend := queryRequest(t, "trend")
+	trend.Subject = analysis.SubjectResolvedPerson
+	trend.Metrics = []analysis.Metric{{Op: analysis.OpUnique}}
+	job, e := f.s.EnqueueQuery(ctx, f.viewer, f.project, trend)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var raw string
+	if e = f.s.Pool.QueryRow(ctx, `SELECT request FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&raw); e != nil {
+		t.Fatal(e)
+	}
+	var stored analysis.Request
+	if e = json.Unmarshal([]byte(raw), &stored); e != nil {
+		t.Fatal(e)
+	}
+	if stored.IdentityExpansion == nil || stored.IdentityExpansion.Revision != 2 || len(stored.IdentityExpansion.Mapping) != 1 {
+		t.Fatalf("expansion materialization wrong: %+v", stored.IdentityExpansion)
+	}
+	mapped := stored.IdentityExpansion.Mapping[0]
+	if len(mapped.UIDs) != 2 || len(mapped.AnonymousIDs) != 2 {
+		t.Fatalf("mapping members wrong: %+v", mapped)
+	}
+
+	// Pinned events carry the bounded member predicate attachment.
+	pin := person
+	events := queryRequest(t, "events")
+	events.Subject = analysis.SubjectResolvedPerson
+	events.IdentityFilter = &analysis.IdentityFilter{ResolvedPersonID: &pin}
+	job, e = f.s.EnqueueQuery(ctx, f.owner, f.project, events)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = f.s.Pool.QueryRow(ctx, `SELECT request FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&raw); e != nil {
+		t.Fatal(e)
+	}
+	stored = analysis.Request{}
+	if e = json.Unmarshal([]byte(raw), &stored); e != nil {
+		t.Fatal(e)
+	}
+	if stored.IdentityExpansion == nil || stored.IdentityExpansion.PersonID != person ||
+		len(stored.IdentityExpansion.PinnedUIDs) != 2 || len(stored.IdentityExpansion.PinnedAnonymousIDs) != 2 {
+		t.Fatalf("pinned expansion wrong: %+v", stored.IdentityExpansion)
+	}
+
+	// Unknown and stale revision pins fail closed at admission.
+	stale := trend
+	revision := int64(1)
+	stale.IdentityRevision = &revision
+	if _, e = f.s.EnqueueQuery(ctx, f.viewer, f.project, stale); e == nil {
+		t.Fatal("stale revision pin must fail closed")
+	}
+	missing := trend
+	unknown := int64(9)
+	missing.IdentityRevision = &unknown
+	if _, e = f.s.EnqueueQuery(ctx, f.viewer, f.project, missing); e == nil {
+		t.Fatal("unknown revision pin must fail closed")
+	}
+
+	// Over-budget persons refuse expansion instead of truncating members.
+	var whale []identity.LinkScan
+	for i := 0; i <= identity.MaxExpansionMembers; i++ {
+		whale = append(whale, linkScan("whale", fmt.Sprintf("99999999-9999-4999-8999-%012d", i), now))
+	}
+	f.foldOnce(t, whale)
+	var whalePerson string
+	if e = f.s.Pool.QueryRow(ctx, `SELECT resolved_person_id::text FROM identity_person_members WHERE project_id=$1 AND member_value='whale'`, f.project).Scan(&whalePerson); e != nil {
+		t.Fatal(e)
+	}
+	whaleEvents := queryRequest(t, "events")
+	whaleEvents.Subject = analysis.SubjectResolvedPerson
+	whaleEvents.IdentityFilter = &analysis.IdentityFilter{ResolvedPersonID: &whalePerson}
+	if _, e = f.s.EnqueueQuery(ctx, f.owner, f.project, whaleEvents); e == nil {
+		t.Fatal("over-budget person must refuse expansion")
+	}
 }

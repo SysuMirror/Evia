@@ -140,7 +140,22 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		c.kill(queryID)
 		return Result{}, e
 	}
-	metadata := Metadata{Accuracy: plan.Accuracy, SampleRate: 1, Coverage: Coverage{TimeRange: r.TimeRange, State: CoverageStateProvisional, KnownGaps: []string{"pipeline_completeness_not_established", "identity_resolution_not_applied"}}, GeneratedAt: time.Now().UTC()}
+	knownGaps := []string{"pipeline_completeness_not_established", "identity_resolution_not_applied"}
+	var identityRevision *int64
+	if r.Subject == SubjectResolvedPerson && r.IdentityExpansion != nil {
+		// The query ran against a materialized identity snapshot; report the
+		// pinned revision and stop advertising identity resolution as a gap.
+		revision := r.IdentityExpansion.Revision
+		identityRevision = &revision
+		gaps := make([]string, 0, 1)
+		for _, gap := range knownGaps {
+			if gap != "identity_resolution_not_applied" {
+				gaps = append(gaps, gap)
+			}
+		}
+		knownGaps = gaps
+	}
+	metadata := Metadata{Accuracy: plan.Accuracy, SampleRate: 1, IdentityRevision: identityRevision, Coverage: Coverage{TimeRange: r.TimeRange, State: CoverageStateProvisional, KnownGaps: knownGaps}, GeneratedAt: time.Now().UTC()}
 	result := Result{Columns: plan.Columns, Rows: make([]map[string]any, 0), Metadata: metadata}
 	for _, row := range rows {
 		key := "received_at_ns"

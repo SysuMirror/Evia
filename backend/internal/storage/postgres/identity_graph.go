@@ -5,7 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/analysis"
+
 	"github.com/howtomakeaname/Evia/backend/internal/access"
+	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/identity"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
@@ -511,4 +514,363 @@ func (s *Store) ResolveMember(ctx context.Context, actor, project, environment s
 		return identity.Resolution{}, e
 	}
 	return resolution, tx.Commit(ctx)
+}
+
+var _ identity.MemberCatalog = (*Store)(nil)
+
+// LatestCompletedRevision reports the scope's newest completed fold.
+func (s *Store) LatestCompletedRevision(ctx context.Context, scope identity.Scope) (int64, error) {
+	var latest int64
+	e := s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'`,
+		scope.ProjectID, scope.Environment).Scan(&latest)
+	return latest, e
+}
+
+// ExpansionMembers resolves one person pin to its member set for a query
+// plan. Only the latest completed revision is expandable in v1; older pins
+// fail closed rather than expanding from state the revision never captured.
+func (s *Store) ExpansionMembers(ctx context.Context, scope identity.Scope, revision int64, resolvedPersonID string) ([]identity.Member, error) {
+	if revision <= 0 {
+		return nil, fault.New(fault.Invalid, "IDENTITY_REVISION_NOT_FOUND", "身份修订编号无效")
+	}
+	if len(resolvedPersonID) == 0 || len(resolvedPersonID) > 64 {
+		return nil, fault.New(fault.Invalid, "IDENTITY_REVISION_NOT_FOUND", "resolved person 标识无效")
+	}
+	tx, e := s.Pool.Begin(ctx)
+	if e != nil {
+		return nil, e
+	}
+	defer tx.Rollback(context.Background())
+	var exists int
+	if e = tx.QueryRow(ctx, `SELECT 1 FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND revision=$3`,
+		scope.ProjectID, scope.Environment, revision).Scan(&exists); errors.Is(e, pgx.ErrNoRows) {
+		return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "身份修订不存在")
+	} else if e != nil {
+		return nil, e
+	}
+	var latest int64
+	if e = tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'`,
+		scope.ProjectID, scope.Environment).Scan(&latest); e != nil {
+		return nil, e
+	}
+	if revision != latest {
+		return nil, fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE",
+			"当前仅支持最新完成修订；历史成员快照尚未提供")
+	}
+	resolved := resolvedPersonID
+	for depth := 0; depth < identity.MaxRedirectDepth; depth++ {
+		var superseded *string
+		if e = tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
+		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+			scope.ProjectID, scope.Environment, resolved).Scan(&superseded); errors.Is(e, pgx.ErrNoRows) {
+			return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不存在")
+		} else if e != nil {
+			return nil, e
+		}
+		if superseded == nil {
+			break
+		}
+		resolved = *superseded
+		if depth == identity.MaxRedirectDepth-1 {
+			return nil, fault.New(fault.Conflict, "IDENTITY_REDIRECT_TOO_DEEP", "身份重定向链超出可解析深度")
+		}
+	}
+	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value,first_seen_at,joined_revision
+	 FROM identity_person_members WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+		scope.ProjectID, scope.Environment, resolved)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var members []identity.Member
+	for rows.Next() {
+		var member identity.Member
+		if e = rows.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value, &member.FirstSeenAt, &member.JoinedRevision); e != nil {
+			return nil, e
+		}
+		members = append(members, member)
+	}
+	if e = rows.Err(); e != nil {
+		return nil, e
+	}
+	return members, tx.Commit(ctx)
+}
+
+// RetireIdentitySubject erases one identity's derived graph state in the
+// erasure rebuilding phase. Edges touching the subject and its membership row
+// are deleted; a person that only ever held the subject disappears, otherwise
+// the whole person retires without a redirect and its surviving member rows
+// are removed so the next fold re-groups them under fresh person ids.
+func (s *Store) RetireIdentitySubject(ctx context.Context, claim erasure.Claim) error {
+	switch claim.SubjectKind {
+	case identity.MemberUID, identity.MemberAnonymousID:
+	default:
+		return fault.New(fault.Invalid, "INVALID_ERASURE_INPUT", "删除对象类型无效")
+	}
+	column := "uid"
+	if claim.SubjectKind == identity.MemberAnonymousID {
+		column = "anonymous_id"
+	}
+	tx, e := s.Pool.Begin(ctx)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback(context.Background())
+	var owners []string
+	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text FROM identity_person_members
+	 WHERE project_id=$1 AND environment=$2 AND member_kind=$3 AND member_value=$4`,
+		claim.ProjectID, claim.Environment, claim.SubjectKind, claim.SubjectValue)
+	if e != nil {
+		return e
+	}
+	for rows.Next() {
+		var owner string
+		if e = rows.Scan(&owner); e != nil {
+			rows.Close()
+			return e
+		}
+		owners = append(owners, owner)
+	}
+	if e = rows.Err(); e != nil {
+		rows.Close()
+		return e
+	}
+	rows.Close()
+	for _, owner := range owners {
+		var total int
+		if e = tx.QueryRow(ctx, `SELECT count(*) FROM identity_person_members
+		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+			claim.ProjectID, claim.Environment, owner).Scan(&total); e != nil {
+			return e
+		}
+		if total <= 1 {
+			// The subject was this person's only member: remove the registry
+			// row entirely so the id cannot be resolved later.
+			if _, e = tx.Exec(ctx, `DELETE FROM identity_persons
+			 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+				claim.ProjectID, claim.Environment, owner); e != nil {
+				return e
+			}
+			continue
+		}
+		// The component shared the erased identity: retire the person and drop
+		// every remaining member row; the fold rebuilds survivors under new
+		// ids because it never treats retired persons as owners.
+		if _, e = tx.Exec(ctx, `DELETE FROM identity_person_members
+		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+			claim.ProjectID, claim.Environment, owner); e != nil {
+			return e
+		}
+		if _, e = tx.Exec(ctx, `UPDATE identity_persons
+			 SET state='retired'
+			 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+			claim.ProjectID, claim.Environment, owner); e != nil {
+			return e
+		}
+	}
+	// Edges that touched the erased identity cannot survive it.
+	if _, e = tx.Exec(ctx, `DELETE FROM identity_edges
+	 WHERE project_id=$1 AND environment=$2 AND `+column+`=$3`,
+		claim.ProjectID, claim.Environment, claim.SubjectValue); e != nil {
+		return e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,action,resource_key)
+	 VALUES($1,$2,'identity.graph_retired',$3)`,
+		claim.ProjectID, claim.ActorID, claim.JobID); e != nil {
+		return e
+	}
+	return tx.Commit(ctx)
+}
+
+// materializeIdentityExpansion resolves a resolved_person query against the
+// identity graph inside the enqueue transaction: the revision is pinned (or
+// defaulted to the latest completed one), the member mapping is loaded under
+// the pin, and the durable request carries it so workers and result metadata
+// never re-read the graph. Budget violations fail closed.
+func (s *Store) materializeIdentityExpansion(ctx context.Context, tx pgx.Tx, project string, request *analysis.Request) error {
+	if request.Subject != analysis.SubjectResolvedPerson && request.IdentityRevision == nil {
+		return nil
+	}
+	scope := identity.Scope{ProjectID: project, Environment: request.Environment}
+	latest, e := latestCompletedRevisionTx(ctx, tx, scope)
+	if e != nil {
+		return e
+	}
+	pinned := request.IdentityRevision
+	if pinned == nil {
+		if latest == 0 {
+			return fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "该作用域尚无已完成的身份修订")
+		}
+		revision := latest
+		pinned = &revision
+	} else {
+		var exists int
+		if e = tx.QueryRow(ctx, `SELECT 1 FROM identity_revisions
+		 WHERE project_id=$1 AND environment=$2 AND revision=$3`,
+			project, request.Environment, *pinned).Scan(&exists); errors.Is(e, pgx.ErrNoRows) {
+			return fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "身份修订不存在")
+		} else if e != nil {
+			return e
+		}
+		if *pinned != latest {
+			return fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE",
+				"当前仅支持最新完成修订；历史成员快照尚未提供")
+		}
+	}
+	expansion := &analysis.IdentityExpansion{Revision: *pinned}
+	if request.IdentityFilter != nil && request.IdentityFilter.ResolvedPersonID != nil {
+		expansion.PersonID = *request.IdentityFilter.ResolvedPersonID
+		members, e := expansionMembersTx(ctx, tx, scope, *pinned, expansion.PersonID)
+		if e != nil {
+			return e
+		}
+		if len(members) == 0 {
+			return fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不在当前修订中")
+		}
+		if len(members) > identity.MaxExpansionMembers {
+			return fault.New(fault.Invalid, "IDENTITY_EXPANSION_EXCEEDED",
+				"resolved person 成员数超出展开预算")
+		}
+		for _, member := range members {
+			if member.Kind == identity.MemberUID {
+				expansion.PinnedUIDs = append(expansion.PinnedUIDs, member.Value)
+			} else {
+				expansion.PinnedAnonymousIDs = append(expansion.PinnedAnonymousIDs, member.Value)
+			}
+		}
+		// A pinned query maps only its own person; other rows must not
+		// group, so the mapping covers exactly the pinned member sets.
+		expansion.Mapping = []analysis.PersonMapping{{
+			PersonID:     expansion.PersonID,
+			UIDs:         expansion.PinnedUIDs,
+			AnonymousIDs: expansion.PinnedAnonymousIDs,
+		}}
+		request.IdentityExpansion = expansion
+		return nil
+	}
+	persons, members, e := scopeMappingTx(ctx, tx, scope, *pinned)
+	if e != nil {
+		return e
+	}
+	if len(members) > identity.MaxScopeExpansionMembers {
+		return fault.New(fault.Invalid, "IDENTITY_EXPANSION_EXCEEDED",
+			"身份图成员总数超出查询展开预算")
+	}
+	byPerson := make(map[string]*analysis.PersonMapping, len(persons))
+	order := make([]string, 0, len(persons))
+	for _, person := range persons {
+		byPerson[person] = &analysis.PersonMapping{PersonID: person}
+		order = append(order, person)
+	}
+	for _, member := range members {
+		mapping, ok := byPerson[member.resolved]
+		if !ok {
+			continue
+		}
+		if member.kind == identity.MemberUID {
+			mapping.UIDs = append(mapping.UIDs, member.value)
+		} else {
+			mapping.AnonymousIDs = append(mapping.AnonymousIDs, member.value)
+		}
+	}
+	for _, person := range order {
+		expansion.Mapping = append(expansion.Mapping, *byPerson[person])
+	}
+	request.IdentityExpansion = expansion
+	return nil
+}
+
+func latestCompletedRevisionTx(ctx context.Context, tx pgx.Tx, scope identity.Scope) (int64, error) {
+	var latest int64
+	e := tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'`,
+		scope.ProjectID, scope.Environment).Scan(&latest)
+	return latest, e
+}
+
+// expansionMembersTx follows redirect chains for one person inside the
+// enqueue transaction.
+func expansionMembersTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64, resolvedPersonID string) ([]identity.Member, error) {
+	resolved := resolvedPersonID
+	for depth := 0; depth < identity.MaxRedirectDepth; depth++ {
+		var superseded *string
+		if e := tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
+		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+			scope.ProjectID, scope.Environment, resolved).Scan(&superseded); errors.Is(e, pgx.ErrNoRows) {
+			return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不存在")
+		} else if e != nil {
+			return nil, e
+		}
+		if superseded == nil {
+			break
+		}
+		resolved = *superseded
+		if depth == identity.MaxRedirectDepth-1 {
+			return nil, fault.New(fault.Conflict, "IDENTITY_REDIRECT_TOO_DEEP", "身份重定向链超出可解析深度")
+		}
+	}
+	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value
+	 FROM identity_person_members WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+		scope.ProjectID, scope.Environment, resolved)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var members []identity.Member
+	for rows.Next() {
+		var member identity.Member
+		if e = rows.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value); e != nil {
+			return nil, e
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+type scopedMember struct {
+	resolved, kind, value string
+}
+
+// scopeMappingTx loads every active person and member of the pinned revision
+// for whole-graph subject mapping.
+func scopeMappingTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64) ([]string, []scopedMember, error) {
+	persons, e := tx.Query(ctx, `SELECT resolved_person_id::text FROM identity_persons
+	 WHERE project_id=$1 AND environment=$2 AND state='active'`,
+		scope.ProjectID, scope.Environment)
+	if e != nil {
+		return nil, nil, e
+	}
+	var active []string
+	for persons.Next() {
+		var person string
+		if e = persons.Scan(&person); e != nil {
+			persons.Close()
+			return nil, nil, e
+		}
+		active = append(active, person)
+	}
+	if e = persons.Err(); e != nil {
+		persons.Close()
+		return nil, nil, e
+	}
+	persons.Close()
+	members, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value
+	 FROM identity_person_members WHERE project_id=$1 AND environment=$2`,
+		scope.ProjectID, scope.Environment)
+	if e != nil {
+		return nil, nil, e
+	}
+	defer members.Close()
+	var all []scopedMember
+	for members.Next() {
+		var member scopedMember
+		if e = members.Scan(&member.resolved, &member.kind, &member.value); e != nil {
+			return nil, nil, e
+		}
+		all = append(all, member)
+	}
+	return active, all, members.Err()
 }

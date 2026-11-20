@@ -59,10 +59,10 @@ func Validate(r *Request) error {
 	if !env.Valid(r.Environment) {
 		return Invalid("INVALID_ENVIRONMENT", "环境无效", "/environment")
 	}
-	if r.IdentityRevision != nil || r.Subject == SubjectResolvedPerson {
-		return Invalid("IDENTITY_RESOLUTION_UNAVAILABLE", "尚无可查询的身份关联版本", "/subject")
+	if e := validateResolvedSubject(r); e != nil {
+		return e
 	}
-	if r.Subject != "" && !ValidSubject(r.Subject) {
+	if r.Subject != "" && !ValidQuerySubject(r.Subject) {
 		return Invalid("INVALID_SUBJECT", "统计主体无效", "/subject")
 	}
 	if r.TimeRange.From.IsZero() || r.TimeRange.To.IsZero() || !r.TimeRange.From.Before(r.TimeRange.To) {
@@ -104,10 +104,10 @@ func ValidateConfiguration(r *Request) error {
 	if !ValidQueryKind(r.Kind) {
 		return Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现", "/kind")
 	}
-	if r.IdentityRevision != nil || r.Subject == SubjectResolvedPerson {
-		return Invalid("IDENTITY_RESOLUTION_UNAVAILABLE", "尚无可查询的身份关联版本", "/subject")
+	if e := validateResolvedSubject(r); e != nil {
+		return e
 	}
-	if r.Subject != "" && !ValidSubject(r.Subject) {
+	if r.Subject != "" && !ValidQuerySubject(r.Subject) {
 		return Invalid("INVALID_SUBJECT", "统计主体无效", "/subject")
 	}
 	if r.Limit == 0 {
@@ -183,7 +183,13 @@ func ValidateConfiguration(r *Request) error {
 	}
 	if r.IdentityFilter != nil {
 		f := r.IdentityFilter
-		if (f.UID == nil) == (f.AnonymousID == nil) {
+		set := 0
+		for _, present := range []bool{f.UID != nil, f.AnonymousID != nil, f.ResolvedPersonID != nil} {
+			if present {
+				set++
+			}
+		}
+		if set != 1 {
 			return Invalid("INVALID_IDENTITY_FILTER", "必须指定且仅指定一个身份", "/identity_filter")
 		}
 		if f.UID != nil && (!utf8.ValidString(*f.UID) || strings.ContainsRune(*f.UID, 0) || strings.TrimSpace(*f.UID) == "" || utf8.RuneCountInString(*f.UID) > 128 || r.Subject != SubjectUID) {
@@ -191,6 +197,9 @@ func ValidateConfiguration(r *Request) error {
 		}
 		if f.AnonymousID != nil && (len(*f.AnonymousID) != 36 || r.Subject != SubjectAnonymous) {
 			return Invalid("INVALID_IDENTITY_FILTER", "匿名身份过滤必须匹配 anonymous 主体", "/identity_filter")
+		}
+		if f.ResolvedPersonID != nil && (len(*f.ResolvedPersonID) != 36 || r.Subject != SubjectResolvedPerson) {
+			return Invalid("INVALID_IDENTITY_FILTER", "resolved person 过滤必须匹配 resolved_person 主体", "/identity_filter")
 		}
 	}
 	if r.Kind == QueryKindFunnel {
@@ -567,6 +576,33 @@ func validateEventSelection(r Request) error {
 			}
 			return Invalid("QUERY_FIELD_VERSION_NOT_SELECTED", "属性必须属于固定选择的事件版本", "/event_versions")
 		})
+	}
+	return nil
+}
+
+// validateResolvedSubject enforces the identity-graph query policy: the
+// revision pin only travels with the resolved subject, journeys stay
+// single-raw-identity, and raw-row listings must pin one person so the
+// member predicate stays bounded.
+func validateResolvedSubject(r *Request) error {
+	if r.Subject != SubjectResolvedPerson {
+		if r.IdentityRevision != nil {
+			return Invalid("IDENTITY_REVISION_WITHOUT_SUBJECT", "身份修订钉版仅适用于 resolved_person 主体", "/identity_revision")
+		}
+		return nil
+	}
+	if r.Kind == QueryKindJourney {
+		return Invalid("SUBJECT_REQUIRED", "轨迹必须限定单个原始身份；请用 uid 或 anonymous 查询行为链", "/subject")
+	}
+	if SubjectRequiresPersonPin(r.Kind) {
+		if r.IdentityFilter == nil || r.IdentityFilter.ResolvedPersonID == nil {
+			return Invalid("IDENTITY_PERSON_REQUIRED", "此查询类型使用 resolved_person 主体时必须钉住 resolved_person_id", "/identity_filter")
+		}
+	} else if r.IdentityFilter != nil && r.IdentityFilter.ResolvedPersonID == nil {
+		return Invalid("INVALID_IDENTITY_FILTER", "resolved_person 主体下的身份过滤必须使用 resolved_person_id", "/identity_filter")
+	}
+	if r.IdentityRevision != nil && *r.IdentityRevision < 1 {
+		return Invalid("IDENTITY_REVISION_NOT_FOUND", "身份修订编号无效", "/identity_revision")
 	}
 	return nil
 }

@@ -1199,8 +1199,9 @@ type QueryRequest struct {
 	Subject          *string         `json:"subject,omitempty"`
 	IdentityRevision *int64          `json:"identity_revision,omitempty"`
 	IdentityFilter   *struct {
-		UID         *string `json:"uid,omitempty"`
-		AnonymousID *string `json:"anonymous_id,omitempty"`
+		UID              *string `json:"uid,omitempty"`
+		AnonymousID      *string `json:"anonymous_id,omitempty"`
+		ResolvedPersonID *string `json:"resolved_person_id,omitempty"`
 	} `json:"identity_filter,omitempty"`
 	GroupBy []json.RawMessage `json:"group_by,omitzero"`
 	Metrics []struct {

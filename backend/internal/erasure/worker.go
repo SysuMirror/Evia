@@ -128,6 +128,12 @@ func (w *Worker) process(ctx context.Context, claim *Claim) error {
 	if remaining != 0 {
 		return fault.New(fault.Conflict, "ERASURE_ROWS_REMAIN", "删除后仍存在匹配的事实数据")
 	}
+	// 4. Derived state: the identity graph must forget the erased subject in
+	// the same job; surviving component members re-group under fresh person
+	// ids on the next fold instead of being re-merged by inference.
+	if e := w.Store.RetireIdentitySubject(ctx, *claim); e != nil {
+		return e
+	}
 	return w.Store.Complete(ctx, *claim)
 }
 

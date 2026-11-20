@@ -49,6 +49,10 @@ const (
 	// MaxExpansionMembers bounds query-side member expansion per resolved
 	// person; slice 2 rejects with IDENTITY_EXPANSION_EXCEEDED beyond it.
 	MaxExpansionMembers = 1024
+	// MaxScopeExpansionMembers bounds the whole-graph mapping one unpinned
+	// aggregate may materialize; generous by decision, still bounded so plan
+	// SQL and job payloads stay predictable.
+	MaxScopeExpansionMembers = 65536
 	// MaxRedirectDepth bounds person redirect-chain resolution before a
 	// fail-closed rebuild is demanded.
 	MaxRedirectDepth = 16
@@ -249,4 +253,20 @@ type Store interface {
 	ListRevisions(ctx context.Context, actor, project, environment string, filter ReadFilter) (Page, error)
 	GetRevision(ctx context.Context, actor, project, environment string, revision int64) (Revision, error)
 	ResolveMember(ctx context.Context, actor, project, environment string, revision int64, kind, value string) (Resolution, error)
+}
+
+// MemberCatalog serves query-plan identity expansion (slice 2). It is an
+// internal engine port, not an actor-facing API: permission enforcement
+// happens at query submission, and expansion itself must stay bounded and
+// deterministic for one revision.
+type MemberCatalog interface {
+	// LatestCompletedRevision returns the newest completed revision of the
+	// scope, or 0 when no fold has completed yet.
+	LatestCompletedRevision(ctx context.Context, scope Scope) (int64, error)
+	// ExpansionMembers returns the full member set of one resolved person for
+	// a query pin. Consistent with the resolve API, only the latest completed
+	// revision is expandable until historical member snapshots exist; pins of
+	// older revisions fail closed instead of answering from a state the
+	// revision never captured.
+	ExpansionMembers(ctx context.Context, scope Scope, revision int64, resolvedPersonID string) ([]Member, error)
 }

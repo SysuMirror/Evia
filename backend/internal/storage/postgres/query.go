@@ -86,6 +86,9 @@ func (s *Store) enqueueQueryTx(ctx context.Context, tx pgx.Tx, actor, project st
 	if e := resolveQueryFields(ctx, tx, project, &request); e != nil {
 		return analysis.Job{}, e
 	}
+	if e := s.materializeIdentityExpansion(ctx, tx, project, &request); e != nil {
+		return analysis.Job{}, e
+	}
 	data, e := json.Marshal(request)
 	if e != nil {
 		return analysis.Job{}, e

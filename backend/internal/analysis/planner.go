@@ -30,6 +30,83 @@ type planner struct {
 
 var identifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`)
 
+// subjectColumn resolves the grouping identity column for one query. The
+// resolved subject renders a bounded multiIf mapping over the plan-time
+// identity expansion; rows outside the graph map to ” so the existing
+// non-empty subject guards drop them.
+func (p *planner) subjectColumn(r Request) (string, error) {
+	if r.Subject != SubjectResolvedPerson {
+		if r.Subject == SubjectAnonymous {
+			return "anonymous_id", nil
+		}
+		return "uid", nil
+	}
+	return p.resolvedMapping(r)
+}
+
+func (p *planner) resolvedMapping(r Request) (string, error) {
+	if r.Subject != SubjectResolvedPerson {
+		return "", nil
+	}
+	if r.IdentityExpansion == nil {
+		return "", Invalid("IDENTITY_EXPANSION_MISSING", "resolved_person 查询缺少计划期身份展开", "/subject")
+	}
+	if len(r.IdentityExpansion.Mapping) == 0 {
+		return "", Invalid("IDENTITY_EXPANSION_MISSING", "身份图当前没有可映射的已解析身份", "/subject")
+	}
+	branches := make([]string, 0, len(r.IdentityExpansion.Mapping)*2+1)
+	for _, mapping := range r.IdentityExpansion.Mapping {
+		person := p.bind("String", mapping.PersonID)
+		if len(mapping.UIDs) > 0 {
+			uids := make([]string, 0, len(mapping.UIDs))
+			for _, uid := range mapping.UIDs {
+				uids = append(uids, p.bind("String", uid))
+			}
+			branches = append(branches, "uid IN ("+strings.Join(uids, ",")+")", person)
+		}
+		if len(mapping.AnonymousIDs) > 0 {
+			anons := make([]string, 0, len(mapping.AnonymousIDs))
+			for _, anon := range mapping.AnonymousIDs {
+				anons = append(anons, p.bind("String", anon))
+			}
+			branches = append(branches, "anonymous_id IN ("+strings.Join(anons, ",")+")", person)
+		}
+	}
+	if len(branches) == 0 {
+		return "", Invalid("IDENTITY_EXPANSION_MISSING", "身份图当前没有可映射的已解析身份", "/subject")
+	}
+	branches = append(branches, "''")
+	return "multiIf(" + strings.Join(branches, ",") + ")", nil
+}
+
+// memberPredicate renders the bounded raw-identity predicate for a pinned
+// resolved person; it plugs into the shared base WHERE segment.
+func (p *planner) memberPredicate(r Request) string {
+	if r.IdentityFilter == nil || r.IdentityFilter.ResolvedPersonID == nil {
+		return ""
+	}
+	expansion := r.IdentityExpansion
+	if expansion == nil || (len(expansion.PinnedUIDs) == 0 && len(expansion.PinnedAnonymousIDs) == 0) {
+		return ""
+	}
+	clauses := make([]string, 0, 2)
+	if len(expansion.PinnedUIDs) > 0 {
+		uids := make([]string, 0, len(expansion.PinnedUIDs))
+		for _, uid := range expansion.PinnedUIDs {
+			uids = append(uids, p.bind("String", uid))
+		}
+		clauses = append(clauses, "uid IN ("+strings.Join(uids, ",")+")")
+	}
+	if len(expansion.PinnedAnonymousIDs) > 0 {
+		anons := make([]string, 0, len(expansion.PinnedAnonymousIDs))
+		for _, anon := range expansion.PinnedAnonymousIDs {
+			anons = append(anons, p.bind("String", anon))
+		}
+		clauses = append(clauses, "anonymous_id IN ("+strings.Join(anons, ",")+")")
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")"
+}
+
 func (p *planner) bind(kind, value string) string {
 	name := fmt.Sprintf("p%d", p.next)
 	p.next++
@@ -307,6 +384,8 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 			base += " AND uid=" + p.bind("String", *r.IdentityFilter.UID)
 		} else if r.IdentityFilter.AnonymousID != nil {
 			base += " AND anonymous_id=" + p.bind("String", *r.IdentityFilter.AnonymousID)
+		} else if pinned := p.memberPredicate(r); pinned != "" {
+			base += " AND " + pinned
 		}
 	}
 	predicate, e := p.filter(r.Filter)
@@ -354,8 +433,16 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 			}
 		}
 		plan.Accuracy = AccuracyExact
+		var subjectValue string
+		if r.Subject == SubjectResolvedPerson {
+			mapping, e := p.resolvedMapping(r)
+			if e != nil {
+				return Plan{}, e
+			}
+			subjectValue = mapping
+		}
 		for i, m := range r.Metrics {
-			expression, e := p.metric(m, r.Subject)
+			expression, e := p.metric(m, r.Subject, subjectValue)
 			if e != nil {
 				return Plan{}, e
 			}
@@ -373,9 +460,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		}
 		plan.SQL += " LIMIT " + strconv.Itoa(r.Limit+1)
 	case QueryKindFunnel:
-		subject := "uid"
-		if r.Subject == SubjectAnonymous {
-			subject = "anonymous_id"
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
 		}
 		selectSQL := []string{subject + " AS subject_id", "event_id", "source_id", "session_id", "tab_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns", "ifNull(sequence,0) AS sequence"}
 		stepMatches := []string{}
@@ -400,9 +487,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "step_index", Type: "integer"}, {Key: "event_key", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "conversion_rate", Type: "number"}}
 	case QueryKindRetention:
-		subject := "uid"
-		if r.Subject == SubjectAnonymous {
-			subject = "anonymous_id"
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
 		}
 		selectSQL := []string{subject + " AS subject_id", "event_id", "toUnixTimestamp64Nano(event_time) AS event_time_ns", "toUnixTimestamp64Nano(received_at) AS received_at_ns"}
 		matches := []string{}
@@ -426,9 +513,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "cohort_index", Type: "integer"}, {Key: "cohort_start", Type: "datetime"}, {Key: "cohort_size", Type: "integer"}, {Key: "retained", Type: "integer"}, {Key: "retention_rate", Type: "number"}}
 	case QueryKindSegment:
-		subject := "uid"
-		if r.Subject == SubjectAnonymous {
-			subject = "anonymous_id"
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
 		}
 		value, e := p.field(r.Segment.Field)
 		if e != nil {
@@ -452,9 +539,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "segment_value", Type: "string"}, {Key: "subjects", Type: "integer"}, {Key: "share", Type: "number"}}
 	case QueryKindPath:
-		subject := "uid"
-		if r.Subject == SubjectAnonymous {
-			subject = "anonymous_id"
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
 		}
 		selectSQL := []string{
 			subject + " AS subject_id",
@@ -482,9 +569,9 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 		plan.Accuracy = AccuracyExact
 		plan.Columns = []Column{{Key: "path", Type: "string"}, {Key: "subjects", Type: "integer"}}
 	case QueryKindAttribution:
-		subject := "uid"
-		if r.Subject == SubjectAnonymous {
-			subject = "anonymous_id"
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
 		}
 		selectSQL := []string{
 			subject + " AS subject_id",
@@ -529,7 +616,11 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 	}
 	return plan, nil
 }
-func (p *planner) metric(m Metric, subject string) (string, error) {
+
+// metric renders one aggregate. subjectValue carries the resolved-person
+// mapping expression when the query groups identities through the identity
+// graph; empty means the plain subject column applies.
+func (p *planner) metric(m Metric, subject, subjectValue string) (string, error) {
 	if m.Op == OpCount {
 		return "count()", nil
 	}
@@ -547,13 +638,19 @@ func (p *planner) metric(m Metric, subject string) (string, error) {
 	if e != nil {
 		return "", e
 	}
+	distinct := field.value
 	valid := "(" + field.scope + " AND " + field.present + " AND isNotNull(" + field.value + "))"
+	if subjectValue != "" {
+		// Rows outside the expansion map to '' and must not count.
+		distinct = subjectValue
+		valid = "(" + field.scope + " AND " + field.present + " AND " + subjectValue + "<>'')"
+	}
 	if m.Op == OpUnique {
 		fn := "uniqExactIf"
 		if m.Accuracy == AccuracyApproximate {
 			fn = "uniqCombined64If"
 		}
-		return fn + "(" + field.value + "," + valid + ")", nil
+		return fn + "(" + distinct + "," + valid + ")", nil
 	}
 	functions := map[string]string{OpSum: "sumIf", OpAvg: "avgIf", OpMin: "minIf", OpMax: "maxIf"}
 	// Percentile operators map to their quantile level; the closed validation

@@ -32,6 +32,9 @@ type Metric struct {
 type IdentityFilter struct {
 	UID         *string `json:"uid,omitempty"`
 	AnonymousID *string `json:"anonymous_id,omitempty"`
+	// ResolvedPersonID pins one resolved person for a resolved_person subject
+	// query; the plan expands it into a bounded member predicate.
+	ResolvedPersonID *string `json:"resolved_person_id,omitempty"`
 }
 type Step struct {
 	EventKey      string  `json:"event_key"`
@@ -122,6 +125,35 @@ type Request struct {
 	// client can never set it; only the formula metric enqueue path writes it
 	// into a durable job, and the composite engine routes on it.
 	Formula *FormulaJobRef `json:"formula_ref,omitempty"`
+	// IdentityExpansion is an internal-only execution attachment. It is
+	// absent from the public query contract (strict decoding rejects unknown
+	// fields), and only the enqueue transaction materializes it from the
+	// versioned identity graph: the pinned revision plus the bounded member
+	// mapping the planner needs. Workers and the result metadata consume it
+	// without further graph reads.
+	IdentityExpansion *IdentityExpansion `json:"identity_expansion,omitempty"`
+}
+
+// IdentityExpansion is the plan-time materialization of one identity graph
+// revision for a resolved_person query. Mapping covers every person of the
+// pinned revision (or just the pinned person), bounded by the expansion
+// budgets enforced at enqueue.
+type IdentityExpansion struct {
+	Revision int64 `json:"revision"`
+	// PersonID is set when the query pins exactly one resolved person.
+	PersonID string `json:"person_id,omitempty"`
+	// Mapping lists person -> raw member sets for subject-column mapping.
+	Mapping []PersonMapping `json:"mapping,omitempty"`
+	// PinnedMembers are the raw member sets of the pinned person.
+	PinnedUIDs         []string `json:"pinned_uids,omitempty"`
+	PinnedAnonymousIDs []string `json:"pinned_anonymous_ids,omitempty"`
+}
+
+// PersonMapping is one resolved person's member sets inside an expansion.
+type PersonMapping struct {
+	PersonID     string   `json:"person_id"`
+	UIDs         []string `json:"uids"`
+	AnonymousIDs []string `json:"anonymous_ids"`
 }
 
 // FormulaJobRef identifies the immutable composite metric version a durable job
