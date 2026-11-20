@@ -48,20 +48,31 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 		needed["uid"], needed["anonymous_id"] = true, true
 	}
 	dedicatedNeeded := map[string]bool{}
+	propertyFields := 0
+	coveredFields := 0
 	if e := WalkFields(&request, func(field *Field) error {
 		if field.Kind == "property" {
+			propertyFields++
+			// A catalog hit means the reader prefers the dedicated slot; when
+			// every property field is covered, the token map (the dominant
+			// memory cost of the winner tuple) is pruned entirely and the
+			// planner's field expressions collapse to slot-or-document.
+			selection, covered := selectDedicated(p.catalog, *field)
+			if covered {
+				coveredFields++
+				needed["event_key"], needed["schema_version"] = true, true
+				if !p.slotsStrict {
+					needed["properties_json"] = true
+				}
+				needed["dedicated_layout_version"] = true
+				dedicatedNeeded[selection.column] = true
+				return nil
+			}
 			// The layout columns travel in the same winner tuple so the
 			// planner's property expressions can choose tokens or document
 			// without a second read of the raw table.
 			needed["event_key"], needed["schema_version"], needed["properties_json"] = true, true, true
 			needed["property_layout_version"], needed["property_tokens"] = true, true
-			// A catalog hit additionally requires the marker and the slot
-			// column inside the same winning tuple; a disabled catalog never
-			// hits, so the default query appends nothing.
-			if selection, ok := selectDedicated(p.catalog, *field); ok {
-				needed["dedicated_layout_version"] = true
-				dedicatedNeeded[selection.column] = true
-			}
 			return nil
 		}
 		if field.Kind == "system" {
@@ -77,6 +88,7 @@ func (p *planner) trendFactsSource(database string, scope Scope, request Request
 	}); e != nil {
 		return "", e
 	}
+	p.slotsCoverProperties = propertyFields > 0 && coveredFields == propertyFields
 	// Keep a fixed server-owned order for tuple offsets and stable SQL. Time and
 	// receipt are always needed for the half-open range and result watermark;
 	// event/schema and properties are included only for the DSL that uses them.

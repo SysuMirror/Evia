@@ -25,7 +25,16 @@ type planner struct {
 	// catalog optionally enables dedicated hot-key reads. A nil or disabled
 	// catalog makes applyDedicatedTier return the map/document SQL unchanged,
 	// so the default planner emits byte-identical queries.
-	catalog *propertycatalog.Catalog
+	// slotsCoverProperties records that every property field of this request
+	// resolves to a dedicated hot-key column; the source projection then
+	// prunes the token map and property fields collapse to a two-tier
+	// slot-or-document expression.
+	slotsCoverProperties bool
+	// slotsStrict is the operator's backfill assertion: covered requests also
+	// prune the authoritative document, and a slot miss maps to the absent
+	// NULL instead of a document fallback.
+	slotsStrict bool
+	catalog     *propertycatalog.Catalog
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`)
@@ -176,13 +185,39 @@ func (p *planner) field(f Field) (fieldSQL, error) {
 	// layout version, old writer or unmaterialized part falls back to the
 	// authoritative document. The user key stays a bound parameter on both paths.
 	encodedKey := p.bind("String", propertylayout.EncodeKey(f.Key))
+	var doc, keyExpr string
+	if p.slotsCoverProperties {
+		// The source projection pruned the token map for this request, so the
+		// map tier is unreachable: read the dedicated slot or fall back to the
+		// authoritative document. Under the operator's strict backfill
+		// assertion the document is pruned too and a miss maps to the empty
+		// object, which every JSON accessor reads as absent (NULL).
+		selection, ok := selectDedicated(p.catalog, f)
+		if !ok {
+			return fieldSQL{}, Invalid("INVALID_FIELD", "属性字段无效")
+		}
+		fallbackDoc := "properties_json"
+		if p.slotsStrict {
+			fallbackDoc = "'{}'"
+		}
+		doc = "if(" + selection.hit + "," + selection.document + "," + fallbackDoc + ")"
+		keyExpr = "if(" + selection.hit + ",'f'," + key + ")"
+		_ = encodedKey
+		return p.propertyFieldSQL(doc, keyExpr, f, scope)
+	}
 	hit := "(property_layout_version=1 AND mapContains(property_tokens," + encodedKey + "))"
-	doc := "if(" + hit + ",concat('{\"f\":',property_tokens[" + encodedKey + "],'}'),properties_json)"
-	keyExpr := "if(" + hit + ",'f'," + key + ")"
+	doc = "if(" + hit + ",concat('{\"f\":',property_tokens[" + encodedKey + "],'}'),properties_json)"
+	keyExpr = "if(" + hit + ",'f'," + key + ")"
 	// Outer dedicated tier; a nil/disabled catalog leaves both expressions
 	// byte-identical, so existing plans and tests are unchanged until a catalog
 	// is explicitly injected through the query engine.
 	doc, keyExpr, _ = applyDedicatedTier(p.catalog, f, doc, keyExpr)
+	return p.propertyFieldSQL(doc, keyExpr, f, scope)
+}
+
+// propertyFieldSQL renders the shared presence/type/extraction SQL every
+// property field builds on top of its document and key expressions.
+func (p *planner) propertyFieldSQL(doc, keyExpr string, f Field, scope string) (fieldSQL, error) {
 	present := "JSONHas(" + doc + "," + keyExpr + ")"
 	jsonType := "JSONType(" + doc + "," + keyExpr + ")"
 	extract := ""
@@ -341,8 +376,14 @@ func Compile(database, table string, scope Scope, r Request) (Plan, error) {
 // catalog entries. A nil catalog is equivalent to Compile and must not change
 // any emitted SQL.
 func CompileWithCatalog(database, table string, scope Scope, r Request, catalog *propertycatalog.Catalog) (Plan, error) {
+	return CompileWithCatalogStrict(database, table, scope, r, catalog, false)
+}
+
+// CompileWithCatalogStrict additionally lets the operator's completed-backfill
+// assertion prune the document fallback for fully covered requests.
+func CompileWithCatalogStrict(database, table string, scope Scope, r Request, catalog *propertycatalog.Catalog, strict bool) (Plan, error) {
 	if !identifier.MatchString(database) || !identifier.MatchString(table) {
-		return Plan{}, Invalid("INVALID_QUERY_TABLE", "查询存储配置无效")
+		return Plan{}, Invalid("QUERY_TABLE", "查询存储配置无效")
 	}
 	if scope.ProjectID == "" || scope.Environment != r.Environment {
 		return Plan{}, Invalid("INVALID_QUERY_SCOPE", "查询范围无效")
@@ -353,7 +394,7 @@ func CompileWithCatalog(database, table string, scope Scope, r Request, catalog 
 	if e := CheckResolved(r); e != nil {
 		return Plan{}, e
 	}
-	p := planner{params: map[string]string{}, catalog: catalog}
+	p := planner{params: map[string]string{}, catalog: catalog, slotsStrict: strict}
 	source := "`" + database + "`.`" + table + "`"
 	if r.Kind == QueryKindTrend && table == "event_facts" {
 		var e error

@@ -157,7 +157,7 @@ func sinkConfig(c config.Config, client *http.Client) pipeline.ClickHouseConfig 
 	return pipeline.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Client: client, Catalog: c.PropertyCatalog}
 }
 func queryEngine(c config.Config, client *http.Client) (*analysis.ClickHouse, error) {
-	engine, err := analysis.NewClickHouse(analysis.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Table: "event_facts", Client: client, Catalog: c.PropertyCatalog})
+	engine, err := analysis.NewClickHouse(analysis.ClickHouseConfig{URL: c.ClickHouse.URL, Database: c.ClickHouse.Database, Username: c.ClickHouse.Username, Password: c.ClickHouse.Password, Table: "event_facts", Client: client, Catalog: c.PropertyCatalog, CatalogStrict: c.PropertyCatalogStrict})
 	if err != nil {
 		return nil, stageError("analysis engine configuration", err)
 	}
@@ -666,6 +666,36 @@ func identityWorkerRuntime(ctx context.Context, c config.Config, store *postgres
 	})
 	logger.Info("identity worker starting")
 	return supervise(ctx, append(metricsTasks(c, "identity-worker", registry), task{name: "identity worker", run: worker.Run}), 15*time.Second)
+}
+
+func propertySlotsRuntime(ctx context.Context, c config.Config, logger *slog.Logger) error {
+	if c.PropertyCatalog == nil || !c.PropertyCatalog.Enabled() {
+		return stageError("property slot catalog", errors.New("EVIA_PROPERTY_CATALOG_PATH must point to an enabled hot-key catalog"))
+	}
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("property slot startup", err)
+	}
+	executor, err := pipeline.NewPropertySlotExecutor(sinkConfig(c, client), client, c.PropertyCatalog)
+	if err != nil {
+		return stageError("property slot executor configuration", err)
+	}
+	if err = executor.ApplyMigration(ctx); err != nil {
+		return stageError("property slot migration", err)
+	}
+	logger.Info("property slot columns and view applied", "revision", c.PropertyCatalog.Revision, "columns", len(c.PropertyCatalog.Columns()))
+	reports, err := executor.Backfill(ctx)
+	if err != nil {
+		return stageError("property slot backfill", err)
+	}
+	for _, report := range reports {
+		logger.Info("property slot backfill complete", "event_key", report.EventKey, "schema_version", report.SchemaVersion, "materialized_rows", report.Materialized)
+	}
+	return nil
 }
 
 func exportWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {

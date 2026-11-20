@@ -22,12 +22,16 @@ type ClickHouseConfig struct {
 	Client                                   *http.Client
 	// Catalog optionally enables dedicated hot-key reads; nil means disabled.
 	Catalog *propertycatalog.Catalog
+	// CatalogStrict is the operator's completed-backfill assertion: fully
+	// covered requests also prune the authoritative document fallback.
+	CatalogStrict bool
 }
 type ClickHouse struct {
 	endpoint                            *url.URL
 	username, password, database, table string
 	client                              *http.Client
 	catalog                             *propertycatalog.Catalog
+	catalogStrict                       bool
 }
 
 func NewClickHouse(cfg ClickHouseConfig) (*ClickHouse, error) {
@@ -55,7 +59,7 @@ func NewClickHouse(cfg ClickHouseConfig) (*ClickHouse, error) {
 	if catalog == nil {
 		catalog = propertycatalog.Disabled()
 	}
-	return &ClickHouse{endpoint: endpoint, username: cfg.Username, password: cfg.Password, database: cfg.Database, table: cfg.Table, client: client, catalog: catalog}, nil
+	return &ClickHouse{endpoint: endpoint, username: cfg.Username, password: cfg.Password, database: cfg.Database, table: cfg.Table, client: client, catalog: catalog, catalogStrict: cfg.CatalogStrict}, nil
 }
 func (c *ClickHouse) request(ctx context.Context, sql, queryID string, parameters map[string]string, execution bool) (*http.Response, error) {
 	endpoint := *c.endpoint
@@ -89,7 +93,7 @@ func (c *ClickHouse) kill(queryID string) {
 	}
 }
 func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Result, error) {
-	plan, e := CompileWithCatalog(c.database, c.table, scope, r, c.catalog)
+	plan, e := CompileWithCatalogStrict(c.database, c.table, scope, r, c.catalog, c.catalogStrict)
 	if e != nil {
 		return Result{}, e
 	}

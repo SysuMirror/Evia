@@ -178,9 +178,13 @@ func TestCompileWithCatalogDefaultsByteIdenticalAndEnablesGate(t *testing.T) {
 	if legacy.SQL == enabled.SQL {
 		t.Fatal("enabled catalog must change the SQL when the field matches an entry")
 	}
-	// The map fallback and bound parameters must survive the outer tier.
-	if !strings.Contains(enabled.SQL, "property_layout_version=1") {
-		t.Fatalf("map fallback lost in catalog-enabled plan:\n%s", enabled.SQL)
+	// A fully covered request prunes the token map from the winner tuple and
+	// keeps the authoritative document as the fallback tier.
+	if strings.Contains(enabled.SQL, "property_tokens") {
+		t.Fatalf("covered request must prune the token map:\n%s", enabled.SQL)
+	}
+	if !strings.Contains(enabled.SQL, "properties_json") {
+		t.Fatalf("document fallback lost in catalog-enabled plan:\n%s", enabled.SQL)
 	}
 }
 

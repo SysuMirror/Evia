@@ -77,6 +77,28 @@ type Catalog struct {
 	Entries  []Entry `json:"entries"`
 }
 
+// Identity names one event definition the catalog carries entries for.
+type Identity struct {
+	EventKey      string
+	SchemaVersion uint64
+}
+
+// Identities returns the distinct event definitions in catalog order, so
+// backfill operators iterate deterministically.
+func (c *Catalog) Identities() []Identity {
+	seen := make(map[Identity]struct{}, len(c.Entries))
+	identities := make([]Identity, 0, len(c.Entries))
+	for _, entry := range c.Entries {
+		identity := Identity{EventKey: entry.EventKey, SchemaVersion: entry.SchemaVersion}
+		if _, duplicate := seen[identity]; duplicate {
+			continue
+		}
+		seen[identity] = struct{}{}
+		identities = append(identities, identity)
+	}
+	return identities
+}
+
 // Slot is the resolved physical target of a catalog lookup. Column is the
 // encoded dedicated column name; ResolvedType keeps the planner semantics the
 // reader must apply to the token found in that column.

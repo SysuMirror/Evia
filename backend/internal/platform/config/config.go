@@ -65,6 +65,9 @@ type Config struct {
 	// needs no nil check.
 	PropertyCatalogPath string
 	PropertyCatalog     *propertycatalog.Catalog
+	// PropertyCatalogStrict asserts the operator completed the property-slot
+	// backfill; fully covered reads then prune the document fallback.
+	PropertyCatalogStrict bool
 }
 
 var (
@@ -92,7 +95,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "property-slots" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -124,6 +127,9 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		}
 	}
 	c.PropertyCatalogPath = get("EVIA_PROPERTY_CATALOG_PATH")
+	if c.PropertyCatalogStrict, err = boolean(get, "EVIA_PROPERTY_SLOTS_STRICT", false); err != nil {
+		return c, err
+	}
 	if c.PropertyCatalogPath == "" {
 		// Default-off: no file means the disabled catalog, so deployments
 		// without dedicated columns keep their exact current behavior.
@@ -168,7 +174,7 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	// The erasure and retention workers only need PostgreSQL plus the
 	// ClickHouse executor; they deliberately load neither Kafka nor the Redis
 	// admission budget.
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "identity-worker" || command == "retention-worker" || command == "export-worker" || command == "backfill-worker" {
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "identity-worker" || command == "property-slots" || command == "retention-worker" || command == "export-worker" || command == "backfill-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
