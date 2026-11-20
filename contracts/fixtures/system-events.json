@@ -77,6 +77,68 @@
       }
     },
     {
+      "event_key": "sys.heatmap_click",
+      "display_name": "热力图点击",
+      "schema_version": 1,
+      "allowed_source_kinds": [
+        "browser"
+      ],
+      "fact_kind": "client_observed",
+      "trigger": "用户完成可点击元素的激活（指针或键盘）后，携带视口坐标与元素定位；每分钟限速。",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "x_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "viewport_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "viewport_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "element_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "element_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "required": [
+          "x_ratio",
+          "y_ratio",
+          "viewport_width",
+          "viewport_height",
+          "element_path"
+        ]
+      },
+      "example_properties": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.32,
+        "viewport_width": 1366,
+        "viewport_height": 900,
+        "element_path": "main>div.list>button.primary",
+        "element_index": 2
+      }
+    },
+    {
       "event_key": "sys.identity_link",
       "display_name": "当前会话身份关联",
       "schema_version": 1,

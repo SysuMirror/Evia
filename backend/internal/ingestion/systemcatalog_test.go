@@ -37,7 +37,7 @@ func TestLoadSystemCatalogEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantKeys := []string{"sys.identity_link", "sys.operation_failed", "sys.page_scroll", "sys.page_view", "sys.session_end"}
+	wantKeys := []string{"sys.heatmap_click", "sys.identity_link", "sys.operation_failed", "sys.page_scroll", "sys.page_view", "sys.session_end"}
 	if got := catalog.Keys(); !reflect.DeepEqual(got, wantKeys) {
 		t.Fatalf("keys = %v, want %v", got, wantKeys)
 	}
@@ -71,8 +71,8 @@ func TestSystemCatalogPropertySchemaValidation(t *testing.T) {
 	if err = json.Unmarshal(wire.SystemEvents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if len(fixture.Events) != 5 {
-		t.Fatalf("want 5 embedded events, got %d", len(fixture.Events))
+	if len(fixture.Events) != 6 {
+		t.Fatalf("want 6 embedded events, got %d", len(fixture.Events))
 	}
 	for _, event := range fixture.Events {
 		_, schema, ok := catalog.Rule(event.Key)
