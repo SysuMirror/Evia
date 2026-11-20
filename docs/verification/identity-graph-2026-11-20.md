@@ -26,8 +26,16 @@
 
 期间修复的装配缺陷：`config.ReadFor` 与命令白名单未包含 `identity-worker`（ClickHouse 配置不加载导致启动探测失败）——补入两处白名单并保留一条启动探测失败的具体错误日志。
 
+### 实机全链（切片②③，真实 serve/identity-worker/query-worker + PG/CH）
+
+Playwright 合成站经真实 collect 产生 `sys.identity_link`（账号一跨两设备、账号二独立设备）→ identity-worker 折叠出修订 1 → 经真实 HTTP `POST /queries` 提交三组对照查询（省略 revision 的 resolved_person、uid、anonymous）→ query-worker 执行：
+
+- `resolved_person` UV = 2（两台设备的同一账号计一人），`anonymous` UV = 3（设备基线），`uid` UV = 2 —— 跨设备去重与基线一致；
+- resolved 结果 `metadata.identity_revision = 1` 回填、`identity_resolution_not_applied` 覆盖缺口移除；uid/anonymous 查询不携带修订字段；
+- 无凭据截图 `resolved-query-result.png`（本地工件不进仓库）。
+
 ## 边界（不声称）
 
 - resolve 仅支持最新 completed 修订；历史成员快照未持久化（规划文档已修订记录）。
-- 查询集成（resolved_person 展开、成员预算 1024、两个新错误码）、erasure 联动退役、回补屏障、控制台工作区、修订保留清理均未交付。
+- 控制台身份工作区（切片④）与修订保留清理未交付；`multiIf` 全图映射在大规模图上的执行成本未做容量声明（等价性为语义证明）。
 - 实机演示为功能性证据，不构成图规模容量或生产 HA 声明；`multiIf` 展开的执行成本待切片②用真实规模数据补测。
