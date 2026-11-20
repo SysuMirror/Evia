@@ -11,6 +11,7 @@ export type WorkspaceSection =
   | 'reports'
   | 'machine-access'
   | 'governance'
+  | 'identity'
   | 'erasure'
   | 'exports'
   | 'retention'
@@ -53,6 +54,13 @@ const paths: Record<WorkspaceSection, ReactNode> = {
     <>
       <circle cx="12" cy="8" r="3.2" />
       <path d="M5.5 19a6.5 6.5 0 0 1 13 0M4 21h16" />
+    </>
+  ),
+  identity: (
+    <>
+      <circle cx="8.5" cy="8" r="3" />
+      <circle cx="15.5" cy="8" r="3" />
+      <path d="M3 19a5.5 5.5 0 0 1 11 0M10 19a5.5 5.5 0 0 1 11 0" />
     </>
   ),
   metrics: (

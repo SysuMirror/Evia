@@ -3585,15 +3585,21 @@ export interface components {
             event_keys?: string[];
             filter?: components["schemas"]["filter"];
             /**
-             * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier (never a resolved person). resolved_person is reserved for a future identity graph and currently fails closed with IDENTITY_RESOLUTION_UNAVAILABLE.
+             * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier. resolved_person groups identities through the versioned identity graph: the request is expanded at enqueue time against the pinned (or latest completed) identity revision, bounded by the identity expansion budgets (IDENTITY_EXPANSION_EXCEEDED otherwise). Journeys stay single-raw-identity and reject resolved_person; raw-row event listings require identity_filter.resolved_person_id.
              * @enum {unknown}
              */
             subject?: "uid" | "anonymous" | "resolved_person";
+            /** @description Pins the identity graph revision a resolved_person query expands against. Omitting it resolves the scope's latest completed revision and the result metadata reports the revision actually used. Only the latest completed revision is expandable until historical member snapshots exist; older or unknown pins fail closed with IDENTITY_REVISION_NOT_FOUND / IDENTITY_REVISION_NOT_RESOLVABLE. */
             identity_revision?: number;
             identity_filter?: {
                 uid?: string;
                 /** Format: uuid */
                 anonymous_id?: string;
+                /**
+                 * Format: uuid
+                 * @description Pins one resolved person for a resolved_person subject query; the server expands it into a bounded raw-identity member predicate of the pinned identity revision.
+                 */
+                resolved_person_id?: string;
             };
             group_by?: ({
                 /** @constant */
@@ -3961,7 +3967,7 @@ export interface components {
             schema_version: number;
         }[];
         /**
-         * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier (never a resolved person). resolved_person is reserved for a future identity graph and currently fails closed with IDENTITY_RESOLUTION_UNAVAILABLE.
+         * @description Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier. resolved_person groups identities through the versioned identity graph: the request is expanded at enqueue time against the pinned (or latest completed) identity revision, bounded by the identity expansion budgets (IDENTITY_EXPANSION_EXCEEDED otherwise). Journeys stay single-raw-identity and reject resolved_person; raw-row event listings require identity_filter.resolved_person_id.
          * @enum {unknown}
          */
         subject: "uid" | "anonymous" | "resolved_person";

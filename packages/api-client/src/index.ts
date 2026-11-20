@@ -34,6 +34,10 @@ export type MachineIssued = components['schemas']['MachineIssued'];
 export type ErasureInput = components['schemas']['ErasureInput'];
 export type ErasureJob = components['schemas']['ErasureJob'];
 export type ErasureList = components['schemas']['ErasureList'];
+export type IdentityRevision = components['schemas']['IdentityRevision'];
+export type IdentityRevisionList = components['schemas']['IdentityRevisionList'];
+export type IdentityResolution = components['schemas']['IdentityResolution'];
+export type IdentityMember = components['schemas']['IdentityMember'];
 export type ExportInput = components['schemas']['ExportInput'];
 export type ExportJob = components['schemas']['ExportJob'];
 export type ExportList = components['schemas']['ExportList'];
@@ -1279,6 +1283,41 @@ export const api = {
     ),
   getErasureJob: (projectID: string, jobID: string, signal?: AbortSignal) =>
     request<ErasureJob>(erasureJobPath(projectID, jobID), { signal }),
+  listIdentityRevisions: (
+    projectID: string,
+    page: { environment: Environment; cursor?: string; limit?: number },
+    signal?: AbortSignal,
+  ) =>
+    request<IdentityRevisionList>(
+      `${projectPath(projectID)}/identity-revisions${catalogQuery({
+        environment: page.environment,
+        cursor: page.cursor,
+        limit: page.limit,
+      })}`,
+      { signal },
+    ),
+  getIdentityRevision: (
+    projectID: string,
+    revision: number,
+    environment: Environment,
+    signal?: AbortSignal,
+  ) =>
+    request<IdentityRevision>(
+      `${projectPath(projectID)}/identity-revisions/${revision}${catalogQuery({ environment })}`,
+      { signal },
+    ),
+  resolveIdentityMember: (
+    projectID: string,
+    revision: number,
+    identity: { environment: Environment; uid?: string; anonymous_id?: string },
+    signal?: AbortSignal,
+  ) =>
+    request<IdentityResolution>(
+      `${projectPath(projectID)}/identity-revisions/${revision}/resolve?environment=${encodeURIComponent(identity.environment)}${
+        identity.uid ? `&uid=${encodeURIComponent(identity.uid)}` : ''
+      }${identity.anonymous_id ? `&anonymous_id=${encodeURIComponent(identity.anonymous_id)}` : ''}`,
+      { signal },
+    ),
   getRetentionPolicy: (
     projectID: string,
     environment: RetentionPolicyInput['environment'],

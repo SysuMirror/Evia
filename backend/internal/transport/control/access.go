@@ -182,7 +182,10 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request, actor authorizedAct
 	return nil
 }
 func projectWire(p access.Project) wire.Project {
-	permissions := []string{"project.read", "settings.read", access.PermissionMetricsRead, access.PermissionMetricsRun}
+	permissions := []string{"project.read", "settings.read", access.PermissionQueriesRead, access.PermissionMetricsRead, access.PermissionMetricsRun}
+	if p.Role == "owner" || p.Role == "editor" {
+		permissions = append(permissions, access.PermissionQueriesRawRead)
+	}
 	if p.Role == "owner" || p.Role == "editor" {
 		permissions = append(permissions, "project.write", access.PermissionMetricsWrite, access.PermissionMetricsPublish)
 	}
