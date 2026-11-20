@@ -13,12 +13,23 @@
 - **确定性边界**：折叠时间在领域入口统一截断到微秒（PostgreSQL `timestamptz` 精度），ClickHouse `DateTime64(9)` 的纳秒残差不会让同一对的重扫被误判为推进；`resolved_person_id` 一次性分配永不复用，重放同构而非逐字节相同。
 - **观测**：`identity-worker` 经 `IdentityObserver` 上报作用域认领/跳过、扫描/屏障失败、完成/空转/失败与轮次时延，标签为固定枚举+错误码，不含业务身份值；`EVIA_METRICS_LISTEN` 暴露 `/metrics`。
 
+## 已交付（切片②：查询集成）
+
+`subject=resolved_person` 查询经版本化身份图解析（契约描述、discovery 广告与校验同步放开，`IDENTITY_RESOLUTION_UNAVAILABLE` 移除）：
+
+- 入队事务内物化展开（`materializeIdentityExpansion`）：省略 `identity_revision` 取最新 completed 并把实际编号回填结果 `metadata.identity_revision`（同时移除该查询的 `identity_resolution_not_applied` 覆盖缺口）；未知修订 `IDENTITY_REVISION_NOT_FOUND`，非最新修订 `IDENTITY_REVISION_NOT_RESOLVABLE`（历史成员快照未持久化前 fail-closed）。
+- 聚合类（trend UV/漏斗/分群/路径/归因/留存）经有界 `multiIf` 映射把 uid 与 anonymous_id 两列归一到 resolved id（trend 投影为此携带双身份列）；events 明细必须钉 `identity_filter.resolved_person_id`，展开为有界成员谓词（需 raw 读权限）；journey 保持单原始身份并拒绝 resolved 主体。
+- 预算 fail-closed：钉人 1024 成员、全图 65536 成员，超限 `IDENTITY_EXPANSION_EXCEEDED`；持久任务携带物化映射，后续折叠不影响已入队查询。
+- 回补屏障方向：折叠只读 ClickHouse，而 BarrierSink（在线写入与回补重放共用）在入库前拦截已删除身份，故回补的旧 `identity_link` 事实无法进入仓库、更无法进入图——与折叠侧屏障构成双向闭环。
+
+## 已交付（切片③：erasure 屏障闭环）
+
+erasure 作业 rebuilding 阶段在完成校验后调用 `RetireIdentitySubject`：删除命中主体的一切边与成员行；仅含该主体的人直接删除注册行，共享组件则整人保守退役（无 redirect）并清空成员行，剩余身份在下一轮折叠中以全新 `resolved_person_id` 重组（折叠从不把退役者视为成员所有者）。真实链路验证：删除 → 图退役 → 重放旧事实 → 不复活（屏障拦截）、幸存者换新 ID 重组；审计追加 `identity.graph_retired`。
+
 ## 尚未交付（按规划切片推进）
 
-- 切片②：查询侧开放 `subject=resolved_person` 与 `identity_revision`（计划期有界展开，成员上限 1024，`IDENTITY_EXPANSION_EXCEEDED` fail-closed；journey 继续拒绝）。在此之前 `analysis` 校验保持 `IDENTITY_RESOLUTION_UNAVAILABLE` 原样。
-- 切片③：erasure rebuilding 联动退役与回补双向屏障闭环。
 - 切片④：控制台身份修订工作区。
-- 历史修订成员快照（或 delta 重放）：resolve 的旧钉版支持依赖它，当前 fail-closed。
+- 历史修订成员快照（或 delta 重放）：resolve 与查询钉版暂仅最新 completed 修订。
 - 保留策略清理（决策：90 天或 1000 个取大）尚未实现，v1 不删除修订。
 
 ## 运行
