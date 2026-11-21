@@ -10,6 +10,8 @@ export type {
   EventOptions,
   EventOutcome,
   FlushResult,
+  HeatmapClick,
+  HeatmapHost,
   NavigationLink,
   OperationErrorCategory,
   OperationFailure,

@@ -123,10 +123,49 @@ export function validateConfig(
     !Number.isSafeInteger(value.release_revision) ||
     Number(value.release_revision) < 1 ||
     !Array.isArray(value.events) ||
-    value.events.length > 205
+    value.events.length > 206
   )
-    // 205 = 200 project release events + 5 platform-reserved sys.* events.
+    // 206 = 200 project release events + 6 platform-reserved sys.* events.
     throw new EviaSDKError('INVALID_CONFIG');
+  if (value.config_signature !== undefined) {
+    const signature = value.config_signature;
+    if (
+      !isRecord(signature) ||
+      typeof signature.key_id !== 'string' ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(signature.key_id) ||
+      signature.alg !== 'Ed25519' ||
+      typeof signature.digest_sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(signature.digest_sha256) ||
+      typeof signature.signature !== 'string' ||
+      !/^[A-Za-z0-9_-]{86}$/.test(signature.signature)
+    )
+      throw new EviaSDKError('INVALID_CONFIG');
+  }
+  if (
+    (value.telemetry_token === undefined) !== (value.telemetry_expires_at === undefined) ||
+    (value.telemetry_token !== undefined &&
+      (typeof value.telemetry_token !== 'string' ||
+        value.telemetry_token.length < 32 ||
+        value.telemetry_token.length > 2048 ||
+        typeof value.telemetry_expires_at !== 'string' ||
+        !Number.isFinite(Date.parse(value.telemetry_expires_at))))
+  )
+    throw new EviaSDKError('INVALID_CONFIG');
+  if (value.content_encryption !== undefined) {
+    const encryption = value.content_encryption;
+    if (
+      !isRecord(encryption) ||
+      typeof encryption.key_id !== 'string' ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(encryption.key_id) ||
+      encryption.alg !== 'RSA-OAEP-256' ||
+      !isRecord(encryption.public_jwk) ||
+      encryption.public_jwk.kty !== 'RSA' ||
+      typeof encryption.public_jwk.n !== 'string' ||
+      typeof encryption.public_jwk.e !== 'string' ||
+      encryption.public_jwk.d !== undefined
+    )
+      throw new EviaSDKError('INVALID_CONFIG');
+  }
   const seen = new Set<string>();
   for (const event of value.events) {
     if (

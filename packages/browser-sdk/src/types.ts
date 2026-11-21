@@ -12,6 +12,19 @@ export interface PublicConfig {
     schema_version: number;
     schema: Readonly<Record<string, unknown>>;
   }[];
+  content_encryption?: Readonly<{
+    key_id: string;
+    alg: 'RSA-OAEP-256';
+    public_jwk: Readonly<Record<string, unknown>>;
+  }>;
+  telemetry_token?: string;
+  telemetry_expires_at?: string;
+  config_signature?: Readonly<{
+    key_id: string;
+    alg: 'Ed25519';
+    digest_sha256: string;
+    signature: string;
+  }>;
 }
 
 export interface StoragePort {
@@ -25,6 +38,22 @@ export interface ScrollHost {
   subscribe(listener: () => void): () => void;
   /** Current vertical scroll position as a ratio in [0, 1]. */
   ratio(): number;
+}
+
+/** One sanitized click sample for the coordinate heatmap. */
+export interface HeatmapClick {
+  xRatio: number;
+  yRatio: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  /** Structural path only: tags/roles/nth-of-type, never text or input value. */
+  elementPath: string;
+  elementIndex?: number;
+}
+
+/** Injectable browser click surface, also used for deterministic tests. */
+export interface HeatmapHost {
+  subscribe(listener: (sample: HeatmapClick) => void): () => void;
 }
 
 export interface Clock {
@@ -66,6 +95,12 @@ export interface ClientOptions {
    * of silently losing continuity.
    */
   sessionStorage?: StoragePort | null;
+  /**
+   * Optional out-of-band trust anchor for Ed25519 public-config signatures.
+   * When configured, unsigned/mismatched/tampered configs fail closed.
+   */
+  configSigningKeyId?: string;
+  configSigningPublicJWK?: Readonly<Record<string, unknown>>;
   /** Injectable browser capabilities, also useful for deterministic tests. */
   clock?: Clock;
   randomUUID?: () => string;
@@ -99,6 +134,14 @@ export interface ClientOptions {
   scrollHost?: ScrollHost;
   /** Debounce window used to decide that scrolling has stopped, in milliseconds. */
   scrollIdleMs?: number;
+  /**
+   * Opt-in automatic sys.heatmap_click collection. It records normalized viewport
+   * coordinates and a sanitized structural element path; text, input values, ids,
+   * classes and arbitrary attributes are never collected. Capped at 120/minute.
+   */
+  autoHeatmapClicks?: boolean;
+  /** Injectable click surface; a document capture listener is used by default. */
+  heatmapHost?: HeatmapHost;
   configTtlMs?: number;
   requestTimeoutMs?: number;
   flushIntervalMs?: number;

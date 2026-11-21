@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createEviaClient, EviaSDKError } from '../src/index.js';
-import type { ClientOptions, Clock, PublicConfig, ScrollHost, StoragePort } from '../src/index.js';
+import type {
+  ClientOptions,
+  Clock,
+  HeatmapClick,
+  HeatmapHost,
+  PublicConfig,
+  ScrollHost,
+  StoragePort,
+} from '../src/index.js';
 
 const projectId = '00000000-0000-4000-8000-000000000001';
 const receiptId = '00000000-0000-4000-8000-000000000002';
@@ -1493,10 +1501,11 @@ test('a throwing scroll host does not break the page listener or the client', as
   client.destroy();
 });
 
-test('public config accepts 205 events including the five reserved sys keys', async () => {
+test('public config accepts 206 events including the six reserved sys keys', async () => {
   const sysKeys = [
     'sys.page_view',
     'sys.page_scroll',
+    'sys.heatmap_click',
     'sys.identity_link',
     'sys.session_end',
     'sys.operation_failed',
@@ -1520,7 +1529,7 @@ test('public config accepts 205 events including the five reserved sys keys', as
     () => {
       throw new Error('unused');
     },
-    { fetch: async () => json(buildConfig(205)) },
+    { fetch: async () => json(buildConfig(206)) },
   );
   await within.client.init();
   within.client.destroy();
@@ -1529,10 +1538,51 @@ test('public config accepts 205 events including the five reserved sys keys', as
     () => {
       throw new Error('unused');
     },
-    { fetch: async () => json(buildConfig(206)) },
+    { fetch: async () => json(buildConfig(207)) },
   );
   await assert.rejects(over.client.init(), /INVALID_CONFIG/);
   over.client.destroy();
+});
+
+test('public config validates browser-safe content encryption keys', async () => {
+  const valid = setup(
+    () => {
+      throw new Error('unused');
+    },
+    {
+      fetch: async () =>
+        json({
+          ...config(),
+          content_encryption: {
+            key_id: 'content-2026-11',
+            alg: 'RSA-OAEP-256',
+            public_jwk: { kty: 'RSA', n: 'public-modulus', e: 'AQAB' },
+          },
+        }),
+    },
+  );
+  const loaded = await valid.client.init();
+  assert.equal(loaded.content_encryption?.key_id, 'content-2026-11');
+  valid.client.destroy();
+
+  for (const content_encryption of [
+    { key_id: 'bad key', alg: 'RSA-OAEP-256', public_jwk: { kty: 'RSA', n: 'n', e: 'AQAB' } },
+    {
+      key_id: 'key',
+      alg: 'RSA-OAEP-256',
+      public_jwk: { kty: 'RSA', n: 'n', e: 'AQAB', d: 'private' },
+    },
+    { key_id: 'key', alg: 'RSA1_5', public_jwk: { kty: 'RSA', n: 'n', e: 'AQAB' } },
+  ]) {
+    const invalid = setup(
+      () => {
+        throw new Error('unused');
+      },
+      { fetch: async () => json({ ...config(), content_encryption }) },
+    );
+    await assert.rejects(invalid.client.init(), /INVALID_CONFIG/);
+    invalid.client.destroy();
+  }
 });
 
 test('reserved sys events in public config are transmitted with the project release revision', async () => {
@@ -2056,5 +2106,116 @@ test('a persisted exhausted sequence keeps failing closed after restore', async 
   });
   await client.init();
   assert.throws(() => client.emit('page_opened'), /SEQUENCE_EXHAUSTED/);
+  client.destroy();
+});
+
+// Automatic sys.heatmap_click collection (opt-in autoHeatmapClicks).
+class FakeHeatmapHost implements HeatmapHost {
+  private listeners = new Set<(sample: HeatmapClick) => void>();
+  subscribe = (listener: (sample: HeatmapClick) => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  emit(sample: HeatmapClick): void {
+    for (const listener of this.listeners) listener(sample);
+  }
+  get size(): number {
+    return this.listeners.size;
+  }
+}
+
+const heatmapConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.heatmap_click',
+        schema_version: 1,
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            x_ratio: { type: 'number' },
+            y_ratio: { type: 'number' },
+            viewport_width: { type: 'integer' },
+            viewport_height: { type: 'integer' },
+            element_path: { type: 'string' },
+            element_index: { type: 'integer' },
+          },
+        },
+      },
+    ],
+  };
+};
+
+const heatmapSample = (overrides: Partial<HeatmapClick> = {}): HeatmapClick => ({
+  xRatio: 0.512345,
+  yRatio: 0.333333,
+  viewportWidth: 1366,
+  viewportHeight: 900,
+  elementPath: 'body:nth-of-type(1)>main:nth-of-type(1)>button:nth-of-type(2)',
+  elementIndex: 1,
+  ...overrides,
+});
+
+test('automatic heatmap clicks stay disabled unless opted in', async () => {
+  const host = new FakeHeatmapHost();
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { heatmapHost: host },
+    heatmapConfig(),
+  );
+  host.emit(heatmapSample());
+  await pump();
+  await client.flush();
+  assert.equal(bodies.length, 0);
+  assert.equal(host.size, 0);
+  client.destroy();
+});
+
+test('auto heatmap clicks emit sanitized bounded properties', async () => {
+  const host = new FakeHeatmapHost();
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { autoHeatmapClicks: true, heatmapHost: host },
+    heatmapConfig(),
+  );
+  await client.init();
+  host.emit(heatmapSample());
+  await pump();
+  await client.flush();
+  const events = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.event_key, 'sys.heatmap_click');
+  assert.deepEqual(events[0]!.properties, {
+    x_ratio: 0.5123,
+    y_ratio: 0.3333,
+    viewport_width: 1366,
+    viewport_height: 900,
+    element_path: 'body:nth-of-type(1)>main:nth-of-type(1)>button:nth-of-type(2)',
+    element_index: 1,
+  });
+  client.destroy();
+  assert.equal(host.size, 0, 'destroy must unsubscribe the document listener');
+});
+
+test('heatmap collection rejects malformed samples and caps at 120 per minute', async () => {
+  const host = new FakeHeatmapHost();
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { autoHeatmapClicks: true, heatmapHost: host, maxBatchEvents: 50 },
+    heatmapConfig(),
+  );
+  await client.init();
+  host.emit(heatmapSample({ viewportWidth: 0 }));
+  host.emit(heatmapSample({ elementPath: '' }));
+  for (let i = 0; i < 121; i++) host.emit(heatmapSample({ xRatio: i / 120 }));
+  await pump();
+  await client.flush();
+  const events = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events);
+  assert.equal(events.length, 120);
+  assert.ok(events.every((event) => event.event_key === 'sys.heatmap_click'));
   client.destroy();
 });

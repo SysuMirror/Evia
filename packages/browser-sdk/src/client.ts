@@ -7,6 +7,8 @@ import type {
   EventOptions,
   EventOutcome,
   FlushResult,
+  HeatmapClick,
+  HeatmapHost,
   NavigationLink,
   OperationFailure,
   PageOptions,
@@ -28,6 +30,7 @@ import {
   validateOptions,
 } from './validation.js';
 import { defaultClock, readJSON, retryAfter, Transport, validateReceipt } from './transport.js';
+import { verifyConfigSignature } from './config-signature.js';
 
 type Page = Omit<EventContext, 'sequence'>;
 // pageViewEventKey is the reserved system event used by automatic page
@@ -44,7 +47,9 @@ const sessionEndEventKey = 'sys.session_end';
 const sessionEndReasons = new Set(['logout', 'account_switch', 'idle']);
 // pageScrollEventKey coalesces one scroll segment after scrolling stops.
 const pageScrollEventKey = 'sys.page_scroll';
+const heatmapClickEventKey = 'sys.heatmap_click';
 const maxScrollEventsPerMinute = 12;
+const maxHeatmapClicksPerMinute = 120;
 const scrollWindowMs = 60_000;
 const defaultScrollIdleMs = 1000;
 
@@ -68,6 +73,74 @@ function defaultScrollHost(): ScrollHost | null {
       const doc = document.documentElement;
       const span = doc.scrollHeight - window.innerHeight;
       return span <= 0 ? 0 : clamp01(window.scrollY / span);
+    },
+  };
+}
+
+const clickableSelector =
+  'a,button,input,select,textarea,[role="button"],[role="link"],[data-evia-heatmap]';
+
+function elementSegment(element: Element): { segment: string; index: number } {
+  const tag = element.localName.toLowerCase();
+  const role = element.getAttribute('role');
+  const safeRole = role && /^[a-z-]{1,24}$/.test(role) ? `[role=${role}]` : '';
+  const siblings = element.parentElement
+    ? [...element.parentElement.children].filter(
+        (candidate) => candidate.localName === element.localName,
+      )
+    : [element];
+  const index = Math.max(0, siblings.indexOf(element));
+  return { segment: `${tag}${safeRole}:nth-of-type(${index + 1})`, index };
+}
+
+// structuralElementPath deliberately excludes text, id, class, href, input
+// values and arbitrary attributes. The path is useful for grouping repeated
+// clicks without collecting page content.
+function structuralElementPath(element: Element): { path: string; index: number } {
+  const parts: string[] = [];
+  const target = element.closest(clickableSelector) ?? element;
+  const targetSegment = elementSegment(target);
+  let current: Element | null = target;
+  for (let depth = 0; current && depth < 4; depth++) {
+    parts.unshift(elementSegment(current).segment);
+    current = current.parentElement;
+    if (current?.localName === 'body') {
+      parts.unshift('body:nth-of-type(1)');
+      break;
+    }
+  }
+  return { path: parts.join('>').slice(0, 128), index: Math.min(255, targetSegment.index) };
+}
+
+function defaultHeatmapHost(): HeatmapHost | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return null;
+  return {
+    subscribe: (listener) => {
+      const handle = (event: MouseEvent) => {
+        if (!(event.target instanceof Element)) return;
+        const viewportWidth = Math.max(1, Math.min(65535, Math.round(window.innerWidth)));
+        const viewportHeight = Math.max(1, Math.min(65535, Math.round(window.innerHeight)));
+        let x = event.clientX;
+        let y = event.clientY;
+        // Keyboard-generated click events have no pointer coordinates; use the
+        // activated element's center rather than grouping them at (0,0).
+        if (event.detail === 0 && x === 0 && y === 0) {
+          const rect = event.target.getBoundingClientRect();
+          x = rect.left + rect.width / 2;
+          y = rect.top + rect.height / 2;
+        }
+        const structural = structuralElementPath(event.target);
+        listener({
+          xRatio: round4(clamp01(x / viewportWidth)),
+          yRatio: round4(clamp01(y / viewportHeight)),
+          viewportWidth,
+          viewportHeight,
+          elementPath: structural.path,
+          elementIndex: structural.index,
+        });
+      };
+      document.addEventListener('click', handle, true);
+      return () => document.removeEventListener('click', handle, true);
     },
   };
 }
@@ -203,6 +276,8 @@ class Client implements BrowserClient {
   private readonly sessionStorage: StoragePort | null;
   private readonly sessionStorageKey: string;
   private readonly configTtl: number;
+  private readonly configSigningKeyID?: string;
+  private readonly configSigningPublicJWK?: Readonly<Record<string, unknown>>;
   private readonly flushInterval: number;
   private readonly retryBase: number;
   private readonly maxAttempts: number;
@@ -240,6 +315,8 @@ class Client implements BrowserClient {
   private readonly autoPageScrolls: boolean;
   private readonly scrollHost: ScrollHost | null;
   private readonly scrollIdleMs: number;
+  private readonly autoHeatmapClicks: boolean;
+  private readonly heatmapHost: HeatmapHost | null;
   private scrollTimer?: ReturnType<typeof setTimeout>;
   private scrollActive = false;
   private scrollFrom = 0;
@@ -250,6 +327,7 @@ class Client implements BrowserClient {
   private scrollSawDown = false;
   private scrollStartedAt = 0;
   private scrollEmittedAt: number[] = [];
+  private heatmapEmittedAt: number[] = [];
 
   constructor(options: ClientOptions) {
     this.endpoint = validateOptions(options);
@@ -270,6 +348,10 @@ class Client implements BrowserClient {
       return id.toLowerCase();
     };
     this.configTtl = boundedInteger(options.configTtlMs, 30000, 1000, 60000);
+    this.configSigningKeyID = options.configSigningKeyId;
+    this.configSigningPublicJWK = options.configSigningPublicJWK;
+    if ((this.configSigningKeyID === undefined) !== (this.configSigningPublicJWK === undefined))
+      throw new EviaSDKError('INVALID_CONFIG_SIGNING_KEY');
     this.flushInterval = boundedInteger(options.flushIntervalMs, 1000, 10, 10000);
     this.retryBase = boundedInteger(options.retryBaseMs, 1000, 10, 60000);
     this.maxAttempts = boundedInteger(options.maxAttempts, 3, 1, 5);
@@ -288,6 +370,7 @@ class Client implements BrowserClient {
     this.autoIdentityLink = options.autoIdentityLink === true;
     this.autoSessionEnd = options.autoSessionEnd === true;
     this.autoPageScrolls = options.autoPageScrolls === true;
+    this.autoHeatmapClicks = options.autoHeatmapClicks === true;
     this.scrollIdleMs = boundedInteger(
       options.scrollIdleMs ?? defaultScrollIdleMs,
       5000,
@@ -295,6 +378,7 @@ class Client implements BrowserClient {
       10000,
     );
     this.scrollHost = options.scrollHost ?? defaultScrollHost();
+    this.heatmapHost = options.heatmapHost ?? defaultHeatmapHost();
     this.storage = options.storage === undefined ? storageDefault() : options.storage;
     this.storageKey = `evia:${this.projectId}:${this.environment}:${this.writeKey}:anonymous`;
     this.persistQueue = options.persistQueue === true;
@@ -340,6 +424,7 @@ class Client implements BrowserClient {
     }
     if (this.autoPageViews) this.emitAutoPageView();
     this.startScrollCollection();
+    this.startHeatmapCollection();
     this.rehydrateQueue();
     if (this.persistQueue && this.queue.length) {
       // Rehydrated events outlive their emitting page; drive config resolution
@@ -539,10 +624,14 @@ class Client implements BrowserClient {
           void response.body?.cancel().catch(() => {});
           throw new EviaSDKError(`CONFIG_HTTP_${response.status}`);
         }
+        const config = validateConfig(
+          await readJSON(response, 1024 * 1024),
+          this.projectId,
+          this.environment,
+        );
+        await verifyConfigSignature(config, this.configSigningKeyID, this.configSigningPublicJWK);
         return {
-          config: freezeConfig(
-            validateConfig(await readJSON(response, 1024 * 1024), this.projectId, this.environment),
-          ),
+          config: freezeConfig(config),
           etag: response.headers.get('ETag') ?? undefined,
         };
       })
@@ -796,6 +885,47 @@ class Client implements BrowserClient {
     this.emitSystemEvent(sessionEndEventKey, this.autoSessionEnd, { reason });
   }
 
+  private startHeatmapCollection(): void {
+    if (!this.autoHeatmapClicks || !this.heatmapHost) return;
+    const unsubscribe = this.heatmapHost.subscribe((sample: HeatmapClick) => {
+      if (this.destroyed || !this.enabled) return;
+      const now = this.clock.now();
+      this.heatmapEmittedAt = this.heatmapEmittedAt.filter((at) => now - at < scrollWindowMs);
+      if (this.heatmapEmittedAt.length >= maxHeatmapClicksPerMinute) return;
+      if (
+        !Number.isFinite(sample.xRatio) ||
+        !Number.isFinite(sample.yRatio) ||
+        !Number.isInteger(sample.viewportWidth) ||
+        !Number.isInteger(sample.viewportHeight) ||
+        sample.viewportWidth < 1 ||
+        sample.viewportWidth > 65535 ||
+        sample.viewportHeight < 1 ||
+        sample.viewportHeight > 65535 ||
+        typeof sample.elementPath !== 'string' ||
+        sample.elementPath.length < 1 ||
+        sample.elementPath.length > 128
+      )
+        return;
+      this.heatmapEmittedAt.push(now);
+      const properties: Record<string, string | number> = {
+        x_ratio: round4(clamp01(sample.xRatio)),
+        y_ratio: round4(clamp01(sample.yRatio)),
+        viewport_width: sample.viewportWidth,
+        viewport_height: sample.viewportHeight,
+        element_path: sample.elementPath,
+      };
+      if (
+        sample.elementIndex !== undefined &&
+        Number.isInteger(sample.elementIndex) &&
+        sample.elementIndex >= 0 &&
+        sample.elementIndex <= 255
+      )
+        properties.element_index = sample.elementIndex;
+      this.emitSystemEvent(heatmapClickEventKey, true, properties);
+    });
+    this.cleanup.push(unsubscribe);
+  }
+
   private startScrollCollection(): void {
     if (!this.autoPageScrolls || !this.scrollHost) return;
     const host = this.scrollHost;
@@ -985,7 +1115,12 @@ class Client implements BrowserClient {
           `${this.endpoint}/v1/collect`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+            headers: {
+              'Content-Type': 'text/plain;charset=UTF-8',
+              ...(this.config?.telemetry_token
+                ? { 'X-Evia-Telemetry': this.config.telemetry_token }
+                : {}),
+            },
             body: batch.body,
             // Lifecycle transitions cannot upgrade an already submitted fetch.
             // Every bounded collection request is keepalive-capable from start.
