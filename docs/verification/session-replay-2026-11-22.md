@@ -9,7 +9,7 @@
 - `item_id=每个加密段 UUID`
 - `actor_type=browser`
 
-交付了真实浏览器采集、压缩分段、浏览器端混合加密、opaque 仓库、content-worker 解密、安全索引、授权读取及沙箱重建证据。正式 Evia 控制台中的回放发现列表和播放器仍未交付；当前播放器是验证工具，不代表产品工作区完成。
+交付了真实浏览器采集、压缩分段、浏览器端混合加密、opaque 仓库、content-worker 解密、安全索引、授权读取及沙箱重建证据；后续同日补齐正式 Evia 控制台的会话流/内容项发现与安全 DOM 快照预览。mutation 逐帧精确播放仍未交付。
 
 ## 采集与数据量控制
 
@@ -51,16 +51,26 @@ newSSE `src/analytics/replay.ts`：
 - `screenshots/newsse-replay-network-req-res.png`
 - `screenshots/evia-replay-authorized-api.png`
 - `screenshots/evia-session-replay-player.png`
+- `screenshots/evia-formal-session-replay-console.png`
+- `screenshots/evia-formal-session-replay-preview.png`
+
+## 正式控制台工作区
+
+- 通用发现 API：`GET .../content/streams` 与 `GET .../content/streams/{stream_id}/items`，要求 environment、1–8 个规范化 content types、limit/cursor；既支持 owner session，也支持环境绑定的 `content.read` 机器凭据。
+- PostgreSQL 仅从完整且 chunk_count 一致的 item 聚合；迁移 047 增 stream/time 索引。流按 `(last_received_at DESC,stream_id)`，item 按 `(received_at,item_id)`；签名游标绑定 actor/project/environment/stream/type，并用 `created_at <= as_of` 冻结分页视图，防止 worker 并发追加导致跨页漂移。
+- owner 项目权限投影新增 `content.read`；editor/viewer 仍由存储事务内 owner 检查拒绝。机器授权 UI 同步公开该独立敏感权限。
+- 控制台「会话回放」工作区提供流列表、完整内容项列表、分页、错误/空态和安全快照预览。快照读取不进入 React Query 缓存；最多 600 个 item、8 并发读取、16 MiB 解压上限。
+- 预览前再次移除 script/iframe/object/embed/base/link、事件处理器、外部 src/href/action 与凭据属性，注入 `default-src 'none'` CSP，并在不含任何 sandbox capability 的 iframe 中使用 `no-referrer` 展示。
+- 真实全栈 UI：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示「欢迎回来」登录页。全栈 Playwright spec 1/1、replay/permission model 5/5 通过。
 
 ## 修复的升级缺陷
 
 原始敏感消息迁移在已升级数据库中残留 `actor_type IN ('user','assistant')` 和状态枚举，违反通用平台模型并阻断 `actor_type=browser`。迁移 046 删除产品专属约束，改为 actor/status bounded string；新建库仍由当前 044 的通用定义建立约束。
 
-验证过程中旧二进制未嵌入迁移 046，因此先对隔离验证库等价执行 SQL 完成 E2E；源迁移随后经 044→045→046 隔离 PostgreSQL 冷启动并用 `actor_type=browser,status=captured` 实插验证。依赖网络恢复后完整 `make backend-test`（gofmt、go vet、`go test -race ./...`）通过，包含 content/storage/control 全套。
+验证过程中旧二进制未嵌入迁移 046，因此先对隔离验证库等价执行 SQL 完成 E2E；源迁移随后经 044→045→046→047 隔离 PostgreSQL 冷启动并用 `actor_type=browser,status=captured` 实插验证。完整 `make backend-test`（gofmt、go vet、`go test -race ./...`）与 web gate（Prettier、typecheck、API client 52/52、SDK 79/79、SDK/console build）通过；content discovery 真实 PostgreSQL `-race` 集成与 OpenAPI/JSON Schema 全契约验证通过。
 
 ## 尚未完成
 
-- Evia 控制台中的 replay stream 发现/列表、产品播放器和审计 UX。
-- 云对象存储适配器、生产 KMS/HSM gateway 实部署。
-- mutation 精确重放（当前验证播放器展示 snapshot 与记录时间线；未逐帧应用所有 mutation）。
+- mutation 精确重放（正式工作区当前展示最新完整 snapshot，不逐帧应用 mutation）。
+- 回放访问审计 UX、云对象存储适配器、生产 KMS/HSM gateway 实部署。
 - SPA 长会话的更完整节点 ID 模型、iframe/Shadow DOM 策略、性能与丢帧基准。
