@@ -12,6 +12,7 @@ export type WorkspaceSection =
   | 'machine-access'
   | 'governance'
   | 'identity'
+  | 'session-replay'
   | 'erasure'
   | 'exports'
   | 'retention'
@@ -61,6 +62,12 @@ const paths: Record<WorkspaceSection, ReactNode> = {
       <circle cx="8.5" cy="8" r="3" />
       <circle cx="15.5" cy="8" r="3" />
       <path d="M3 19a5.5 5.5 0 0 1 11 0M10 19a5.5 5.5 0 0 1 11 0" />
+    </>
+  ),
+  'session-replay': (
+    <>
+      <rect x="3" y="4" width="18" height="14" rx="3" />
+      <path d="m10 8 5 3-5 3V8ZM8 21h8" />
     </>
   ),
   metrics: (

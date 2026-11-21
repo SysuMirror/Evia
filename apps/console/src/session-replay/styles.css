@@ -1,0 +1,49 @@
+.replay-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.replay-selection {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.replay-preview-meta {
+  color: var(--color-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px 20px;
+  margin-bottom: 12px;
+}
+
+.replay-frame-shell {
+  background: #eef2f7;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  height: min(680px, 70vh);
+  overflow: hidden;
+}
+
+.replay-frame-shell iframe {
+  background: white;
+  border: 0;
+  height: 100%;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .replay-selection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .replay-frame-shell {
+    height: 520px;
+  }
+}

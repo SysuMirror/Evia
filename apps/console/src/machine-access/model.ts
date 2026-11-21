@@ -74,8 +74,9 @@ export const permissionGroups: {
   },
   {
     name: '数据治理',
-    help: '独立敏感授权，不由其他权限推导：数据删除按身份永久清除事实，数据导出物化有界查询产物。',
+    help: '独立敏感授权，不由其他权限推导：内容读取可访问解密后的受保护内容，数据删除与导出影响持久数据。',
     items: [
+      { value: 'content.read', label: '读取受保护内容' },
       { value: 'data.erasure', label: '按身份删除数据' },
       { value: 'data.export', label: '创建数据导出作业' },
     ],

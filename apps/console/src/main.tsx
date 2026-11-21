@@ -77,6 +77,11 @@ const ErasurePage = lazy(() =>
 const IdentityPage = lazy(() =>
   import('./identity/identity').then((module) => ({ default: module.IdentityPage })),
 );
+const SessionReplayPage = lazy(() =>
+  import('./session-replay/session-replay').then((module) => ({
+    default: module.SessionReplayPage,
+  })),
+);
 const ExportsPage = lazy(() =>
   import('./exports/exports').then((module) => ({ default: module.ExportsPage })),
 );
@@ -241,6 +246,9 @@ function Workspace({ session }: { session: Session }) {
       : []),
     ...(project.data?.permissions.includes('queries.read')
       ? [{ path: 'identity' as const, label: '身份修订', component: IdentityPage }]
+      : []),
+    ...(project.data?.permissions.includes('content.read')
+      ? [{ path: 'session-replay' as const, label: '会话回放', component: SessionReplayPage }]
       : []),
     ...(project.data?.permissions.includes('data.erasure')
       ? [{ path: 'erasure' as const, label: '数据删除', component: ErasurePage }]
