@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
@@ -138,6 +139,24 @@ func (a *API) publicConfig(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	resource := wire.PublicConfig{Format: out.Config.Format, ProjectID: out.Config.ProjectID, Environment: out.Config.Environment, ReleaseRevision: out.Config.Revision}
+	if out.Config.ContentEncryption != nil {
+		resource.ContentEncryption = &wire.ContentEncryptionPublicKey{
+			KeyID:     out.Config.ContentEncryption.KeyID,
+			Alg:       out.Config.ContentEncryption.Algorithm,
+			PublicJwk: out.Config.ContentEncryption.PublicJWK,
+		}
+	}
+	if out.Config.ConfigSignature != nil {
+		resource.ConfigSignature = &wire.PublicConfigSignature{
+			KeyID: out.Config.ConfigSignature.KeyID, Alg: out.Config.ConfigSignature.Algorithm,
+			DigestSha256: out.Config.ConfigSignature.DigestSHA256, Signature: out.Config.ConfigSignature.Signature,
+		}
+	}
+	if out.Config.TelemetryToken != "" && out.Config.TelemetryExpiresAt != nil {
+		resource.TelemetryToken = &out.Config.TelemetryToken
+		expires := out.Config.TelemetryExpiresAt.UTC().Format(time.RFC3339Nano)
+		resource.TelemetryExpiresAt = &expires
+	}
 	resource.Events = make([]struct {
 		EventKey      string         `json:"event_key"`
 		SchemaVersion int64          `json:"schema_version"`

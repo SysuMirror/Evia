@@ -191,6 +191,25 @@ type ComparisonSpec struct {
 	Amount *int64 `json:"amount,omitempty"`
 }
 
+type ContentEncryptionPublicKey struct {
+	KeyID     string         `json:"key_id"`
+	Alg       string         `json:"alg"`
+	PublicJwk map[string]any `json:"public_jwk"`
+}
+
+type ContentMessage struct {
+	ConversationID string  `json:"conversation_id"`
+	MessageID      string  `json:"message_id"`
+	Role           string  `json:"role"`
+	Content        string  `json:"content"`
+	Truncated      bool    `json:"truncated"`
+	ContentLength  int64   `json:"content_length"`
+	KeyID          string  `json:"key_id"`
+	ReceivedAt     string  `json:"received_at"`
+	ResponseStatus *string `json:"response_status,omitempty"`
+	DurationMs     *int64  `json:"duration_ms,omitempty"`
+}
+
 type CredentialRotation struct {
 	OverlapSeconds int64 `json:"overlap_seconds"`
 }
@@ -1155,6 +1174,17 @@ type PublicConfig struct {
 		SchemaVersion int64          `json:"schema_version"`
 		Schema        map[string]any `json:"schema"`
 	} `json:"events"`
+	ContentEncryption  *ContentEncryptionPublicKey `json:"content_encryption,omitempty"`
+	TelemetryToken     *string                     `json:"telemetry_token,omitempty"`
+	TelemetryExpiresAt *string                     `json:"telemetry_expires_at,omitempty"`
+	ConfigSignature    *PublicConfigSignature      `json:"config_signature,omitempty"`
+}
+
+type PublicConfigSignature struct {
+	KeyID        string `json:"key_id"`
+	Alg          string `json:"alg"`
+	DigestSha256 string `json:"digest_sha256"`
+	Signature    string `json:"signature"`
 }
 
 type QueryDependency struct {

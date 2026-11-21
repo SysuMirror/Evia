@@ -15,6 +15,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 )
 
 var uuid = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -45,6 +46,10 @@ type Service struct {
 	validator              Validator
 	options                Options
 	reserved               ReservedEventProvider
+	contentEncryption      *ContentEncryption
+	telemetrySigner        *telemetry.Signer
+	telemetryTTL           time.Duration
+	configSigner           ConfigSigner
 	mu                     sync.Mutex
 	cache                  map[string]manifestCache
 	cacheBytes, cacheRules int
@@ -57,6 +62,37 @@ type Service struct {
 // events, byte-identical to the historical behaviour.
 func (s *Service) WithReservedEvents(provider ReservedEventProvider) *Service {
 	s.reserved = provider
+	return s
+}
+
+// WithContentEncryption advertises the active browser encryption public key in
+// /v1/config. The public JWK is safe to distribute; private keys remain outside
+// the API process. Passing nil keeps the historical response byte-identical.
+func (s *Service) WithConfigSigner(signer ConfigSigner) *Service {
+	s.configSigner = signer
+	return s
+}
+
+func (s *Service) WithTelemetrySigner(signer *telemetry.Signer, ttl time.Duration) *Service {
+	s.telemetrySigner = signer
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	s.telemetryTTL = ttl
+	return s
+}
+
+func (s *Service) WithContentEncryption(encryption *ContentEncryption) *Service {
+	if encryption == nil {
+		s.contentEncryption = nil
+		return s
+	}
+	clone := *encryption
+	clone.PublicJWK = make(map[string]any, len(encryption.PublicJWK))
+	for key, value := range encryption.PublicJWK {
+		clone.PublicJWK[key] = value
+	}
+	s.contentEncryption = &clone
 	return s
 }
 
@@ -247,9 +283,41 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 			return ConfigResult{}, Unavailable("PUBLIC_CONFIG_LIMIT_EXCEEDED")
 		}
 	}
+	if s.contentEncryption != nil {
+		clone := *s.contentEncryption
+		clone.PublicJWK = make(map[string]any, len(s.contentEncryption.PublicJWK))
+		for key, value := range s.contentEncryption.PublicJWK {
+			clone.PublicJWK[key] = value
+		}
+		out.Config.ContentEncryption = &clone
+	}
+	if s.telemetrySigner != nil && snapshot.Source.Kind == "browser" && auth.Origin != "" {
+		// Bucket issuance so the ETag/token stays stable inside one TTL window;
+		// the next bucket rotates before the prior token expires.
+		expires := time.Now().UTC().Truncate(s.telemetryTTL).Add(2 * s.telemetryTTL)
+		token, signErr := s.telemetrySigner.Sign(telemetry.Claims{
+			SourceID: snapshot.Source.ID, ProjectID: snapshot.Source.ProjectID,
+			Environment: snapshot.Source.Environment, Origin: auth.Origin,
+			Revision: chosen.Revision, WriteKeyHash: telemetry.HashWriteKey(key), ExpiresAt: expires.Unix(),
+		})
+		if signErr != nil {
+			return ConfigResult{}, signErr
+		}
+		out.Config.TelemetryToken = token
+		out.Config.TelemetryExpiresAt = &expires
+	}
 	hash, e := canonical.Hash(out.Config)
 	if e != nil {
 		return ConfigResult{}, e
+	}
+	if s.configSigner != nil {
+		keyID, signature, signErr := s.configSigner.SignDigest(hash)
+		if signErr != nil {
+			return ConfigResult{}, signErr
+		}
+		out.Config.ConfigSignature = &ConfigSignature{
+			KeyID: keyID, Algorithm: "Ed25519", DigestSHA256: hash, Signature: signature,
+		}
 	}
 	out.ETag = "\"" + hash + "\""
 	return out, nil

@@ -235,6 +235,13 @@ func (c *Collector) authenticate(ctx context.Context, key string, auth Authentic
 		if auth.Origin == "" || !allowed {
 			return source, fault.New(fault.Forbidden, "SOURCE_ORIGIN_FORBIDDEN", "该来源不允许此 Origin")
 		}
+		if auth.Telemetry != nil && (auth.Telemetry.SourceID != source.Source.ID ||
+			auth.Telemetry.ProjectID != source.Source.ProjectID ||
+			auth.Telemetry.Environment != source.Source.Environment ||
+			auth.Telemetry.Origin != auth.Origin ||
+			auth.Telemetry.Revision < 1) {
+			return source, fault.New(fault.Unauthenticated, "TELEMETRY_TOKEN_SCOPE_INVALID", "浏览器上报授权范围无效")
+		}
 		if auth.Bearer != "" {
 			return source, fault.New(fault.Forbidden, "BROWSER_AUTH_FORBIDDEN", "浏览器来源不得携带网站登录凭据")
 		}
@@ -321,6 +328,11 @@ func (c *Collector) Collect(ctx context.Context, batch Batch, auth Authenticatio
 		}
 		if e = json.Unmarshal(raw, &event); e != nil {
 			reject("INVALID_EVENT", false)
+			out.Results[i] = result
+			continue
+		}
+		if auth.Telemetry != nil && event.Revision != auth.Telemetry.Revision {
+			reject("TELEMETRY_TOKEN_REVISION_MISMATCH", false, "release_revision")
 			out.Results[i] = result
 			continue
 		}

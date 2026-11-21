@@ -22,6 +22,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/artifacts"
 	"github.com/howtomakeaname/Evia/backend/internal/backfilling"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
+	"github.com/howtomakeaname/Evia/backend/internal/content"
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/diagnostics"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
@@ -36,6 +37,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 	"github.com/howtomakeaname/Evia/backend/internal/quotas"
 	"github.com/howtomakeaname/Evia/backend/internal/reporting"
 	"github.com/howtomakeaname/Evia/backend/internal/reports"
@@ -245,6 +247,17 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Erasure = store
 	api.Identity = store
+	if c.ContentDir != "" {
+		contentArtifacts, contentErr := content.NewFileStore(c.ContentDir)
+		if contentErr != nil {
+			return stageError("content artifact store", contentErr)
+		}
+		contentService, contentErr := content.NewService(store, contentArtifacts)
+		if contentErr != nil {
+			return stageError("content service", contentErr)
+		}
+		api.Content = contentService
+	}
 	retentionService := retention.NewServiceWithSweepReader(store, store)
 	api.Retention = retentionService
 	api.RetentionSweeps = retentionService
@@ -341,6 +354,13 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		collectionAPI, err := control.NewCollectionAPI(boundary, collector)
 		if err != nil {
 			return stageError("collection boundary", err)
+		}
+		if len(c.TelemetrySigningKey) > 0 {
+			telemetrySigner, signerErr := telemetry.New(c.TelemetrySigningKey)
+			if signerErr != nil {
+				return stageError("telemetry signer", signerErr)
+			}
+			collectionAPI.WithTelemetrySigner(telemetrySigner)
 		}
 		mux.Handle("/v1/collect", collectionAPI.Handler())
 		probes = append(probes, limiter.Ping, recorder.Ping, producer.Ping)
@@ -666,6 +686,40 @@ func identityWorkerRuntime(ctx context.Context, c config.Config, store *postgres
 	})
 	logger.Info("identity worker starting")
 	return supervise(ctx, append(metricsTasks(c, "identity-worker", registry), task{name: "identity worker", run: worker.Run}), 15*time.Second)
+}
+
+func contentWorkerRuntime(ctx context.Context, c config.Config, store *postgres.Store, logger *slog.Logger) error {
+	client := httpClient()
+	defer client.CloseIdleConnections()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := clickHouseProbe(startup, c, client)
+	cancel()
+	if err != nil {
+		return stageError("content worker startup", err)
+	}
+	scanner, err := pipeline.NewContentScanner(sinkConfig(c, client), client)
+	if err != nil {
+		return stageError("content scanner configuration", err)
+	}
+	var decryptor *content.RSAOAEPDecryptor
+	if c.ContentKMSURL != "" {
+		decryptor, err = content.NewRSAOAEPDecryptorFromKMS(c.ContentKMSURL, c.ContentKMSTokenPath, c.ContentKeyID, c.AllowInsecureDependencies)
+	} else {
+		decryptor, err = content.NewRSAOAEPDecryptorFromFile(c.ContentPrivateJWKPath, c.ContentKeyID)
+	}
+	if err != nil {
+		return stageError("content key provider", err)
+	}
+	artifacts, err := content.NewFileStore(c.ContentDir)
+	if err != nil {
+		return stageError("content artifact store", err)
+	}
+	worker := &content.Worker{
+		Store: store, Scanner: scanner, Decryptor: decryptor, Artifacts: artifacts,
+		ID: c.InstanceID + "-" + ids.New(), Lease: time.Minute, Logger: logger,
+	}
+	logger.Info("content worker starting", "artifact_dir", c.ContentDir, "key_id", c.ContentKeyID)
+	return supervise(ctx, append(metricsTasks(c, "content-worker", observe.NewRegistry("content-worker")), task{name: "content worker", run: worker.Run}), 15*time.Second)
 }
 
 func propertySlotsRuntime(ctx context.Context, c config.Config, logger *slog.Logger) error {

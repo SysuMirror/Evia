@@ -1806,6 +1806,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/content/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getContentMessage */
+        get: operations["getContentMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2329,7 +2346,7 @@ export interface components {
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             release_revision: number;
-            /** @description 只包含当前来源类型可上报的事件；允许为空。上限 205 = 200 个项目发布事件 + 5 个平台保留 sys.* 事件。 */
+            /** @description 只包含当前来源类型可上报的事件；允许为空。上限 206 = 200 个项目发布事件 + 6 个平台保留 sys.* 事件。 */
             events: {
                 event_key: string;
                 schema_version: number;
@@ -2338,6 +2355,12 @@ export interface components {
                     [key: string]: unknown;
                 };
             }[];
+            content_encryption?: components["schemas"]["ContentEncryptionPublicKey"];
+            /** @description Short-lived HMAC-signed browser collection grant scoped to source/project/environment/origin/revision/write key. */
+            telemetry_token?: string;
+            /** Format: date-time */
+            telemetry_expires_at?: string;
+            config_signature?: components["schemas"]["PublicConfigSignature"];
         };
         ProblemDetails: {
             field_paths?: string[];
@@ -3041,7 +3064,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run" | "metrics.read" | "metrics.write" | "metrics.publish" | "metrics.run" | "data.erasure" | "data.export";
+        MachinePermission: "project.read" | "catalog.drafts.read" | "catalog.drafts.write" | "catalog.releases.read" | "catalog.releases.publish" | "catalog.releases.activate" | "sources.read" | "sources.write" | "sources.rotate" | "queries.read" | "queries.run" | "queries.raw.read" | "analyses.read" | "analyses.write" | "analyses.publish" | "analyses.run" | "dashboards.read" | "dashboards.write" | "dashboards.publish" | "dashboards.run" | "metrics.read" | "metrics.write" | "metrics.publish" | "metrics.run" | "data.erasure" | "data.export" | "content.read";
         MachinePrincipal: {
             /** Format: uuid */
             id: string;
@@ -3492,6 +3515,37 @@ export interface components {
             /** Format: uuid */
             resolved_person_id: string;
             members: components["schemas"]["IdentityMember"][];
+        };
+        ContentEncryptionPublicKey: {
+            key_id: string;
+            /** @constant */
+            alg: "RSA-OAEP-256";
+            /** @description Browser-safe RSA public JWK; private parameters are never included. */
+            public_jwk: {
+                [key: string]: unknown;
+            };
+        };
+        ContentMessage: {
+            conversation_id: string;
+            message_id: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+            truncated: boolean;
+            content_length: number;
+            key_id: string;
+            /** Format: date-time */
+            received_at: string;
+            /** @enum {string} */
+            response_status?: "done" | "error" | "stopped";
+            duration_ms?: number;
+        };
+        PublicConfigSignature: {
+            key_id: string;
+            /** @constant */
+            alg: "Ed25519";
+            digest_sha256: string;
+            signature: string;
         };
         filter: {
             /**
@@ -18678,6 +18732,76 @@ export interface operations {
             };
             /** @description 修订不可解析 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getContentMessage: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMessage"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

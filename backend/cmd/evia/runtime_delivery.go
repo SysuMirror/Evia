@@ -10,7 +10,9 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/config"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/configsign"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 	"github.com/howtomakeaname/Evia/backend/internal/storage/postgres"
 )
 
@@ -68,6 +70,31 @@ func newDelivery(c config.Config, store *postgres.Store, validator *contract.Val
 		return nil, nil, result
 	}
 	service.WithReservedEvents(systemEventProvider{catalog: systemCatalog})
+	if c.ConfigSigningJWKPath != "" {
+		signer, signerErr := configsign.NewFromFile(c.ConfigSigningJWKPath, c.ConfigSigningKeyID)
+		if signerErr != nil {
+			result := stageError("config signer", signerErr)
+			closeProbe(probe, &result)
+			return nil, nil, result
+		}
+		service.WithConfigSigner(signer)
+	}
+	if len(c.TelemetrySigningKey) > 0 {
+		signer, signerErr := telemetry.New(c.TelemetrySigningKey)
+		if signerErr != nil {
+			result := stageError("telemetry signer", signerErr)
+			closeProbe(probe, &result)
+			return nil, nil, result
+		}
+		service.WithTelemetrySigner(signer, 5*time.Minute)
+	}
+	if c.ContentKeyID != "" {
+		service.WithContentEncryption(&delivery.ContentEncryption{
+			KeyID:     c.ContentKeyID,
+			Algorithm: "RSA-OAEP-256",
+			PublicJWK: c.ContentPublicJWK,
+		})
+	}
 	return service, probe, nil
 }
 

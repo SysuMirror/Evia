@@ -133,7 +133,15 @@ type Batch struct {
 	SentAt       time.Time
 	Events       []json.RawMessage
 }
-type Authentication struct{ Bearer, Origin string }
+type TelemetryClaims struct {
+	SourceID, ProjectID, Environment, Origin string
+	Revision                                 int64
+}
+
+type Authentication struct {
+	Bearer, Origin string
+	Telemetry      *TelemetryClaims
+}
 type ItemError struct {
 	Code       string   `json:"code"`
 	Retryable  bool     `json:"retryable"`

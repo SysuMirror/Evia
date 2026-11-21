@@ -28,10 +28,10 @@ func main() {
 
 func execute(ctx context.Context, args []string, get func(string) string, logger *slog.Logger) error {
 	if len(args) != 1 {
-		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | identity-worker | retention-worker | export-worker | backfill-worker | property-slots | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password | account-audit")
+		return errors.New("usage: evia serve | ingest-worker | query-worker | erasure-worker | identity-worker | content-worker | retention-worker | export-worker | backfill-worker | property-slots | migrate | bootstrap | account-create | account-disable | account-enable | account-reset-password | account-audit")
 	}
 	command := args[0]
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "property-slots" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" && command != "account-audit" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "content-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "property-slots" && command != "migrate" && command != "bootstrap" && command != "account-create" && command != "account-disable" && command != "account-enable" && command != "account-reset-password" && command != "account-audit" {
 		return errors.New("unknown command")
 	}
 	var cfg config.Config
@@ -109,6 +109,8 @@ func execute(ctx context.Context, args []string, get func(string) string, logger
 		return erasureWorkerRuntime(ctx, cfg, store, logger)
 	case "identity-worker":
 		return identityWorkerRuntime(ctx, cfg, store, logger)
+	case "content-worker":
+		return contentWorkerRuntime(ctx, cfg, store, logger)
 	case "property-slots":
 		return propertySlotsRuntime(ctx, cfg, logger)
 	case "retention-worker":

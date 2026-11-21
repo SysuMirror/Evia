@@ -150,8 +150,8 @@ func TestSystemEventFixtureInvariants(t *testing.T) {
 		t.Fatalf("unexpected envelope format %q", envelope.Format)
 	}
 	wantKeys := map[string]bool{
-		"sys.page_view": true, "sys.page_scroll": true, "sys.identity_link": true,
-		"sys.session_end": true, "sys.operation_failed": true,
+		"sys.page_view": true, "sys.page_scroll": true, "sys.heatmap_click": true,
+		"sys.identity_link": true, "sys.session_end": true, "sys.operation_failed": true,
 	}
 	if len(envelope.Events) != len(wantKeys) {
 		t.Fatalf("want %d system events, got %d", len(wantKeys), len(envelope.Events))

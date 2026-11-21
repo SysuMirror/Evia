@@ -15,6 +15,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -23,6 +24,12 @@ type CollectionAPI struct {
 	Collector *ingestion.Collector
 	header    *jsonschema.Schema
 	timeout   time.Duration
+	telemetry *telemetry.Signer
+}
+
+func (a *CollectionAPI) WithTelemetrySigner(signer *telemetry.Signer) *CollectionAPI {
+	a.telemetry = signer
+	return a
 }
 
 func NewCollectionAPI(boundary *httpapi.Boundary, collector *ingestion.Collector) (*CollectionAPI, error) {
@@ -78,13 +85,13 @@ func (a *CollectionAPI) options(w http.ResponseWriter, r *http.Request) error {
 	}
 	for _, header := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
 		h := strings.ToLower(strings.TrimSpace(header))
-		if h != "" && h != "content-type" {
+		if h != "" && h != "content-type" && h != "x-evia-telemetry" {
 			return fault.New(fault.Forbidden, "COLLECTION_HEADER_FORBIDDEN", "浏览器接收端不允许此请求头")
 		}
 	}
 	collectionCORS(w, origin)
 	w.Header().Set("Access-Control-Allow-Methods", "POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Evia-Telemetry")
 	w.Header().Set("Access-Control-Max-Age", "300")
 	w.WriteHeader(http.StatusNoContent)
 	return nil
@@ -103,7 +110,7 @@ func (a *CollectionAPI) collect(w http.ResponseWriter, r *http.Request) error {
 	if e != nil || (media != "application/json" && media != "text/plain") || (params["charset"] != "" && !strings.EqualFold(params["charset"], "utf-8")) {
 		return fault.New(fault.Invalid, "INVALID_CONTENT_TYPE", "接收端仅支持 UTF-8 JSON 或 text/plain")
 	}
-	if len(r.Header.Values("Authorization")) > 1 || len(r.Header.Values("Origin")) > 1 {
+	if len(r.Header.Values("Authorization")) > 1 || len(r.Header.Values("Origin")) > 1 || len(r.Header.Values("X-Evia-Telemetry")) > 1 {
 		return ingestion.Invalid("BAD_BATCH", "接收请求头不可重复")
 	}
 	// Collection never authenticates with platform/website cookies. Rejecting
@@ -132,6 +139,18 @@ func (a *CollectionAPI) collect(w http.ResponseWriter, r *http.Request) error {
 	if e = json.Unmarshal(raw, &in); e != nil {
 		return ingestion.Invalid("BAD_BATCH", "批次字段无效")
 	}
+	var telemetryClaims *ingestion.TelemetryClaims
+	if a.telemetry != nil {
+		token := r.Header.Get("X-Evia-Telemetry")
+		claims, verifyErr := a.telemetry.Verify(token, time.Now().UTC())
+		if verifyErr != nil || claims.WriteKeyHash != telemetry.HashWriteKey(in.WriteKey) {
+			return fault.New(fault.Unauthenticated, "TELEMETRY_TOKEN_INVALID", "浏览器上报授权无效或已过期")
+		}
+		telemetryClaims = &ingestion.TelemetryClaims{
+			SourceID: claims.SourceID, ProjectID: claims.ProjectID, Environment: claims.Environment,
+			Origin: claims.Origin, Revision: claims.Revision,
+		}
+	}
 	bearer := ""
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		parts := strings.Fields(auth)
@@ -143,7 +162,7 @@ func (a *CollectionAPI) collect(w http.ResponseWriter, r *http.Request) error {
 	bounded, cancel := context.WithTimeout(r.Context(), a.timeout)
 	defer cancel()
 	r = r.WithContext(bounded)
-	out, status, e := a.Collector.Collect(r.Context(), ingestion.Batch{ID: in.ID, WriteKey: in.WriteKey, SentAt: in.SentAt, Events: in.Events}, ingestion.Authentication{Bearer: bearer, Origin: r.Header.Get("Origin")})
+	out, status, e := a.Collector.Collect(r.Context(), ingestion.Batch{ID: in.ID, WriteKey: in.WriteKey, SentAt: in.SentAt, Events: in.Events}, ingestion.Authentication{Bearer: bearer, Origin: r.Header.Get("Origin"), Telemetry: telemetryClaims})
 	if e != nil {
 		return e
 	}

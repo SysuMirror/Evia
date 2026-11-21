@@ -20427,6 +20427,113 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/content/messages/{message_id}": {
+      "get": {
+        "operationId": "getContentMessage",
+        "summary": "getContentMessage",
+        "security": [
+          {
+            "consoleSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -22618,7 +22725,7 @@
           },
           "events": {
             "type": "array",
-            "maxItems": 205,
+            "maxItems": 206,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -22645,7 +22752,23 @@
                 "schema"
               ]
             },
-            "description": "只包含当前来源类型可上报的事件；允许为空。上限 205 = 200 个项目发布事件 + 5 个平台保留 sys.* 事件。"
+            "description": "只包含当前来源类型可上报的事件；允许为空。上限 206 = 200 个项目发布事件 + 6 个平台保留 sys.* 事件。"
+          },
+          "content_encryption": {
+            "$ref": "#/components/schemas/ContentEncryptionPublicKey"
+          },
+          "telemetry_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 2048,
+            "description": "Short-lived HMAC-signed browser collection grant scoped to source/project/environment/origin/revision/write key."
+          },
+          "telemetry_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "config_signature": {
+            "$ref": "#/components/schemas/PublicConfigSignature"
           }
         },
         "required": [
@@ -25763,7 +25886,8 @@
           "metrics.publish",
           "metrics.run",
           "data.erasure",
-          "data.export"
+          "data.export",
+          "content.read"
         ]
       },
       "MachinePrincipal": {
@@ -25794,7 +25918,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 26,
+            "maxItems": 27,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -25927,7 +26051,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 26,
+            "maxItems": 27,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -26045,7 +26169,7 @@
           "permissions": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 26,
+            "maxItems": 27,
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/MachinePermission"
@@ -27870,6 +27994,126 @@
           "revision",
           "resolved_person_id",
           "members"
+        ]
+      },
+      "ContentEncryptionPublicKey": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "alg": {
+            "const": "RSA-OAEP-256"
+          },
+          "public_jwk": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Browser-safe RSA public JWK; private parameters are never included."
+          }
+        },
+        "required": [
+          "key_id",
+          "alg",
+          "public_jwk"
+        ]
+      },
+      "ContentMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "message_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "content_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "response_status": {
+            "type": "string",
+            "enum": [
+              "done",
+              "error",
+              "stopped"
+            ]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600000
+          }
+        },
+        "required": [
+          "conversation_id",
+          "message_id",
+          "role",
+          "content",
+          "truncated",
+          "content_length",
+          "key_id",
+          "received_at"
+        ]
+      },
+      "PublicConfigSignature": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "alg": {
+            "const": "Ed25519"
+          },
+          "digest_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "signature": {
+            "type": "string",
+            "minLength": 86,
+            "maxLength": 86
+          }
+        },
+        "required": [
+          "key_id",
+          "alg",
+          "digest_sha256",
+          "signature"
         ]
       }
     }

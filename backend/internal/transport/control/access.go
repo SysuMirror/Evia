@@ -46,6 +46,7 @@ type API struct {
 	Delivery         DeliveryService
 	Erasure          ErasureService
 	Identity         IdentityService
+	Content          ContentService
 	Exports          ExportService
 	ExportDownloads  exporting.ArtifactStore
 	ExportValidator  analysis.Validator
@@ -91,6 +92,7 @@ func (a *API) Handler() http.Handler {
 	(&DashboardFoldersAPI{API: a, Service: a.DashboardFolders}).Register(mux)
 	(&ErasureAPI{API: a, Service: a.Erasure}).Register(mux)
 	(&IdentityAPI{API: a, Service: a.Identity}).Register(mux)
+	(&ContentAPI{API: a, Service: a.Content}).Register(mux)
 	(&ExportAPI{API: a, Service: a.Exports, Validator: a.ExportValidator, Downloads: a.ExportDownloads}).Register(mux)
 	(&RetentionAPI{API: a, Service: a.Retention, Sweeps: a.RetentionSweeps}).Register(mux)
 	(&ArchiveAPI{API: a, Service: a.Archives}).Register(mux)

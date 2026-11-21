@@ -87,12 +87,33 @@ type ReservedEvent struct {
 type ReservedEventProvider interface {
 	ReservedEvents() []ReservedEvent
 }
+
+type ConfigSigner interface {
+	SignDigest(string) (keyID, signature string, err error)
+}
+type ContentEncryption struct {
+	KeyID     string         `json:"key_id"`
+	Algorithm string         `json:"alg"`
+	PublicJWK map[string]any `json:"public_jwk"`
+}
+
+type ConfigSignature struct {
+	KeyID        string `json:"key_id"`
+	Algorithm    string `json:"alg"`
+	DigestSHA256 string `json:"digest_sha256"`
+	Signature    string `json:"signature"`
+}
+
 type Config struct {
-	Format      string        `json:"format"`
-	ProjectID   string        `json:"project_id"`
-	Environment string        `json:"environment"`
-	Revision    int64         `json:"release_revision"`
-	Events      []ConfigEvent `json:"events"`
+	Format             string             `json:"format"`
+	ProjectID          string             `json:"project_id"`
+	Environment        string             `json:"environment"`
+	Revision           int64              `json:"release_revision"`
+	Events             []ConfigEvent      `json:"events"`
+	ContentEncryption  *ContentEncryption `json:"content_encryption,omitempty"`
+	TelemetryToken     string             `json:"telemetry_token,omitempty"`
+	TelemetryExpiresAt *time.Time         `json:"telemetry_expires_at,omitempty"`
+	ConfigSignature    *ConfigSignature   `json:"config_signature,omitempty"`
 }
 type ConfigResult struct {
 	Config              Config

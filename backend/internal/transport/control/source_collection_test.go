@@ -15,6 +15,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 )
 
 type collectionSources struct{}
@@ -180,5 +181,48 @@ func TestCollectorHTTPFailureBoundsAndPreflight(t *testing.T) {
 	collectionHandler(t, &collectionQueue{}).ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatal("browser could forward website Authorization")
+	}
+}
+
+func TestCollectorHTTPRequiresScopedTelemetryGrantWhenConfigured(t *testing.T) {
+	signer, err := telemetry.New([]byte(strings.Repeat("t", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := signer.Sign(telemetry.Claims{
+		SourceID: catalogReleaseID, ProjectID: projectID, Environment: "development",
+		Origin: "https://website.example", Revision: 1,
+		WriteKeyHash: telemetry.HashWriteKey("public-key"), ExpiresAt: time.Now().Add(time.Minute).Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := func(token string, event map[string]any) *httptest.ResponseRecorder {
+		q := &collectionQueue{}
+		r := httptest.NewRequest("POST", "/v1/collect", strings.NewReader(collectionBody(event)))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", "https://website.example")
+		if token != "" {
+			r.Header.Set("X-Evia-Telemetry", token)
+		}
+		w := httptest.NewRecorder()
+		collectionAdapter(t, q).WithTelemetrySigner(signer).Handler().ServeHTTP(w, r)
+		return w
+	}
+	if w := request(valid, collectionEvent()); w.Code != http.StatusAccepted {
+		t.Fatal("valid grant rejected", w.Code, w.Body.String())
+	}
+	if w := request("", collectionEvent()); w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "TELEMETRY_TOKEN_INVALID") {
+		t.Fatal("missing grant accepted", w.Code, w.Body.String())
+	}
+	parts := strings.Split(valid, ".")
+	tampered := parts[0] + "." + map[bool]string{true: "B", false: "A"}[strings.HasPrefix(parts[1], "A")] + parts[1][1:]
+	if w := request(tampered, collectionEvent()); w.Code != http.StatusUnauthorized {
+		t.Fatal("tampered grant accepted", w.Code, w.Body.String())
+	}
+	mismatch := collectionEvent()
+	mismatch["release_revision"] = 2
+	if w := request(valid, mismatch); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "TELEMETRY_TOKEN_REVISION_MISMATCH") {
+		t.Fatal("revision mismatch accepted", w.Code, w.Body.String())
 	}
 }

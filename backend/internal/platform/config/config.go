@@ -3,10 +3,12 @@ package config
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -68,6 +70,18 @@ type Config struct {
 	// PropertyCatalogStrict asserts the operator completed the property-slot
 	// backfill; fully covered reads then prune the document fallback.
 	PropertyCatalogStrict bool
+	// Content encryption publishes a browser-safe public JWK. Private keys are
+	// loaded only by content-worker from a secret-mounted file.
+	ContentKeyID          string
+	ContentPublicJWKPath  string
+	ContentPublicJWK      map[string]any
+	ContentPrivateJWKPath string
+	ContentKMSURL         string
+	ContentKMSTokenPath   string
+	ContentDir            string
+	TelemetrySigningKey   []byte
+	ConfigSigningKeyID    string
+	ConfigSigningJWKPath  string
 }
 
 var (
@@ -95,7 +109,7 @@ func Read(get func(string) string) (Config, error) { return ReadFor("serve", get
 // Administrative migration/bootstrap commands deliberately use only DatabaseURL.
 func ReadFor(command string, get func(string) string) (Config, error) {
 	c := Config{DatabaseURL: get("EVIA_DATABASE_URL"), SecureCookies: true, QueryWorkers: 2, InstanceID: "evia"}
-	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "property-slots" {
+	if command != "serve" && command != "ingest-worker" && command != "query-worker" && command != "erasure-worker" && command != "identity-worker" && command != "content-worker" && command != "retention-worker" && command != "export-worker" && command != "backfill-worker" && command != "property-slots" {
 		return c, errors.New("unknown runtime command")
 	}
 	if c.DatabaseURL == "" {
@@ -143,6 +157,47 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 		}
 		c.PropertyCatalog = catalog
 	}
+	c.ContentKeyID = get("EVIA_CONTENT_KEY_ID")
+	c.ContentPublicJWKPath = get("EVIA_CONTENT_PUBLIC_JWK_PATH")
+	if (c.ContentKeyID == "") != (c.ContentPublicJWKPath == "") {
+		return c, errors.New("EVIA_CONTENT_KEY_ID and EVIA_CONTENT_PUBLIC_JWK_PATH must be configured together")
+	}
+	if c.ContentKeyID != "" {
+		if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`).MatchString(c.ContentKeyID) {
+			return c, errors.New("EVIA_CONTENT_KEY_ID must be a bounded ASCII key id")
+		}
+		raw, readErr := os.ReadFile(c.ContentPublicJWKPath)
+		if readErr != nil || len(raw) == 0 || len(raw) > 16*1024 {
+			return c, errors.New("EVIA_CONTENT_PUBLIC_JWK_PATH must contain a bounded public JWK")
+		}
+		var jwk map[string]any
+		if jsonErr := json.Unmarshal(raw, &jwk); jsonErr != nil || jwk["kty"] != "RSA" || jwk["n"] == nil || jwk["e"] == nil || jwk["d"] != nil {
+			return c, errors.New("EVIA_CONTENT_PUBLIC_JWK_PATH must contain an RSA public JWK without private parameters")
+		}
+		c.ContentPublicJWK = jwk
+	}
+	if raw := get("EVIA_TELEMETRY_SIGNING_KEY"); raw != "" {
+		c.TelemetrySigningKey, err = hex.DecodeString(raw)
+		if err != nil || len(c.TelemetrySigningKey) != 32 {
+			return c, errors.New("EVIA_TELEMETRY_SIGNING_KEY must be 32 random bytes encoded as 64 hexadecimal characters")
+		}
+	}
+	c.ConfigSigningKeyID = get("EVIA_CONFIG_SIGNING_KEY_ID")
+	c.ConfigSigningJWKPath = get("EVIA_CONFIG_SIGNING_JWK_PATH")
+	if (c.ConfigSigningKeyID == "") != (c.ConfigSigningJWKPath == "") {
+		return c, errors.New("EVIA_CONFIG_SIGNING_KEY_ID and EVIA_CONFIG_SIGNING_JWK_PATH must be configured together")
+	}
+	c.ContentPrivateJWKPath = get("EVIA_CONTENT_PRIVATE_JWK_PATH")
+	c.ContentKMSURL = get("EVIA_CONTENT_KMS_URL")
+	c.ContentKMSTokenPath = get("EVIA_CONTENT_KMS_TOKEN_PATH")
+	c.ContentDir = get("EVIA_CONTENT_DIR")
+	if command == "content-worker" {
+		localKey := c.ContentPrivateJWKPath != ""
+		kmsKey := c.ContentKMSURL != "" && c.ContentKMSTokenPath != ""
+		if c.ContentKeyID == "" || c.ContentDir == "" || localKey == kmsKey {
+			return c, errors.New("content-worker requires content key/public JWK/content dir and exactly one private JWK or KMS endpoint+token")
+		}
+	}
 	if command == "serve" {
 		if err = c.readHTTP(get); err != nil {
 			return c, err
@@ -174,7 +229,7 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	// The erasure and retention workers only need PostgreSQL plus the
 	// ClickHouse executor; they deliberately load neither Kafka nor the Redis
 	// admission budget.
-	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "identity-worker" || command == "property-slots" || command == "retention-worker" || command == "export-worker" || command == "backfill-worker" {
+	if (c.AnalysisEnabled || c.DeliveryEnabled) && command == "serve" || command == "ingest-worker" || command == "query-worker" || command == "erasure-worker" || command == "identity-worker" || command == "content-worker" || command == "property-slots" || command == "retention-worker" || command == "export-worker" || command == "backfill-worker" {
 		if err = c.readClickHouse(get); err != nil {
 			return c, err
 		}
