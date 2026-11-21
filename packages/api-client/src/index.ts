@@ -38,6 +38,11 @@ export type IdentityRevision = components['schemas']['IdentityRevision'];
 export type IdentityRevisionList = components['schemas']['IdentityRevisionList'];
 export type IdentityResolution = components['schemas']['IdentityResolution'];
 export type IdentityMember = components['schemas']['IdentityMember'];
+export type ContentStreamSummary = components['schemas']['ContentStreamSummary'];
+export type ContentStreamList = components['schemas']['ContentStreamList'];
+export type ContentItemSummary = components['schemas']['ContentItemSummary'];
+export type ContentItemList = components['schemas']['ContentItemList'];
+export type ContentItem = components['schemas']['ContentItem'];
 export type ExportInput = components['schemas']['ExportInput'];
 export type ExportJob = components['schemas']['ExportJob'];
 export type ExportList = components['schemas']['ExportList'];
@@ -216,6 +221,12 @@ export type DashboardPage = SavedAnalysisPage & {
 };
 export type SavedAnalysisVersionPage = { cursor?: string; limit?: number };
 export type MachinePrincipalPage = { cursor?: string; limit?: number };
+export type ContentDiscoveryPage = {
+  environment: Environment;
+  contentTypes: string[];
+  cursor?: string;
+  limit?: number;
+};
 export type QueryResultPage = { cursor?: string; limit?: number };
 
 export class ApiError extends Error {
@@ -344,6 +355,14 @@ function catalogQuery(page: CatalogPage): string {
   if (page.folderId !== undefined) query.set('folder_id', page.folderId);
   if (page.search !== undefined) query.set('q', page.search);
   return query.size ? `?${query.toString()}` : '';
+}
+function contentDiscoveryQuery(page: ContentDiscoveryPage): string {
+  const query = new URLSearchParams();
+  query.set('environment', page.environment);
+  query.set('content_types', [...page.contentTypes].sort().join(','));
+  if (page.cursor !== undefined) query.set('cursor', page.cursor);
+  if (page.limit !== undefined) query.set('limit', String(page.limit));
+  return `?${query.toString()}`;
 }
 function queryResultQuery(page: QueryResultPage): string {
   const query = new URLSearchParams();
@@ -1316,6 +1335,31 @@ export const api = {
       `${projectPath(projectID)}/identity-revisions/${revision}/resolve?environment=${encodeURIComponent(identity.environment)}${
         identity.uid ? `&uid=${encodeURIComponent(identity.uid)}` : ''
       }${identity.anonymous_id ? `&anonymous_id=${encodeURIComponent(identity.anonymous_id)}` : ''}`,
+      { signal },
+    ),
+  listContentStreams: (projectID: string, page: ContentDiscoveryPage, signal?: AbortSignal) =>
+    request<ContentStreamList>(
+      `${projectPath(projectID)}/content/streams${contentDiscoveryQuery(page)}`,
+      { signal },
+    ),
+  listContentItems: (
+    projectID: string,
+    streamID: string,
+    page: ContentDiscoveryPage,
+    signal?: AbortSignal,
+  ) =>
+    request<ContentItemList>(
+      `${projectPath(projectID)}/content/streams/${encodeURIComponent(streamID)}/items${contentDiscoveryQuery(page)}`,
+      { signal },
+    ),
+  getContentItem: (
+    projectID: string,
+    itemID: string,
+    environment: Environment,
+    signal?: AbortSignal,
+  ) =>
+    request<ContentItem>(
+      `${projectPath(projectID)}/content/items/${encodeURIComponent(itemID)}${catalogQuery({ environment })}`,
       { signal },
     ),
   getRetentionPolicy: (

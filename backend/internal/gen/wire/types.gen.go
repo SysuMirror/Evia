@@ -211,6 +211,38 @@ type ContentItem struct {
 	DurationMs    *int64  `json:"duration_ms,omitempty"`
 }
 
+type ContentItemList struct {
+	Items      []ContentItemSummary `json:"items"`
+	NextCursor *string              `json:"next_cursor,omitempty"`
+}
+
+type ContentItemSummary struct {
+	ContentType   string  `json:"content_type"`
+	StreamID      string  `json:"stream_id"`
+	ItemID        string  `json:"item_id"`
+	ActorType     string  `json:"actor_type"`
+	ReceivedAt    string  `json:"received_at"`
+	ChunkCount    int64   `json:"chunk_count"`
+	ContentLength int64   `json:"content_length"`
+	Truncated     bool    `json:"truncated"`
+	Status        *string `json:"status,omitempty"`
+	DurationMs    *int64  `json:"duration_ms,omitempty"`
+}
+
+type ContentStreamList struct {
+	Items      []ContentStreamSummary `json:"items"`
+	NextCursor *string                `json:"next_cursor,omitempty"`
+}
+
+type ContentStreamSummary struct {
+	StreamID        string   `json:"stream_id"`
+	ContentTypes    []string `json:"content_types"`
+	ActorTypes      []string `json:"actor_types"`
+	FirstReceivedAt string   `json:"first_received_at"`
+	LastReceivedAt  string   `json:"last_received_at"`
+	ItemCount       int64    `json:"item_count"`
+}
+
 type CredentialRotation struct {
 	OverlapSeconds int64 `json:"overlap_seconds"`
 }

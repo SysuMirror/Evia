@@ -237,7 +237,7 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 				permissions := out["permissions"].([]any)
 				expected := 5
 				if tc.role == "owner" {
-					expected = 15
+					expected = 16
 				} else if tc.role == "editor" {
 					expected = 9
 				}
@@ -251,6 +251,18 @@ func TestGetProjectHTTPPermissionsAndBoundaries(t *testing.T) {
 	catalogStatus(t, publicConfigRequest(api(t, f), "GET", base, nil), 401)
 	if f.projectCalls != 0 {
 		t.Fatal("unauthenticated project read")
+	}
+}
+
+func TestProjectContentReadPermissionIsOwnerOnly(t *testing.T) {
+	for _, role := range []string{"owner", "editor", "viewer"} {
+		has := false
+		for _, permission := range projectWire(access.Project{Role: role}).Permissions {
+			has = has || permission == access.PermissionContentRead
+		}
+		if has != (role == "owner") {
+			t.Fatalf("%s has incorrect content.read policy", role)
+		}
 	}
 }
 

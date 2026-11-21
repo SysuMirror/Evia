@@ -8,7 +8,7 @@ import (
 )
 
 type Worker struct {
-	Store     Store
+	Store     WorkerStore
 	Scanner   Scanner
 	Decryptor Decryptor
 	Artifacts ArtifactStore

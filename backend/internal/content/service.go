@@ -9,15 +9,23 @@ import (
 )
 
 type Service struct {
-	store     Store
+	store     ReadStore
 	artifacts ArtifactStore
 }
 
-func NewService(store Store, artifacts ArtifactStore) (*Service, error) {
+func NewService(store ReadStore, artifacts ArtifactStore) (*Service, error) {
 	if store == nil || artifacts == nil {
 		return nil, errors.New("content service requires index and artifact store")
 	}
 	return &Service{store: store, artifacts: artifacts}, nil
+}
+
+func (s *Service) ListStreams(ctx context.Context, actor, project, environment string, filter DiscoveryFilter) (StreamPage, error) {
+	return s.store.ListContentStreams(ctx, actor, project, environment, filter)
+}
+
+func (s *Service) ListItems(ctx context.Context, actor, project, environment, streamID string, filter DiscoveryFilter) (ItemPage, error) {
+	return s.store.ListContentItems(ctx, actor, project, environment, streamID, filter)
 }
 
 func (s *Service) GetItem(ctx context.Context, actor, project, environment, itemID string) (Item, error) {

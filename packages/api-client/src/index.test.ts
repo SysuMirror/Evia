@@ -1030,6 +1030,34 @@ test('machine administration reads encode scope and allow only cursor and limit'
   }
 });
 
+test('content discovery canonicalizes types and encodes stream and item identifiers', async () => {
+  const fetch = respond();
+  const controller = new AbortController();
+  const page = {
+    environment: 'development' as const,
+    contentTypes: ['session_replay_snapshot', 'session_replay_mutations'],
+    cursor: 'a+/=',
+    limit: 25,
+  };
+  await api.listContentStreams('p/q', page, controller.signal);
+  await api.listContentItems('p/q', 'stream/one', page, controller.signal);
+  await api.getContentItem('p/q', 'item/one', 'development', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/content/streams?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&cursor=a%2B%2F%3D&limit=25',
+      '/api/v1/projects/p%2Fq/content/streams/stream%2Fone/items?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&cursor=a%2B%2F%3D&limit=25',
+      '/api/v1/projects/p%2Fq/content/items/item%2Fone?environment=development',
+    ],
+  );
+  controller.abort();
+  for (const call of fetch.mock.calls) {
+    const init = call.arguments[1] as RequestInit;
+    assert.equal(init.signal?.aborted, true);
+    assert.equal(init.credentials, 'same-origin');
+  }
+});
+
 test('machine writes preserve request bodies, retry keys, principal revisions and session CSRF', async () => {
   const fetch = respond();
   const controller = new AbortController();

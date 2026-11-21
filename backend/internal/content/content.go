@@ -66,6 +66,45 @@ type Item struct {
 	DurationMS                               int
 }
 
+type DiscoveryPosition struct {
+	ReceivedAt time.Time
+	ID         string
+}
+
+type StreamSummary struct {
+	StreamID                 string
+	ContentTypes, ActorTypes []string
+	FirstReceivedAt          time.Time
+	LastReceivedAt           time.Time
+	ItemCount                int
+}
+
+type ItemSummary struct {
+	ContentType, StreamID, ItemID, ActorType string
+	ReceivedAt                               time.Time
+	ChunkCount, ContentLength                int
+	Truncated                                bool
+	Status                                   string
+	DurationMS                               int
+}
+
+type StreamPage struct {
+	Items []StreamSummary
+	Next  *DiscoveryPosition
+}
+
+type ItemPage struct {
+	Items []ItemSummary
+	Next  *DiscoveryPosition
+}
+
+type DiscoveryFilter struct {
+	ContentTypes []string
+	AsOf         time.Time
+	After        *DiscoveryPosition
+	Limit        int
+}
+
 type Scanner interface {
 	ScanEncryptedContent(context.Context, Cursor, int) ([]EncryptedChunk, error)
 }
@@ -79,9 +118,14 @@ type ArtifactStore interface {
 	Read(context.Context, string) ([]byte, error)
 }
 
-type Store interface {
+type WorkerStore interface {
 	ClaimContent(context.Context, string, time.Duration) (*Claim, error)
 	CompleteContent(context.Context, Claim, []Record, Cursor) error
 	ReleaseContent(context.Context, Claim) error
+}
+
+type ReadStore interface {
+	ListContentStreams(context.Context, string, string, string, DiscoveryFilter) (StreamPage, error)
+	ListContentItems(context.Context, string, string, string, string, DiscoveryFilter) (ItemPage, error)
 	GetContentItem(context.Context, string, string, string, string) ([]Record, error)
 }

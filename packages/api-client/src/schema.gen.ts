@@ -1806,6 +1806,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/content/streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** listContentStreams */
+        get: operations["listContentStreams"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/content/streams/{stream_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** listContentItems */
+        get: operations["listContentItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/content/items/{item_id}": {
         parameters: {
             query?: never;
@@ -3531,6 +3565,37 @@ export interface components {
             alg: "Ed25519";
             digest_sha256: string;
             signature: string;
+        };
+        ContentStreamSummary: {
+            stream_id: string;
+            content_types: string[];
+            actor_types: string[];
+            /** Format: date-time */
+            first_received_at: string;
+            /** Format: date-time */
+            last_received_at: string;
+            item_count: number;
+        };
+        ContentStreamList: {
+            items: components["schemas"]["ContentStreamSummary"][];
+            next_cursor?: string;
+        };
+        ContentItemSummary: {
+            content_type: string;
+            stream_id: string;
+            item_id: string;
+            actor_type: string;
+            /** Format: date-time */
+            received_at: string;
+            chunk_count: number;
+            content_length: number;
+            truncated: boolean;
+            status?: string;
+            duration_ms?: number;
+        };
+        ContentItemList: {
+            items: components["schemas"]["ContentItemSummary"][];
+            next_cursor?: string;
         };
         ContentItem: {
             content_type: string;
@@ -18731,6 +18796,134 @@ export interface operations {
             };
             /** @description 修订不可解析 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listContentStreams: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+                /** @description 逗号分隔的 1–8 个通用内容类型；分页游标绑定归一化类型集合。 */
+                content_types: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentStreamList"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listContentItems: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+                content_types: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                stream_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentItemList"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -192,7 +192,7 @@ func projectWire(p access.Project) wire.Project {
 		permissions = append(permissions, "project.write", access.PermissionMetricsWrite, access.PermissionMetricsPublish)
 	}
 	if p.Role == "owner" {
-		permissions = append(permissions, "machine_principals.manage", "settings.write", "members.manage", "audit.read", access.PermissionDataErasure, access.PermissionDataExport)
+		permissions = append(permissions, "machine_principals.manage", "settings.write", "members.manage", "audit.read", access.PermissionDataErasure, access.PermissionDataExport, access.PermissionContentRead)
 	}
 	return wire.Project{ID: p.ID, Name: p.Name, Timezone: p.Timezone, Capabilities: []string{}, Permissions: permissions}
 }
