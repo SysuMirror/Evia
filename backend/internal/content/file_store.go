@@ -26,7 +26,7 @@ func NewFileStore(root string) (*FileStore, error) {
 }
 
 func (s *FileStore) Put(_ context.Context, chunk DecryptedChunk) (string, string, error) {
-	identity := fmt.Sprintf("%s|%s|%s|%d|%s", chunk.ProjectID, chunk.Environment, chunk.MessageID, chunk.ChunkIndex, chunk.EventID)
+	identity := fmt.Sprintf("%s|%s|%s|%d|%s", chunk.ProjectID, chunk.Environment, chunk.ItemID, chunk.ChunkIndex, chunk.EventID)
 	nameHash := sha256.Sum256([]byte(identity))
 	objectKey := hex.EncodeToString(nameHash[:]) + ".chunk"
 	finalPath := filepath.Join(s.root, objectKey)

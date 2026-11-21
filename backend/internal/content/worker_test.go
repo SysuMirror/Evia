@@ -25,7 +25,7 @@ func (s *fakeStore) CompleteContent(_ context.Context, _ Claim, records []Record
 	return nil
 }
 func (s *fakeStore) ReleaseContent(context.Context, Claim) error { s.released++; return nil }
-func (s *fakeStore) GetContentMessage(context.Context, string, string, string, string) ([]Record, error) {
+func (s *fakeStore) GetContentItem(context.Context, string, string, string, string) ([]Record, error) {
 	return nil, nil
 }
 
@@ -58,7 +58,7 @@ func TestWorkerDecryptsStoresAndAdvancesCursor(t *testing.T) {
 	worker := &Worker{
 		Store: store, Scanner: &fakeScanner{chunks: []EncryptedChunk{{
 			ProjectID: "project", Environment: "development", EventID: "event", ReceivedAt: now,
-			ConversationID: "conversation", MessageID: "message", Role: RoleUser,
+			StreamID: "conversation", ItemID: "message", ActorType: "user",
 			ChunkIndex: 0, ChunkCount: 1, KeyID: "key", ContentLength: 5,
 		}}},
 		Decryptor: &fakeDecryptor{}, Artifacts: fakeArtifacts{}, ID: "worker", Lease: time.Minute,

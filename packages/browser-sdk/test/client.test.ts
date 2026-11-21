@@ -4,6 +4,7 @@ import { createEviaClient, EviaSDKError } from '../src/index.js';
 import type {
   ClientOptions,
   Clock,
+  EncryptedContentChunk,
   HeatmapClick,
   HeatmapHost,
   PublicConfig,
@@ -1501,10 +1502,11 @@ test('a throwing scroll host does not break the page listener or the client', as
   client.destroy();
 });
 
-test('public config accepts 206 events including the six reserved sys keys', async () => {
+test('public config accepts 207 events including the seven reserved sys keys', async () => {
   const sysKeys = [
     'sys.page_view',
     'sys.page_scroll',
+    'sys.content_chunk',
     'sys.heatmap_click',
     'sys.identity_link',
     'sys.session_end',
@@ -1529,7 +1531,7 @@ test('public config accepts 206 events including the six reserved sys keys', asy
     () => {
       throw new Error('unused');
     },
-    { fetch: async () => json(buildConfig(206)) },
+    { fetch: async () => json(buildConfig(207)) },
   );
   await within.client.init();
   within.client.destroy();
@@ -1538,7 +1540,7 @@ test('public config accepts 206 events including the six reserved sys keys', asy
     () => {
       throw new Error('unused');
     },
-    { fetch: async () => json(buildConfig(207)) },
+    { fetch: async () => json(buildConfig(208)) },
   );
   await assert.rejects(over.client.init(), /INVALID_CONFIG/);
   over.client.destroy();
@@ -2217,5 +2219,87 @@ test('heatmap collection rejects malformed samples and caps at 120 per minute', 
   const events = bodies.flatMap((raw) => (JSON.parse(raw) as Body).events);
   assert.equal(events.length, 120);
   assert.ok(events.every((event) => event.event_key === 'sys.heatmap_click'));
+  client.destroy();
+});
+
+const encryptedContentConfig = (revision = 1): PublicConfig => {
+  const base = config(revision);
+  return {
+    ...base,
+    events: [
+      ...base.events,
+      {
+        event_key: 'sys.content_chunk',
+        schema_version: 1,
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+      },
+    ],
+  };
+};
+
+const encryptedChunk = (overrides: Partial<EncryptedContentChunk> = {}): EncryptedContentChunk => ({
+  contentType: 'ai_chat_message',
+  streamId: 'stream-1',
+  itemId: 'item-1',
+  actorType: 'user',
+  chunkIndex: 0,
+  chunkCount: 1,
+  ciphertext: 'ciphertext',
+  nonce: 'nonce',
+  wrappedKey: 'wrappedkey',
+  keyId: 'key-1',
+  alg: 'A256GCM+RSA-OAEP-256',
+  aadVersion: 'evia-content-v1',
+  padding: 'fixed-600-v1',
+  contentLength: 12,
+  truncated: false,
+  ...overrides,
+});
+
+test('encrypted content uses the strict generic reserved envelope', async () => {
+  const { client, bodies } = setupAuto((body) => receipt(body), {}, encryptedContentConfig());
+  await client.init();
+  const emission = client.emitEncryptedContentChunk(encryptedChunk());
+  await pump();
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  const event = (JSON.parse(bodies[0]!) as Body).events[0]!;
+  assert.equal(event.event_key, 'sys.content_chunk');
+  assert.deepEqual(event.properties, {
+    content_type: 'ai_chat_message',
+    stream_id: 'stream-1',
+    item_id: 'item-1',
+    actor_type: 'user',
+    chunk_index: 0,
+    chunk_count: 1,
+    ciphertext: 'ciphertext',
+    nonce: 'nonce',
+    wrapped_key: 'wrappedkey',
+    key_id: 'key-1',
+    alg: 'A256GCM+RSA-OAEP-256',
+    aad_version: 'evia-content-v1',
+    padding: 'fixed-600-v1',
+    content_length: 12,
+    truncated: false,
+  });
+  assert.throws(() => client.emit('sys.content_chunk'), /INVALID_CUSTOM_EVENT_KEY/);
+  client.destroy();
+});
+
+test('encrypted content rejects malformed chunks before queue allocation', () => {
+  const { client } = setupAuto((body) => receipt(body), {}, encryptedContentConfig());
+  for (const malformed of [
+    encryptedChunk({ chunkIndex: 1, chunkCount: 1 }),
+    encryptedChunk({ ciphertext: 'not+base64' }),
+    encryptedChunk({ contentLength: 0 }),
+    encryptedChunk({ streamId: '' }),
+    encryptedChunk({ padding: 'fixed-600-v2' as 'fixed-600-v1' }),
+  ]) {
+    assert.throws(
+      () => client.emitEncryptedContentChunk(malformed),
+      /INVALID_ENCRYPTED_CONTENT_CHUNK|INVALID_TEXT/,
+    );
+  }
+  assert.equal(client.pending, 0);
   client.destroy();
 });

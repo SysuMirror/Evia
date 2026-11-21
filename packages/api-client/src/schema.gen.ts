@@ -1806,15 +1806,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{project_id}/content/messages/{message_id}": {
+    "/api/v1/projects/{project_id}/content/items/{item_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** getContentMessage */
-        get: operations["getContentMessage"];
+        /** getContentItem */
+        get: operations["getContentItem"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2346,7 +2346,7 @@ export interface components {
             /** @enum {unknown} */
             environment: "development" | "staging" | "production";
             release_revision: number;
-            /** @description 只包含当前来源类型可上报的事件；允许为空。上限 206 = 200 个项目发布事件 + 6 个平台保留 sys.* 事件。 */
+            /** @description 只包含当前来源类型可上报的事件；允许为空。上限 207 = 200 个项目发布事件 + 7 个平台保留 sys.* 事件。 */
             events: {
                 event_key: string;
                 schema_version: number;
@@ -3525,27 +3525,25 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        ContentMessage: {
-            conversation_id: string;
-            message_id: string;
-            /** @enum {string} */
-            role: "user" | "assistant";
-            content: string;
-            truncated: boolean;
-            content_length: number;
-            key_id: string;
-            /** Format: date-time */
-            received_at: string;
-            /** @enum {string} */
-            response_status?: "done" | "error" | "stopped";
-            duration_ms?: number;
-        };
         PublicConfigSignature: {
             key_id: string;
             /** @constant */
             alg: "Ed25519";
             digest_sha256: string;
             signature: string;
+        };
+        ContentItem: {
+            stream_id: string;
+            item_id: string;
+            actor_type: string;
+            content: string;
+            truncated: boolean;
+            content_length: number;
+            key_id: string;
+            /** Format: date-time */
+            received_at: string;
+            status?: string;
+            duration_ms?: number;
         };
         filter: {
             /**
@@ -18750,7 +18748,7 @@ export interface operations {
             };
         };
     };
-    getContentMessage: {
+    getContentItem: {
         parameters: {
             query: {
                 environment: "development" | "staging" | "production";
@@ -18758,7 +18756,7 @@ export interface operations {
             header?: never;
             path: {
                 project_id: string;
-                message_id: string;
+                item_id: string;
             };
             cookie?: never;
         };
@@ -18770,7 +18768,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContentMessage"];
+                    "application/json": components["schemas"]["ContentItem"];
                 };
             };
             /** @description 请求不合法 */

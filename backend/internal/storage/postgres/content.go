@@ -55,15 +55,15 @@ func (s *Store) CompleteContent(ctx context.Context, claim content.Claim, record
 		return err
 	}
 	for _, record := range records {
-		if _, err = tx.Exec(ctx, `INSERT INTO content_message_chunks
-		 (project_id,environment,event_id,received_at,conversation_id,message_id,role,chunk_index,chunk_count,
-		  object_key,sha256,key_id,content_length,truncated,response_status,duration_ms)
+		if _, err = tx.Exec(ctx, `INSERT INTO content_item_chunks
+		 (project_id,environment,event_id,received_at,stream_id,item_id,actor_type,chunk_index,chunk_count,
+		  object_key,sha256,key_id,content_length,truncated,status,duration_ms)
 		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NULLIF($15,''),NULLIF($16,0))
 		 ON CONFLICT(project_id,environment,event_id) DO NOTHING`,
 			record.ProjectID, record.Environment, record.EventID, record.ReceivedAt,
-			record.ConversationID, record.MessageID, record.Role, record.ChunkIndex, record.ChunkCount,
+			record.StreamID, record.ItemID, record.ActorType, record.ChunkIndex, record.ChunkCount,
 			record.ObjectKey, record.SHA256, record.KeyID, record.ContentLength, record.Truncated,
-			record.ResponseStatus, record.DurationMS); err != nil {
+			record.Status, record.DurationMS); err != nil {
 			return err
 		}
 	}
@@ -102,9 +102,9 @@ func (s *Store) contentReadAuthority(ctx context.Context, tx pgx.Tx, actor, proj
 	return memberOwnerTx(ctx, tx, actor, project)
 }
 
-func (s *Store) GetContentMessage(ctx context.Context, actor, project, environment, messageID string) ([]content.Record, error) {
-	if len(messageID) < 1 || len(messageID) > 128 {
-		return nil, fault.New(fault.Invalid, "INVALID_CONTENT_MESSAGE", "内容消息标识无效")
+func (s *Store) GetContentItem(ctx context.Context, actor, project, environment, itemID string) ([]content.Record, error) {
+	if len(itemID) < 1 || len(itemID) > 128 {
+		return nil, fault.New(fault.Invalid, "INVALID_CONTENT_ITEM", "内容项标识无效")
 	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -114,10 +114,10 @@ func (s *Store) GetContentMessage(ctx context.Context, actor, project, environme
 	if err = s.contentReadAuthority(ctx, tx, actor, project, environment); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT project_id::text,environment,event_id::text,received_at,conversation_id,message_id,role,
-	 chunk_index,chunk_count,object_key,sha256,key_id,content_length,truncated,COALESCE(response_status,''),COALESCE(duration_ms,0)
-	 FROM content_message_chunks WHERE project_id=$1 AND environment=$2 AND message_id=$3 ORDER BY chunk_index`,
-		project, environment, messageID)
+	rows, err := tx.Query(ctx, `SELECT project_id::text,environment,event_id::text,received_at,stream_id,item_id,actor_type,
+	 chunk_index,chunk_count,object_key,sha256,key_id,content_length,truncated,COALESCE(status,''),COALESCE(duration_ms,0)
+	 FROM content_item_chunks WHERE project_id=$1 AND environment=$2 AND item_id=$3 ORDER BY chunk_index`,
+		project, environment, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,9 +126,9 @@ func (s *Store) GetContentMessage(ctx context.Context, actor, project, environme
 	for rows.Next() {
 		var record content.Record
 		if err = rows.Scan(&record.ProjectID, &record.Environment, &record.EventID, &record.ReceivedAt,
-			&record.ConversationID, &record.MessageID, &record.Role, &record.ChunkIndex, &record.ChunkCount,
+			&record.StreamID, &record.ItemID, &record.ActorType, &record.ChunkIndex, &record.ChunkCount,
 			&record.ObjectKey, &record.SHA256, &record.KeyID, &record.ContentLength, &record.Truncated,
-			&record.ResponseStatus, &record.DurationMS); err != nil {
+			&record.Status, &record.DurationMS); err != nil {
 			return nil, err
 		}
 		records = append(records, record)
@@ -137,7 +137,7 @@ func (s *Store) GetContentMessage(ctx context.Context, actor, project, environme
 		return nil, err
 	}
 	if len(records) == 0 {
-		return nil, fault.New(fault.NotFound, "CONTENT_MESSAGE_NOT_FOUND", "内容消息不存在或不可见")
+		return nil, fault.New(fault.NotFound, "CONTENT_ITEM_NOT_FOUND", "内容项不存在或不可见")
 	}
 	return records, tx.Commit(ctx)
 }

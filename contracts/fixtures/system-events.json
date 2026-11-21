@@ -139,6 +139,139 @@
       }
     },
     {
+      "event_key": "sys.content_chunk",
+      "display_name": "敏感内容密文分片",
+      "schema_version": 1,
+      "allowed_source_kinds": [
+        "browser"
+      ],
+      "fact_kind": "client_observed",
+      "trigger": "业务通过 SDK 通用密文内容 API 提交已加密内容分片。",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "item_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "actor_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "chunk_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31
+          },
+          "chunk_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "ciphertext": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "nonce": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "wrapped_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "alg": {
+            "enum": [
+              "A256GCM+RSA-OAEP-256"
+            ]
+          },
+          "aad_version": {
+            "enum": [
+              "evia-content-v1"
+            ]
+          },
+          "padding": {
+            "enum": [
+              "fixed-600-v1"
+            ]
+          },
+          "content_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600000
+          }
+        },
+        "required": [
+          "content_type",
+          "stream_id",
+          "item_id",
+          "actor_type",
+          "chunk_index",
+          "chunk_count",
+          "ciphertext",
+          "nonce",
+          "wrapped_key",
+          "key_id",
+          "alg",
+          "aad_version",
+          "padding",
+          "content_length",
+          "truncated"
+        ]
+      },
+      "example_properties": {
+        "content_type": "ai_chat_message",
+        "stream_id": "stream-1",
+        "item_id": "item-1",
+        "actor_type": "user",
+        "chunk_index": 0,
+        "chunk_count": 1,
+        "ciphertext": "ciphertext",
+        "nonce": "nonce",
+        "wrapped_key": "wrapped",
+        "key_id": "key-1",
+        "alg": "A256GCM+RSA-OAEP-256",
+        "aad_version": "evia-content-v1",
+        "padding": "fixed-600-v1",
+        "content_length": 12,
+        "truncated": false
+      }
+    },
+    {
       "event_key": "sys.identity_link",
       "display_name": "当前会话身份关联",
       "schema_version": 1,

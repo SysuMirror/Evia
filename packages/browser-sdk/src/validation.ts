@@ -123,9 +123,9 @@ export function validateConfig(
     !Number.isSafeInteger(value.release_revision) ||
     Number(value.release_revision) < 1 ||
     !Array.isArray(value.events) ||
-    value.events.length > 206
+    value.events.length > 207
   )
-    // 206 = 200 project release events + 6 platform-reserved sys.* events.
+    // 207 = 200 project release events + 7 platform-reserved sys.* events.
     throw new EviaSDKError('INVALID_CONFIG');
   if (value.config_signature !== undefined) {
     const signature = value.config_signature;

@@ -61,7 +61,7 @@ func encryptTestChunk(t *testing.T, public *rsa.PublicKey, plaintext []byte) Enc
 	gcm, _ := cipher.NewGCM(block)
 	chunk := EncryptedChunk{
 		ProjectID: "p", Environment: "development", EventID: "e", ReceivedAt: time.Now().UTC(),
-		ConversationID: "conversation", MessageID: "message", Role: RoleUser,
+		StreamID: "conversation", ItemID: "message", ActorType: "user",
 		ChunkIndex: 0, ChunkCount: 1, KeyID: "key-1", Algorithm: "A256GCM+RSA-OAEP-256",
 		AADVersion: "evia-content-v1", Padding: "fixed-600-v1",
 		Nonce: base64.RawURLEncoding.EncodeToString(nonce), WrappedKey: base64.RawURLEncoding.EncodeToString(wrapped),
@@ -86,7 +86,7 @@ func TestRSAOAEPDecryptorAuthenticatesContent(t *testing.T) {
 	if err != nil || string(decrypted.Plaintext) != string(plaintext) {
 		t.Fatalf("decrypt mismatch: %q %v", decrypted.Plaintext, err)
 	}
-	encrypted.MessageID = "tampered"
+	encrypted.ItemID = "tampered"
 	if _, err = decryptor.Decrypt(context.Background(), encrypted); err == nil {
 		t.Fatal("AAD tampering must fail closed")
 	}
@@ -140,7 +140,7 @@ func TestFileStoreRoundTripAndHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chunk := DecryptedChunk{EncryptedChunk: EncryptedChunk{ProjectID: "p", Environment: "development", EventID: "e", MessageID: "m", ChunkIndex: 0}, Plaintext: []byte("hello")}
+	chunk := DecryptedChunk{EncryptedChunk: EncryptedChunk{ProjectID: "p", Environment: "development", EventID: "e", ItemID: "m", ChunkIndex: 0}, Plaintext: []byte("hello")}
 	key, hash, err := store.Put(context.Background(), chunk)
 	if err != nil || len(key) != 70 || len(hash) != 64 {
 		t.Fatal(key, hash, err)

@@ -20,36 +20,36 @@ func NewService(store Store, artifacts ArtifactStore) (*Service, error) {
 	return &Service{store: store, artifacts: artifacts}, nil
 }
 
-func (s *Service) GetMessage(ctx context.Context, actor, project, environment, messageID string) (Message, error) {
-	records, err := s.store.GetContentMessage(ctx, actor, project, environment, messageID)
+func (s *Service) GetItem(ctx context.Context, actor, project, environment, itemID string) (Item, error) {
+	records, err := s.store.GetContentItem(ctx, actor, project, environment, itemID)
 	if err != nil {
-		return Message{}, err
+		return Item{}, err
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].ChunkIndex < records[j].ChunkIndex })
 	if len(records) == 0 || records[0].ChunkCount != len(records) {
-		return Message{}, errors.New("content message is incomplete")
+		return Item{}, errors.New("content item is incomplete")
 	}
 	var content []byte
 	for index, record := range records {
 		if record.ChunkIndex != index || record.ChunkCount != len(records) {
-			return Message{}, errors.New("content message chunk order is invalid")
+			return Item{}, errors.New("content item chunk order is invalid")
 		}
 		data, readErr := s.artifacts.Read(ctx, record.ObjectKey)
 		if readErr != nil {
-			return Message{}, readErr
+			return Item{}, readErr
 		}
 		hash := sha256.Sum256(data)
 		if hex.EncodeToString(hash[:]) != record.SHA256 {
-			return Message{}, errors.New("content artifact hash mismatch")
+			return Item{}, errors.New("content artifact hash mismatch")
 		}
 		content = append(content, data...)
 	}
 	first := records[0]
-	return Message{
+	return Item{
 		ProjectID: project, Environment: environment,
-		ConversationID: first.ConversationID, MessageID: first.MessageID, Role: first.Role,
+		StreamID: first.StreamID, ItemID: first.ItemID, ActorType: first.ActorType,
 		Content: string(content), Truncated: first.Truncated, ContentLength: first.ContentLength,
 		KeyID: first.KeyID, ReceivedAt: first.ReceivedAt,
-		ResponseStatus: first.ResponseStatus, DurationMS: first.DurationMS,
+		Status: first.Status, DurationMS: first.DurationMS,
 	}, nil
 }

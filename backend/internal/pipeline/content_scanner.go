@@ -47,22 +47,22 @@ type encryptedRow struct {
 }
 
 type encryptedProperties struct {
-	ConversationID string `json:"conversation_id"`
-	MessageID      string `json:"message_id"`
-	Role           string `json:"role"`
-	ChunkIndex     int    `json:"chunk_index"`
-	ChunkCount     int    `json:"chunk_count"`
-	Ciphertext     string `json:"ciphertext"`
-	Nonce          string `json:"nonce"`
-	WrappedKey     string `json:"wrapped_key"`
-	KeyID          string `json:"key_id"`
-	Algorithm      string `json:"alg"`
-	AADVersion     string `json:"aad_version"`
-	Padding        string `json:"padding"`
-	ContentLength  int    `json:"content_length"`
-	Truncated      bool   `json:"truncated"`
-	ResponseStatus string `json:"response_status"`
-	DurationMS     int    `json:"duration_ms"`
+	StreamID      string `json:"stream_id"`
+	ItemID        string `json:"item_id"`
+	ActorType     string `json:"actor_type"`
+	ChunkIndex    int    `json:"chunk_index"`
+	ChunkCount    int    `json:"chunk_count"`
+	Ciphertext    string `json:"ciphertext"`
+	Nonce         string `json:"nonce"`
+	WrappedKey    string `json:"wrapped_key"`
+	KeyID         string `json:"key_id"`
+	Algorithm     string `json:"alg"`
+	AADVersion    string `json:"aad_version"`
+	Padding       string `json:"padding"`
+	ContentLength int    `json:"content_length"`
+	Truncated     bool   `json:"truncated"`
+	Status        string `json:"status"`
+	DurationMS    int    `json:"duration_ms"`
 }
 
 func (s *ContentScanner) ScanEncryptedContent(ctx context.Context, cursor content.Cursor, limit int) ([]content.EncryptedChunk, error) {
@@ -70,7 +70,7 @@ func (s *ContentScanner) ScanEncryptedContent(ctx context.Context, cursor conten
 		limit = content.MaxScanBatch
 	}
 	query := "SELECT project_id,environment,event_id,toUnixTimestamp64Nano(received_at) AS received_at_ns,properties_json" +
-		" FROM `" + s.database + "`.event_facts WHERE event_key='chat_content_chunk'" +
+		" FROM `" + s.database + "`.event_facts WHERE event_key='sys.content_chunk'" +
 		" AND tuple(received_at,event_id)>tuple(fromUnixTimestamp64Nano({after:Int64}),{event:String})" +
 		" ORDER BY received_at,event_id LIMIT {limit:UInt64} FORMAT JSONEachRow"
 	body, err := s.request(ctx, query, map[string]string{
@@ -96,14 +96,14 @@ func (s *ContentScanner) ScanEncryptedContent(ctx context.Context, cursor conten
 		}
 		chunks = append(chunks, content.EncryptedChunk{
 			ProjectID: row.ProjectID, Environment: row.Environment, EventID: row.EventID,
-			ReceivedAt:     time.Unix(0, row.ReceivedAtNS).UTC(),
-			ConversationID: properties.ConversationID, MessageID: properties.MessageID, Role: properties.Role,
+			ReceivedAt: time.Unix(0, row.ReceivedAtNS).UTC(),
+			StreamID:   properties.StreamID, ItemID: properties.ItemID, ActorType: properties.ActorType,
 			ChunkIndex: properties.ChunkIndex, ChunkCount: properties.ChunkCount,
 			Ciphertext: properties.Ciphertext, Nonce: properties.Nonce, WrappedKey: properties.WrappedKey,
 			KeyID: properties.KeyID, Algorithm: properties.Algorithm,
 			AADVersion: properties.AADVersion, Padding: properties.Padding,
 			ContentLength: properties.ContentLength, Truncated: properties.Truncated,
-			ResponseStatus: properties.ResponseStatus, DurationMS: properties.DurationMS,
+			Status: properties.Status, DurationMS: properties.DurationMS,
 		})
 	}
 	return chunks, scanner.Err()

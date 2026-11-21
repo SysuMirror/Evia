@@ -18,7 +18,7 @@ const ProjectReleaseEventLimit = 200
 
 // ReservedEventLimit is the fixed size of the embedded platform sys.* catalog
 // pinned by the system event fixture invariants.
-const ReservedEventLimit = 6
+const ReservedEventLimit = 7
 
 // PublicConfigEventLimit bounds total events served in one public config:
 // 200 project release events plus the five platform-reserved sys.* events.

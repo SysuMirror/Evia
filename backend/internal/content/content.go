@@ -1,5 +1,5 @@
 // Package content owns the encrypted-sensitive-content processing boundary.
-// Browsers submit opaque chat_content_chunk events; the collector/Kafka/fact
+// Browsers submit opaque sys.content_chunk events; the collector/Kafka/fact
 // path never decrypts them. A dedicated worker unwraps each message key through
 // a KeyProvider, authenticates AES-GCM chunks, writes plaintext to a protected
 // artifact store and indexes only safe metadata in PostgreSQL.
@@ -10,11 +10,7 @@ import (
 	"time"
 )
 
-const (
-	RoleUser      = "user"
-	RoleAssistant = "assistant"
-	MaxScanBatch  = 200
-)
+const MaxScanBatch = 200
 
 type Cursor struct {
 	ReceivedAt time.Time
@@ -24,14 +20,14 @@ type Cursor struct {
 type EncryptedChunk struct {
 	ProjectID, Environment, EventID string
 	ReceivedAt                      time.Time
-	ConversationID, MessageID, Role string
+	StreamID, ItemID, ActorType     string
 	ChunkIndex, ChunkCount          int
 	Ciphertext, Nonce, WrappedKey   string
 	KeyID, Algorithm                string
 	AADVersion, Padding             string
 	ContentLength                   int
 	Truncated                       bool
-	ResponseStatus                  string
+	Status                          string
 	DurationMS                      int
 }
 
@@ -43,12 +39,12 @@ type DecryptedChunk struct {
 type Record struct {
 	ProjectID, Environment, EventID string
 	ReceivedAt                      time.Time
-	ConversationID, MessageID, Role string
+	StreamID, ItemID, ActorType     string
 	ChunkIndex, ChunkCount          int
 	ObjectKey, SHA256, KeyID        string
 	ContentLength                   int
 	Truncated                       bool
-	ResponseStatus                  string
+	Status                          string
 	DurationMS                      int
 }
 
@@ -58,16 +54,16 @@ type Claim struct {
 	Cursor     Cursor
 }
 
-type Message struct {
-	ProjectID, Environment          string
-	ConversationID, MessageID, Role string
-	Content                         string
-	Truncated                       bool
-	ContentLength                   int
-	KeyID                           string
-	ReceivedAt                      time.Time
-	ResponseStatus                  string
-	DurationMS                      int
+type Item struct {
+	ProjectID, Environment      string
+	StreamID, ItemID, ActorType string
+	Content                     string
+	Truncated                   bool
+	ContentLength               int
+	KeyID                       string
+	ReceivedAt                  time.Time
+	Status                      string
+	DurationMS                  int
 }
 
 type Scanner interface {
@@ -87,5 +83,5 @@ type Store interface {
 	ClaimContent(context.Context, string, time.Duration) (*Claim, error)
 	CompleteContent(context.Context, Claim, []Record, Cursor) error
 	ReleaseContent(context.Context, Claim) error
-	GetContentMessage(context.Context, string, string, string, string) ([]Record, error)
+	GetContentItem(context.Context, string, string, string, string) ([]Record, error)
 }

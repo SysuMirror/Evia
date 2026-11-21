@@ -20428,10 +20428,10 @@
         }
       }
     },
-    "/api/v1/projects/{project_id}/content/messages/{message_id}": {
+    "/api/v1/projects/{project_id}/content/items/{item_id}": {
       "get": {
-        "operationId": "getContentMessage",
-        "summary": "getContentMessage",
+        "operationId": "getContentItem",
+        "summary": "getContentItem",
         "security": [
           {
             "consoleSession": []
@@ -20448,7 +20448,7 @@
             }
           },
           {
-            "name": "message_id",
+            "name": "item_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -20477,7 +20477,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContentMessage"
+                  "$ref": "#/components/schemas/ContentItem"
                 }
               }
             }
@@ -22725,7 +22725,7 @@
           },
           "events": {
             "type": "array",
-            "maxItems": 206,
+            "maxItems": 207,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -22752,7 +22752,7 @@
                 "schema"
               ]
             },
-            "description": "只包含当前来源类型可上报的事件；允许为空。上限 206 = 200 个项目发布事件 + 6 个平台保留 sys.* 事件。"
+            "description": "只包含当前来源类型可上报的事件；允许为空。上限 207 = 200 个项目发布事件 + 7 个平台保留 sys.* 事件。"
           },
           "content_encryption": {
             "$ref": "#/components/schemas/ContentEncryptionPublicKey"
@@ -28020,73 +28020,6 @@
           "public_jwk"
         ]
       },
-      "ContentMessage": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "conversation_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "message_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ]
-          },
-          "content": {
-            "type": "string",
-            "maxLength": 20000
-          },
-          "truncated": {
-            "type": "boolean"
-          },
-          "content_length": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 1000000
-          },
-          "key_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "received_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "response_status": {
-            "type": "string",
-            "enum": [
-              "done",
-              "error",
-              "stopped"
-            ]
-          },
-          "duration_ms": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 3600000
-          }
-        },
-        "required": [
-          "conversation_id",
-          "message_id",
-          "role",
-          "content",
-          "truncated",
-          "content_length",
-          "key_id",
-          "received_at"
-        ]
-      },
       "PublicConfigSignature": {
         "type": "object",
         "additionalProperties": false,
@@ -28114,6 +28047,67 @@
           "alg",
           "digest_sha256",
           "signature"
+        ]
+      },
+      "ContentItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "item_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "actor_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "content_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600000
+          }
+        },
+        "required": [
+          "stream_id",
+          "item_id",
+          "actor_type",
+          "content",
+          "truncated",
+          "content_length",
+          "key_id",
+          "received_at"
         ]
       }
     }

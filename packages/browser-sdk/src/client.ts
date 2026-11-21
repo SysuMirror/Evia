@@ -2,6 +2,7 @@ import type {
   BrowserClient,
   ClientOptions,
   Emission,
+  EncryptedContentChunk,
   Envelope,
   EventContext,
   EventOptions,
@@ -48,6 +49,7 @@ const sessionEndReasons = new Set(['logout', 'account_switch', 'idle']);
 // pageScrollEventKey coalesces one scroll segment after scrolling stops.
 const pageScrollEventKey = 'sys.page_scroll';
 const heatmapClickEventKey = 'sys.heatmap_click';
+const encryptedContentEventKey = 'sys.content_chunk';
 const maxScrollEventsPerMinute = 12;
 const maxHeatmapClicksPerMinute = 120;
 const scrollWindowMs = 60_000;
@@ -662,6 +664,71 @@ class Client implements BrowserClient {
     if (typeof eventKey !== 'string' || !customEventPattern.test(eventKey))
       throw new EviaSDKError('INVALID_CUSTOM_EVENT_KEY');
     return this.enqueue(eventKey, properties, options);
+  }
+
+  // emitEncryptedContentChunk is the only public path to the generic reserved
+  // content envelope. Callers supply already-encrypted bytes and safe metadata;
+  // the strict shape prevents arbitrary sys.* forgery or business semantics
+  // from leaking into the platform event contract.
+  emitEncryptedContentChunk(chunk: EncryptedContentChunk): Emission {
+    this.assertEnabled();
+    for (const [value, bound] of [
+      [chunk.contentType, 64],
+      [chunk.streamId, 128],
+      [chunk.itemId, 128],
+      [chunk.actorType, 32],
+      [chunk.keyId, 64],
+    ] as const)
+      requireText(value, bound, true);
+    const encoded = /^[A-Za-z0-9_-]+$/;
+    if (
+      !Number.isInteger(chunk.chunkIndex) ||
+      !Number.isInteger(chunk.chunkCount) ||
+      chunk.chunkCount < 1 ||
+      chunk.chunkCount > 32 ||
+      chunk.chunkIndex < 0 ||
+      chunk.chunkIndex >= chunk.chunkCount ||
+      !encoded.test(chunk.ciphertext) ||
+      chunk.ciphertext.length > 1024 ||
+      !encoded.test(chunk.nonce) ||
+      chunk.nonce.length > 64 ||
+      !encoded.test(chunk.wrappedKey) ||
+      chunk.wrappedKey.length > 1024 ||
+      chunk.alg !== 'A256GCM+RSA-OAEP-256' ||
+      chunk.aadVersion !== 'evia-content-v1' ||
+      chunk.padding !== 'fixed-600-v1' ||
+      !Number.isInteger(chunk.contentLength) ||
+      chunk.contentLength < 1 ||
+      chunk.contentLength > 1_000_000 ||
+      typeof chunk.truncated !== 'boolean' ||
+      (chunk.status !== undefined &&
+        (typeof chunk.status !== 'string' || chunk.status.length > 32)) ||
+      (chunk.durationMs !== undefined &&
+        (!Number.isInteger(chunk.durationMs) ||
+          chunk.durationMs < 0 ||
+          chunk.durationMs > 3_600_000))
+    )
+      throw new EviaSDKError('INVALID_ENCRYPTED_CONTENT_CHUNK');
+    const properties: Record<string, string | number | boolean> = {
+      content_type: chunk.contentType,
+      stream_id: chunk.streamId,
+      item_id: chunk.itemId,
+      actor_type: chunk.actorType,
+      chunk_index: chunk.chunkIndex,
+      chunk_count: chunk.chunkCount,
+      ciphertext: chunk.ciphertext,
+      nonce: chunk.nonce,
+      wrapped_key: chunk.wrappedKey,
+      key_id: chunk.keyId,
+      alg: chunk.alg,
+      aad_version: chunk.aadVersion,
+      padding: chunk.padding,
+      content_length: chunk.contentLength,
+      truncated: chunk.truncated,
+    };
+    if (chunk.status) properties.status = chunk.status;
+    if (chunk.durationMs !== undefined) properties.duration_ms = chunk.durationMs;
+    return this.enqueue(encryptedContentEventKey, properties, {});
   }
 
   // reportOperationFailure enqueues one reserved sys.operation_failed event. The

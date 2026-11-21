@@ -12,7 +12,7 @@ import (
 )
 
 type ContentService interface {
-	GetMessage(context.Context, string, string, string, string) (content.Message, error)
+	GetItem(context.Context, string, string, string, string) (content.Item, error)
 }
 
 type ContentAPI struct {
@@ -24,7 +24,7 @@ func (a *ContentAPI) Register(mux *http.ServeMux) {
 	if a.Service == nil {
 		return
 	}
-	mux.HandleFunc("GET /api/v1/projects/{project_id}/content/messages/{message_id}",
+	mux.HandleFunc("GET /api/v1/projects/{project_id}/content/items/{item_id}",
 		a.API.projectPermissionAuth(false, access.PermissionContentRead, a.get))
 }
 
@@ -39,29 +39,29 @@ func (a *ContentAPI) get(w http.ResponseWriter, r *http.Request, actor authorize
 	}
 	environment := query.Get("environment")
 	if environment == "" {
-		return fault.New(fault.Invalid, "INVALID_CONTENT_MESSAGE", "必须指定环境")
+		return fault.New(fault.Invalid, "INVALID_CONTENT_ITEM", "必须指定环境")
 	}
-	messageID := r.PathValue("message_id")
-	message, err := a.Service.GetMessage(r.Context(), actor.ID, project, environment, messageID)
+	itemID := r.PathValue("item_id")
+	item, err := a.Service.GetItem(r.Context(), actor.ID, project, environment, itemID)
 	if err != nil {
 		return err
 	}
-	out := wire.ContentMessage{
-		ConversationID: message.ConversationID,
-		MessageID:      message.MessageID,
-		Role:           message.Role,
-		Content:        message.Content,
-		Truncated:      message.Truncated,
-		ContentLength:  int64(message.ContentLength),
-		KeyID:          message.KeyID,
-		ReceivedAt:     message.ReceivedAt.UTC().Format(time.RFC3339Nano),
+	out := wire.ContentItem{
+		StreamID:      item.StreamID,
+		ItemID:        item.ItemID,
+		ActorType:     item.ActorType,
+		Content:       item.Content,
+		Truncated:     item.Truncated,
+		ContentLength: int64(item.ContentLength),
+		KeyID:         item.KeyID,
+		ReceivedAt:    item.ReceivedAt.UTC().Format(time.RFC3339Nano),
 	}
-	if message.ResponseStatus != "" {
-		out.ResponseStatus = &message.ResponseStatus
+	if item.Status != "" {
+		out.Status = &item.Status
 	}
-	if message.DurationMS > 0 {
-		duration := int64(message.DurationMS)
+	if item.DurationMS > 0 {
+		duration := int64(item.DurationMS)
 		out.DurationMs = &duration
 	}
-	return a.API.Boundary.JSON(w, http.StatusOK, "ContentMessage", out)
+	return a.API.Boundary.JSON(w, http.StatusOK, "ContentItem", out)
 }

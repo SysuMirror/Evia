@@ -5,6 +5,7 @@ export type {
   ClientOptions,
   Clock,
   Emission,
+  EncryptedContentChunk,
   Environment,
   EventContext,
   EventOptions,

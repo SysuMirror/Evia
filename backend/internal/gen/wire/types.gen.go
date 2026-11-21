@@ -197,17 +197,17 @@ type ContentEncryptionPublicKey struct {
 	PublicJwk map[string]any `json:"public_jwk"`
 }
 
-type ContentMessage struct {
-	ConversationID string  `json:"conversation_id"`
-	MessageID      string  `json:"message_id"`
-	Role           string  `json:"role"`
-	Content        string  `json:"content"`
-	Truncated      bool    `json:"truncated"`
-	ContentLength  int64   `json:"content_length"`
-	KeyID          string  `json:"key_id"`
-	ReceivedAt     string  `json:"received_at"`
-	ResponseStatus *string `json:"response_status,omitempty"`
-	DurationMs     *int64  `json:"duration_ms,omitempty"`
+type ContentItem struct {
+	StreamID      string  `json:"stream_id"`
+	ItemID        string  `json:"item_id"`
+	ActorType     string  `json:"actor_type"`
+	Content       string  `json:"content"`
+	Truncated     bool    `json:"truncated"`
+	ContentLength int64   `json:"content_length"`
+	KeyID         string  `json:"key_id"`
+	ReceivedAt    string  `json:"received_at"`
+	Status        *string `json:"status,omitempty"`
+	DurationMs    *int64  `json:"duration_ms,omitempty"`
 }
 
 type CredentialRotation struct {

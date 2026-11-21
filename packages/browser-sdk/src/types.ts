@@ -195,6 +195,26 @@ export type OperationErrorCategory = 'validation' | 'network' | 'timeout' | 'htt
  * Raw exceptions and request bodies are intentionally not accepted, so the SDK
  * never collects credentials or arbitrary payloads in sys.operation_failed.
  */
+export interface EncryptedContentChunk {
+  contentType: string;
+  streamId: string;
+  itemId: string;
+  actorType: string;
+  chunkIndex: number;
+  chunkCount: number;
+  ciphertext: string;
+  nonce: string;
+  wrappedKey: string;
+  keyId: string;
+  alg: 'A256GCM+RSA-OAEP-256';
+  aadVersion: 'evia-content-v1';
+  padding: 'fixed-600-v1';
+  contentLength: number;
+  truncated: boolean;
+  status?: string;
+  durationMs?: number;
+}
+
 export interface OperationFailure {
   operation: string;
   errorCategory: OperationErrorCategory;
@@ -239,6 +259,7 @@ export interface BrowserClient {
   init(): Promise<PublicConfig>;
   refreshConfig(): Promise<PublicConfig>;
   emit(eventKey: string, properties?: Properties, options?: EventOptions): Emission;
+  emitEncryptedContentChunk(chunk: EncryptedContentChunk): Emission;
   reportOperationFailure(failure: OperationFailure): Emission;
   identify(uid: string): void;
   reset(): void;
