@@ -45,6 +45,16 @@ newSSE `src/analytics/replay.ts`：
 6. 验证播放器解压并重组 4 个 payload group、62 条 mutation（children 56、attribute 1、navigation 2、click/resize/scroll 各 1），成功重建登录页；mask 原文检查通过。
 7. 负向浏览器守卫：固定 `sampled=0` 时 replay stream/item/collect 均不存在；预置 `used_bytes=2 MiB` 时 replay item/collect 为 0，证明采样关闭和跨刷新预算耗尽均在 DOM observer/发送前终止。
 
+### 已登录真实业务旅程
+
+使用测试账号经真实登录 UI（凭据不进入日志/截图/提交），依次运行首页、点击帖子详情、顶部搜索“大创”、热榜、分区、评分、商城、音乐、消息、小秋、简历、投票，共 13 个旅程节点；未发布评论、私信、商品或投票，也未触发其他业务写入。
+
+- 产生 login/page/post/search/hot/rating/shop/message/chat 与 sys.page_view/identity_link/heatmap/content 共 15 类事件；最终 78 批 collect 全部 202，无 page error。
+- 深链搜索缺少 search_id 时原实现发送 `unknown`，真实 collector 以 `PROPERTY_SCHEMA_MISMATCH` 422 拒绝；修复为生成 UUID，并用真实顶部搜索复验 `search_performed` + `search_results_viewed` 全 202。
+- 高体积 DOM 暴露了 SDK queue backpressure 边界：原 helper 在同步入队失败时仍返回 true。修复为每个 10,000 字符 segment 控制在单个 20-event batch 内，显式 flush、队列满先 flush 重试，并等待全部 emission outcome=accepted 后才记 item。
+- 最终样式流 `06997b4e-e594-47f7-8f6c-64dda21e7a39`：浏览器记 62 items；ClickHouse 与 PostgreSQL 同为 62 个 distinct/完整 items（snapshot 41 + mutations 21），三方严格相等；892 个密文块全 822 字符，CH `content` 字段计数 0。
+- snapshot 延迟至路由稳定后 2 秒，内联最多 1 MiB CSSOM，并只额外保留 Vue scope 标记；最终正式 Evia sandbox 可恢复已登录首页布局，组装 13 个 snapshot segment，页面正文长度 2489。
+
 截图：
 
 - `screenshots/newsse-replay-recording.png`
@@ -53,6 +63,13 @@ newSSE `src/analytics/replay.ts`：
 - `screenshots/evia-session-replay-player.png`
 - `screenshots/evia-formal-session-replay-console.png`
 - `screenshots/evia-formal-session-replay-preview.png`
+- `screenshots/newsse-auth-home.png`
+- `screenshots/newsse-auth-post-detail.png`
+- `screenshots/newsse-auth-search.png`
+- `screenshots/newsse-auth-heat.png`
+- `screenshots/newsse-auth-shop.png`
+- `screenshots/evia-authenticated-session-replay-console.png`
+- `screenshots/evia-authenticated-session-replay-preview.png`
 
 ## 正式控制台工作区
 
@@ -61,7 +78,7 @@ newSSE `src/analytics/replay.ts`：
 - owner 项目权限投影新增 `content.read`；editor/viewer 仍由存储事务内 owner 检查拒绝。机器授权 UI 同步公开该独立敏感权限。
 - 控制台「会话回放」工作区提供流列表、完整内容项列表、分页、错误/空态和安全快照预览。快照读取不进入 React Query 缓存；最多 600 个 item、8 并发读取、16 MiB 解压上限。
 - 预览前再次移除 script/iframe/object/embed/base/link、事件处理器、外部 src/href/action 与凭据属性，注入 `default-src 'none'` CSP，并在不含任何 sandbox capability 的 iframe 中使用 `no-referrer` 展示。
-- 真实全栈 UI：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示「欢迎回来」登录页。全栈 Playwright spec 1/1、replay/permission model 5/5 通过。
+- 真实全栈 UI 基线：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示登录页。追加已登录旅程后工作区列出 11 条流，最新短旅程 22 个完整 item，重组 13 个 snapshot segments 并恢复有 scoped 样式的登录后首页。全栈 Playwright spec 1/1、replay/permission model 5/5 通过。
 
 ## 修复的升级缺陷
 
