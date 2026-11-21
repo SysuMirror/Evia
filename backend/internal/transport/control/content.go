@@ -47,6 +47,7 @@ func (a *ContentAPI) get(w http.ResponseWriter, r *http.Request, actor authorize
 		return err
 	}
 	out := wire.ContentItem{
+		ContentType:   item.ContentType,
 		StreamID:      item.StreamID,
 		ItemID:        item.ItemID,
 		ActorType:     item.ActorType,

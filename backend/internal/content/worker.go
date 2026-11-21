@@ -70,7 +70,8 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		records = append(records, Record{
 			ProjectID: encrypted.ProjectID, Environment: encrypted.Environment,
 			EventID: encrypted.EventID, ReceivedAt: encrypted.ReceivedAt,
-			StreamID: encrypted.StreamID, ItemID: encrypted.ItemID, ActorType: encrypted.ActorType,
+			ContentType: encrypted.ContentType,
+			StreamID:    encrypted.StreamID, ItemID: encrypted.ItemID, ActorType: encrypted.ActorType,
 			ChunkIndex: encrypted.ChunkIndex, ChunkCount: encrypted.ChunkCount,
 			ObjectKey: objectKey, SHA256: hash, KeyID: encrypted.KeyID,
 			ContentLength: encrypted.ContentLength, Truncated: encrypted.Truncated,

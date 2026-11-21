@@ -28053,6 +28053,11 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "content_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
           "stream_id": {
             "type": "string",
             "minLength": 1,
@@ -28100,6 +28105,7 @@
           }
         },
         "required": [
+          "content_type",
           "stream_id",
           "item_id",
           "actor_type",

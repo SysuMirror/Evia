@@ -18,17 +18,17 @@ type Cursor struct {
 }
 
 type EncryptedChunk struct {
-	ProjectID, Environment, EventID string
-	ReceivedAt                      time.Time
-	StreamID, ItemID, ActorType     string
-	ChunkIndex, ChunkCount          int
-	Ciphertext, Nonce, WrappedKey   string
-	KeyID, Algorithm                string
-	AADVersion, Padding             string
-	ContentLength                   int
-	Truncated                       bool
-	Status                          string
-	DurationMS                      int
+	ProjectID, Environment, EventID          string
+	ReceivedAt                               time.Time
+	ContentType, StreamID, ItemID, ActorType string
+	ChunkIndex, ChunkCount                   int
+	Ciphertext, Nonce, WrappedKey            string
+	KeyID, Algorithm                         string
+	AADVersion, Padding                      string
+	ContentLength                            int
+	Truncated                                bool
+	Status                                   string
+	DurationMS                               int
 }
 
 type DecryptedChunk struct {
@@ -37,15 +37,15 @@ type DecryptedChunk struct {
 }
 
 type Record struct {
-	ProjectID, Environment, EventID string
-	ReceivedAt                      time.Time
-	StreamID, ItemID, ActorType     string
-	ChunkIndex, ChunkCount          int
-	ObjectKey, SHA256, KeyID        string
-	ContentLength                   int
-	Truncated                       bool
-	Status                          string
-	DurationMS                      int
+	ProjectID, Environment, EventID          string
+	ReceivedAt                               time.Time
+	ContentType, StreamID, ItemID, ActorType string
+	ChunkIndex, ChunkCount                   int
+	ObjectKey, SHA256, KeyID                 string
+	ContentLength                            int
+	Truncated                                bool
+	Status                                   string
+	DurationMS                               int
 }
 
 type Claim struct {
@@ -55,15 +55,15 @@ type Claim struct {
 }
 
 type Item struct {
-	ProjectID, Environment      string
-	StreamID, ItemID, ActorType string
-	Content                     string
-	Truncated                   bool
-	ContentLength               int
-	KeyID                       string
-	ReceivedAt                  time.Time
-	Status                      string
-	DurationMS                  int
+	ProjectID, Environment                   string
+	ContentType, StreamID, ItemID, ActorType string
+	Content                                  string
+	Truncated                                bool
+	ContentLength                            int
+	KeyID                                    string
+	ReceivedAt                               time.Time
+	Status                                   string
+	DurationMS                               int
 }
 
 type Scanner interface {

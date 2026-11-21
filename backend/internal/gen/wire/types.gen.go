@@ -198,6 +198,7 @@ type ContentEncryptionPublicKey struct {
 }
 
 type ContentItem struct {
+	ContentType   string  `json:"content_type"`
 	StreamID      string  `json:"stream_id"`
 	ItemID        string  `json:"item_id"`
 	ActorType     string  `json:"actor_type"`

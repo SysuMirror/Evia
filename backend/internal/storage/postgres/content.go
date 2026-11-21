@@ -56,11 +56,11 @@ func (s *Store) CompleteContent(ctx context.Context, claim content.Claim, record
 	}
 	for _, record := range records {
 		if _, err = tx.Exec(ctx, `INSERT INTO content_item_chunks
-		 (project_id,environment,event_id,received_at,stream_id,item_id,actor_type,chunk_index,chunk_count,
+		 (project_id,environment,event_id,received_at,content_type,stream_id,item_id,actor_type,chunk_index,chunk_count,
 		  object_key,sha256,key_id,content_length,truncated,status,duration_ms)
-		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NULLIF($15,''),NULLIF($16,0))
-		 ON CONFLICT(project_id,environment,event_id) DO NOTHING`,
-			record.ProjectID, record.Environment, record.EventID, record.ReceivedAt,
+		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NULLIF($16,''),NULLIF($17,0))
+		 ON CONFLICT DO NOTHING`,
+			record.ProjectID, record.Environment, record.EventID, record.ReceivedAt, record.ContentType,
 			record.StreamID, record.ItemID, record.ActorType, record.ChunkIndex, record.ChunkCount,
 			record.ObjectKey, record.SHA256, record.KeyID, record.ContentLength, record.Truncated,
 			record.Status, record.DurationMS); err != nil {
@@ -114,7 +114,7 @@ func (s *Store) GetContentItem(ctx context.Context, actor, project, environment,
 	if err = s.contentReadAuthority(ctx, tx, actor, project, environment); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT project_id::text,environment,event_id::text,received_at,stream_id,item_id,actor_type,
+	rows, err := tx.Query(ctx, `SELECT project_id::text,environment,event_id::text,received_at,content_type,stream_id,item_id,actor_type,
 	 chunk_index,chunk_count,object_key,sha256,key_id,content_length,truncated,COALESCE(status,''),COALESCE(duration_ms,0)
 	 FROM content_item_chunks WHERE project_id=$1 AND environment=$2 AND item_id=$3 ORDER BY chunk_index`,
 		project, environment, itemID)
@@ -125,7 +125,7 @@ func (s *Store) GetContentItem(ctx context.Context, actor, project, environment,
 	var records []content.Record
 	for rows.Next() {
 		var record content.Record
-		if err = rows.Scan(&record.ProjectID, &record.Environment, &record.EventID, &record.ReceivedAt,
+		if err = rows.Scan(&record.ProjectID, &record.Environment, &record.EventID, &record.ReceivedAt, &record.ContentType,
 			&record.StreamID, &record.ItemID, &record.ActorType, &record.ChunkIndex, &record.ChunkCount,
 			&record.ObjectKey, &record.SHA256, &record.KeyID, &record.ContentLength, &record.Truncated,
 			&record.Status, &record.DurationMS); err != nil {

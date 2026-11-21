@@ -61,7 +61,7 @@ func encryptTestChunk(t *testing.T, public *rsa.PublicKey, plaintext []byte) Enc
 	gcm, _ := cipher.NewGCM(block)
 	chunk := EncryptedChunk{
 		ProjectID: "p", Environment: "development", EventID: "e", ReceivedAt: time.Now().UTC(),
-		StreamID: "conversation", ItemID: "message", ActorType: "user",
+		ContentType: "ai_chat_message", StreamID: "conversation", ItemID: "message", ActorType: "user",
 		ChunkIndex: 0, ChunkCount: 1, KeyID: "key-1", Algorithm: "A256GCM+RSA-OAEP-256",
 		AADVersion: "evia-content-v1", Padding: "fixed-600-v1",
 		Nonce: base64.RawURLEncoding.EncodeToString(nonce), WrappedKey: base64.RawURLEncoding.EncodeToString(wrapped),
@@ -73,7 +73,7 @@ func encryptTestChunk(t *testing.T, public *rsa.PublicKey, plaintext []byte) Enc
 	if _, err = rand.Read(padded[2+len(plaintext):]); err != nil {
 		t.Fatal(err)
 	}
-	aad := []byte("evia-content-v1|p|development|key-1|conversation|message|user|0|1|" + fmt.Sprint(len(plaintext)) + "|0||0")
+	aad := []byte("evia-content-v1|p|development|key-1|ai_chat_message|conversation|message|user|0|1|" + fmt.Sprint(len(plaintext)) + "|0||0")
 	chunk.Ciphertext = base64.RawURLEncoding.EncodeToString(gcm.Seal(nil, nonce, padded, aad))
 	return chunk
 }

@@ -47,6 +47,7 @@ type encryptedRow struct {
 }
 
 type encryptedProperties struct {
+	ContentType   string `json:"content_type"`
 	StreamID      string `json:"stream_id"`
 	ItemID        string `json:"item_id"`
 	ActorType     string `json:"actor_type"`
@@ -91,13 +92,14 @@ func (s *ContentScanner) ScanEncryptedContent(ctx context.Context, cursor conten
 		if err = json.Unmarshal([]byte(row.PropertiesJSON), &properties); err != nil {
 			return nil, fmt.Errorf("decode encrypted content properties: %w", err)
 		}
-		if properties.ChunkCount < 1 || properties.ChunkCount > 32 || properties.ChunkIndex < 0 || properties.ChunkIndex >= properties.ChunkCount || len(properties.Ciphertext) == 0 || len(properties.Ciphertext) > 1024 || len(properties.WrappedKey) == 0 || len(properties.WrappedKey) > 1024 {
+		if len(properties.ContentType) < 1 || len(properties.ContentType) > 64 || properties.ChunkCount < 1 || properties.ChunkCount > 32 || properties.ChunkIndex < 0 || properties.ChunkIndex >= properties.ChunkCount || len(properties.Ciphertext) == 0 || len(properties.Ciphertext) > 1024 || len(properties.WrappedKey) == 0 || len(properties.WrappedKey) > 1024 {
 			return nil, errors.New("encrypted content properties exceed bounds")
 		}
 		chunks = append(chunks, content.EncryptedChunk{
 			ProjectID: row.ProjectID, Environment: row.Environment, EventID: row.EventID,
-			ReceivedAt: time.Unix(0, row.ReceivedAtNS).UTC(),
-			StreamID:   properties.StreamID, ItemID: properties.ItemID, ActorType: properties.ActorType,
+			ReceivedAt:  time.Unix(0, row.ReceivedAtNS).UTC(),
+			ContentType: properties.ContentType,
+			StreamID:    properties.StreamID, ItemID: properties.ItemID, ActorType: properties.ActorType,
 			ChunkIndex: properties.ChunkIndex, ChunkCount: properties.ChunkCount,
 			Ciphertext: properties.Ciphertext, Nonce: properties.Nonce, WrappedKey: properties.WrappedKey,
 			KeyID: properties.KeyID, Algorithm: properties.Algorithm,

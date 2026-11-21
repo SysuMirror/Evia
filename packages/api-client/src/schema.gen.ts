@@ -3533,6 +3533,7 @@ export interface components {
             signature: string;
         };
         ContentItem: {
+            content_type: string;
             stream_id: string;
             item_id: string;
             actor_type: string;

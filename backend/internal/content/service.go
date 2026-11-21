@@ -47,7 +47,8 @@ func (s *Service) GetItem(ctx context.Context, actor, project, environment, item
 	first := records[0]
 	return Item{
 		ProjectID: project, Environment: environment,
-		StreamID: first.StreamID, ItemID: first.ItemID, ActorType: first.ActorType,
+		ContentType: first.ContentType,
+		StreamID:    first.StreamID, ItemID: first.ItemID, ActorType: first.ActorType,
 		Content: string(content), Truncated: first.Truncated, ContentLength: first.ContentLength,
 		KeyID: first.KeyID, ReceivedAt: first.ReceivedAt,
 		Status: first.Status, DurationMS: first.DurationMS,

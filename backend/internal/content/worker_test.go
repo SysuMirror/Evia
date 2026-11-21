@@ -58,7 +58,7 @@ func TestWorkerDecryptsStoresAndAdvancesCursor(t *testing.T) {
 	worker := &Worker{
 		Store: store, Scanner: &fakeScanner{chunks: []EncryptedChunk{{
 			ProjectID: "project", Environment: "development", EventID: "event", ReceivedAt: now,
-			StreamID: "conversation", ItemID: "message", ActorType: "user",
+			ContentType: "test_content", StreamID: "conversation", ItemID: "message", ActorType: "user",
 			ChunkIndex: 0, ChunkCount: 1, KeyID: "key", ContentLength: 5,
 		}}},
 		Decryptor: &fakeDecryptor{}, Artifacts: fakeArtifacts{}, ID: "worker", Lease: time.Minute,

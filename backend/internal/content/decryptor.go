@@ -215,15 +215,25 @@ func (d *RSAOAEPDecryptor) Decrypt(ctx context.Context, chunk EncryptedChunk) (D
 		return DecryptedChunk{}, errors.New("invalid content ciphertext")
 	}
 	aadV1 := []byte(fmt.Sprintf(
-		"evia-content-v1|%s|%s|%s|%s|%s|%s|%d|%d|%d|%d|%s|%d",
-		chunk.ProjectID, chunk.Environment, chunk.KeyID, chunk.StreamID, chunk.ItemID, chunk.ActorType,
+		"evia-content-v1|%s|%s|%s|%s|%s|%s|%s|%d|%d|%d|%d|%s|%d",
+		chunk.ProjectID, chunk.Environment, chunk.KeyID, chunk.ContentType, chunk.StreamID, chunk.ItemID, chunk.ActorType,
 		chunk.ChunkIndex, chunk.ChunkCount, chunk.ContentLength, boolInt(chunk.Truncated), chunk.Status, chunk.DurationMS,
 	))
 	var opened []byte
 	paddedV1 := false
 	if chunk.AADVersion == "evia-content-v1" && chunk.Padding == "fixed-600-v1" {
 		opened, err = gcm.Open(nil, nonce, ciphertext, aadV1)
-		paddedV1 = true
+		if err != nil {
+			// Compatibility for the development window before content_type was
+			// added to v1 AAD. New producers always bind content_type.
+			preGenericAAD := []byte(fmt.Sprintf(
+				"evia-content-v1|%s|%s|%s|%s|%s|%s|%d|%d|%d|%d|%s|%d",
+				chunk.ProjectID, chunk.Environment, chunk.KeyID, chunk.StreamID, chunk.ItemID, chunk.ActorType,
+				chunk.ChunkIndex, chunk.ChunkCount, chunk.ContentLength, boolInt(chunk.Truncated), chunk.Status, chunk.DurationMS,
+			))
+			opened, err = gcm.Open(nil, nonce, ciphertext, preGenericAAD)
+		}
+		paddedV1 = err == nil
 	} else if chunk.AADVersion == "" && chunk.Padding == "" {
 		// Compatibility for pre-v1 and the short-lived development transition:
 		// old chunks used the legacy AAD/plaintext, while transitional padded
