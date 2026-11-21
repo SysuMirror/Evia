@@ -56,7 +56,7 @@ newSSE `src/analytics/replay.ts`：
 
 原始敏感消息迁移在已升级数据库中残留 `actor_type IN ('user','assistant')` 和状态枚举，违反通用平台模型并阻断 `actor_type=browser`。迁移 046 删除产品专属约束，改为 actor/status bounded string；新建库仍由当前 044 的通用定义建立约束。
 
-验证过程中旧二进制未嵌入迁移 046，因此对隔离验证库等价执行 SQL 后完成 E2E；源迁移已加入仓库。后端 content/storage/control focused tests通过。一次全量重编译尝试因本机访问 `proxy.golang.org` 超时而失败，非编译错误；后续需在依赖缓存/网络恢复后执行完整 `make backend-test` 与迁移冷启动验证。
+验证过程中旧二进制未嵌入迁移 046，因此先对隔离验证库等价执行 SQL 完成 E2E；源迁移随后经 044→045→046 隔离 PostgreSQL 冷启动并用 `actor_type=browser,status=captured` 实插验证。依赖网络恢复后完整 `make backend-test`（gofmt、go vet、`go test -race ./...`）通过，包含 content/storage/control 全套。
 
 ## 尚未完成
 
