@@ -1030,7 +1030,10 @@ export function AnalysisPage({
   );
   return (
     <>
-      <PageHeading title="分析查询" />
+      <PageHeading
+        title="分析查询"
+        summary="组合事件、主体与时间条件，在同一工作区运行查询并检查完整结果。"
+      />
       {!canRead ? (
         <EmptyPanel description="暂无查询权限，需要项目读取权限。" />
       ) : (

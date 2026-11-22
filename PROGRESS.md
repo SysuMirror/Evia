@@ -2,6 +2,8 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
+**2026-11-22，控制台工作区高相似结构重排**：WorkspaceShell 改为品牌+顶层分类胶囊导航、按当前分类显示的窄图标工具栏和浅色外画布上的单一白色圆角工作面；全部既有权限路由仍可通过分类与工具栏到达，图标链接提供可访问名称与悬浮提示，390×844 下分类和工具栏合并为带完整文字标签的菜单。分析、看板、会话回放统一首屏标题/摘要节奏，并保留热力图+结果表、非对称回放主从表格和既有看板布局比例。API、权限、加载/错误/空态、未保存保护及键盘语义未改变。TypeScript、生产构建、边界检查、格式检查和 focused 浏览器测试通过；1440×1000 与390×844确定性截图经直接复核无横向溢出。**
+
 **2026-11-22，控制台信息架构与共享控件二次重构（基于8张直接读图复盘）**：针对首版“长扁平侧栏+嵌套卡片/胶囊过多+页面动作主次弱”的真实反馈，重构 WorkspaceShell 为248px分组导航层级，桌面 header/nav/main 分平面，移动端改键盘可达的纵向菜单；移除超大圆角 workspace 外壳，PageHeading/action、underline Tabs、table header/row、heatmap visual+table split、replay stream/content master+player 三层重新编排。随后在 design-system 层统一 Button icon/loading/size/pressed/disabled/focus，Field/Input/Select/Textarea help/error/read-only，Tabs键盘与滚动焦点，Pagination语义/忙碌态，Modal关闭/页脚/移动操作，DataTable compact/comfortable density与统一操作列，并让11个资源列表接入。真实认证 heatmap/replay 截图复盘后修复权限路由交错导致的重复侧栏分组、热力图第三列表格裁切。Prettier/typecheck/production build通过，共享控件11/11、analysis/dashboard/replay组合43/43；最终合并后再跑controls+analysis+replay 34/34。未改变路由、权限、API和状态语义。提交：`cf10f8e`、`acd1927`、`26d7da3`。**
 
 **2026-11-22，控制台共享视觉系统重构**：设计系统统一为空气感暖白工作区、深色正文、柔和薰衣草层级与克制青绿色交互色；WorkspaceShell 保留 64px/220px 桌面契约和移动端横向可达导航，同时将头部账号区、导航、按钮与 Tabs 收敛为胶囊交互，Panel、DataSurface、DataTable、分析结果、看板卡片和会话回放预览统一圆角、边界与层级。未改变路由、权限、API、加载/错误/空态、对话框与键盘行为。`pnpm typecheck`、console production build、`pnpm format:check`、共享组件浏览器测试 11/11，以及分析/看板/回放 focused model tests 32/32 通过；合入主线后再用真实后端与专用账号捕获热力图和会话回放业务数据页面，1440×1000 下 header/220px rail/rounded workspace、表格、网格和回放层级均无裁切或overflow，视觉复核通过；移动组件 390×844 零横向溢出。

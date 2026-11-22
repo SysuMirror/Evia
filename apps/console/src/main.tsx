@@ -286,8 +286,9 @@ function Workspace({ session }: { session: Session }) {
       ].includes(path)
     )
       return '洞察分析';
+    if (['erasure', 'exports', 'retention', 'archiving'].includes(path)) return '数据管理';
     if (['metrics', 'formula-metrics'].includes(path)) return '指标体系';
-    return '项目管理';
+    return '项目设置';
   };
   const navigationItems = projectID
     ? sections.map((section) => ({

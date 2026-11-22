@@ -109,6 +109,11 @@ export function DashboardsPage(props: CatalogPageProps) {
               : '新建看板'
             : '保存的看板'
         }
+        summary={
+          workspace
+            ? '编辑看板结构、固定分析版本并检查已发布结果。'
+            : '按文件夹管理可复用看板，打开草稿或创建新的数据视图。'
+        }
         action={
           workspace ? (
             <Button disabled={!!request.busy || runWork.busy} onClick={controller.close}>

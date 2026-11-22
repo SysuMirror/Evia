@@ -81,7 +81,10 @@ export function SessionReplayPage(props: PageProps) {
   if (!props.project.permissions.includes('content.read'))
     return (
       <>
-        <PageHeading title="会话回放" />
+        <PageHeading
+          title="会话回放"
+          summary="浏览受保护的会话记录，并在隔离环境中检查安全快照。"
+        />
         <Alert tone="error" title="只有项目所有者或拥有 content.read 的机器可以读取受保护内容。" />
       </>
     );
@@ -243,7 +246,7 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
 
   return (
     <>
-      <PageHeading title="会话回放" />
+      <PageHeading title="会话回放" summary="浏览受保护的会话记录，并在隔离环境中检查安全快照。" />
       <div className="inline-notice">
         <Alert
           tone="info"

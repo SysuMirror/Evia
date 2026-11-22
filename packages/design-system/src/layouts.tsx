@@ -95,6 +95,7 @@ export function WorkspaceShell({
     },
     [],
   );
+  const activeGroup = groups.find((group) => group.items.some((item) => item.active)) ?? groups[0];
   return (
     <div className="workspace">
       <a className="skip-link" href="#main-content">
@@ -102,41 +103,87 @@ export function WorkspaceShell({
       </a>
       <header className="workspace-header">
         <Brand onNavigate={onNavigate} />
-        <div className="account-actions">
-          <span className="account-avatar" aria-hidden="true">
-            {account.slice(0, 1).toUpperCase()}
-          </span>
-          <span className="account-name" title={account}>
-            {account}
-          </span>
-          <Button variant="ghost" loading={busy} onClick={onLogout} aria-label="退出登录">
-            退出登录
-          </Button>
-        </div>
-      </header>
-      <div className="workspace-body">
-        <aside className="workspace-nav">
-          {projectContext && <div className="workspace-context">{projectContext}</div>}
+        <nav className="workspace-primary-nav" aria-label="工作区分类">
+          {groups.map((group) => {
+            const destination = group.items[0];
+            if (!destination) return null;
+            const active = group === activeGroup;
+            return (
+              <a
+                key={group.label}
+                href={destination.href}
+                aria-current={active ? 'location' : undefined}
+                onClick={(event) => navigate(event, destination.href, onNavigate)}
+              >
+                {group.label}
+              </a>
+            );
+          })}
+        </nav>
+        <div className="workspace-utilities">
+          <div className="account-actions" aria-label={`当前账号：${account}`}>
+            <span className="account-avatar" title={account} aria-hidden="true">
+              {account.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="account-name" title={account}>
+              {account}
+            </span>
+            <Button
+              className="workspace-logout"
+              variant="ghost"
+              loading={busy}
+              onClick={onLogout}
+              aria-label="退出登录"
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M10 5H6.8A2.8 2.8 0 0 0 4 7.8v8.4A2.8 2.8 0 0 0 6.8 19H10m5-4 3-3m0 0-3-3m3 3H9"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="sr-only">退出登录</span>
+            </Button>
+          </div>
           <Button
             className="workspace-nav-toggle"
             variant="secondary"
+            aria-label={navigationOpen ? '关闭工作区菜单' : '打开工作区菜单'}
             aria-expanded={navigationOpen}
             aria-controls="workspace-navigation"
             onClick={() => setNavigationOpen((open) => !open)}
           >
-            <span>工作区导航</span>
-            <span aria-hidden="true">{navigationOpen ? '收起' : '展开'}</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              {navigationOpen ? (
+                <path
+                  d="m6 6 12 12M18 6 6 18"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <path
+                  d="M5 7h14M5 12h14M5 17h14"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
           </Button>
-          <nav
-            id="workspace-navigation"
-            aria-label="主导航"
-            data-mobile-open={navigationOpen || undefined}
-          >
+        </div>
+      </header>
+      <div className="workspace-body">
+        <aside className="workspace-nav" data-mobile-open={navigationOpen || undefined}>
+          <nav id="workspace-navigation" aria-label="功能导航">
             {groups.map((group) => (
               <div
                 className="workspace-nav-group"
                 role="group"
                 aria-label={group.label}
+                data-active={group === activeGroup || undefined}
                 key={group.label}
               >
                 <h2>{group.label}</h2>
@@ -145,7 +192,9 @@ export function WorkspaceShell({
                     <a
                       key={item.href}
                       href={item.href}
+                      aria-label={item.label}
                       aria-current={item.active ? 'page' : undefined}
+                      data-label={item.label}
                       onClick={(event) => {
                         navigate(event, item.href, onNavigate);
                         if (event.defaultPrevented) setNavigationOpen(false);
@@ -156,7 +205,7 @@ export function WorkspaceShell({
                           {item.icon}
                         </span>
                       )}
-                      <span>{item.label}</span>
+                      <span className="workspace-nav-label">{item.label}</span>
                     </a>
                   ))}
                 </div>
@@ -165,6 +214,7 @@ export function WorkspaceShell({
           </nav>
         </aside>
         <main id="main-content" tabIndex={-1}>
+          {projectContext && <div className="workspace-context">{projectContext}</div>}
           {children}
         </main>
       </div>
@@ -201,11 +251,20 @@ const defaultNavigation: WorkspaceNavigationItem = {
   ),
 };
 
-export function PageHeading({ title, action }: { title: string; action?: ReactNode }) {
+export function PageHeading({
+  title,
+  summary,
+  action,
+}: {
+  title: string;
+  summary?: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <header className="page-heading">
       <div className="page-heading-copy">
         <h1>{title}</h1>
+        {summary && <p className="page-heading-summary">{summary}</p>}
       </div>
       {action && <div className="heading-actions">{action}</div>}
     </header>
