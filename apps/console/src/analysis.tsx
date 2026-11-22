@@ -1188,59 +1188,67 @@ export function AnalysisPage({
                 )}
                 {result && (
                   <>
-                    {snapshot.request.kind === 'trend' &&
-                      !snapshot.request.interval &&
-                      rows.length > 0 && (
-                        <div className="analysis-stat">
-                          <div>
-                            <span>{metricLabel(snapshot.request, snapshot.semanticMetric)}</span>
-                            <div className="metric-value">
-                              {cell(rows[0]!.metric_0, 'number', snapshot.request.timezone)}
+                    <div
+                      className={`analysis-result-presentation${
+                        snapshot.request.kind === 'heatmap'
+                          ? ' analysis-result-presentation-heatmap'
+                          : ''
+                      }`}
+                    >
+                      {snapshot.request.kind === 'trend' &&
+                        !snapshot.request.interval &&
+                        rows.length > 0 && (
+                          <div className="analysis-stat">
+                            <div>
+                              <span>{metricLabel(snapshot.request, snapshot.semanticMetric)}</span>
+                              <div className="metric-value">
+                                {cell(rows[0]!.metric_0, 'number', snapshot.request.timezone)}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
+                      {rows.length > 0 &&
+                        snapshot.request.kind === 'heatmap' &&
+                        snapshot.request.heatmap && (
+                          <HeatmapGrid
+                            rows={rows}
+                            viewportWidth={snapshot.request.heatmap.viewport_width}
+                            viewportHeight={snapshot.request.heatmap.viewport_height}
+                          />
+                        )}
+                      {rows.length > 0 &&
+                        ((snapshot.request.kind === 'trend' && snapshot.request.interval) ||
+                          snapshot.request.kind === 'funnel') && (
+                          <ResultChart
+                            kind={snapshot.request.kind === 'funnel' ? 'funnel' : 'trend'}
+                            rows={rows}
+                            label={
+                              snapshot.request.kind === 'funnel'
+                                ? '到达主体数'
+                                : metricLabel(snapshot.request, snapshot.semanticMetric)
+                            }
+                            timezone={snapshot.request.timezone}
+                            steps={snapshot.request.funnel?.steps.map(
+                              (step, index) =>
+                                `${index + 1}. ${step.event_key} v${step.schema_version}`,
+                            )}
+                          />
+                        )}
+                      {snapshot.request.kind === 'trend' && snapshot.request.interval && (
+                        <p className="field-help">
+                          仅展示实际返回的时间桶，缺失时间桶未补零。各桶 UV 不能相加作为整段 UV。
+                        </p>
                       )}
-                    {rows.length > 0 &&
-                      snapshot.request.kind === 'heatmap' &&
-                      snapshot.request.heatmap && (
-                        <HeatmapGrid
+                      <DataSurface label="查询结果表">
+                        <DataTable
+                          caption="查询结果，数值与图表对应"
                           rows={rows}
-                          viewportWidth={snapshot.request.heatmap.viewport_width}
-                          viewportHeight={snapshot.request.heatmap.viewport_height}
+                          columns={columns}
+                          rowKey={(row) => String(rows.indexOf(row))}
+                          empty="该范围内无匹配结果，不等同于数值零。"
                         />
-                      )}
-                    {rows.length > 0 &&
-                      ((snapshot.request.kind === 'trend' && snapshot.request.interval) ||
-                        snapshot.request.kind === 'funnel') && (
-                        <ResultChart
-                          kind={snapshot.request.kind === 'funnel' ? 'funnel' : 'trend'}
-                          rows={rows}
-                          label={
-                            snapshot.request.kind === 'funnel'
-                              ? '到达主体数'
-                              : metricLabel(snapshot.request, snapshot.semanticMetric)
-                          }
-                          timezone={snapshot.request.timezone}
-                          steps={snapshot.request.funnel?.steps.map(
-                            (step, index) =>
-                              `${index + 1}. ${step.event_key} v${step.schema_version}`,
-                          )}
-                        />
-                      )}
-                    {snapshot.request.kind === 'trend' && snapshot.request.interval && (
-                      <p className="field-help">
-                        仅展示实际返回的时间桶，缺失时间桶未补零。各桶 UV 不能相加作为整段 UV。
-                      </p>
-                    )}
-                    <DataSurface label="查询结果表">
-                      <DataTable
-                        caption="查询结果，数值与图表对应"
-                        rows={rows}
-                        columns={columns}
-                        rowKey={(row) => String(rows.indexOf(row))}
-                        empty="该范围内无匹配结果，不等同于数值零。"
-                      />
-                    </DataSurface>
+                      </DataSurface>
+                    </div>
                     <p className="field-help">
                       返回 {rows.length} 行，上限 {snapshot.request.limit}{' '}
                       行。超出预算会明确失败；原始事件与行为链可通过下一页继续读取。

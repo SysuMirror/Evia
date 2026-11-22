@@ -19,6 +19,7 @@ import {
   EmptyPanel,
   PageHeading,
   PaginationBar,
+  ResultHeader,
   Toolbar,
   type DataTableColumn,
 } from '@evia/design-system';
@@ -249,97 +250,102 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
           title="回放内容在浏览器端加密，只有项目所有者或 content.read 机器可读取。快照在禁脚本、禁网络的 sandbox 中预览。"
         />
       </div>
-      <DataSurface label="回放会话流">
-        {streams.isError ? (
-          <Alert
-            tone="error"
-            title="无法读取回放会话"
-            action={<Button onClick={() => void streams.refetch()}>重试</Button>}
-          >
-            {streams.error instanceof ApiError ? streams.error.message : '请稍后再试。'}
-          </Alert>
-        ) : (
-          <>
-            <DataTable
-              caption="回放会话流列表"
-              columns={streamColumns}
-              rows={streams.data?.items ?? []}
-              rowKey={(row) => row.stream_id}
-              minWidth={820}
-              loading={streams.isFetching}
-              empty={<EmptyPanel description="当前环境还没有完整的会话回放内容。" />}
-            />
-            <PaginationBar
-              page={streamCursors.length + 1}
-              count={streams.data?.items.length ?? 0}
-              hasNext={!!streams.data?.next_cursor}
-              busy={streams.isFetching}
-              onPrevious={() => setStreamCursors((current) => current.slice(0, -1))}
-              onNext={() => {
-                if (streams.data?.next_cursor)
-                  setStreamCursors((current) => [...current, streams.data!.next_cursor!]);
-              }}
-            />
-          </>
-        )}
-      </DataSurface>
-
-      {selectedStream && (
-        <DataSurface label="会话内容项">
-          <Toolbar label="会话回放操作">
-            <div className="replay-selection">
-              <span>
-                当前会话：<code title={selectedStream}>{shortReplayID(selectedStream)}</code>
-              </span>
-              <Button loading={previewLoading} onClick={() => void openPreview()}>
-                加载安全快照预览
-              </Button>
-            </div>
-          </Toolbar>
-          {previewError && (
-            <div className="inline-notice">
-              <Alert tone="error" title="无法重建回放快照">
-                {previewError.message}
-              </Alert>
-            </div>
-          )}
-          {items.isError ? (
+      <div className="replay-library">
+        <DataSurface label="回放会话流">
+          <ResultHeader title="会话流" summary="按最近接收时间浏览完整回放流" />
+          {streams.isError ? (
             <Alert
               tone="error"
-              title="无法读取会话内容项"
-              action={<Button onClick={() => void items.refetch()}>重试</Button>}
+              title="无法读取回放会话"
+              action={<Button onClick={() => void streams.refetch()}>重试</Button>}
             >
-              {items.error instanceof ApiError ? items.error.message : '请稍后再试。'}
+              {streams.error instanceof ApiError ? streams.error.message : '请稍后再试。'}
             </Alert>
           ) : (
             <>
               <DataTable
-                caption="回放内容项列表"
-                columns={itemColumns}
-                rows={items.data?.items ?? []}
-                rowKey={(row) => row.item_id}
-                minWidth={760}
-                loading={items.isFetching}
-                empty={<EmptyPanel description="该会话还没有完整内容项。" />}
+                caption="回放会话流列表"
+                columns={streamColumns}
+                rows={streams.data?.items ?? []}
+                rowKey={(row) => row.stream_id}
+                minWidth={820}
+                loading={streams.isFetching}
+                empty={<EmptyPanel description="当前环境还没有完整的会话回放内容。" />}
               />
               <PaginationBar
-                page={itemCursors.length + 1}
-                count={items.data?.items.length ?? 0}
-                hasNext={!!items.data?.next_cursor}
-                busy={items.isFetching}
-                onPrevious={() => setItemCursors((current) => current.slice(0, -1))}
+                page={streamCursors.length + 1}
+                count={streams.data?.items.length ?? 0}
+                hasNext={!!streams.data?.next_cursor}
+                busy={streams.isFetching}
+                onPrevious={() => setStreamCursors((current) => current.slice(0, -1))}
                 onNext={() => {
-                  if (items.data?.next_cursor)
-                    setItemCursors((current) => [...current, items.data!.next_cursor!]);
+                  if (streams.data?.next_cursor)
+                    setStreamCursors((current) => [...current, streams.data!.next_cursor!]);
                 }}
               />
             </>
           )}
         </DataSurface>
-      )}
+
+        {selectedStream && (
+          <DataSurface label="会话内容项">
+            <ResultHeader title="内容记录" summary="选择完整内容并加载安全预览" />
+            <Toolbar label="会话回放操作">
+              <div className="replay-selection">
+                <span>
+                  当前会话：<code title={selectedStream}>{shortReplayID(selectedStream)}</code>
+                </span>
+                <Button loading={previewLoading} onClick={() => void openPreview()}>
+                  加载安全快照预览
+                </Button>
+              </div>
+            </Toolbar>
+            {previewError && (
+              <div className="inline-notice">
+                <Alert tone="error" title="无法重建回放快照">
+                  {previewError.message}
+                </Alert>
+              </div>
+            )}
+            {items.isError ? (
+              <Alert
+                tone="error"
+                title="无法读取会话内容项"
+                action={<Button onClick={() => void items.refetch()}>重试</Button>}
+              >
+                {items.error instanceof ApiError ? items.error.message : '请稍后再试。'}
+              </Alert>
+            ) : (
+              <>
+                <DataTable
+                  caption="回放内容项列表"
+                  columns={itemColumns}
+                  rows={items.data?.items ?? []}
+                  rowKey={(row) => row.item_id}
+                  minWidth={760}
+                  loading={items.isFetching}
+                  empty={<EmptyPanel description="该会话还没有完整内容项。" />}
+                />
+                <PaginationBar
+                  page={itemCursors.length + 1}
+                  count={items.data?.items.length ?? 0}
+                  hasNext={!!items.data?.next_cursor}
+                  busy={items.isFetching}
+                  onPrevious={() => setItemCursors((current) => current.slice(0, -1))}
+                  onNext={() => {
+                    if (items.data?.next_cursor)
+                      setItemCursors((current) => [...current, items.data!.next_cursor!]);
+                  }}
+                />
+              </>
+            )}
+          </DataSurface>
+        )}
+      </div>
 
       {preview && (
         <DataSurface label="会话回放播放器">
+          <ResultHeader title="安全播放器" summary="净化后的 light DOM，不加载脚本或网络资源" />
           <div className="replay-preview-meta">
             <span>路由：{preview.timeline.snapshot.route || '—'}</span>
             <span>采集：{replayInstant(preview.timeline.snapshot.createdAt)}</span>

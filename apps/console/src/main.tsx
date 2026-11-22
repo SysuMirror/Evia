@@ -273,12 +273,29 @@ function Workspace({ session }: { session: Session }) {
         ]
       : []),
   ];
+  const navigationGroup = (path: WorkspaceSection) => {
+    if (['events', 'releases', 'sources', 'diagnostics'].includes(path)) return '数据接入';
+    if (
+      [
+        'analysis',
+        'saved-analyses',
+        'dashboards',
+        'reports',
+        'session-replay',
+        'identity',
+      ].includes(path)
+    )
+      return '洞察分析';
+    if (['metrics', 'formula-metrics'].includes(path)) return '指标体系';
+    return '项目管理';
+  };
   const navigationItems = projectID
     ? sections.map((section) => ({
         href: `/projects/${encodeURIComponent(projectID)}/${section.path}?environment=${environment}`,
         label: section.label,
         icon: <NavigationIcon section={section.path} />,
         active: match?.params['*'] === section.path,
+        group: navigationGroup(section.path),
       }))
     : undefined;
   const logout = useMutation({

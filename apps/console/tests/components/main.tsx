@@ -3,17 +3,25 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { createMemoryRouter, Link, RouterProvider, useLocation } from 'react-router-dom';
 import {
+  Badge,
   Button,
   Checkbox,
   CopyButton,
+  DashboardCard,
+  DashboardGrid,
+  DataSurface,
   DesignProvider,
   DataTable,
   Field,
   Input,
   Modal,
+  PageHeading,
+  Panel,
   Select,
   Textarea,
   Tabs,
+  Toolbar,
+  WorkspaceShell,
   useToast,
 } from '@evia/design-system';
 import { DraftNavigationProvider, useDraftNavigation } from '../../src/draft-navigation';
@@ -312,6 +320,142 @@ function LifecycleFixture() {
   );
 }
 
+function WorkspacePreviewFixture() {
+  const navigation = [
+    ['事件管理', '/events'],
+    ['发布管理', '/releases'],
+    ['接入来源', '/sources'],
+    ['数据分析', '/analysis'],
+    ['保存的分析', '/saved-analyses'],
+    ['自定义看板', '/dashboards'],
+    ['会话回放', '/session-replay'],
+    ['项目治理', '/governance'],
+  ] as const;
+  return (
+    <WorkspaceShell
+      account="测试管理员"
+      busy={false}
+      onLogout={() => undefined}
+      navigation={navigation.map(([label, href]) => ({
+        label,
+        href,
+        active: href === '/dashboards',
+      }))}
+      projectContext={
+        <div className="workspace-project-context">
+          <Button variant="link" className="workspace-project-back">
+            <span aria-hidden="true">←</span>
+            返回项目列表
+          </Button>
+          <strong className="workspace-project-name">产品体验分析</strong>
+          <Field
+            className="workspace-project-environment"
+            label="当前环境"
+            htmlFor="preview-environment"
+          >
+            <Select
+              id="preview-environment"
+              defaultValue="production"
+              options={[
+                { value: 'development', label: '开发环境' },
+                { value: 'production', label: '生产环境' },
+              ]}
+            />
+          </Field>
+        </div>
+      }
+    >
+      <div className="dashboard-workspace section-stack">
+        <PageHeading
+          title="运营概览"
+          action={
+            <>
+              <Button>查看版本</Button>
+              <Button variant="primary">运行看板</Button>
+            </>
+          }
+        />
+        <Panel className="dashboard-run-controls" label="看板执行条件">
+          <Toolbar actions={<Button>调整条件</Button>}>
+            <strong>最近 7 天</strong>
+            <span className="field-help">生产环境，Asia/Shanghai</span>
+          </Toolbar>
+        </Panel>
+        <DashboardGrid
+          label="合成看板布局预览"
+          items={[
+            {
+              id: 'sessions',
+              reading_order: 1,
+              layout: { x: 0, y: 0, width: 4, height: 2 },
+              content: (
+                <DashboardCard title="访问会话" summary="较前 7 天">
+                  <div className="analysis-stat">
+                    <div className="metric-value">12,480</div>
+                    <span>增长 8.2%</span>
+                  </div>
+                </DashboardCard>
+              ),
+            },
+            {
+              id: 'trend',
+              reading_order: 2,
+              layout: { x: 4, y: 0, width: 8, height: 5 },
+              content: (
+                <DashboardCard
+                  title="事件趋势"
+                  summary="2026/11/09 00:00 至 05:00"
+                  action={<Badge tone="success">已完成</Badge>}
+                >
+                  <SavedAnalysisChart
+                    kind="line"
+                    label="事件趋势组件预览"
+                    timezone="Asia/Shanghai"
+                    categories={chartCategories}
+                    series={chartSeries.slice(0, 1)}
+                    timeRange={chartTimeRange}
+                    intervalMs={chartHour}
+                  />
+                </DashboardCard>
+              ),
+            },
+            {
+              id: 'routes',
+              reading_order: 3,
+              layout: { x: 0, y: 2, width: 4, height: 3 },
+              content: (
+                <DashboardCard title="热门路径" summary="按访问次数排序">
+                  <DataSurface label="热门路径结果">
+                    <DataTable
+                      caption="热门路径结果"
+                      minWidth={320}
+                      rows={[
+                        { route: '/home', count: 4_820 },
+                        { route: '/search', count: 2_140 },
+                        { route: '/detail', count: 1_390 },
+                      ]}
+                      rowKey={(row) => row.route}
+                      columns={[
+                        { key: 'route', header: '路径', render: (row) => row.route },
+                        {
+                          key: 'count',
+                          header: '访问次数',
+                          align: 'right',
+                          render: (row) => row.count.toLocaleString('zh-CN'),
+                        },
+                      ]}
+                    />
+                  </DataSurface>
+                </DashboardCard>
+              ),
+            },
+          ]}
+        />
+      </div>
+    </WorkspaceShell>
+  );
+}
+
 // Isolated development fixture. This HTML entry is not a product route or a build input.
 function ComponentFixture() {
   const toast = useToast();
@@ -488,10 +632,12 @@ function ComponentFixture() {
   );
 }
 
+const previewFixture = new URLSearchParams(window.location.search).get('fixture') === 'workspace';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <DesignProvider>
-      <ComponentFixture />
+      {previewFixture ? <WorkspacePreviewFixture /> : <ComponentFixture />}
     </DesignProvider>
   </StrictMode>,
 );

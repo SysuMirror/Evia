@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { Button } from './controls';
 import { Alert } from './feedback';
 
@@ -83,6 +83,18 @@ export function WorkspaceShell({
   navigation?: readonly WorkspaceNavigationItem[];
   projectContext?: ReactNode;
 }) {
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const items = navigation ?? [defaultNavigation];
+  const groups = items.reduce<{ label: string; items: WorkspaceNavigationItem[] }[]>(
+    (all, item) => {
+      const label = item.group ?? '工作区';
+      const current = all.at(-1);
+      if (current?.label === label) current.items.push(item);
+      else all.push({ label, items: [item] });
+      return all;
+    },
+    [],
+  );
   return (
     <div className="workspace">
       <a className="skip-link" href="#main-content">
@@ -105,21 +117,50 @@ export function WorkspaceShell({
       <div className="workspace-body">
         <aside className="workspace-nav">
           {projectContext && <div className="workspace-context">{projectContext}</div>}
-          <nav aria-label="主导航">
-            {(navigation ?? [defaultNavigation]).map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                aria-current={item.active ? 'page' : undefined}
-                onClick={(event) => navigate(event, item.href, onNavigate)}
+          <Button
+            className="workspace-nav-toggle"
+            variant="secondary"
+            aria-expanded={navigationOpen}
+            aria-controls="workspace-navigation"
+            onClick={() => setNavigationOpen((open) => !open)}
+          >
+            <span>工作区导航</span>
+            <span aria-hidden="true">{navigationOpen ? '收起' : '展开'}</span>
+          </Button>
+          <nav
+            id="workspace-navigation"
+            aria-label="主导航"
+            data-mobile-open={navigationOpen || undefined}
+          >
+            {groups.map((group) => (
+              <div
+                className="workspace-nav-group"
+                role="group"
+                aria-label={group.label}
+                key={group.label}
               >
-                {item.icon && (
-                  <span className="nav-icon" aria-hidden="true">
-                    {item.icon}
-                  </span>
-                )}
-                <span>{item.label}</span>
-              </a>
+                <h2>{group.label}</h2>
+                <div className="workspace-nav-links">
+                  {group.items.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      aria-current={item.active ? 'page' : undefined}
+                      onClick={(event) => {
+                        navigate(event, item.href, onNavigate);
+                        if (event.defaultPrevented) setNavigationOpen(false);
+                      }}
+                    >
+                      {item.icon && (
+                        <span className="nav-icon" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                      )}
+                      <span>{item.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
             ))}
           </nav>
         </aside>
@@ -136,6 +177,7 @@ export interface WorkspaceNavigationItem {
   label: string;
   active?: boolean;
   icon?: ReactNode;
+  group?: string;
 }
 
 const defaultNavigation: WorkspaceNavigationItem = {
@@ -161,10 +203,12 @@ const defaultNavigation: WorkspaceNavigationItem = {
 
 export function PageHeading({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="page-heading">
-      <h1>{title}</h1>
+    <header className="page-heading">
+      <div className="page-heading-copy">
+        <h1>{title}</h1>
+      </div>
       {action && <div className="heading-actions">{action}</div>}
-    </div>
+    </header>
   );
 }
 
