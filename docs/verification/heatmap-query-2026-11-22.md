@@ -23,7 +23,8 @@
 - 真实 ClickHouse `-race` `TestClickHouseBoundedHeatmapExactScopeBinsAndWatermark` 通过：边界坐标、route/viewport/project/environment/version 隔离、dedup、错误属性排除、顺序与 watermark 均按预期。
 - 真实 PostgreSQL `-race` `TestHeatmapJobPersistsThroughExpandedKindConstraint` 通过。
 - 全栈控制台以 newSSE 项目 development、`route_name=Home`、`1440×1000` 运行真实 query-worker：返回两格 `(17,0)=4`、`(11,2)=5`，共 9 次匹配点击；UI 标记 completed/exact，网格深浅与精确表一致。
-- 截图：`screenshots/evia-click-heatmap-console.png`。
+- 移动端仿真使用 Chromium `390×844`、deviceScaleFactor=3、isMobile/touch；同一路由按精确移动视口查询返回一格 `(9,5)=1`，控制台按 390:844 纵向比例渲染，证明桌面/移动事实不会混合。
+- 截图：`screenshots/evia-click-heatmap-console.png`、`screenshots/evia-click-heatmap-mobile.png`。
 
 ## 边界
 

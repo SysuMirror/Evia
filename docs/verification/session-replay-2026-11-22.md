@@ -54,6 +54,7 @@ newSSE `src/analytics/replay.ts`：
 - 高体积 DOM 暴露了 SDK queue backpressure 边界：原 helper 在同步入队失败时仍返回 true。修复为每个 10,000 字符 segment 控制在单个 20-event batch 内，显式 flush、队列满先 flush 重试，并等待全部 emission outcome=accepted 后才记 item。
 - 最终样式流 `06997b4e-e594-47f7-8f6c-64dda21e7a39`：浏览器记 62 items；ClickHouse 与 PostgreSQL 同为 62 个 distinct/完整 items（snapshot 41 + mutations 21），三方严格相等；892 个密文块全 822 字符，CH `content` 字段计数 0。
 - snapshot 延迟至路由稳定后 2 秒，内联最多 1 MiB CSSOM，并只额外保留 Vue scope 标记；最终正式 Evia sandbox 可恢复已登录首页布局，组装 13 个 snapshot segment，页面正文长度 2489。
+- 移动端仿真使用 Chromium `390×844`、deviceScaleFactor=3、isMobile/touch，真实登录后覆盖首页、顶部搜索、热榜、商城、消息和小秋；63 批 collect 全 202、13 类事件、page error=0。流 `763f9135-45ca-4a84-ac52-02577cbfa240` 在 ClickHouse/PostgreSQL 为 60 个完整 items / 846 chunks、CH 明文字段0；正式 v2 工作区按 viewport=390×844 重建移动页面并加载 6 条连续记录。
 
 截图：
 
@@ -70,6 +71,10 @@ newSSE `src/analytics/replay.ts`：
 - `screenshots/newsse-auth-shop.png`
 - `screenshots/evia-authenticated-session-replay-console.png`
 - `screenshots/evia-authenticated-session-replay-preview.png`
+- `screenshots/newsse-mobile-home.png`
+- `screenshots/newsse-mobile-search.png`
+- `screenshots/newsse-mobile-heat.png`
+- `screenshots/evia-click-heatmap-mobile.png`
 
 ## 正式控制台工作区
 
@@ -78,7 +83,7 @@ newSSE `src/analytics/replay.ts`：
 - owner 项目权限投影新增 `content.read`；editor/viewer 仍由存储事务内 owner 检查拒绝。机器授权 UI 同步公开该独立敏感权限。
 - 控制台「会话回放」工作区提供流列表、完整内容项列表、分页、错误/空态和安全快照预览。快照读取不进入 React Query 缓存；最多 600 个 item、8 并发读取、16 MiB 解压上限。
 - 预览前再次移除 script/iframe/object/embed/base/link、事件处理器、外部 src/href/action 与凭据属性，注入 `default-src 'none'` CSP，并在不含任何 sandbox capability 的 iframe 中使用 `no-referrer` 展示。
-- 真实全栈 UI 基线：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示登录页。追加已登录旅程后工作区列出 11 条流，最新短旅程 22 个完整 item，重组 13 个 snapshot segments 并恢复有 scoped 样式的登录后首页。全栈 Playwright spec 1/1、replay/permission model 5/5 通过。
+- 真实全栈 UI 基线：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示登录页。追加已登录旅程后工作区列出 11 条流，最新短旅程 22 个完整 item，重组 13 个 snapshot segments 并恢复有 scoped 样式的登录后首页。全栈 Playwright spec 1/1、replay/permission model 7/7 通过。
 
 ## v2 精确 mutation 播放
 
