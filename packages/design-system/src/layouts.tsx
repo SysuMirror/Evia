@@ -255,13 +255,15 @@ export function PageHeading({
   title,
   summary,
   action,
+  className = '',
 }: {
   title: string;
   summary?: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="page-heading">
+    <header className={`page-heading ${className}`}>
       <div className="page-heading-copy">
         <h1>{title}</h1>
         {summary && <p className="page-heading-summary">{summary}</p>}

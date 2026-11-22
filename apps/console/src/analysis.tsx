@@ -127,6 +127,81 @@ function cell(value: unknown, type: string, timezone: string) {
   return String(value);
 }
 
+function QueryMetadataDetails({ result, snapshot }: { result: QueryResult; snapshot: Snapshot }) {
+  return (
+    <details>
+      <summary>精度与覆盖详情</summary>
+      <dl className="detail-list">
+        <div>
+          <dt>精度</dt>
+          <dd>
+            {result.metadata.accuracy === 'exact'
+              ? '精确'
+              : result.metadata.accuracy === 'approximate'
+                ? '近似'
+                : '不适用'}
+            ，采样率 {(result.metadata.sample_rate * 100).toLocaleString('zh-CN')}%
+          </dd>
+        </div>
+        <div>
+          <dt>覆盖状态</dt>
+          <dd>
+            {
+              { provisional: '暂定', settled: '已稳定', partial: '部分覆盖' }[
+                result.metadata.coverage.state
+              ]
+            }
+            ，{formatTime(result.metadata.coverage.time_range.from, snapshot.request.timezone)} 至{' '}
+            {formatTime(result.metadata.coverage.time_range.to, snapshot.request.timezone)}（不含）
+          </dd>
+        </div>
+        <div>
+          <dt>已知缺口</dt>
+          <dd>
+            {result.metadata.coverage.known_gaps.length
+              ? result.metadata.coverage.known_gaps
+                  .map(
+                    (gap) =>
+                      ({
+                        pipeline_completeness_not_established: '尚未确认接入链路完整性',
+                        identity_resolution_not_applied: '未应用身份关联',
+                      })[gap] ?? `未识别的覆盖提示（${gap}）`,
+                  )
+                  .join('、')
+              : '未报告'}
+          </dd>
+        </div>
+        <div>
+          <dt>实际观察到的最晚接收时间</dt>
+          <dd>
+            {result.metadata.data_watermark
+              ? formatTime(result.metadata.data_watermark, snapshot.request.timezone)
+              : '无观测数据'}
+            ，不代表数据已完整到达
+          </dd>
+        </div>
+        <div>
+          <dt>生成时间</dt>
+          <dd>
+            {formatTime(result.metadata.generated_at, snapshot.request.timezone)}，
+            {result.metadata.cache_hit ? '命中缓存' : '未命中缓存'}
+          </dd>
+        </div>
+      </dl>
+    </details>
+  );
+}
+
+function QuerySourceDetails({ snapshot }: { snapshot: Snapshot }) {
+  return (
+    <details>
+      <summary>查询标识与原始条件</summary>
+      <CopyButton value={snapshot.job.query_id} label="复制查询标识" />
+      <CodeBlock label="本次查询参数">{JSON.stringify(snapshot.request, null, 2)}</CodeBlock>
+    </details>
+  );
+}
+
 function HeatmapGrid({
   rows,
   viewportWidth,
@@ -139,7 +214,7 @@ function HeatmapGrid({
   const captionID = useId();
   const cells = heatmapCells(rows);
   const maximum = Math.max(0, ...cells.map((item) => item.clicks));
-  const width = Math.min(960, (480 * viewportWidth) / viewportHeight);
+  const width = Math.min(960, (560 * viewportWidth) / viewportHeight);
   return (
     <figure className="analysis-heatmap" aria-labelledby={captionID}>
       <figcaption id={captionID}>
@@ -1031,6 +1106,7 @@ export function AnalysisPage({
   return (
     <>
       <PageHeading
+        className="analysis-page-heading"
         title="分析查询"
         summary="组合事件、主体与时间条件，在同一工作区运行查询并检查完整结果。"
       />
@@ -1038,7 +1114,10 @@ export function AnalysisPage({
         <EmptyPanel description="暂无查询权限，需要项目读取权限。" />
       ) : (
         <div className="section-stack">
-          <Panel label="查询条件" className="analysis-workbench">
+          <Panel
+            label="查询条件"
+            className={`analysis-workbench${form.mode === 'heatmap' ? ' analysis-workbench-heatmap' : ''}`}
+          >
             <Tabs
               label="分析类型"
               value={form.mode}
@@ -1108,7 +1187,7 @@ export function AnalysisPage({
                     >
                       {jobLabels[snapshot.job.state]}
                     </Badge>
-                    {result && (
+                    {result && snapshot.request.kind !== 'heatmap' && (
                       <div className="inline-actions">
                         <Badge
                           tone={result.metadata.accuracy === 'approximate' ? 'warning' : 'neutral'}
@@ -1242,15 +1321,31 @@ export function AnalysisPage({
                           仅展示实际返回的时间桶，缺失时间桶未补零。各桶 UV 不能相加作为整段 UV。
                         </p>
                       )}
-                      <DataSurface label="查询结果表">
-                        <DataTable
-                          caption="查询结果，数值与图表对应"
-                          rows={rows}
-                          columns={columns}
-                          rowKey={(row) => String(rows.indexOf(row))}
-                          empty="该范围内无匹配结果，不等同于数值零。"
-                        />
-                      </DataSurface>
+                      {snapshot.request.kind === 'heatmap' ? (
+                        <aside className="analysis-result-side" aria-label="点击排名与查询详情">
+                          <DataSurface label="查询结果表">
+                            <DataTable
+                              caption="查询结果，数值与图表对应"
+                              rows={rows}
+                              columns={columns}
+                              rowKey={(row) => String(rows.indexOf(row))}
+                              empty="该范围内无匹配结果，不等同于数值零。"
+                            />
+                          </DataSurface>
+                          <QueryMetadataDetails result={result} snapshot={snapshot} />
+                          <QuerySourceDetails snapshot={snapshot} />
+                        </aside>
+                      ) : (
+                        <DataSurface label="查询结果表">
+                          <DataTable
+                            caption="查询结果，数值与图表对应"
+                            rows={rows}
+                            columns={columns}
+                            rowKey={(row) => String(rows.indexOf(row))}
+                            empty="该范围内无匹配结果，不等同于数值零。"
+                          />
+                        </DataSurface>
+                      )}
                     </div>
                     <p className="field-help">
                       返回 {rows.length} 行，上限 {snapshot.request.limit}{' '}
@@ -1265,88 +1360,12 @@ export function AnalysisPage({
                         加载下一页
                       </Button>
                     )}
-                    <details>
-                      <summary>精度与覆盖详情</summary>
-                      <dl className="detail-list">
-                        <div>
-                          <dt>精度</dt>
-                          <dd>
-                            {result.metadata.accuracy === 'exact'
-                              ? '精确'
-                              : result.metadata.accuracy === 'approximate'
-                                ? '近似'
-                                : '不适用'}
-                            ，采样率 {(result.metadata.sample_rate * 100).toLocaleString('zh-CN')}%
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>覆盖状态</dt>
-                          <dd>
-                            {
-                              { provisional: '暂定', settled: '已稳定', partial: '部分覆盖' }[
-                                result.metadata.coverage.state
-                              ]
-                            }
-                            ，
-                            {formatTime(
-                              result.metadata.coverage.time_range.from,
-                              snapshot.request.timezone,
-                            )}{' '}
-                            至{' '}
-                            {formatTime(
-                              result.metadata.coverage.time_range.to,
-                              snapshot.request.timezone,
-                            )}
-                            （不含）
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>已知缺口</dt>
-                          <dd>
-                            {result.metadata.coverage.known_gaps.length
-                              ? result.metadata.coverage.known_gaps
-                                  .map(
-                                    (gap) =>
-                                      ({
-                                        pipeline_completeness_not_established:
-                                          '尚未确认接入链路完整性',
-                                        identity_resolution_not_applied: '未应用身份关联',
-                                      })[gap] ?? `未识别的覆盖提示（${gap}）`,
-                                  )
-                                  .join('、')
-                              : '未报告'}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>实际观察到的最晚接收时间</dt>
-                          <dd>
-                            {result.metadata.data_watermark
-                              ? formatTime(
-                                  result.metadata.data_watermark,
-                                  snapshot.request.timezone,
-                                )
-                              : '无观测数据'}
-                            ，不代表数据已完整到达
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>生成时间</dt>
-                          <dd>
-                            {formatTime(result.metadata.generated_at, snapshot.request.timezone)}，
-                            {result.metadata.cache_hit ? '命中缓存' : '未命中缓存'}
-                          </dd>
-                        </div>
-                      </dl>
-                    </details>
+                    {snapshot.request.kind !== 'heatmap' && (
+                      <QueryMetadataDetails result={result} snapshot={snapshot} />
+                    )}
                   </>
                 )}
-                <details>
-                  <summary>查询标识与原始条件</summary>
-                  <CopyButton value={snapshot.job.query_id} label="复制查询标识" />
-                  <CodeBlock label="本次查询参数">
-                    {JSON.stringify(snapshot.request, null, 2)}
-                  </CodeBlock>
-                </details>
+                {snapshot.request.kind !== 'heatmap' && <QuerySourceDetails snapshot={snapshot} />}
               </div>
             </Panel>
           ) : (
