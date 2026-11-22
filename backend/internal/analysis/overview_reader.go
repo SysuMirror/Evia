@@ -26,7 +26,7 @@ SELECT 'summary' AS kind,toInt64(0) AS bucket_ms,count() AS events,
 FROM %s WHERE project_id={project:String} AND environment={environment:String}
  AND event_time>=fromUnixTimestamp64Nano({from_ns:Int64}) AND event_time<fromUnixTimestamp64Nano({to_ns:Int64})
 UNION ALL
-SELECT 'trend',toUnixTimestamp64Milli(multiIf({interval:String}='hour',toStartOfHour(event_time,'UTC'),toStartOfDay(event_time,'UTC'))) AS bucket_ms,
+SELECT 'trend',toUnixTimestamp64Milli(toDateTime64(multiIf({interval:String}='hour',toStartOfHour(event_time,'UTC'),toStartOfDay(event_time,'UTC')),3,'UTC')) AS bucket_ms,
  count() AS events,uniqExactIf(session_id,session_id IS NOT NULL) AS sessions,
  toUInt64(0),toUInt64(0),maxOrNull(toUnixTimestamp64Nano(received_at)),''
 FROM %s WHERE project_id={project:String} AND environment={environment:String}
