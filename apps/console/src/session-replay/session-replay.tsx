@@ -278,10 +278,7 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
               <LoadingPanel label="正在组装安全回放" />
             )}
             {selectedStream && !previewLoading && !preview && !previewError && (
-              <EmptyPanel
-                description="内容记录已就绪，加载安全快照后即可播放。"
-                action={<Button onClick={() => void openPreview()}>加载安全快照预览</Button>}
-              />
+              <EmptyPanel description="内容记录已就绪，使用播放器标题栏的加载操作开始。" />
             )}
             {preview && (
               <>
