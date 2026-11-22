@@ -1,8 +1,8 @@
 # 会话回放容量基准
 
-本切片定义会话回放容量报告的**纯核对与通过门禁**。`tooling/benchmark/session_replay_capacity.py` 不采集事件、不调用 Evia、不启停 worker，也不创建数据库记录；它只读取一份私有汇总 JSON，并以固定策略生成一份私有评估 JSON。因此，单元测试通过只证明报告政策，不能当作浏览器、数据库、worker 或生产容量证据。
+本切片包含两个边界清晰的工具：`tooling/benchmark/session_replay_harness.py` 负责调用**外部提供的**专用 loopback full-stack/newSSE fixture hooks、按格保存断点并生成评估器输入；`tooling/benchmark/session_replay_capacity.py` 仍只做纯核对与固定通过门禁。仓库不提供 fixture 可执行文件、凭据或生产连接；harness 不修改浏览器 SDK 或业务 app producer，也不把普通 newSSE development mode 当作容量 fixture。
 
-本文没有实测结果。只有在专用本地合成环境完成全部矩阵、保留原始观测并由评估器返回 `passed: true` 后，才能为该次明确硬件与配置的运行记录容量结论；不得外推到生产。
+本文没有新增实测结果。dry-run 或单元测试通过只证明配置、命令合同和报告政策，不能当作浏览器、数据库、worker 或生产容量证据。只有在专用本地合成环境完成全部矩阵、保留原始观测并由评估器返回 `passed: true` 后，才能为该次明确硬件与配置的运行记录容量结论；不得外推到生产。
 
 ## 单位与矩阵
 
@@ -113,9 +113,129 @@ baseline 在 worker 尚有正数 pending chunks 时请求优雅停止，要求 d
 
 这些是首版固定验收上限，不是实测值或生产 SLO。延迟失败不能从分位数样本中删除。RSS 对两个指定 PID 至少各采 30 个同频样本；记录的是 process peak RSS bytes，不把宿主机或容器总内存冒充进程 RSS。退出、重启造成的 PID 切换要继续跟踪新 worker PID，并把同一场景所有 worker 世代的峰值取最大值。
 
+## 可执行四格 harness
+
+### 外部 fixture 合同
+
+harness 只编排调用方提供的可执行 hook，不包含或修改 newSSE producer。fixture 必须是独立 full-stack 实例，并同时满足：
+
+- API 与 fixture control origin 都是无路径、query、fragment、userinfo 的 literal loopback HTTP origin；
+- `fixture_kind` 固定为 `full_stack_new_sse`，`new_sse_mode` 固定为 `replay_capacity_fixture`；普通 `development` 模式会在任何 hook 执行前拒绝；
+- namespace 是新分配的 `evia_bench_<12 lowercase hex>`，fixture 把 Kafka topic/group、Redis prefix、ClickHouse database 和本次合成项目全部绑定到它；
+- 每格 `prepare_cell` 都创建新合成项目并返回边界 attestation，不能复用业务项目；
+- hook 只读取 `EVIA_REPLAY_*` 环境。harness 不继承 `EVIA_E2E_PASSWORD`、proxy、云凭据或其他 ambient environment，且用 argument array 直接执行，不经过 shell。
+
+harness 为每格确定性传入：namespace、cell ID、profile、2/8 MiB encoded-character budget、SHA-256 seed、两个合成 canary、资源 JSON 与网络 JSON。固定网络参数为：
+
+| profile | latency | download | upload | packet loss |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | 0 ms | unlimited (`-1`) | unlimited (`-1`) | 0% |
+| weak | 250 ms | 32,768 B/s | 32,768 B/s | 0% |
+
+弱网不是调用方可放宽的报告字段。fixture 的浏览器 workload 必须实际应用 `EVIA_REPLAY_NETWORK_JSON`，按 `EVIA_REPLAY_BUDGET_ENCODED_CHARS` 执行，并把 harness 提供的 password/masked canary 放入对应合成 DOM；canary 原文不得写入报告。
+
+固定 hook 顺序为：
+
+```text
+prepare_cell → worker_hold → browser_workload
+  → baseline: worker_drain / weak: worker_restart
+  → frozen_pagination → reconcile
+```
+
+各 hook stdout 只能是一个不超过 64 KiB 的 JSON object；stderr 同样有 64 KiB 上限。退出非零、超时、非 JSON、字段重叠或不完整都会使该格在写 checkpoint 前失败。hook 响应合同为：
+
+- `prepare_cell`：逐字返回 api/fixture URL、namespace、cell ID、fixture kind/mode，并声明 `synthetic=true`、`production_writes=false`、`dedicated_namespace=true`、`ordinary_development_mode=false`、`fresh_project=true` 和一个有界 `project_fixture_id`；
+- `worker_hold`：仅返回 `{"hold_armed": true}`；
+- `browser_workload`：返回正数 `accepted_items_before_freeze` 与 `accepted_chunks_before_transition`；
+- `worker_drain` / `worker_restart`：返回评估器所需完整 `worker` object，且对应 pending-before 值为正；transition 时间必须覆盖恢复到 pending=0 及 artifact 完整就绪；
+- `frozen_pagination`：先取得 owner/machine 首页 `as_of`，追加至少一个完整 item，再走完两种认证的冻结分页；返回累计最终 `browser`、`pagination`、collect/page `latency` 与 browser privacy scan；累计 browser 数不能低于前阶段；
+- `reconcile`：在追加 item 和 worker 恢复之后返回 `clickhouse`、`postgres`、artifact-ready `latency`、CH/artifact privacy scan 与跨 worker 世代 `rss`。这里必须做 CH distinct identity、PG chunk/item/artifact、授权解密重组/hash 和 artifact 明文 canary 扫描，不能只抄一个数据库总数。
+
+冻结值必须来自实际签名 cursor，不得在报告中改写。当前公开内容 API 为 owner 和 machine 的首次请求各自读取当前时间，且 cursor 绑定 actor；因此普通服务模式不能保证两者得到逐字相同的 `as_of`。调用方 fixture 仍需提供一个**仅用于该专用 loopback fixture** 的共享时钟钉住/等价测试能力，然后分别走真实 owner session 与 machine Bearer 路径；harness 本身没有这项后端接线，也不会伪造或跨 actor 复用 cursor。
+
+完整叶子字段和门禁仍以本页“观测合同”与 evaluator 为准。harness 从私有设置注入 `resources`，将两个 privacy/latency 分段无歧义合并，最终输出 evaluator 当前接受的 `evia_session_replay_capacity` v1 JSON。
+
+### 私有设置与精确命令
+
+先由运维者安装或构建自己的 fixture wrapper；下面的 `/opt/evia-replay-fixture/bin/replay-fixture` 是必须替换为**实际绝对 executable 路径**的占位，仓库没有声称它已存在。创建专用 checkpoint 目录和设置文件：
+
+```sh
+umask 077
+install -d -m 0700 /tmp/evia-replay-capacity-cells
+install -m 0600 /dev/null /tmp/evia-replay-capacity-settings.json
+${EDITOR:?set EDITOR to a local editor} /tmp/evia-replay-capacity-settings.json
+```
+
+设置内容如下；资源值是本次运行的显式 fixture 限制，不是测量结果，weak 四项不得高于同预算 baseline 且至少一项更低：
+
+```json
+{
+  "harness_version": 1,
+  "kind": "evia_session_replay_harness",
+  "synthetic": true,
+  "production_writes": false,
+  "environment": "development",
+  "api_url": "http://127.0.0.1:8081",
+  "fixture_url": "http://127.0.0.1:4174",
+  "fixture_kind": "full_stack_new_sse",
+  "new_sse_mode": "replay_capacity_fixture",
+  "namespace": "evia_bench_012345abcdef",
+  "report_dir": "/tmp/evia-replay-capacity-cells",
+  "hook_timeout_seconds": 21600,
+  "resources": {
+    "baseline": {
+      "api_cpu_millicores": 2000,
+      "api_memory_bytes": 2147483648,
+      "content_worker_cpu_millicores": 2000,
+      "content_worker_memory_bytes": 2147483648
+    },
+    "weak": {
+      "api_cpu_millicores": 1000,
+      "api_memory_bytes": 1073741824,
+      "content_worker_cpu_millicores": 500,
+      "content_worker_memory_bytes": 1073741824
+    }
+  },
+  "commands": {
+    "prepare_cell": ["/opt/evia-replay-fixture/bin/replay-fixture", "prepare-cell"],
+    "worker_hold": ["/opt/evia-replay-fixture/bin/replay-fixture", "worker-hold"],
+    "browser_workload": ["/opt/evia-replay-fixture/bin/replay-fixture", "browser-workload"],
+    "worker_drain": ["/opt/evia-replay-fixture/bin/replay-fixture", "worker-drain"],
+    "worker_restart": ["/opt/evia-replay-fixture/bin/replay-fixture", "worker-restart"],
+    "frozen_pagination": ["/opt/evia-replay-fixture/bin/replay-fixture", "frozen-pagination"],
+    "reconcile": ["/opt/evia-replay-fixture/bin/replay-fixture", "reconcile"]
+  }
+}
+```
+
+先 dry-run。它检查设置 `0600`、checkpoint 目录 `0700`、loopback origins、fixture mode、namespace、资源关系、七个 executable 和 fresh summary path；不会执行 hook、访问网络或创建报告：
+
+```sh
+python3 tooling/benchmark/session_replay_harness.py \
+  --settings /tmp/evia-replay-capacity-settings.json \
+  --out /tmp/replay-capacity-summary.json \
+  --dry-run
+```
+
+再运行四格。每个完成格以 `O_EXCL`/`0600` 写入 checkpoint；中断后用相同设置重跑，已完成且 settings SHA-256 匹配的格作为输入恢复，不执行其 hook。checkpoint 目录只允许四个规定文件，其他旧输出会被拒绝：
+
+```sh
+python3 tooling/benchmark/session_replay_harness.py \
+  --settings /tmp/evia-replay-capacity-settings.json \
+  --out /tmp/replay-capacity-summary.json
+```
+
+退出码 `0` 表示 harness 完成且 evaluator 门禁通过，`1` 表示已写完整 summary 但至少一个容量门禁失败，`2` 表示边界、命令或本地执行失败。`1` 仍应保留证据并继续运行下面 evaluator；不得把它改写成成功。summary 已存在时一律拒绝覆盖；如中断后需要换 summary 名称，使用尚不存在的新路径：
+
+```sh
+python3 tooling/benchmark/session_replay_harness.py \
+  --settings /tmp/evia-replay-capacity-settings.json \
+  --out /tmp/replay-capacity-summary-resume-001.json
+```
+
 ## 评估
 
-先将外部观测器生成的**汇总** JSON 写为 `/tmp` 下 mode `0600` 文件，再运行：
+harness 生成的**汇总** JSON 已是 evaluator 当前输入合同；也可由符合相同合同的外部观测器写为 `/tmp` 下 mode `0600` 文件。使用尚不存在的评估输出运行：
 
 ```sh
 python3 tooling/benchmark/session_replay_capacity.py \
