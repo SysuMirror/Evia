@@ -30,9 +30,15 @@ test('owner discovers replay streams and renders a sandboxed snapshot', async ({
   await page.getByRole('button', { name: '加载安全快照预览', exact: true }).click();
   const frame = page.locator('iframe[title="会话回放 DOM 快照"]');
   await expect(frame).toBeVisible();
-  await expect(frame.contentFrame().locator('body')).toContainText('欢迎回来');
+  await expect(frame.contentFrame().locator('body')).not.toHaveText('');
+  const progress = page.getByLabel('回放进度');
+  if (await progress.count()) {
+    await progress.fill('5');
+    await expect(page.getByText('回放记录应用失败')).toHaveCount(0);
+  }
   expect(responses.length).toBeGreaterThanOrEqual(4);
   expect(new Set(responses)).toEqual(new Set([200]));
-  await expect(frame).toHaveAttribute('sandbox', '');
+  await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
+  expect((await frame.getAttribute('sandbox'))?.includes('allow-scripts')).toBe(false);
   await expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
 });

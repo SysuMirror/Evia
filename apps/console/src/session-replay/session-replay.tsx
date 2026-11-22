@@ -23,12 +23,13 @@ import {
   type DataTableColumn,
 } from '@evia/design-system';
 import {
+  applyReplayRecords,
+  buildReplayTimeline,
   decodeReplayPayloads,
-  latestSnapshot,
   replayInstant,
   sandboxSnapshotHTML,
   shortReplayID,
-  type ReplaySnapshot,
+  type ReplayTimeline,
 } from './model';
 import './styles.css';
 
@@ -37,7 +38,7 @@ const PAGE_LIMIT = 20;
 const MAX_PREVIEW_ITEMS = 600;
 
 type PageProps = { project: Project; session: Session; environment: Environment };
-type Preview = { snapshot: ReplaySnapshot; srcDoc: string; itemCount: number };
+type Preview = { timeline: ReplayTimeline; srcDoc: string; itemCount: number };
 
 async function loadSnapshotPreview(
   projectID: string,
@@ -51,12 +52,12 @@ async function loadSnapshotPreview(
     const page = await api.listContentItems(
       projectID,
       streamID,
-      { environment, contentTypes: ['session_replay_snapshot'], cursor, limit: 100 },
+      { environment, contentTypes: REPLAY_TYPES, cursor, limit: 100 },
       signal,
     );
     summaries.push(...page.items);
     if (summaries.length > MAX_PREVIEW_ITEMS)
-      throw new Error(`该会话快照超过 ${MAX_PREVIEW_ITEMS} 个内容段，已拒绝在浏览器中展开。`);
+      throw new Error(`该会话回放超过 ${MAX_PREVIEW_ITEMS} 个内容段，已拒绝在浏览器中展开。`);
     cursor = page.next_cursor;
   } while (cursor);
   if (summaries.length === 0) throw new Error('该会话还没有完整快照。');
@@ -70,9 +71,9 @@ async function loadSnapshotPreview(
       )),
     );
   }
-  const snapshot = latestSnapshot(await decodeReplayPayloads(items));
-  if (!snapshot) throw new Error('没有可重建的完整 DOM 快照。');
-  return { snapshot, srcDoc: sandboxSnapshotHTML(snapshot.html), itemCount: items.length };
+  const timeline = buildReplayTimeline(await decodeReplayPayloads(items));
+  if (!timeline) throw new Error('没有可重建的完整 DOM 快照。');
+  return { timeline, srcDoc: sandboxSnapshotHTML(timeline.snapshot.html), itemCount: items.length };
 }
 
 export function SessionReplayPage(props: PageProps) {
@@ -93,6 +94,9 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
   const [preview, setPreview] = useState<Preview>();
   const [previewError, setPreviewError] = useState<Error>();
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [playbackStep, setPlaybackStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const previewController = useRef<AbortController | undefined>(undefined);
 
   const streams = useQuery({
@@ -138,6 +142,17 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
     },
     [],
   );
+  useEffect(() => {
+    if (!playing || !preview?.timeline.exact || playbackStep >= preview.timeline.records.length)
+      return;
+    const timer = window.setInterval(() => {
+      setPlaybackStep((current) => Math.min(current + 1, preview.timeline.records.length));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [playing, playbackStep, preview]);
+  useEffect(() => {
+    if (preview && playbackStep >= preview.timeline.records.length) setPlaying(false);
+  }, [playbackStep, preview]);
 
   const selectStream = (streamID: string) => {
     previewController.current?.abort();
@@ -146,6 +161,8 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
     setPreview(undefined);
     setPreviewError(undefined);
     setPreviewLoading(false);
+    setPlaybackStep(0);
+    setPlaying(false);
   };
   const openPreview = async () => {
     if (!selectedStream || previewLoading) return;
@@ -161,7 +178,11 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
         selectedStream,
         controller.signal,
       );
-      if (!controller.signal.aborted) setPreview(loaded);
+      if (!controller.signal.aborted) {
+        setPreview(loaded);
+        setPlaybackStep(0);
+        setPlaying(false);
+      }
     } catch (error) {
       if (!controller.signal.aborted)
         setPreviewError(error instanceof Error ? error : new Error('无法加载回放快照。'));
@@ -318,25 +339,76 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
       )}
 
       {preview && (
-        <DataSurface label="安全快照预览">
+        <DataSurface label="会话回放播放器">
           <div className="replay-preview-meta">
-            <span>路由：{preview.snapshot.route || '—'}</span>
-            <span>采集：{replayInstant(preview.snapshot.createdAt)}</span>
+            <span>路由：{preview.timeline.snapshot.route || '—'}</span>
+            <span>采集：{replayInstant(preview.timeline.snapshot.createdAt)}</span>
             <span>
-              视口：{preview.snapshot.viewport.width} × {preview.snapshot.viewport.height}
+              视口：{preview.timeline.snapshot.viewport.width} ×{' '}
+              {preview.timeline.snapshot.viewport.height}
             </span>
             <span>组装内容项：{preview.itemCount}</span>
+            <span>
+              协议：v{preview.timeline.snapshot.protocolVersion} · 记录 {playbackStep}/
+              {preview.timeline.records.length}
+            </span>
           </div>
+          {!preview.timeline.exact && (
+            <div className="inline-notice">
+              <Alert tone="warning" title="当前章节只能安全显示快照">
+                {preview.timeline.issue}
+              </Alert>
+            </div>
+          )}
+          {preview.timeline.exact && (
+            <div className="replay-controls">
+              <Button onClick={() => setPlaying((current) => !current)}>
+                {playing ? '暂停' : '播放'}
+              </Button>
+              <Button
+                onClick={() => {
+                  setPlaying(false);
+                  setPlaybackStep(0);
+                }}
+              >
+                回到快照
+              </Button>
+              <input
+                aria-label="回放进度"
+                type="range"
+                min={0}
+                max={preview.timeline.records.length}
+                value={playbackStep}
+                onChange={(event) => {
+                  setPlaying(false);
+                  setPlaybackStep(Number(event.target.value));
+                }}
+              />
+            </div>
+          )}
           <div className="replay-frame-shell">
             <iframe
+              key={`${preview.timeline.snapshot.groupID}:${playbackStep}`}
+              ref={frameRef}
               title="会话回放 DOM 快照"
-              sandbox=""
+              sandbox="allow-same-origin"
               referrerPolicy="no-referrer"
               srcDoc={preview.srcDoc}
+              onLoad={() => {
+                const document = frameRef.current?.contentDocument;
+                if (!document || playbackStep === 0) return;
+                try {
+                  applyReplayRecords(document, preview.timeline.records.slice(0, playbackStep));
+                } catch (error) {
+                  setPlaying(false);
+                  setPreviewError(error instanceof Error ? error : new Error('回放记录应用失败。'));
+                }
+              }}
             />
           </div>
           <p className="evia-field-hint">
-            当前仅展示最新完整 DOM 快照；增量 mutation 精确播放仍作为下一切片，不在此预览中推断。
+            v2 仅精确播放已净化 light DOM；遇到序号缺口或未知节点立即停止。Shadow
+            DOM、iframe、canvas 与媒体状态不在当前捕获范围。
           </p>
         </DataSurface>
       )}

@@ -18,12 +18,31 @@ export interface ReplayPayload {
   contentType: string;
   route: string;
   createdAt: string;
+  protocolVersion: number;
+  documentID?: string;
+  documentSeq?: number;
+  payloadSeq?: number;
   payload: Record<string, unknown>;
 }
 
 export interface ReplaySnapshot extends ReplayPayload {
   html: string;
   viewport: { width: number; height: number };
+  baseSeq: number;
+}
+
+export interface ReplayRecordV2 {
+  seq: number;
+  at: number;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+export interface ReplayTimeline {
+  snapshot: ReplaySnapshot;
+  records: ReplayRecordV2[];
+  exact: boolean;
+  issue?: string;
 }
 
 function segmentEnvelope(content: string): SegmentEnvelope {
@@ -112,6 +131,10 @@ export async function decodeReplayPayloads(items: ContentItem[]): Promise<Replay
     const raw = await decodeGroup(group.encoding, group.segments.join(''));
     const value = JSON.parse(raw) as {
       format?: string;
+      protocol_version?: number;
+      document_id?: string;
+      document_seq?: number;
+      payload_seq?: number;
       route?: string;
       created_at?: string;
       payload?: unknown;
@@ -132,6 +155,10 @@ export async function decodeReplayPayloads(items: ContentItem[]): Promise<Replay
       contentType: group.contentType,
       route: value.route,
       createdAt: value.created_at,
+      protocolVersion: value.protocol_version === 2 ? 2 : 1,
+      documentID: typeof value.document_id === 'string' ? value.document_id : undefined,
+      documentSeq: Number.isSafeInteger(value.document_seq) ? value.document_seq : undefined,
+      payloadSeq: Number.isSafeInteger(value.payload_seq) ? value.payload_seq : undefined,
       payload: value.payload as Record<string, unknown>,
     });
   }
@@ -160,22 +187,107 @@ export function latestSnapshot(payloads: ReplayPayload[]): ReplaySnapshot | unde
       ...payload,
       html,
       viewport: { width: Number(viewport.width), height: Number(viewport.height) },
+      baseSeq: Number.isSafeInteger(payload.payload.base_seq)
+        ? Number(payload.payload.base_seq)
+        : 0,
     });
   }
   return snapshots.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 }
 
-export function sandboxSnapshotHTML(html: string): string {
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  document
+export function buildReplayTimeline(payloads: ReplayPayload[]): ReplayTimeline | undefined {
+  const snapshot = latestSnapshot(payloads);
+  if (!snapshot) return undefined;
+  if (snapshot.protocolVersion !== 2 || !snapshot.documentID)
+    return { snapshot, records: [], exact: false, issue: 'v1 录制仅支持静态快照。' };
+  const records: ReplayRecordV2[] = [];
+  for (const payload of payloads) {
+    if (
+      payload.protocolVersion !== 2 ||
+      payload.documentID !== snapshot.documentID ||
+      payload.contentType !== 'session_replay_mutations' ||
+      !Array.isArray(payload.payload.records)
+    )
+      continue;
+    for (const value of payload.payload.records) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const record = value as Partial<ReplayRecordV2>;
+      if (
+        Number.isSafeInteger(record.seq) &&
+        Number.isFinite(record.at) &&
+        typeof record.type === 'string' &&
+        record.data &&
+        typeof record.data === 'object' &&
+        !Array.isArray(record.data) &&
+        Number(record.seq) > snapshot.baseSeq
+      )
+        records.push(record as ReplayRecordV2);
+    }
+  }
+  records.sort((left, right) => left.seq - right.seq);
+  let expected = snapshot.baseSeq + 1;
+  for (const record of records) {
+    if (record.seq !== expected)
+      return {
+        snapshot,
+        records: records.filter((item) => item.seq < expected),
+        exact: false,
+        issue: `记录序号在 #${expected} 处中断。`,
+      };
+    expected++;
+  }
+  return { snapshot, records, exact: true };
+}
+
+function replayNodeMap(
+  root: Document | DocumentFragment,
+  existing = new Map<number, Node>(),
+): Map<number, Node> {
+  for (const element of Array.from(root.querySelectorAll('[data-evia-rid]'))) {
+    const id = Number(element.getAttribute('data-evia-rid'));
+    if (!Number.isSafeInteger(id) || id < 1) throw new Error('回放节点标识无效。');
+    const prior = existing.get(id);
+    if (prior?.isConnected) throw new Error('回放节点标识重复。');
+    existing.set(id, element);
+  }
+  const walker = root.ownerDocument!.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
+  const markers: Comment[] = [];
+  while (walker.nextNode()) {
+    const comment = walker.currentNode as Comment;
+    if (/^evia-rid:[1-9][0-9]*$/.test(comment.data)) markers.push(comment);
+  }
+  for (const marker of markers) {
+    const id = Number(marker.data.slice('evia-rid:'.length));
+    const target = marker.nextSibling;
+    if (!target || !Number.isSafeInteger(id)) throw new Error('回放文本节点标识无效。');
+    const prior = existing.get(id);
+    if (prior?.isConnected) throw new Error('回放节点标识重复。');
+    existing.set(id, target);
+    marker.remove();
+  }
+  return existing;
+}
+
+function sanitizeReplayRoot(root: Document | DocumentFragment): void {
+  root
     .querySelectorAll('script,noscript,iframe,object,embed,base,link,meta[http-equiv]')
     .forEach((node) => node.remove());
-  for (const element of Array.from(document.querySelectorAll('*'))) {
+  for (const element of Array.from(root.querySelectorAll('*'))) {
     for (const attribute of Array.from(element.attributes)) {
       const name = attribute.name.toLowerCase();
       if (
         name.startsWith('on') ||
-        ['src', 'href', 'action', 'formaction', 'srcdoc', 'nonce'].includes(name) ||
+        [
+          'src',
+          'srcset',
+          'href',
+          'poster',
+          'action',
+          'formaction',
+          'ping',
+          'srcdoc',
+          'nonce',
+        ].includes(name) ||
         name.includes('token') ||
         name.includes('authorization') ||
         name.includes('cookie')
@@ -188,9 +300,80 @@ export function sandboxSnapshotHTML(html: string): string {
         );
     }
   }
+}
+
+export function applyReplayRecords(document: Document, records: ReplayRecordV2[]): void {
+  const nodes = replayNodeMap(document);
+  const connected = (id: unknown): Node => {
+    if (!Number.isSafeInteger(id)) throw new Error('回放记录缺少节点标识。');
+    const node = nodes.get(Number(id));
+    if (!node?.isConnected) throw new Error(`回放节点 #${id} 不存在。`);
+    return node;
+  };
+  for (const record of records) {
+    const data = record.data;
+    if (record.type === 'text') {
+      const node = connected(data.node_id);
+      if (node.nodeType !== Node.TEXT_NODE && node.nodeType !== Node.COMMENT_NODE)
+        throw new Error('回放文本目标类型无效。');
+      if (typeof data.text !== 'string') throw new Error('回放文本值无效。');
+      node.textContent = data.text;
+    } else if (record.type === 'attribute') {
+      const node = connected(data.node_id);
+      if (!(node instanceof Element) || typeof data.name !== 'string')
+        throw new Error('回放属性目标无效。');
+      if (!['class', 'style', 'hidden'].includes(data.name))
+        throw new Error('回放属性不在安全白名单。');
+      const namespace = typeof data.namespace === 'string' ? data.namespace : null;
+      if (data.value === null) node.removeAttributeNS(namespace, data.name);
+      else if (typeof data.value === 'string') {
+        const value =
+          data.name === 'style'
+            ? data.value.replace(/url\([^)]*\)/gi, 'url()').slice(0, 2000)
+            : data.value;
+        node.setAttributeNS(namespace, data.name, value);
+      } else throw new Error('回放属性值无效。');
+    } else if (record.type === 'children') {
+      const parent = connected(data.parent_id);
+      const removed = Array.isArray(data.removed_ids) ? data.removed_ids : [];
+      for (const id of removed) {
+        const node = connected(id);
+        if (node.parentNode !== parent) throw new Error('回放删除目标不属于指定父节点。');
+        node.parentNode.removeChild(node);
+        nodes.delete(Number(id));
+      }
+      if (data.added !== null && data.added !== undefined) {
+        if (!data.added || typeof data.added !== 'object' || Array.isArray(data.added))
+          throw new Error('回放新增片段无效。');
+        const added = data.added as { root_ids?: unknown; html?: unknown };
+        if (!Array.isArray(added.root_ids) || typeof added.html !== 'string')
+          throw new Error('回放新增片段无效。');
+        const range = document.createRange();
+        range.selectNodeContents(parent);
+        const fragment = range.createContextualFragment(added.html);
+        sanitizeReplayRoot(fragment);
+        replayNodeMap(fragment, nodes);
+        const roots = added.root_ids.map((id) => {
+          if (!Number.isSafeInteger(id)) throw new Error('回放新增根标识无效。');
+          const node = nodes.get(Number(id));
+          if (!node) throw new Error('回放新增根不存在。');
+          return node;
+        });
+        const before = data.before_id === null ? null : connected(data.before_id);
+        if (before && before.parentNode !== parent) throw new Error('回放插入锚点无效。');
+        for (const root of roots) parent.insertBefore(root, before);
+      }
+    }
+  }
+}
+
+export function sandboxSnapshotHTML(html: string): string {
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  sanitizeReplayRoot(document);
   const policy = document.createElement('meta');
   policy.httpEquiv = 'Content-Security-Policy';
-  policy.content = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+  policy.content =
+    "default-src 'none'; connect-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; style-src 'unsafe-inline'; img-src data:";
   document.head.prepend(policy);
   return `<!doctype html>${document.documentElement.outerHTML}`;
 }
