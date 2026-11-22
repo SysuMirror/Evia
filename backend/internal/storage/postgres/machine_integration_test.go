@@ -24,6 +24,26 @@ func machineFault(t *testing.T, e error, code string) {
 	}
 }
 
+func TestMachineContentReadGrantPersistsAfterVocabularyMigration(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	svc := access.NewMachines(f.s)
+	issued, err := svc.CreatePrincipal(ctx, f.owner, f.project, "content-read", access.MachineCreate{
+		Name: "Protected content reader", Environment: "development",
+		Permissions: []string{access.PermissionContentRead}, ExpiresAt: time.Now().UTC().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := svc.AuthenticateMachine(ctx, issued.SecretOnce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(identity.Permissions) != 1 || identity.Permissions[0] != access.PermissionContentRead {
+		t.Fatalf("content.read grant did not round trip: %v", identity.Permissions)
+	}
+}
+
 func TestMachineLifecycleIsolationAndHashOnlyRecovery(t *testing.T) {
 	f := catalogDB(t)
 	ctx := context.Background()

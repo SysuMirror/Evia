@@ -70,7 +70,7 @@ def scenario(profile, budget):
             "distinct_items": 10,
             "plaintext_content_rows": 0,
         },
-        "postgres": {"chunks": 100, "items": 10, "artifacts": 10},
+        "postgres": {"chunks": 100, "items": 10, "artifacts": 100},
         "privacy": {
             "canary_count": 2,
             "canary_matches": {

@@ -155,15 +155,17 @@ def reconcile_scenario(scenario):
         "postgres_items": _integer(postgres, "items", "postgres", failures),
         "postgres_artifacts": _integer(postgres, "artifacts", "postgres", failures),
     }
+    # The protected artifact store writes one immutable object per decrypted
+    # chunk; item assembly is a read-time operation, not another artifact file.
     chunk_counts = [counts[key] for key in (
-        "browser_accepted_chunks", "clickhouse_distinct_chunks", "postgres_chunks")]
-    item_counts = [counts[key] for key in (
-        "browser_accepted_items", "clickhouse_distinct_items", "postgres_items",
+        "browser_accepted_chunks", "clickhouse_distinct_chunks", "postgres_chunks",
         "postgres_artifacts")]
+    item_counts = [counts[key] for key in (
+        "browser_accepted_items", "clickhouse_distinct_items", "postgres_items")]
     if chunk_counts[0] <= 0 or len(set(chunk_counts)) != 1:
-        failures.append("browser accepted, ClickHouse distinct, and PostgreSQL chunk counts must be positive and equal")
+        failures.append("browser accepted, ClickHouse distinct, PostgreSQL chunk, and protected artifact counts must be positive and equal")
     if item_counts[0] <= 0 or len(set(item_counts)) != 1:
-        failures.append("browser accepted, ClickHouse distinct, PostgreSQL item, and artifact counts must be positive and equal")
+        failures.append("browser accepted, ClickHouse distinct, and PostgreSQL complete item counts must be positive and equal")
 
     if _integer(browser, "receipt_rejections", "browser", failures) != 0:
         failures.append("browser.receipt_rejections must be zero")
