@@ -20,9 +20,11 @@
 - `accepted_encoded_chars_total`：已获逐事件 accepted 回执的 payload 的实际 base64url 字符数总和；
 - `max_session_encoded_chars`：单会话实际计入预算的 base64url 字符数；
 - `accepted_gzip_bytes_total`：base64url 编码前 `CompressionStream(gzip)` 输出字节数总和；
-- `largest_unsent_payload_encoded_chars`：因加入后会越过预算而未发送的下一 payload 的编码字符数。
+- `browser.budget_checkpoint.accepted_encoded_chars`：最终已获 accepted outcome、已经提交的单会话预算；必须等于 `max_session_encoded_chars`；
+- `browser.budget_checkpoint.reserved_encoded_chars` / `pending_encoded_chars`：最终 checkpoint 尚处于本地预留或回执未决的字符数；二者必须为 0，不能混入 accepted 口径；
+- `largest_attempted_rejected_payload_encoded_chars`：fixture 实际尝试加入、因会越过本地字符预算而被拒绝的最大 payload 编码字符数。不得用“最近一次成功 payload”或后续数据库行大小代填。
 
-不要用 `gzip_bytes × 4/3` 反推预算使用量。无 padding 的 base64url 长度还受每个独立 payload 的余数影响，分段、JSON、加密 padding 和存储字节又是其他口径。门禁只用实际编码字符串长度检查 2/8 MiB 预算；gzip 体积单独报告，不参与字符预算比较。至少一个会话必须到达边界，且 `max_session_encoded_chars + largest_unsent_payload_encoded_chars > budget_encoded_chars`，同时不得有预算 overshoot。
+不要用 `gzip_bytes × 4/3` 反推预算使用量。无 padding 的 base64url 长度还受每个独立 payload 的余数影响，分段、JSON、加密 padding 和存储字节又是其他口径。门禁只用实际编码字符串长度检查 2/8 MiB 预算；gzip 体积单独报告，不参与字符预算比较。至少一个会话必须到达边界，且 `budget_checkpoint.accepted_encoded_chars + largest_attempted_rejected_payload_encoded_chars > budget_encoded_chars`，同时不得有预算 overshoot。只记录“尚未发送”但没有实际预算拒绝观测不算边界证据。
 
 `weak` 必须是同预算 baseline 的真实弱资源对照：API CPU/内存与 content-worker CPU/内存四项都不能高于 baseline，至少一项必须更低。报告保存每项明确数值，不允许只写“弱机”。每格使用新合成项目；同一格内的浏览器、ClickHouse、PostgreSQL、分页和资源观测必须来自同一次运行。
 
@@ -45,7 +47,7 @@ CLI 在读取输入或创建输出前先验证 loopback origin 与专用 namespa
 
 ```json
 {
-  "report_version": 1,
+  "report_version": 2,
   "kind": "evia_session_replay_capacity",
   "synthetic": true,
   "production_writes": false,
@@ -62,21 +64,24 @@ CLI 在读取输入或创建输出前先验证 loopback origin 与专用 namespa
 
 - `browser.accepted_chunks`：逐事件响应为 accepted 的加密 chunk 数。HTTP 202 本身不计 accepted；`receipt_rejections` 和 `unknown_outcomes` 必须为 0，HTTP 状态只允许出现正数的 202。
 - `browser.accepted_items`：该次浏览器运行中，全部 chunk 都获 accepted 的完整 item 数。
-- `clickhouse.distinct_chunks` / `distinct_items`：按完整 chunk identity 和 item identity 去重后的数量；`plaintext_content_rows` 必须为 0。
-- `postgres.chunks` / `items` / `artifacts`：worker 完成后的索引 chunk、完整 item 和校验成功 artifact 数。
+- `clickhouse.distinct_chunks` / `distinct_items`：按完整 chunk identity 去重后的 chunk 数，以及只计 chunk 集合完整的 item 数；`raw_items` 是不论完整性的 raw item identity 数，`incomplete_raw_items` 是其中 chunk 集合不完整的数量；`plaintext_content_rows` 必须为 0。
+- `postgres.chunks` / `items` / `artifacts`：worker 完成后的索引 chunk、完整 item 和校验成功 artifact 数；`raw_items` / `incomplete_raw_items` 使用与 CH 相同的完整性口径。
+- `pagination.discovery_excluded_incomplete_items`：发现 API 排除的 raw 不完整 item 数，必须等于 CH/PG 的 incomplete 数。0 也必须显式报告，不能省略。
 
 通过条件为：
 
 ```text
-browser accepted chunks == CH distinct chunks == PG chunks
-browser accepted items  == CH distinct items  == PG items == PG artifacts
+browser accepted chunks == CH distinct chunks == PG chunks == PG artifacts
+browser accepted items  == CH distinct complete items == PG complete items
+CH/PG raw items         == complete items + incomplete raw items
+CH incomplete           == PG incomplete == discovery excluded incomplete
 ```
 
-两组数量都必须大于 0。只比总行数不够；原始私有证据还应保留每格用于 distinct 的复合 identity、artifact 完整性校验结果和查询时间范围。
+artifact **始终是一条已解密 chunk 对应一个不可变对象**，不是每个 item 一个 artifact；即使 raw item 不完整，其已落地 chunk 仍逐 chunk 对账。两组 accepted 数量都必须大于 0。只比总行数不够；原始私有证据还应保留每格用于 distinct 的复合 identity、artifact 完整性校验结果和查询时间范围。
 
 ### 隐私 canary
 
-每格至少注入两个合成 canary（例如 password input 与显式 mask 区域各一个）。报告只保存 canary 数量和三处扫描命中数，不保存 canary 原文：
+每格至少注入两个合成 canary（password input 与显式 mask 区域各一个）。`privacy.canary_injection` 必须逐项证明 `password_input_injected=true`、`masked_region_injected=true`、`injected_before_capture=true`；只报告后续扫描为 0、沿用旧轮次 canary 或持有 harness seed 都不能代替本格实际注入。报告只保存注入 attestation、canary 数量和三处扫描命中数，不保存 canary 原文：
 
 - `browser_request_properties`：浏览器 collect request properties；
 - `clickhouse_properties`：CH properties/ciphertext 旁的可查询字段；
@@ -88,6 +93,8 @@ browser accepted items  == CH distinct items  == PG items == PG artifacts
 
 baseline 在 worker 尚有正数 pending chunks 时请求优雅停止，要求 drain 完成、`pending_after_recovery=0`、无重启。weak 在尚有正数 pending chunks 时重启 content-worker，要求至少一次 restart、恢复完成、最终 pending 为 0。两类都要求 `duplicate_chunks_after_recovery=0`，并在恢复后再做 CH/PG/artifact 精确对账。
 
+每格还必须在动作前后记录 `generation_before_transition`、`generation_after_recovery`、`restart_count_before_transition`、`restart_count_after_recovery`。`restart_count` 必须严格等于两个 checkpoint 的差；baseline generation 与 restart count 均不得变化，weak generation 必须变化且 restart count 至少增加 1。进程“曾经启动”或只看最终 PID 不构成 restart/recovery 证据。
+
 `worker.transition_ms` 从 drain/restart 动作开始计到最终 pending 为 0 且 artifact 对账完成。不得只记录进程启动时间。
 
 ### 冻结分页及 owner/machine 一致性
@@ -95,6 +102,7 @@ baseline 在 worker 尚有正数 pending chunks 时请求优雅停止，要求 d
 每格先用第一页响应的 `as_of` 固定视图，再在同一合成项目追加至少一个完整 item，然后继续至少第二页：
 
 - owner session 和具有该 environment `content.read` 的 machine credential 都必须返回 200；
+- owner/machine 分别保存 `first_page_frozen_at`，二者必须逐字等于 scenario 的 `frozen_at`，并显式声明 `shared_first_page_freeze=true`；静止数据集上最终集合碰巧相等不能代替共享首次冻结证明；
 - 每个 principal 的所有页只能观察同一个 `as_of`；
 - `items == distinct_items == frozen_expected_items`，duplicate、missing、cursor error 都为 0；
 - `frozen_expected_items + appended_after_freeze_items ==` 最终 PG item 数；
@@ -111,7 +119,9 @@ baseline 在 worker 尚有正数 pending chunks 时请求优雅停止，要求 d
 | baseline | ≤ 2,000 ms | ≤ 120,000 ms | 各 ≤ 2,000 ms | ≤ 120,000 ms | 各 ≤ 2 GiB |
 | weak | ≤ 5,000 ms | ≤ 300,000 ms | 各 ≤ 5,000 ms | ≤ 300,000 ms | 各 ≤ 3 GiB |
 
-这些是首版固定验收上限，不是实测值或生产 SLO。延迟失败不能从分位数样本中删除。RSS 对两个指定 PID 至少各采 30 个同频样本；记录的是 process peak RSS bytes，不把宿主机或容器总内存冒充进程 RSS。退出、重启造成的 PID 切换要继续跟踪新 worker PID，并把同一场景所有 worker 世代的峰值取最大值。
+这些是首版固定验收上限，不是实测值或生产 SLO。延迟失败不能从分位数样本中删除。`capture.wall_time_ms` 单独保存整段浏览器 capture wall time，**只报告、不参与通过门禁**；它不能写进 `latency.collect_ack`，也不能拿整段 wall time 与 collect ack p95 上限比较。如果以后增加 wall gate，必须先在 evaluator 固定一个显式且宽裕的 profile 上限，不能由报告自行选择。`capture.pagehide_triggered`、`pagehide_finalized`、`pagehide_finalized_before_context_close` 必须全为 true，证明 fixture 在关闭 browser context 前主动触发一次性 pagehide、等待预算/队列稳定并完成最终化。
+
+RSS 对两个指定 PID 至少各采 30 个同频样本；记录的是 process peak RSS bytes，不把宿主机或容器总内存冒充进程 RSS。退出、重启造成的 PID 切换要继续跟踪新 worker PID，并把同一场景所有 worker 世代的峰值取最大值。每格还要在 workload 前后观测 `clickhouse.disk_reserve_bytes_before` / `disk_reserve_bytes_after`；两者都不得低于 evaluator 固定的 2 GiB reserve。容器内存限制、宿主总盘或配置声明不能代替 ClickHouse 实际可用 reserve 观测。
 
 ## 可执行四格 harness
 
@@ -146,14 +156,14 @@ prepare_cell → worker_hold → browser_workload
 
 - `prepare_cell`：逐字返回 api/fixture URL、namespace、cell ID、fixture kind/mode，并声明 `synthetic=true`、`production_writes=false`、`dedicated_namespace=true`、`ordinary_development_mode=false`、`fresh_project=true` 和一个有界 `project_fixture_id`；
 - `worker_hold`：仅返回 `{"hold_armed": true}`；
-- `browser_workload`：返回正数 `accepted_items_before_freeze` 与 `accepted_chunks_before_transition`；
-- `worker_drain` / `worker_restart`：返回评估器所需完整 `worker` object，且对应 pending-before 值为正；transition 时间必须覆盖恢复到 pending=0 及 artifact 完整就绪；
-- `frozen_pagination`：先取得 owner/machine 首页 `as_of`，追加至少一个完整 item，再走完两种认证的冻结分页；返回累计最终 `browser`、`pagination`、collect/page `latency` 与 browser privacy scan；累计 browser 数不能低于前阶段；
-- `reconcile`：在追加 item 和 worker 恢复之后返回 `clickhouse`、`postgres`、artifact-ready `latency`、CH/artifact privacy scan 与跨 worker 世代 `rss`。这里必须做 CH distinct identity、PG chunk/item/artifact、授权解密重组/hash 和 artifact 明文 canary 扫描，不能只抄一个数据库总数。
+- `browser_workload`：返回且只返回 `checkpoint`、`browser`、`capture`、`privacy` 四个 object。`checkpoint` 包含正数 `accepted_items_before_freeze` / `accepted_chunks_before_transition`；`browser` 提供 accepted/reserved/pending budget checkpoint 与 largest attempted rejected payload；`capture` 提供 wall time 和三个 pagehide 证明；`privacy.canary_injection` 提供本格双 canary 注入证明。这三组 evidence 会先并入 scenario，后续 hook 重复同一叶子会 fail-closed；
+- `worker_drain` / `worker_restart`：返回评估器所需完整 `worker` object，且对应 pending-before 值为正，并包含 transition 前后 generation/restart checkpoints；transition 时间必须覆盖恢复到 pending=0 及 artifact 完整就绪；
+- `frozen_pagination`：用 fixture shared clock 取得 owner/machine 相同首页 `as_of`，保存两条 first-page timestamp 与 shared attestation，追加至少一个完整 item，再走完两种认证的冻结分页；返回累计最终 `browser`、`pagination`、collect/page `latency` 与 browser privacy scan；累计 browser 数不能低于前阶段；
+- `reconcile`：在追加 item 和 worker 恢复之后返回 `clickhouse`、`postgres`、artifact-ready `latency`、CH/artifact privacy scan 与跨 worker 世代 `rss`。这里必须做 CH distinct/raw/incomplete identity、PG complete/raw/incomplete chunk/item、逐 chunk artifact、实际 ClickHouse disk reserve、授权解密重组/hash 和 artifact 明文 canary 扫描，不能只抄一个数据库总数。
 
 冻结值必须来自实际签名 cursor，不得在报告中改写。当前公开内容 API 为 owner 和 machine 的首次请求各自读取当前时间，且 cursor 绑定 actor；因此普通服务模式不能保证两者得到逐字相同的 `as_of`。调用方 fixture 仍需提供一个**仅用于该专用 loopback fixture** 的共享时钟钉住/等价测试能力，然后分别走真实 owner session 与 machine Bearer 路径；harness 本身没有这项后端接线，也不会伪造或跨 actor 复用 cursor。
 
-完整叶子字段和门禁仍以本页“观测合同”与 evaluator 为准。harness 从私有设置注入 `resources`，将两个 privacy/latency 分段无歧义合并，最终输出 evaluator 当前接受的 `evia_session_replay_capacity` v1 JSON。
+完整叶子字段和门禁仍以本页“观测合同”与 evaluator 为准。harness 从私有设置注入 `resources`，将两个 privacy/latency 分段无歧义合并，最终输出 evaluator 当前接受的 `evia_session_replay_capacity` v2 JSON。
 
 ### 私有设置与精确命令
 
@@ -170,7 +180,7 @@ ${EDITOR:?set EDITOR to a local editor} /tmp/evia-replay-capacity-settings.json
 
 ```json
 {
-  "harness_version": 1,
+  "harness_version": 2,
   "kind": "evia_session_replay_harness",
   "synthetic": true,
   "production_writes": false,
@@ -233,9 +243,22 @@ python3 tooling/benchmark/session_replay_harness.py \
   --out /tmp/replay-capacity-summary-resume-001.json
 ```
 
+### 从手工每格 fragment 组装
+
+真实长跑也可以由运维者逐格手工采集，而不必手写顶层 report JSON。创建独立 mode `0700` 目录，放入恰好四个 mode `0600` JSON object；文件名固定为 `baseline-2097152.json`、`baseline-8388608.json`、`weak-2097152.json`、`weak-8388608.json`。每个文件是对应完整 scenario（也接受 harness 原生 cell checkpoint wrapper），必须包含与 settings 完全一致的 `name`、profile、budget、固定 network 和 resources：
+
+```sh
+python3 tooling/benchmark/session_replay_harness.py \
+  --settings /tmp/evia-replay-capacity-settings.json \
+  --assemble-fragments /tmp/evia-replay-manual-cells \
+  --out /tmp/replay-capacity-manual-summary.json
+```
+
+组装器补齐 v2 顶层边界，按固定矩阵排序，生成可直接交给 evaluator 的私有 report。目录缺格、额外文件、格 identity/network/resource 不符会以退出码 2 明确拒绝且不写 summary；叶子 evidence 缺失或门禁失败则仍写完整 report，以退出码 1 返回，并在 stdout `failures` 中按 cell 列出字段路径（例如缺 pagehide、shared freeze、disk reserve、canary 或 generation checkpoint）。这样保留失败证据，不需要人为补造字段。
+
 ## 评估
 
-harness 生成的**汇总** JSON 已是 evaluator 当前输入合同；也可由符合相同合同的外部观测器写为 `/tmp` 下 mode `0600` 文件。使用尚不存在的评估输出运行：
+harness 生成或 fragment helper 组装的**汇总** JSON 已是 evaluator 当前输入合同；也可由符合相同 v2 合同的外部观测器写为 `/tmp` 下 mode `0600` 文件。使用尚不存在的评估输出运行：
 
 ```sh
 python3 tooling/benchmark/session_replay_capacity.py \

@@ -4,7 +4,7 @@
 
 四格均执行了真实浏览器→collector/Kafka→ClickHouse→content-worker→PostgreSQL/artifact 路径。SDK 原生 bulk drain、accepted 后预算提交、弱网配置续传、429 Retry-After、worker hold/drain/restart 均取得实证；但**整份 evaluator 仍应判失败**，不能宣称四格容量全部通过：
 
-1. 2 MiB 两格与 8 MiB baseline 没有由 fixture 明确记录 `largest_unsent_payload_encoded_chars`，因此预算边界证据不满足 evaluator 的固定合同，尽管使用量接近上限且没有 overshoot。
+1. 2 MiB 两格与 8 MiB baseline 没有由 fixture 明确记录 `largest_attempted_rejected_payload_encoded_chars`，也没有 accepted/reserved/pending 最终 checkpoint，因此预算边界证据不满足 evaluator 的固定合同，尽管使用量接近上限且没有 overshoot。
 2. 8 MiB weak 在固定 18 分钟观测窗只 accepted 6,399,837 / 8,388,608 encoded chars（76.3%），明确没有到达预算边界。
 3. baseline 8 MiB 首次 fixture 在浏览器 close 时留下 1 个 2/28 chunk 的未跟踪尾项；发现 API正确排除它，后续 fixture 已改为在页面存活时显式触发一次性 pagehide 并等待稳定，但该格未重新跑完整 8 MiB。
 4. 本机 ClickHouse 依赖盘最大仅约 512 MiB，低于 runbook 2 GiB reserve，不能满足正式资源环境门禁。
@@ -73,6 +73,6 @@ PG insert `ON CONFLICT DO NOTHING`、artifact hash object key 与 cursor lease �
 
 ## Harness 与剩余失败
 
-可执行 harness 已支持 private 0600 settings / 0700 checkpoints、baseline/weak × 2/8 MiB、七 hook、resume、dry-run、loopback/namespace/mode/command/output fail-closed；harness/evaluator focused 33/33，完整 benchmark tools 202/202。
+可执行 harness 已支持 private 0600 settings / 0700 checkpoints、baseline/weak × 2/8 MiB、七 hook、resume、dry-run、loopback/namespace/mode/command/output fail-closed。根据本次缺口，后续 v2 证据合同还明确区分 accepted/reserved/pending budget checkpoint、最大实际预算拒绝 payload、capture wall 与 collect ack、pagehide/context close 顺序、raw incomplete/discovery exclusion、CH disk reserve、owner/machine 首次共享冻结、双 canary 注入及 worker generation/restart checkpoints；artifact 仍严格按 chunk 对账，不改成按 item。
 
-当前缺 caller fixture wrapper 对 RSS/p95/canary/shared-freeze 的完整观测接线，因此本报告是实机四格证据，不伪装成 evaluator v1 PASS 报告。下一步只需补观测 wrapper 并重跑失败格，而不是再改 evaluator 放宽门禁。
+当前缺 caller fixture wrapper 对上述字段和 RSS/p95 的完整观测接线，因此本报告是实机四格证据，不伪装成 evaluator PASS 报告。既有手工每格观测可用 harness `--assemble-fragments` 组装并让缺证逐字段失败，无需手写或补造顶层 JSON。下一步应补观测 wrapper 并重跑失败格，而不是放宽门禁。

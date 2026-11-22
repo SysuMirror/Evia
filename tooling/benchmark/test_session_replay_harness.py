@@ -22,7 +22,7 @@ EXECUTABLE = str(Path(sys.executable).resolve())
 def settings_value(report_dir):
     command = [EXECUTABLE, "-c", "print('{}')"]
     return {
-        "harness_version": 1,
+        "harness_version": harness.HARNESS_VERSION,
         "kind": harness.SETTINGS_KIND,
         "synthetic": True,
         "production_writes": False,
@@ -90,14 +90,32 @@ def hook_result(settings, profile, budget, hook):
         return {"hold_armed": True}
     if hook == "browser_workload":
         return {
-            "accepted_items_before_freeze": complete["browser"]["accepted_items"] - 1,
-            "accepted_chunks_before_transition": complete["browser"]["accepted_chunks"] - 1,
+            "checkpoint": {
+                "accepted_items_before_freeze": complete["browser"]["accepted_items"] - 1,
+                "accepted_chunks_before_transition": complete["browser"]["accepted_chunks"] - 1,
+            },
+            "browser": {
+                "budget_checkpoint": complete["browser"]["budget_checkpoint"],
+                "largest_attempted_rejected_payload_encoded_chars": complete["browser"][
+                    "largest_attempted_rejected_payload_encoded_chars"
+                ],
+            },
+            "capture": complete["capture"],
+            "privacy": {
+                "canary_injection": complete["privacy"]["canary_injection"],
+            },
         }
     if hook in ("worker_drain", "worker_restart"):
         return {"worker": complete["worker"]}
     if hook == "frozen_pagination":
         return {
-            "browser": complete["browser"],
+            "browser": {
+                key: value for key, value in complete["browser"].items()
+                if key not in {
+                    "budget_checkpoint",
+                    "largest_attempted_rejected_payload_encoded_chars",
+                }
+            },
             "pagination": complete["pagination"],
             "latency": {
                 "collect_ack": complete["latency"]["collect_ack"],
@@ -236,6 +254,36 @@ class OrchestrationTest(unittest.TestCase):
                 )
             self.assertEqual(calls, ["prepare_cell"])
 
+    def test_browser_pagehide_and_split_merge_contract_fail_closed(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as directory:
+            settings = self._loaded(directory)
+            calls = []
+            def unfinished(current, profile, budget, hook):
+                calls.append(hook)
+                value = hook_result(current, profile, budget, hook)
+                if hook == "browser_workload":
+                    value["capture"]["pagehide_finalized_before_context_close"] = False
+                return value
+            with self.assertRaisesRegex(SmokeFailure, "pagehide"):
+                harness.execute_cell(
+                    settings, "baseline", 2 * capacity.MIB, hook_runner=unfinished
+                )
+            self.assertEqual(calls, ["prepare_cell", "worker_hold", "browser_workload"])
+
+            def duplicate(current, profile, budget, hook):
+                value = hook_result(current, profile, budget, hook)
+                if hook == "frozen_pagination":
+                    value["browser"]["budget_checkpoint"] = {
+                        "accepted_encoded_chars": budget,
+                        "reserved_encoded_chars": 0,
+                        "pending_encoded_chars": 0,
+                    }
+                return value
+            with self.assertRaisesRegex(SmokeFailure, "budget_checkpoint"):
+                harness.execute_cell(
+                    settings, "baseline", 2 * capacity.MIB, hook_runner=duplicate
+                )
+
     def test_cumulative_browser_counts_cannot_regress(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as directory:
             settings = self._loaded(directory)
@@ -304,6 +352,58 @@ class ResumeAndOutputTest(unittest.TestCase):
             cells = sorted(report_dir.iterdir())
             self.assertEqual(len(cells), 4)
             self.assertTrue(all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in cells))
+
+    def test_assemble_manual_fragments_writes_complete_report(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as directory:
+            source, _, _ = write_settings(directory)
+            settings = harness.load_settings(source)
+            fragments = Path(directory) / "fragments"
+            fragments.mkdir(mode=0o700)
+            for profile, budget in capacity.EXPECTED_SCENARIOS:
+                path = fragments / (harness.cell_id(profile, budget) + ".json")
+                value = scenario(profile, budget)
+                value["network"] = harness.NETWORK_PROFILES[profile]
+                path.write_text(json.dumps(value), encoding="utf-8")
+                path.chmod(0o600)
+            output = Path(directory) / "assembled.json"
+            evaluation = harness.assemble_fragments(settings, fragments, output)
+            self.assertTrue(evaluation["passed"], evaluation)
+            assembled = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(assembled["report_version"], capacity.REPORT_VERSION)
+            self.assertEqual(len(assembled["scenarios"]), 4)
+
+    def test_assemble_fragments_reports_missing_cell_and_evidence(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as directory:
+            source, _, _ = write_settings(directory)
+            settings = harness.load_settings(source)
+            fragments = Path(directory) / "fragments"
+            fragments.mkdir(mode=0o700)
+            for profile, budget in capacity.EXPECTED_SCENARIOS[:-1]:
+                value = scenario(profile, budget)
+                value["network"] = harness.NETWORK_PROFILES[profile]
+                if (profile, budget) == capacity.EXPECTED_SCENARIOS[0]:
+                    del value["capture"]["pagehide_finalized_before_context_close"]
+                path = fragments / (harness.cell_id(profile, budget) + ".json")
+                path.write_text(json.dumps(value), encoding="utf-8")
+                path.chmod(0o600)
+            with self.assertRaisesRegex(SmokeFailure, "Missing manual replay cell fragments"):
+                harness.assemble_fragments(
+                    settings, fragments, Path(directory) / "missing-cell.json"
+                )
+            profile, budget = capacity.EXPECTED_SCENARIOS[-1]
+            path = fragments / (harness.cell_id(profile, budget) + ".json")
+            value = scenario(profile, budget)
+            value["network"] = harness.NETWORK_PROFILES[profile]
+            path.write_text(json.dumps(value), encoding="utf-8")
+            path.chmod(0o600)
+            evaluation = harness.assemble_fragments(
+                settings, fragments, Path(directory) / "missing-evidence.json"
+            )
+            self.assertFalse(evaluation["passed"])
+            self.assertTrue(any(
+                "pagehide_finalized_before_context_close" in failure
+                for failure in harness.evaluation_failures(evaluation)
+            ))
 
     def test_resume_reads_completed_cells_without_executing_hooks(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as directory:

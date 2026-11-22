@@ -23,6 +23,12 @@ def scenario(profile, budget):
         "pending_after_recovery": 0,
         "duplicate_chunks_after_recovery": 0,
         "transition_ms": 1_000,
+        "generation_before_transition": "worker-generation-1",
+        "generation_after_recovery": (
+            "worker-generation-1" if profile == "baseline" else "worker-generation-2"
+        ),
+        "restart_count_before_transition": 0,
+        "restart_count_after_recovery": 0 if profile == "baseline" else 1,
     }
     if profile == "baseline":
         worker.update({
@@ -45,6 +51,7 @@ def scenario(profile, budget):
         "missing_items": 0,
         "cursor_errors": 0,
         "item_set_sha256": DIGEST,
+        "first_page_frozen_at": FROZEN_AT,
         "as_of_values": [FROZEN_AT],
     }
     latency = {"samples": 30, "p95_ms": 100, "max_ms": 150}
@@ -61,18 +68,44 @@ def scenario(profile, budget):
             "accepted_encoded_chars_total": budget * 3,
             "accepted_gzip_bytes_total": budget * 2,
             "max_session_encoded_chars": budget - 10,
-            "largest_unsent_payload_encoded_chars": 20,
+            "largest_attempted_rejected_payload_encoded_chars": 20,
+            "budget_checkpoint": {
+                "accepted_encoded_chars": budget - 10,
+                "reserved_encoded_chars": 0,
+                "pending_encoded_chars": 0,
+            },
             "budget_boundary_reached_sessions": 3,
             "budget_overshoot_sessions": 0,
+        },
+        "capture": {
+            "wall_time_ms": 600_000,
+            "pagehide_triggered": True,
+            "pagehide_finalized": True,
+            "pagehide_finalized_before_context_close": True,
         },
         "clickhouse": {
             "distinct_chunks": 100,
             "distinct_items": 10,
+            "raw_items": 11,
+            "incomplete_raw_items": 1,
             "plaintext_content_rows": 0,
+            "disk_reserve_bytes_before": 3 * 1024 * replay.MIB,
+            "disk_reserve_bytes_after": 2 * 1024 * replay.MIB,
         },
-        "postgres": {"chunks": 100, "items": 10, "artifacts": 100},
+        "postgres": {
+            "chunks": 100,
+            "items": 10,
+            "raw_items": 11,
+            "incomplete_raw_items": 1,
+            "artifacts": 100,
+        },
         "privacy": {
             "canary_count": 2,
+            "canary_injection": {
+                "password_input_injected": True,
+                "masked_region_injected": True,
+                "injected_before_capture": True,
+            },
             "canary_matches": {
                 "browser_request_properties": 0,
                 "clickhouse_properties": 0,
@@ -82,8 +115,10 @@ def scenario(profile, budget):
         "worker": worker,
         "pagination": {
             "frozen_at": FROZEN_AT,
+            "shared_first_page_freeze": True,
             "appended_after_freeze_items": 1,
             "frozen_expected_items": 9,
+            "discovery_excluded_incomplete_items": 1,
             "owner": {**principal, "auth_kind": "owner_session"},
             "machine": {**principal, "auth_kind": "machine_credential"},
         },
@@ -109,7 +144,7 @@ def scenario(profile, budget):
 
 def report():
     return {
-        "report_version": 1,
+        "report_version": replay.REPORT_VERSION,
         "kind": replay.REPORT_KIND,
         "synthetic": True,
         "production_writes": False,
@@ -191,7 +226,10 @@ class ReportEvaluationTest(unittest.TestCase):
         value = report()
         case = value["scenarios"][0]
         case["browser"]["max_session_encoded_chars"] = case["budget_encoded_chars"] - 100
-        case["browser"]["largest_unsent_payload_encoded_chars"] = 50
+        case["browser"]["budget_checkpoint"]["accepted_encoded_chars"] = (
+            case["budget_encoded_chars"] - 100
+        )
+        case["browser"]["largest_attempted_rejected_payload_encoded_chars"] = 50
         case["browser"]["budget_overshoot_sessions"] = 1
         result = replay.evaluate_report(value)
         self.assertFalse(result["passed"])
@@ -199,10 +237,44 @@ class ReportEvaluationTest(unittest.TestCase):
         self.assertTrue(any("boundary was not exercised" in failure for failure in failures))
         self.assertTrue(any("overshoot" in failure for failure in failures))
 
+    def test_budget_checkpoint_rejected_payload_and_pagehide_fail_closed(self):
+        value = report()
+        case = value["scenarios"][0]
+        case["browser"]["budget_checkpoint"]["reserved_encoded_chars"] = 1
+        case["browser"]["largest_attempted_rejected_payload_encoded_chars"] = 1
+        case["capture"]["pagehide_finalized_before_context_close"] = False
+        result = replay.evaluate_report(value)
+        self.assertFalse(result["passed"])
+        failures = result["scenarios"][0]["failures"]
+        self.assertTrue(any("reserved and pending" in failure for failure in failures))
+        self.assertTrue(any("largest attempted rejected" in failure for failure in failures))
+        self.assertTrue(any("before browser context close" in failure for failure in failures))
+
+    def test_capture_wall_time_is_report_only_not_collect_ack_latency(self):
+        value = report()
+        value["scenarios"][0]["capture"]["wall_time_ms"] = 24 * 60 * 60 * 1000
+        result = replay.evaluate_report(value)
+        self.assertTrue(result["passed"], result)
+        self.assertTrue(result["scenarios"][0]["capture"]["report_only"])
+
+    def test_raw_incomplete_discovery_and_clickhouse_disk_gates_fail(self):
+        value = report()
+        case = value["scenarios"][0]
+        case["pagination"]["discovery_excluded_incomplete_items"] = 0
+        case["clickhouse"]["disk_reserve_bytes_after"] = (
+            replay.MIN_CLICKHOUSE_DISK_RESERVE_BYTES - 1
+        )
+        result = replay.evaluate_report(value)
+        self.assertFalse(result["passed"])
+        failures = result["scenarios"][0]["failures"]
+        self.assertTrue(any("exclude every incomplete" in failure for failure in failures))
+        self.assertTrue(any("2 GiB" in failure for failure in failures))
+
     def test_privacy_canary_and_plaintext_fail(self):
         value = report()
         case = value["scenarios"][0]
         case["privacy"]["canary_matches"]["artifact_plaintext"] = 1
+        case["privacy"]["canary_injection"]["masked_region_injected"] = False
         case["clickhouse"]["plaintext_content_rows"] = 1
         result = replay.evaluate_report(value)
         self.assertFalse(result["passed"])
@@ -226,8 +298,10 @@ class ReportEvaluationTest(unittest.TestCase):
     def test_baseline_drain_and_weak_restart_are_profile_specific(self):
         value = report()
         value["scenarios"][0]["worker"]["graceful_drain_completed"] = False
+        value["scenarios"][0]["worker"]["generation_after_recovery"] = "unexpected"
         weak = next(case for case in value["scenarios"] if case["profile"] == "weak")
         weak["worker"]["restart_count"] = 0
+        weak["worker"]["restart_count_after_recovery"] = 0
         result = replay.evaluate_report(value)
         self.assertFalse(result["passed"])
         baseline_result = result["scenarios"][0]
@@ -239,11 +313,14 @@ class ReportEvaluationTest(unittest.TestCase):
         value = report()
         case = value["scenarios"][0]
         case["pagination"]["owner"]["as_of_values"] = [FROZEN_AT, "2026-11-22T12:01:00Z"]
+        case["pagination"]["machine"]["first_page_frozen_at"] = "2026-11-22T12:01:00Z"
+        case["pagination"]["shared_first_page_freeze"] = False
         case["pagination"]["machine"]["item_set_sha256"] = "b" * 64
         result = replay.evaluate_report(value)
         self.assertFalse(result["passed"])
         failures = result["scenarios"][0]["failures"]
         self.assertTrue(any("as_of_values" in failure for failure in failures))
+        self.assertTrue(any("shared freeze" in failure for failure in failures))
         self.assertTrue(any("identical" in failure for failure in failures))
 
     def test_latency_rss_and_sample_gates_fail(self):

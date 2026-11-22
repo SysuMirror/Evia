@@ -13,9 +13,10 @@ import sys
 
 from benchmark_common import SmokeFailure, loopback, private_path, require
 
-REPORT_VERSION = 1
+REPORT_VERSION = 2
 REPORT_KIND = "evia_session_replay_capacity"
 MIB = 1024 * 1024
+MIN_CLICKHOUSE_DISK_RESERVE_BYTES = 2 * 1024 * MIB
 ENCODED_CHARACTER_BUDGETS = (2 * MIB, 8 * MIB)
 PROFILES = ("baseline", "weak")
 EXPECTED_SCENARIOS = tuple(
@@ -85,6 +86,22 @@ def _boolean(mapping, key, path, failures):
     return value
 
 
+def _nonempty_string(mapping, key, path, failures):
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value:
+        failures.append(f"{path}.{key} must be a non-empty string")
+        return ""
+    return value
+
+
+def _utc_timestamp(mapping, key, path, failures):
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value.endswith("Z"):
+        failures.append(f"{path}.{key} must be a UTC timestamp string")
+        return ""
+    return value
+
+
 def _distribution(latency, name, limit, failures):
     path = "latency." + name
     observed = _mapping(latency.get(name), path, failures)
@@ -115,6 +132,9 @@ def _principal_page(pagination, principal, expected_items, frozen_at, failures):
     missing = _integer(page, "missing_items", path, failures)
     cursor_errors = _integer(page, "cursor_errors", path, failures)
     digest = page.get("item_set_sha256")
+    first_page_frozen_at = _utc_timestamp(
+        page, "first_page_frozen_at", path, failures
+    )
     as_of_values = page.get("as_of_values")
     if pages < 2:
         failures.append(f"{path}.pages must exercise at least two pages")
@@ -125,9 +145,16 @@ def _principal_page(pagination, principal, expected_items, frozen_at, failures):
     if not isinstance(digest, str) or SHA256.fullmatch(digest) is None:
         failures.append(f"{path}.item_set_sha256 must be a lowercase SHA-256 digest")
         digest = ""
+    if first_page_frozen_at != frozen_at:
+        failures.append(f"{path}.first_page_frozen_at must equal pagination.frozen_at")
     if as_of_values != [frozen_at]:
         failures.append(f"{path}.as_of_values must contain only the frozen as_of value")
-    return {"items": items, "distinct_items": distinct, "item_set_sha256": digest}
+    return {
+        "items": items,
+        "distinct_items": distinct,
+        "item_set_sha256": digest,
+        "first_page_frozen_at": first_page_frozen_at,
+    }
 
 
 def reconcile_scenario(scenario):
@@ -154,6 +181,14 @@ def reconcile_scenario(scenario):
         "clickhouse_distinct_items": _integer(clickhouse, "distinct_items", "clickhouse", failures),
         "postgres_items": _integer(postgres, "items", "postgres", failures),
         "postgres_artifacts": _integer(postgres, "artifacts", "postgres", failures),
+        "clickhouse_raw_items": _integer(clickhouse, "raw_items", "clickhouse", failures),
+        "clickhouse_incomplete_raw_items": _integer(
+            clickhouse, "incomplete_raw_items", "clickhouse", failures
+        ),
+        "postgres_raw_items": _integer(postgres, "raw_items", "postgres", failures),
+        "postgres_incomplete_raw_items": _integer(
+            postgres, "incomplete_raw_items", "postgres", failures
+        ),
     }
     # The protected artifact store writes one immutable object per decrypted
     # chunk; item assembly is a read-time operation, not another artifact file.
@@ -166,6 +201,16 @@ def reconcile_scenario(scenario):
         failures.append("browser accepted, ClickHouse distinct, PostgreSQL chunk, and protected artifact counts must be positive and equal")
     if item_counts[0] <= 0 or len(set(item_counts)) != 1:
         failures.append("browser accepted, ClickHouse distinct, and PostgreSQL complete item counts must be positive and equal")
+    if (counts["clickhouse_raw_items"]
+            != counts["clickhouse_distinct_items"] + counts["clickhouse_incomplete_raw_items"]):
+        failures.append("ClickHouse raw items must equal complete plus incomplete raw items")
+    if (counts["postgres_raw_items"]
+            != counts["postgres_items"] + counts["postgres_incomplete_raw_items"]):
+        failures.append("PostgreSQL raw items must equal complete plus incomplete raw items")
+    if (counts["clickhouse_raw_items"] != counts["postgres_raw_items"]
+            or counts["clickhouse_incomplete_raw_items"]
+            != counts["postgres_incomplete_raw_items"]):
+        failures.append("ClickHouse and PostgreSQL raw/incomplete item counts must agree")
 
     if _integer(browser, "receipt_rejections", "browser", failures) != 0:
         failures.append("browser.receipt_rejections must be zero")
@@ -178,18 +223,51 @@ def reconcile_scenario(scenario):
     encoded_total = _integer(browser, "accepted_encoded_chars_total", "browser", failures, 1)
     gzip_total = _integer(browser, "accepted_gzip_bytes_total", "browser", failures, 1)
     max_session = _integer(browser, "max_session_encoded_chars", "browser", failures, 1)
-    largest_unsent = _integer(browser, "largest_unsent_payload_encoded_chars", "browser", failures, 1)
+    largest_rejected = _integer(
+        browser, "largest_attempted_rejected_payload_encoded_chars", "browser", failures, 1
+    )
     boundary_sessions = _integer(browser, "budget_boundary_reached_sessions", "browser", failures, 1)
     overshoot_sessions = _integer(browser, "budget_overshoot_sessions", "browser", failures)
+    budget_checkpoint = _mapping(
+        browser.get("budget_checkpoint"), "browser.budget_checkpoint", failures
+    )
+    checkpoint_accepted = _integer(
+        budget_checkpoint, "accepted_encoded_chars", "browser.budget_checkpoint", failures, 1
+    )
+    checkpoint_reserved = _integer(
+        budget_checkpoint, "reserved_encoded_chars", "browser.budget_checkpoint", failures
+    )
+    checkpoint_pending = _integer(
+        budget_checkpoint, "pending_encoded_chars", "browser.budget_checkpoint", failures
+    )
     if budget and max_session > budget:
         failures.append("browser.max_session_encoded_chars exceeded budget_encoded_chars")
-    if budget and max_session + largest_unsent <= budget:
-        failures.append("encoded-character boundary was not exercised by the next unsent payload")
+    if checkpoint_accepted != max_session:
+        failures.append("browser.budget_checkpoint.accepted_encoded_chars must equal max_session_encoded_chars")
+    if checkpoint_reserved != 0 or checkpoint_pending != 0:
+        failures.append("browser budget checkpoint must have zero reserved and pending encoded characters")
+    if budget and checkpoint_accepted + largest_rejected <= budget:
+        failures.append("encoded-character boundary was not exercised by the largest attempted rejected payload")
     if overshoot_sessions != 0:
         failures.append("browser.budget_overshoot_sessions must be zero")
 
+    capture = _mapping(scenario.get("capture"), "capture", failures)
+    capture_wall_ms = _integer(capture, "wall_time_ms", "capture", failures, 1)
+    if not _boolean(capture, "pagehide_triggered", "capture", failures):
+        failures.append("capture.pagehide_triggered must be true")
+    if not _boolean(capture, "pagehide_finalized", "capture", failures):
+        failures.append("capture.pagehide_finalized must be true")
+    if not _boolean(capture, "pagehide_finalized_before_context_close", "capture", failures):
+        failures.append("capture.pagehide must finalize before browser context close")
+
     privacy = _mapping(scenario.get("privacy"), "privacy", failures)
     canary_count = _integer(privacy, "canary_count", "privacy", failures, 2)
+    injection = _mapping(
+        privacy.get("canary_injection"), "privacy.canary_injection", failures
+    )
+    for key in ("password_input_injected", "masked_region_injected", "injected_before_capture"):
+        if not _boolean(injection, key, "privacy.canary_injection", failures):
+            failures.append(f"privacy.canary_injection.{key} must be true")
     matches = _mapping(privacy.get("canary_matches"), "privacy.canary_matches", failures)
     if set(matches) != set(PRIVACY_SCAN_LOCATIONS):
         failures.append("privacy.canary_matches must cover the fixed browser, ClickHouse, and artifact locations")
@@ -198,11 +276,38 @@ def reconcile_scenario(scenario):
             failures.append(f"privacy.canary_matches.{location} must be zero")
     if _integer(clickhouse, "plaintext_content_rows", "clickhouse", failures) != 0:
         failures.append("clickhouse.plaintext_content_rows must be zero")
+    disk_before = _integer(
+        clickhouse, "disk_reserve_bytes_before", "clickhouse", failures, 1
+    )
+    disk_after = _integer(
+        clickhouse, "disk_reserve_bytes_after", "clickhouse", failures, 1
+    )
+    if min(disk_before, disk_after) < MIN_CLICKHOUSE_DISK_RESERVE_BYTES:
+        failures.append(
+            "clickhouse disk reserve fell below the fixed 2 GiB observation gate"
+        )
 
     worker = _mapping(scenario.get("worker"), "worker", failures)
     pending_after = _integer(worker, "pending_after_recovery", "worker", failures)
     duplicate_chunks = _integer(worker, "duplicate_chunks_after_recovery", "worker", failures)
     transition_ms = _integer(worker, "transition_ms", "worker", failures)
+    generation_before = _nonempty_string(
+        worker, "generation_before_transition", "worker", failures
+    )
+    generation_after = _nonempty_string(
+        worker, "generation_after_recovery", "worker", failures
+    )
+    restarts_before = _integer(
+        worker, "restart_count_before_transition", "worker", failures
+    )
+    restarts_after = _integer(
+        worker, "restart_count_after_recovery", "worker", failures
+    )
+    restart_count = _integer(worker, "restart_count", "worker", failures)
+    if restarts_after < restarts_before:
+        failures.append("worker restart checkpoint count must not regress")
+    elif restart_count != restarts_after - restarts_before:
+        failures.append("worker.restart_count must equal the restart checkpoint delta")
     if pending_after != 0 or duplicate_chunks != 0:
         failures.append("worker recovery must leave zero pending and duplicate chunks")
     if profile == "baseline":
@@ -210,27 +315,35 @@ def reconcile_scenario(scenario):
             failures.append("baseline must begin graceful drain with pending chunks")
         if not _boolean(worker, "graceful_drain_completed", "worker", failures):
             failures.append("baseline graceful drain must complete")
-        if _integer(worker, "restart_count", "worker", failures) != 0:
-            failures.append("baseline must not use restart recovery")
+        if restart_count != 0 or generation_after != generation_before:
+            failures.append("baseline must not restart or change content-worker generation")
     elif profile == "weak":
         if _integer(worker, "pending_before_restart", "worker", failures, 1) <= 0:
             failures.append("weak scenario must restart with pending chunks")
-        if _integer(worker, "restart_count", "worker", failures, 1) < 1:
-            failures.append("weak scenario must restart the content worker")
+        if restart_count < 1 or generation_after == generation_before:
+            failures.append("weak scenario must restart into a new content-worker generation")
         if not _boolean(worker, "restart_recovery_completed", "worker", failures):
             failures.append("weak restart recovery must complete")
 
     pagination = _mapping(scenario.get("pagination"), "pagination", failures)
-    frozen_at = pagination.get("frozen_at")
-    if not isinstance(frozen_at, str) or not frozen_at.endswith("Z"):
-        failures.append("pagination.frozen_at must be a UTC timestamp string")
-        frozen_at = ""
+    frozen_at = _utc_timestamp(pagination, "frozen_at", "pagination", failures)
     appended = _integer(pagination, "appended_after_freeze_items", "pagination", failures, 1)
     frozen_expected = _integer(pagination, "frozen_expected_items", "pagination", failures, 1)
+    excluded_incomplete = _integer(
+        pagination, "discovery_excluded_incomplete_items", "pagination", failures
+    )
+    shared_freeze = _boolean(
+        pagination, "shared_first_page_freeze", "pagination", failures
+    )
     if frozen_expected + appended != counts["postgres_items"]:
-        failures.append("frozen pagination count plus post-freeze items must equal final PostgreSQL items")
+        failures.append("frozen pagination count plus post-freeze complete items must equal final PostgreSQL complete items")
+    if excluded_incomplete != counts["postgres_incomplete_raw_items"]:
+        failures.append("discovery must exclude every incomplete raw item")
     owner = _principal_page(pagination, "owner", frozen_expected, frozen_at, failures)
     machine = _principal_page(pagination, "machine", frozen_expected, frozen_at, failures)
+    if (not shared_freeze
+            or owner["first_page_frozen_at"] != machine["first_page_frozen_at"]):
+        failures.append("owner and machine first pages must attest one shared freeze timestamp")
     if owner["item_set_sha256"] != machine["item_set_sha256"]:
         failures.append("owner and machine frozen item sets must be identical")
 
@@ -271,7 +384,25 @@ def reconcile_scenario(scenario):
             "accepted_encoded_chars_total": encoded_total,
             "accepted_gzip_bytes_total": gzip_total,
             "max_session_encoded_chars": max_session,
+            "budget_checkpoint": {
+                "accepted_encoded_chars": checkpoint_accepted,
+                "reserved_encoded_chars": checkpoint_reserved,
+                "pending_encoded_chars": checkpoint_pending,
+            },
+            "largest_attempted_rejected_payload_encoded_chars": largest_rejected,
             "budget_boundary_reached_sessions": boundary_sessions,
+        },
+        "capture": {
+            "wall_time_ms": capture_wall_ms,
+            "report_only": True,
+            "pagehide_finalized_before_context_close": capture.get(
+                "pagehide_finalized_before_context_close"
+            ) is True,
+        },
+        "clickhouse_disk_reserve": {
+            "before_bytes": disk_before,
+            "after_bytes": disk_after,
+            "minimum_bytes": MIN_CLICKHOUSE_DISK_RESERVE_BYTES,
         },
         "latency": latency_summary,
         "rss": {
@@ -290,7 +421,7 @@ def evaluate_report(report):
     global_failures = []
     report = _mapping(report, "report", global_failures)
     if report.get("report_version") != REPORT_VERSION:
-        global_failures.append("report_version must be 1")
+        global_failures.append(f"report_version must be {REPORT_VERSION}")
     if report.get("kind") != REPORT_KIND:
         global_failures.append("kind must identify the session replay capacity report")
     if report.get("synthetic") is not True:
@@ -335,7 +466,7 @@ def evaluate_report(report):
 
     passed = not global_failures and all(result["passed"] for result in results)
     return {
-        "evaluation_version": 1,
+        "evaluation_version": 2,
         "report_kind": REPORT_KIND,
         "passed": passed,
         "global_failures": global_failures,

@@ -26,7 +26,8 @@ from session_replay_capacity import (
     reconcile_scenario,
 )
 
-HARNESS_VERSION = 1
+HARNESS_VERSION = 2
+CELL_REPORT_VERSION = 2
 SETTINGS_KIND = "evia_session_replay_harness"
 CELL_REPORT_KIND = "evia_session_replay_capacity_cell"
 FIXTURE_KIND = "full_stack_new_sse"
@@ -299,14 +300,38 @@ def execute_cell(settings, profile, budget, hook_runner=run_hook):
     hold = hook_runner(settings, profile, budget, "worker_hold")
     require(hold == {"hold_armed": True}, "worker_hold must arm the dedicated fixture hold")
 
-    initial = hook_runner(settings, profile, budget, "browser_workload")
-    require(isinstance(initial, dict)
-            and set(initial) == {"accepted_items_before_freeze", "accepted_chunks_before_transition"}
-            and type(initial["accepted_items_before_freeze"]) is int
-            and initial["accepted_items_before_freeze"] > 0
-            and type(initial["accepted_chunks_before_transition"]) is int
-            and initial["accepted_chunks_before_transition"] > 0,
-            "browser_workload must report positive pre-freeze accepted item and chunk counts")
+    initial = _sections(
+        hook_runner(settings, profile, budget, "browser_workload"),
+        ("checkpoint", "browser", "capture", "privacy"),
+        "browser_workload",
+    )
+    checkpoint = initial["checkpoint"]
+    require(set(checkpoint) == {
+                "accepted_items_before_freeze", "accepted_chunks_before_transition"
+            }
+            and type(checkpoint["accepted_items_before_freeze"]) is int
+            and checkpoint["accepted_items_before_freeze"] > 0
+            and type(checkpoint["accepted_chunks_before_transition"]) is int
+            and checkpoint["accepted_chunks_before_transition"] > 0,
+            "browser_workload.checkpoint must report positive pre-freeze accepted item and chunk counts")
+    capture = initial["capture"]
+    require(capture.get("pagehide_triggered") is True
+            and capture.get("pagehide_finalized") is True
+            and capture.get("pagehide_finalized_before_context_close") is True,
+            "browser_workload must finalize fixture pagehide before closing browser context")
+    budget_checkpoint = initial["browser"].get("budget_checkpoint")
+    require(isinstance(budget_checkpoint, dict)
+            and type(budget_checkpoint.get("accepted_encoded_chars")) is int
+            and budget_checkpoint.get("accepted_encoded_chars", 0) > 0
+            and budget_checkpoint.get("reserved_encoded_chars") == 0
+            and budget_checkpoint.get("pending_encoded_chars") == 0,
+            "browser_workload must return an accepted-only budget checkpoint with zero reserved/pending characters")
+    injection = initial["privacy"].get("canary_injection")
+    require(isinstance(injection, dict)
+            and injection.get("password_input_injected") is True
+            and injection.get("masked_region_injected") is True
+            and injection.get("injected_before_capture") is True,
+            "browser_workload must attest both synthetic canaries were injected before capture")
 
     transition_hook = "worker_drain" if profile == "baseline" else "worker_restart"
     transition = _sections(
@@ -316,6 +341,21 @@ def execute_cell(settings, profile, budget, hook_runner=run_hook):
     require(type(transition["worker"].get(pending_key)) is int
             and transition["worker"].get(pending_key) > 0,
             f"{transition_hook} must observe positive pending chunks")
+    worker = transition["worker"]
+    generation_before = worker.get("generation_before_transition")
+    generation_after = worker.get("generation_after_recovery")
+    restarts_before = worker.get("restart_count_before_transition")
+    restarts_after = worker.get("restart_count_after_recovery")
+    require(isinstance(generation_before, str) and generation_before
+            and isinstance(generation_after, str) and generation_after
+            and type(restarts_before) is int and restarts_before >= 0
+            and type(restarts_after) is int and restarts_after >= restarts_before,
+            f"{transition_hook} must return content-worker generation and restart checkpoints")
+    require((profile == "baseline" and generation_after == generation_before
+             and restarts_after == restarts_before)
+            or (profile == "weak" and generation_after != generation_before
+                and restarts_after > restarts_before),
+            f"{transition_hook} generation/restart checkpoints do not prove the required transition")
 
     pagination = _sections(
         hook_runner(settings, profile, budget, "frozen_pagination"),
@@ -323,9 +363,9 @@ def execute_cell(settings, profile, budget, hook_runner=run_hook):
         "frozen_pagination",
     )
     require(type(pagination["browser"].get("accepted_items")) is int
-            and pagination["browser"].get("accepted_items") >= initial["accepted_items_before_freeze"]
+            and pagination["browser"].get("accepted_items") >= checkpoint["accepted_items_before_freeze"]
             and type(pagination["browser"].get("accepted_chunks")) is int
-            and pagination["browser"].get("accepted_chunks") >= initial["accepted_chunks_before_transition"],
+            and pagination["browser"].get("accepted_chunks") >= checkpoint["accepted_chunks_before_transition"],
             "frozen_pagination cumulative browser counts regressed")
 
     reconciliation = _sections(
@@ -341,6 +381,7 @@ def execute_cell(settings, profile, budget, hook_runner=run_hook):
         "network": dict(NETWORK_PROFILES[profile]),
         "resources": dict(settings["resources"][profile]),
     }
+    _merge(scenario, {key: value for key, value in initial.items() if key != "checkpoint"})
     _merge(scenario, transition)
     _merge(scenario, pagination)
     _merge(scenario, reconciliation)
@@ -364,7 +405,7 @@ def _write_private_json(path, value):
 
 def _cell_wrapper(settings, profile, budget, scenario):
     return {
-        "cell_report_version": 1,
+        "cell_report_version": CELL_REPORT_VERSION,
         "kind": CELL_REPORT_KIND,
         "settings_sha256": settings["fingerprint"],
         "api_url": settings["api_url"],
@@ -384,7 +425,7 @@ def load_cell_report(path, settings, profile, budget):
     except (ValueError, UnicodeError):
         raise SmokeFailure("Existing replay cell report is invalid JSON") from None
     expected = {
-        "cell_report_version": 1,
+        "cell_report_version": CELL_REPORT_VERSION,
         "kind": CELL_REPORT_KIND,
         "settings_sha256": settings["fingerprint"],
         "api_url": settings["api_url"],
@@ -406,6 +447,83 @@ def load_cell_report(path, settings, profile, budget):
     # scenario to remain parseable by the same pure evaluator used at assembly.
     reconcile_scenario(scenario)
     return scenario
+
+
+def load_manual_fragment(path, settings, profile, budget):
+    """Load one private bare scenario (or native checkpoint) for manual assembly."""
+    path = private_path(path, existing=True)
+    try:
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            parse_constant=lambda item: (_ for _ in ()).throw(ValueError(item)),
+        )
+    except (ValueError, UnicodeError):
+        raise SmokeFailure(f"Manual replay fragment {path.name} is invalid JSON") from None
+    require(isinstance(value, dict), f"Manual replay fragment {path.name} must be an object")
+    if value.get("kind") == CELL_REPORT_KIND:
+        return load_cell_report(path, settings, profile, budget)
+    scenario = value
+    require(scenario.get("name") == cell_id(profile, budget)
+            and scenario.get("profile") == profile
+            and scenario.get("budget_encoded_chars") == budget,
+            f"Manual replay fragment {path.name} does not identify its matrix cell")
+    require(scenario.get("network") == NETWORK_PROFILES[profile],
+            f"Manual replay fragment {path.name} has the wrong fixed network profile")
+    require(scenario.get("resources") == settings["resources"][profile],
+            f"Manual replay fragment {path.name} has the wrong resource profile")
+    return scenario
+
+
+def assemble_fragments(settings, fragment_directory, output):
+    """Assemble four manually captured cell fragments into one evaluator report."""
+    fragment_directory = _private_directory(fragment_directory)
+    output = _summary_path(settings, output)
+    require(output.parent.resolve() != fragment_directory.resolve(),
+            "Keep the assembled summary outside the manual fragment directory")
+    expected = {
+        cell_report_path({"report_dir": fragment_directory}, profile, budget).name
+        for profile, budget in EXPECTED_SCENARIOS
+    }
+    observed = {entry.name for entry in fragment_directory.iterdir()}
+    missing = sorted(expected - observed)
+    unexpected = sorted(observed - expected)
+    require(not missing, "Missing manual replay cell fragments: " + ", ".join(missing))
+    require(not unexpected,
+            "Manual replay fragment directory contains unexpected files: "
+            + ", ".join(unexpected))
+    scenarios = [
+        load_manual_fragment(
+            fragment_directory / (cell_id(profile, budget) + ".json"),
+            settings,
+            profile,
+            budget,
+        )
+        for profile, budget in EXPECTED_SCENARIOS
+    ]
+    report = {
+        "report_version": REPORT_VERSION,
+        "kind": REPORT_KIND,
+        "synthetic": True,
+        "production_writes": False,
+        "environment": "development",
+        "api_url": settings["api_url"],
+        "namespace": settings["namespace"],
+        "scenarios": scenarios,
+    }
+    evaluation = evaluate_report(report)
+    _write_private_json(output, report)
+    return evaluation
+
+
+def evaluation_failures(evaluation):
+    """Flatten evaluator failures for actionable CLI output."""
+    failures = list(evaluation["global_failures"])
+    for scenario in evaluation["scenarios"]:
+        failures.extend(
+            f"{scenario['profile']}-{scenario['budget_encoded_chars']}: {failure}"
+            for failure in scenario["failures"]
+        )
+    return failures
 
 
 def _existing_cells(settings):
@@ -496,7 +614,13 @@ def main(argv=None):
                         help="Fresh mode-0600 evaluator-input report path under /tmp")
     parser.add_argument("--dry-run", action="store_true",
                         help="Validate settings, commands, output, and resume state without executing hooks")
+    parser.add_argument(
+        "--assemble-fragments",
+        help="Mode-0700 directory containing four private <profile>-<budget>.json cell scenarios",
+    )
     args = parser.parse_args(argv)
+    require(not (args.dry_run and args.assemble_fragments),
+            "--dry-run and --assemble-fragments are mutually exclusive")
 
     # Validate the fresh final output before any hook can execute.
     output = private_path(args.out)
@@ -506,6 +630,15 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(plan(settings), sort_keys=True))
         return 0
+    if args.assemble_fragments:
+        evaluation = assemble_fragments(settings, args.assemble_fragments, output)
+        print(json.dumps({
+            "stage": "assembled",
+            "passed": evaluation["passed"],
+            "private_output_written": True,
+            "failures": evaluation_failures(evaluation),
+        }, sort_keys=True))
+        return 0 if evaluation["passed"] else 1
     evaluation, resumed = run(settings, output)
     print(json.dumps({
         "stage": "complete",
