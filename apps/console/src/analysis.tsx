@@ -1385,8 +1385,11 @@ function AnalysisWorkspace({
                               empty="该范围内无匹配结果，不等同于数值零。"
                             />
                           </DataSurface>
-                          <QueryMetadataDetails result={result} snapshot={snapshot} />
-                          <QuerySourceDetails snapshot={snapshot} />
+                          <details className="analysis-technical-details">
+                            <summary>技术详情</summary>
+                            <QueryMetadataDetails result={result} snapshot={snapshot} />
+                            <QuerySourceDetails snapshot={snapshot} />
+                          </details>
                         </aside>
                       ) : (
                         <DataSurface label="查询结果表">
