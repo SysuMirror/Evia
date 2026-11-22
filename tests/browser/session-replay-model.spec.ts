@@ -139,6 +139,35 @@ test('replay v2 builds a contiguous exact timeline and detects gaps', async () =
   expect(gap?.issue).toContain('#4');
 });
 
+test('replay v2 applies exact text, attribute and child operations in a browser DOM', async ({ page }) => {
+  await page.goto('http://127.0.0.1:5174/tests/components/');
+  const result = await page.evaluate(async () => {
+    const load = new Function('return import("/src/session-replay/model.ts")') as () => Promise<{
+      applyReplayRecords: (document: Document, records: unknown[]) => void;
+    }>;
+    const { applyReplayRecords } = await load();
+    document.body.innerHTML = '<main data-evia-rid="2"><!--evia-rid:3-->old</main>';
+    applyReplayRecords(document, [
+      { seq: 1, at: 1, type: 'text', data: { node_id: 3, text: 'new' } },
+      { seq: 2, at: 2, type: 'attribute', data: { node_id: 2, namespace: null, name: 'class', value: 'active' } },
+      {
+        seq: 3,
+        at: 3,
+        type: 'children',
+        data: {
+          parent_id: 2,
+          removed_ids: [],
+          added: { root_ids: [4], html: '<span data-evia-rid="4"><!--evia-rid:5-->child</span>' },
+          before_id: null,
+        },
+      },
+    ]);
+    const main = document.querySelector('main')!;
+    return { text: main.textContent, className: main.className, child: main.lastElementChild?.textContent };
+  });
+  expect(result).toEqual({ text: 'newchild', className: 'active', child: 'child' });
+});
+
 test('replay model skips incomplete groups and rejects conflicting segments', async () => {
   const data = encoded(rawPayload);
   const first = item(

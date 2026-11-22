@@ -250,7 +250,9 @@ function replayNodeMap(
     if (prior?.isConnected) throw new Error('回放节点标识重复。');
     existing.set(id, element);
   }
-  const walker = root.ownerDocument!.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
+  const owner = root instanceof Document ? root : root.ownerDocument;
+  if (!owner) throw new Error('回放节点文档无效。');
+  const walker = owner.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
   const markers: Comment[] = [];
   while (walker.nextNode()) {
     const comment = walker.currentNode as Comment;
