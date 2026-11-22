@@ -371,7 +371,7 @@ test('required fields announce recoverable errors and keep focus and error styli
       const style = getComputedStyle(node);
       return [style.borderTopColor, style.outlineColor, style.outlineStyle];
     }),
-  ).toEqual(['rgb(180, 35, 53)', 'rgb(180, 35, 53)', 'solid']);
+  ).toEqual(['rgb(167, 53, 70)', 'rgb(167, 53, 70)', 'solid']);
   await field.fill('可恢复的查询');
   await expect(field).not.toHaveAttribute('aria-invalid', 'true');
   await expect(field).toHaveAccessibleDescription('名称用于区分查询。');
