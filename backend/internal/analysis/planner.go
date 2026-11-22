@@ -388,6 +388,11 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 	if scope.ProjectID == "" || scope.Environment != r.Environment {
 		return Plan{}, Invalid("INVALID_QUERY_SCOPE", "查询范围无效")
 	}
+	if r.Kind == QueryKindHeatmap {
+		if e := validateHeatmap(&r); e != nil {
+			return Plan{}, e
+		}
+	}
 	if e := validateEventSelection(r); e != nil {
 		return Plan{}, e
 	}
@@ -652,6 +657,28 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 			// single-touch models do not need, keeping their output byte-stable.
 			plan.Columns = append(plan.Columns, Column{Key: "credit", Type: "number"})
 		}
+	case QueryKindHeatmap:
+		h := r.Heatmap
+		routeColumn, routeValue := "route_name", ""
+		if h.RouteName != nil {
+			routeValue = *h.RouteName
+		} else {
+			routeColumn, routeValue = "route_template", *h.RouteTemplate
+		}
+		xKey := p.bind("String", "x_ratio")
+		yKey := p.bind("String", "y_ratio")
+		widthKey := p.bind("String", "viewport_width")
+		heightKey := p.bind("String", "viewport_height")
+		xBin := "least(toUInt8(floor(least(greatest(JSONExtractFloat(properties_json," + xKey + "),0.0),1.0)*20)),19)"
+		yBin := "least(toUInt8(floor(least(greatest(JSONExtractFloat(properties_json," + yKey + "),0.0),1.0)*10)),9)"
+		base += " AND event_key=" + p.bind("String", "sys.heatmap_click")
+		base += " AND schema_version=" + p.bind("UInt64", "1")
+		base += " AND " + routeColumn + "=" + p.bind("String", routeValue)
+		base += " AND JSONExtractUInt(properties_json," + widthKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportWidth))
+		base += " AND JSONExtractUInt(properties_json," + heightKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportHeight))
+		plan.SQL = "SELECT " + xBin + " AS x_bin," + yBin + " AS y_bin,count() AS clicks,toUnixTimestamp64Nano(max(received_at)) AS watermark_ns" + base + " GROUP BY x_bin,y_bin ORDER BY y_bin,x_bin LIMIT 201"
+		plan.Accuracy = AccuracyExact
+		plan.Columns = []Column{{Key: "x_bin", Type: "integer"}, {Key: "y_bin", Type: "integer"}, {Key: "clicks", Type: "integer"}}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

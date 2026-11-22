@@ -119,7 +119,7 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	hasRetention, hasSegment, hasPath, hasAttribution := false, false, false, false
+	hasRetention, hasSegment, hasPath, hasAttribution, hasHeatmap := false, false, false, false, false
 	for _, kind := range capabilities.QueryKinds {
 		if kind == "retention" {
 			hasRetention = true
@@ -133,6 +133,9 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 		if kind == "attribution" {
 			hasAttribution = true
 		}
+		if kind == "heatmap" {
+			hasHeatmap = true
+		}
 	}
 	if !hasRetention {
 		t.Fatalf("retention must be advertised in query kinds: %v", capabilities.QueryKinds)
@@ -145,6 +148,9 @@ func TestCapabilitiesAdvertiseRetentionSurface(t *testing.T) {
 	}
 	if !hasAttribution {
 		t.Fatalf("attribution must be advertised in query kinds: %v", capabilities.QueryKinds)
+	}
+	if !hasHeatmap {
+		t.Fatalf("heatmap must be advertised in query kinds: %v", capabilities.QueryKinds)
 	}
 	wantGranularities := analysis.RetentionGranularities
 	if len(capabilities.RetentionGranularities) != len(wantGranularities) {

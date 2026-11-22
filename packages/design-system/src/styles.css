@@ -1687,6 +1687,47 @@ p {
   padding: 12px 16px;
   background: transparent;
 }
+.analysis-heatmap {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+}
+.analysis-heatmap figcaption {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.analysis-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  max-height: 480px;
+  padding: 2px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+.analysis-heatmap-cell {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 2px;
+}
+.analysis-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.analysis-heatmap-legend i {
+  width: 24px;
+  height: 10px;
+}
+.analysis-heatmap-legend span:last-child {
+  margin-left: 4px;
+}
 .analysis-filter-row,
 .analysis-funnel-step {
   display: grid;

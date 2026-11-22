@@ -27,6 +27,26 @@ func queryRequest(t *testing.T, kind string) analysis.Request {
 	}
 	return r
 }
+func TestHeatmapJobPersistsThroughExpandedKindConstraint(t *testing.T) {
+	f := catalogDB(t)
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e := analysis.Parse([]byte(`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-07T10:00:00Z","to":"2026-11-07T11:00:00Z"},"timezone":"UTC","heatmap":{"route_name":"Course","viewport_width":1366,"viewport_height":900},"limit":200}`), validator)
+	if e != nil {
+		t.Fatal(e)
+	}
+	job, e := f.s.EnqueueQuery(context.Background(), f.viewer, f.project, r)
+	if e != nil || job.State != analysis.JobStateQueued {
+		t.Fatalf("heatmap job was not admitted by migration 048: %+v %v", job, e)
+	}
+	var kind string
+	if e = f.s.Pool.QueryRow(context.Background(), `SELECT kind FROM analysis_query_jobs WHERE id=$1`, job.ID).Scan(&kind); e != nil || kind != analysis.QueryKindHeatmap {
+		t.Fatalf("stored heatmap kind mismatch: %q %v", kind, e)
+	}
+}
+
 func queryOutcome(id string, r analysis.Request) analysis.Outcome {
 	return analysis.Outcome{Result: &analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "observed", Type: "number"}}, Rows: []map[string]any{{"observed": 0, "enabled": false, "unknown": nil}}, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: r.TimeRange, State: analysis.CoverageStateProvisional, KnownGaps: []string{"synthetic_lifecycle_fixture"}}, GeneratedAt: time.Now().UTC()}}}
 }

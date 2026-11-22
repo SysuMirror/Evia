@@ -3684,10 +3684,10 @@ export interface components {
         };
         "query-request.schema": {
             /**
-             * @description Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints.
+             * @description Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints; heatmap aggregates fixed sys.heatmap_click v1 coordinates into a fixed 20x10 viewport grid.
              * @enum {unknown}
              */
-            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution" | "heatmap";
             /**
              * @description Deployment scope. The query runs only against facts published in this environment, and for machine credentials it must match the granted environment.
              * @enum {unknown}
@@ -3826,6 +3826,13 @@ export interface components {
                  */
                 model: "last_touch" | "first_touch" | "linear" | "position_based" | "time_decay";
             };
+            /** @description Bounded click heatmap over fixed sys.heatmap_click schema version 1. Exactly one route_name or route_template is matched literally together with the exact viewport dimensions; results use fixed 20x10 bins. */
+            heatmap?: {
+                route_name?: string;
+                route_template?: string;
+                viewport_width: number;
+                viewport_height: number;
+            } & (unknown | unknown);
             limit?: number;
             cursor?: string;
             event_versions?: {
@@ -3920,7 +3927,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;

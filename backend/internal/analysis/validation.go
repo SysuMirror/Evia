@@ -69,7 +69,7 @@ func Validate(r *Request) error {
 		return Invalid("INVALID_TIME_RANGE", "时间范围必须为非空半开区间", "/time_range")
 	}
 	window := time.Duration(BudgetTrendWindowSeconds) * time.Second
-	if r.Kind == QueryKindJourney || r.Kind == QueryKindEvents || r.Kind == QueryKindFunnel || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution {
+	if r.Kind == QueryKindJourney || r.Kind == QueryKindEvents || r.Kind == QueryKindFunnel || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution || r.Kind == QueryKindHeatmap {
 		window = time.Duration(BudgetOtherWindowSeconds) * time.Second
 	}
 	if r.Kind == QueryKindRetention {
@@ -118,6 +118,11 @@ func ValidateConfiguration(r *Request) error {
 	}
 	if r.Cursor != "" {
 		return Invalid("UNSUPPORTED_QUERY_CURSOR", "此版本仅支持有界快照，请缩小时间范围", "/cursor")
+	}
+	if r.Kind == QueryKindHeatmap {
+		if e := validateHeatmap(r); e != nil {
+			return e
+		}
 	}
 	if len(r.EventKeys) > BudgetEventSelections || len(r.GroupBy) > BudgetGroupFields || len(r.Metrics) > BudgetMetrics {
 		return Invalid("QUERY_COST_EXCEEDED", "事件、分组或指标数量超过预算")
@@ -263,6 +268,47 @@ func ValidateConfiguration(r *Request) error {
 		}
 	} else if r.Attribution != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有归因查询接受 attribution 参数", "/attribution")
+	}
+	if r.Kind != QueryKindHeatmap && r.Heatmap != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有热力图查询接受 heatmap 参数", "/heatmap")
+	}
+	return nil
+}
+
+// validateHeatmap closes the ad-hoc v1 surface around one reserved event,
+// exact route/viewport matching and the fixed 200-cell grid.
+func validateHeatmap(r *Request) error {
+	if r.Heatmap == nil {
+		return Invalid("INVALID_HEATMAP", "热力图配置缺失", "/heatmap")
+	}
+	if r.EventKeys != nil || r.EventVersions != nil || r.Filter != nil || r.Subject != "" || r.IdentityRevision != nil || r.IdentityFilter != nil || len(r.GroupBy) > 0 || len(r.Metrics) > 0 || r.Interval != "" {
+		return Invalid("INVALID_HEATMAP_OPTIONS", "热力图不接受通用事件、过滤、主体、分组、指标或间隔字段", "/heatmap")
+	}
+	if r.Funnel != nil || r.Retention != nil || r.Segment != nil || r.Path != nil || r.Attribution != nil {
+		return Invalid("INVALID_HEATMAP_OPTIONS", "热力图不接受其他分析配置", "/heatmap")
+	}
+	if r.Limit < 200 {
+		return Invalid("INVALID_HEATMAP_LIMIT", "热力图结果行数上限不能小于 200", "/limit")
+	}
+	h := r.Heatmap
+	routes := 0
+	var route string
+	var maxRunes int
+	if h.RouteName != nil {
+		routes++
+		route = *h.RouteName
+		maxRunes = 128
+	}
+	if h.RouteTemplate != nil {
+		routes++
+		route = *h.RouteTemplate
+		maxRunes = 256
+	}
+	if routes != 1 || route == "" || strings.ContainsRune(route, 0) || utf8.RuneCountInString(route) > maxRunes {
+		return Invalid("INVALID_HEATMAP_ROUTE", "必须且只能指定一个有效的 route_name 或 route_template", "/heatmap")
+	}
+	if h.ViewportWidth < 1 || h.ViewportWidth > 65535 || h.ViewportHeight < 1 || h.ViewportHeight > 65535 {
+		return Invalid("INVALID_HEATMAP_VIEWPORT", "视口宽高必须是 1 到 65535 的整数", "/heatmap")
 	}
 	return nil
 }

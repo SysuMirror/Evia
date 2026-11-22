@@ -7,6 +7,8 @@ import {
   metricLabel,
   publishedFields,
   fieldOperators,
+  heatmapCellColor,
+  heatmapCells,
   operators,
   type AnalysisForm,
   type QueryField,
@@ -651,4 +653,48 @@ test('trend week interval is emitted with the fixed seven-day bucket size', () =
   expect(request.interval).toBe('week');
   // A fourteen-day range stays inside the result-row limit at one bucket per week.
   expect(() => buildRequest(input, 'development')).not.toThrow();
+});
+
+test('heatmap form emits only the fixed exact selector and bounded viewport', () => {
+  const input = form();
+  input.mode = 'heatmap';
+  input.heatmapRouteField = 'route_template';
+  input.heatmapRoute = '/courses/:id';
+  input.heatmapViewportWidth = '1366';
+  input.heatmapViewportHeight = '900';
+  input.filters = [{ id: 1, field: 'uid', op: 'eq', value: 'ignored' }];
+  const request = buildRequest(input, 'development');
+  expect(request).toMatchObject({
+    kind: 'heatmap',
+    limit: 200,
+    heatmap: {
+      route_template: '/courses/:id',
+      viewport_width: 1366,
+      viewport_height: 900,
+    },
+  });
+  expect(request.event_keys).toBeUndefined();
+  expect(request.filter).toBeUndefined();
+  expect(request.subject).toBeUndefined();
+  expect(request.metrics).toBeUndefined();
+  input.limit = '199';
+  expect(() => buildRequest(input, 'development')).toThrow('200 至 500');
+  input.limit = '200';
+  input.to = '2026-11-08T00:01';
+  expect(() => buildRequest(input, 'development')).toThrow('最多 7 天');
+});
+
+test('heatmap grid fills the fixed 20 by 10 surface and uses the validated blue scale', () => {
+  const cells = heatmapCells([
+    { x_bin: 0, y_bin: 0, clicks: 1 },
+    { x_bin: 19, y_bin: 9, clicks: 5 },
+    { x_bin: 20, y_bin: 0, clicks: 99 },
+  ]);
+  expect(cells).toHaveLength(200);
+  expect(cells[0]).toEqual({ x: 0, y: 0, clicks: 1 });
+  expect(cells[199]).toEqual({ x: 19, y: 9, clicks: 5 });
+  expect(cells[1]?.clicks).toBe(0);
+  expect(heatmapCellColor(0, 5)).toBe('var(--color-surface-subtle)');
+  expect(heatmapCellColor(1, 5)).toBe('#60a5fa');
+  expect(heatmapCellColor(5, 5)).toBe('#172554');
 });

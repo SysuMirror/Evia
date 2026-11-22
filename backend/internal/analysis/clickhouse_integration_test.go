@@ -269,6 +269,56 @@ func TestClickHouseDeduplicatedMetricsAndTypedFilters(t *testing.T) {
 		t.Fatal(bucket)
 	}
 }
+func TestClickHouseBoundedHeatmapExactScopeBinsAndWatermark(t *testing.T) {
+	client := clickHouseDatabase(t)
+	matching := func(id string, second int, x, y float64) map[string]any {
+		row := fact(id, "sys.heatmap_click", "", "device-one", "source-one", second, map[string]any{
+			"x_ratio": x, "y_ratio": y, "viewport_width": 1366, "viewport_height": 900,
+			"element_path": "main>button:nth-of-type(1)",
+		})
+		row["route_name"] = "Course"
+		return row
+	}
+	rows := []map[string]any{
+		matching("top-left", 1, 0, 0),
+		matching("edge-one", 2, 1, 1),
+		matching("edge-two", 3, 1, 1),
+	}
+	wrongViewport := matching("wrong-viewport", 4, 0.5, 0.5)
+	wrongViewportProperties, _ := json.Marshal(map[string]any{"x_ratio": 0.5, "y_ratio": 0.5, "viewport_width": 1440, "viewport_height": 900, "element_path": "main>button"})
+	wrongViewport["properties_json"] = string(wrongViewportProperties)
+	wrongRoute := matching("wrong-route", 5, 0.5, 0.5)
+	wrongRoute["route_name"] = "Other"
+	rows = append(rows, wrongViewport, wrongRoute)
+	seedRows(t, client, rows)
+
+	route := "Course"
+	r := Request{
+		Kind: QueryKindHeatmap, Environment: "development", Timezone: "UTC", Limit: 200,
+		TimeRange: aggregateRequest(t).TimeRange,
+		Heatmap:   &Heatmap{RouteName: &route, ViewportWidth: 1366, ViewportHeight: 900},
+	}
+	result := execute(t, client, r)
+	if len(result.Rows) != 2 {
+		t.Fatalf("expected two occupied bins: %+v", result.Rows)
+	}
+	for index, want := range []struct{ x, y, clicks int64 }{{0, 0, 1}, {19, 9, 2}} {
+		row := result.Rows[index]
+		for key, expected := range map[string]int64{"x_bin": want.x, "y_bin": want.y, "clicks": want.clicks} {
+			got, ok := integer(row[key])
+			if !ok || got != expected {
+				t.Fatalf("row %d %s=%v, want %d: %+v", index, key, row[key], expected, row)
+			}
+		}
+		if len(row) != 3 {
+			t.Fatalf("heatmap row exposed internal columns: %+v", row)
+		}
+	}
+	if result.Metadata.DataWatermark == nil || result.Metadata.DataWatermark.Format(time.RFC3339Nano) != "2026-11-07T10:00:04Z" {
+		t.Fatalf("heatmap watermark wrong: %+v", result.Metadata.DataWatermark)
+	}
+}
+
 func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 	client := clickHouseDatabase(t)
 	rows := []map[string]any{fact("anonymous-before", "sys.page_view", "", "device-one", "source-one", 0, map[string]any{}), fact("logged-in", "sys.page_view", "user-one", "device-one", "source-one", 1, map[string]any{}), fact("switched-account", "sys.page_view", "user-two", "device-one", "source-one", 2, map[string]any{})}

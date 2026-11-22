@@ -2,8 +2,10 @@ package analysis
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
 	"github.com/howtomakeaname/Evia/backend/internal/propertylayout"
@@ -23,6 +25,66 @@ func request(t *testing.T, raw string) Request {
 }
 
 const baseRequest = `{"kind":"trend","environment":"development","time_range":{"from":"2026-11-07T10:00:00Z","to":"2026-11-07T11:00:00Z"},"timezone":"UTC"}`
+
+func TestHeatmapValidationClosesTheFixedSurface(t *testing.T) {
+	valid := `{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_width":1366,"viewport_height":900}}`
+	r := request(t, valid)
+	if r.Limit != 200 || r.Heatmap == nil || r.Heatmap.RouteTemplate == nil || *r.Heatmap.RouteTemplate != "/courses/:id" {
+		t.Fatalf("heatmap defaults or exact selector changed: %+v", r)
+	}
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	invalid := []string{
+		strings.Replace(valid, `"route_template":"/courses/:id"`, `"route_name":"Course","route_template":"/courses/:id"`, 1),
+		strings.Replace(valid, `,"heatmap":`, `,"event_keys":[],"heatmap":`, 1),
+		strings.Replace(valid, `,"heatmap":`, `,"filter":{"op":"eq","field":{"kind":"system","key":"event_key"},"value":"sys.heatmap_click"},"heatmap":`, 1),
+		strings.Replace(valid, `,"heatmap":`, `,"subject":"uid","heatmap":`, 1),
+		strings.Replace(valid, `"viewport_width":1366`, `"viewport_width":0`, 1),
+		strings.Replace(valid, `"heatmap":`, `"limit":199,"heatmap":`, 1),
+		strings.Replace(valid, `"from":"2026-11-01T00:00:00Z"`, `"from":"2026-10-31T23:59:59Z"`, 1),
+	}
+	for index, raw := range invalid {
+		if _, e := Parse([]byte(raw), validator); e == nil {
+			t.Fatalf("invalid heatmap case %d accepted: %s", index, raw)
+		}
+	}
+}
+
+func TestHeatmapPlannerBindsExactScopeAndClampsEdges(t *testing.T) {
+	route := "Course ' OR 1=1 --"
+	r := Request{
+		Kind: QueryKindHeatmap, Environment: "development", Timezone: "UTC", Limit: 200,
+		TimeRange: TimeRange{From: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)},
+		Heatmap:   &Heatmap{RouteName: &route, ViewportWidth: 1366, ViewportHeight: 900},
+	}
+	plan, e := Compile("db", "event_facts", Scope{ProjectID: "private-project", Environment: "development"}, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, value := range []string{route, "private-project", "sys.heatmap_click"} {
+		if strings.Contains(plan.SQL, value) {
+			t.Fatalf("request value %q interpolated into heatmap SQL: %s", value, plan.SQL)
+		}
+		found := false
+		for _, parameter := range plan.Parameters {
+			found = found || parameter == value
+		}
+		if !found {
+			t.Fatalf("bound heatmap value %q missing: %+v", value, plan.Parameters)
+		}
+	}
+	for _, fragment := range []string{"route_name=", "schema_version=", "greatest(JSONExtractFloat", "least(toUInt8", "*20", "*10", "GROUP BY x_bin,y_bin", "ORDER BY y_bin,x_bin", "LIMIT 201"} {
+		if !strings.Contains(plan.SQL, fragment) {
+			t.Fatalf("heatmap SQL missing %q: %s", fragment, plan.SQL)
+		}
+	}
+	wantColumns := []Column{{Key: "x_bin", Type: "integer"}, {Key: "y_bin", Type: "integer"}, {Key: "clicks", Type: "integer"}}
+	if !reflect.DeepEqual(plan.Columns, wantColumns) || plan.Accuracy != AccuracyExact {
+		t.Fatalf("heatmap output drifted: %+v accuracy=%s", plan.Columns, plan.Accuracy)
+	}
+}
 
 func TestQueryBoundariesAndStrictDSL(t *testing.T) {
 	validator, e := contract.New()

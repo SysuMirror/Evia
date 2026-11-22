@@ -49,6 +49,8 @@ import {
   buildRequest,
   fieldOperators,
   formatTime,
+  heatmapCellColor,
+  heatmapCells,
   initialForm,
   metricLabel,
   modes,
@@ -124,6 +126,53 @@ function cell(value: unknown, type: string, timezone: string) {
   if (typeof value === 'number') return value.toLocaleString('zh-CN', { maximumFractionDigits: 6 });
   return String(value);
 }
+
+function HeatmapGrid({
+  rows,
+  viewportWidth,
+  viewportHeight,
+}: {
+  rows: Record<string, unknown>[];
+  viewportWidth: number;
+  viewportHeight: number;
+}) {
+  const captionID = useId();
+  const cells = heatmapCells(rows);
+  const maximum = Math.max(0, ...cells.map((item) => item.clicks));
+  const width = Math.min(960, (480 * viewportWidth) / viewportHeight);
+  return (
+    <figure className="analysis-heatmap" aria-labelledby={captionID}>
+      <figcaption id={captionID}>
+        视口点击分布，{viewportWidth.toLocaleString('zh-CN')} ×{' '}
+        {viewportHeight.toLocaleString('zh-CN')} 像素，20 × 10 网格
+      </figcaption>
+      <div
+        className="analysis-heatmap-grid"
+        role="img"
+        aria-label={`点击热力图，最高单格 ${maximum.toLocaleString('zh-CN')} 次；完整数值见下方结果表。`}
+        style={{ aspectRatio: `${viewportWidth} / ${viewportHeight}`, maxWidth: `${width}px` }}
+      >
+        {cells.map((item) => (
+          <span
+            key={`${item.x}:${item.y}`}
+            className="analysis-heatmap-cell"
+            aria-hidden="true"
+            title={`横向格 ${item.x + 1}，纵向格 ${item.y + 1}：${item.clicks.toLocaleString('zh-CN')} 次点击`}
+            style={{ backgroundColor: heatmapCellColor(item.clicks, maximum) }}
+          />
+        ))}
+      </div>
+      <div className="analysis-heatmap-legend" aria-label="颜色越深表示点击次数越多">
+        <span>较少</span>
+        {['#60a5fa', '#3b82f6', '#2563eb', '#1e40af', '#172554'].map((color) => (
+          <i key={color} aria-hidden="true" style={{ backgroundColor: color }} />
+        ))}
+        <span>较多</span>
+      </div>
+    </figure>
+  );
+}
+
 export function AnalysisPage({
   project,
   session,
@@ -421,7 +470,8 @@ export function AnalysisPage({
         if (
           failure.target === 'event' ||
           failure.target === 'identity' ||
-          failure.target === 'interval'
+          failure.target === 'interval' ||
+          failure.target === 'heatmap'
         ) {
           formRef.current
             ?.querySelector<HTMLElement>(`[data-query-control="${failure.target}"]`)
@@ -575,6 +625,9 @@ export function AnalysisPage({
               path: '事件路径',
               touchpoint: '归因触点',
               credit: '加权权重',
+              x_bin: '横向格（0–19）',
+              y_bin: '纵向格（0–9）',
+              clicks: '点击次数',
             }[column.key] ??
             column.label ??
             column.key),
@@ -640,7 +693,8 @@ export function AnalysisPage({
             form.mode !== 'retention' &&
             form.mode !== 'segment' &&
             form.mode !== 'path' &&
-            form.mode !== 'attribution' && (
+            form.mode !== 'attribution' &&
+            form.mode !== 'heatmap' && (
               <Field
                 label="事件（跨已发布版本）"
                 error={validationTarget === 'event' ? validationError : undefined}
@@ -819,6 +873,60 @@ export function AnalysisPage({
               </span>
             </div>
           )}
+          {form.mode === 'heatmap' && (
+            <>
+              <Field label="精确路由字段">
+                <Select
+                  value={form.heatmapRouteField}
+                  onChange={(event) =>
+                    patch(
+                      'heatmapRouteField',
+                      event.target.value as AnalysisForm['heatmapRouteField'],
+                    )
+                  }
+                  options={[
+                    { value: 'route_template', label: '路由模板' },
+                    { value: 'route_name', label: '路由名称' },
+                  ]}
+                />
+              </Field>
+              <Field
+                label={form.heatmapRouteField === 'route_name' ? '路由名称' : '路由模板'}
+                error={validationTarget === 'heatmap' ? validationError : undefined}
+              >
+                <Input
+                  required
+                  data-query-control="heatmap"
+                  maxLength={form.heatmapRouteField === 'route_name' ? 128 : 256}
+                  value={form.heatmapRoute}
+                  onChange={(event) => patch('heatmapRoute', event.target.value)}
+                  placeholder={form.heatmapRouteField === 'route_name' ? 'Course' : '/courses/:id'}
+                />
+              </Field>
+              <Field label="视口宽度">
+                <Input
+                  required
+                  type="number"
+                  min="1"
+                  max="65535"
+                  step="1"
+                  value={form.heatmapViewportWidth}
+                  onChange={(event) => patch('heatmapViewportWidth', event.target.value)}
+                />
+              </Field>
+              <Field label="视口高度">
+                <Input
+                  required
+                  type="number"
+                  min="1"
+                  max="65535"
+                  step="1"
+                  value={form.heatmapViewportHeight}
+                  onChange={(event) => patch('heatmapViewportHeight', event.target.value)}
+                />
+              </Field>
+            </>
+          )}
         </div>
       )}
       {isMetric && form.metric === 'pv' && (
@@ -855,6 +963,12 @@ export function AnalysisPage({
           7 天。
         </p>
       )}
+      {form.mode === 'heatmap' && (
+        <p className="field-help">
+          仅统计 sys.heatmap_click v1，按精确路由和精确视口匹配，固定汇总为 20 × 10
+          个视口坐标格；不读取页面截图或 DOM，时间范围最多 7 天。
+        </p>
+      )}
       {catalog.hasNextPage && (
         <Button
           size="small"
@@ -869,9 +983,11 @@ export function AnalysisPage({
           <Button onClick={() => setEditor('range')} aria-haspopup="dialog">
             时间范围
           </Button>
-          <Button onClick={() => setEditor('filters')} aria-haspopup="dialog">
-            过滤条件（{form.filters.length}）
-          </Button>
+          {form.mode !== 'heatmap' && (
+            <Button onClick={() => setEditor('filters')} aria-haspopup="dialog">
+              过滤条件（{form.filters.length}）
+            </Button>
+          )}
           <Button onClick={() => setEditor('settings')} aria-haspopup="dialog">
             查询设置
           </Button>
@@ -968,7 +1084,9 @@ export function AnalysisPage({
                               ? `深度 ${snapshot.request.path?.depth ?? 0} 事件路径`
                               : snapshot.request.kind === 'attribution'
                                 ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分', position_based: '位置归因', time_decay: '时间衰减' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
-                                : '全部事件')}
+                                : snapshot.request.kind === 'heatmap'
+                                  ? `${snapshot.request.heatmap?.route_name ?? snapshot.request.heatmap?.route_template ?? ''}，${snapshot.request.heatmap?.viewport_width ?? 0} × ${snapshot.request.heatmap?.viewport_height ?? 0} 视口`
+                                  : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
                       : ''}
@@ -1081,6 +1199,15 @@ export function AnalysisPage({
                             </div>
                           </div>
                         </div>
+                      )}
+                    {rows.length > 0 &&
+                      snapshot.request.kind === 'heatmap' &&
+                      snapshot.request.heatmap && (
+                        <HeatmapGrid
+                          rows={rows}
+                          viewportWidth={snapshot.request.heatmap.viewport_width}
+                          viewportHeight={snapshot.request.heatmap.viewport_height}
+                        />
                       )}
                     {rows.length > 0 &&
                       ((snapshot.request.kind === 'trend' && snapshot.request.interval) ||

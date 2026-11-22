@@ -9,7 +9,8 @@ export type AnalysisMode =
   | 'retention'
   | 'segment'
   | 'path'
-  | 'attribution';
+  | 'attribution'
+  | 'heatmap';
 export type QueryField = NonNullable<QueryRequest['group_by']>[number];
 export type QueryFilter = NonNullable<QueryRequest['filter']>;
 export type PublishedField = { id: string; label: string; type: string; reference: QueryField };
@@ -51,6 +52,10 @@ export type AnalysisForm = {
   attributionWindow: string;
   attributionModel: 'last_touch' | 'first_touch' | 'linear' | 'position_based' | 'time_decay';
   attributionHalfLife: string;
+  heatmapRouteField: 'route_name' | 'route_template';
+  heatmapRoute: string;
+  heatmapViewportWidth: string;
+  heatmapViewportHeight: string;
 };
 export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'metrics', label: '指标' },
@@ -62,6 +67,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'segment', label: '主体分群' },
   { id: 'path', label: '聚合路径' },
   { id: 'attribution', label: '归因分析' },
+  { id: 'heatmap', label: '点击热力图' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },
@@ -187,6 +193,10 @@ export function initialForm(timezone: string): AnalysisForm {
     attributionWindow: '86400',
     attributionModel: 'last_touch',
     attributionHalfLife: '600',
+    heatmapRouteField: 'route_template',
+    heatmapRoute: '',
+    heatmapViewportWidth: '1366',
+    heatmapViewportHeight: '900',
   };
 }
 export type AnalysisValidationTarget =
@@ -200,7 +210,8 @@ export type AnalysisValidationTarget =
   | 'retention'
   | 'segment'
   | 'path'
-  | 'attribution';
+  | 'attribution'
+  | 'heatmap';
 export class AnalysisValidationError extends Error {
   constructor(
     public readonly target: AnalysisValidationTarget,
@@ -277,8 +288,14 @@ function readRetention(form: AnalysisForm): NonNullable<QueryRequest['retention'
 }
 function readLimit(form: AnalysisForm) {
   const limit = Number(form.limit);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 500)
-    throw new AnalysisValidationError('settings', '结果行数须为 1 至 500 的整数。');
+  const minimum = form.mode === 'heatmap' ? 200 : 1;
+  if (!Number.isInteger(limit) || limit < minimum || limit > 500)
+    throw new AnalysisValidationError(
+      'settings',
+      form.mode === 'heatmap'
+        ? '点击热力图结果行数须为 200 至 500 的整数。'
+        : '结果行数须为 1 至 500 的整数。',
+    );
   return limit;
 }
 function readFilters(form: AnalysisForm): QueryFilter[] {
@@ -480,6 +497,31 @@ function readAttribution(form: AnalysisForm): NonNullable<QueryRequest['attribut
   }
   return attribution;
 }
+function readHeatmap(form: AnalysisForm): NonNullable<QueryRequest['heatmap']> {
+  const route = form.heatmapRoute;
+  const maxLength = form.heatmapRouteField === 'route_name' ? 128 : 256;
+  if (!route || [...route].length > maxLength || route.includes('\0'))
+    throw new AnalysisValidationError(
+      'heatmap',
+      `${form.heatmapRouteField === 'route_name' ? '路由名称' : '路由模板'}须为 1 至 ${maxLength} 个字符。`,
+    );
+  const width = Number(form.heatmapViewportWidth);
+  const height = Number(form.heatmapViewportHeight);
+  if (
+    !Number.isInteger(width) ||
+    width < 1 ||
+    width > 65535 ||
+    !Number.isInteger(height) ||
+    height < 1 ||
+    height > 65535
+  )
+    throw new AnalysisValidationError('heatmap', '视口宽高须为 1 至 65535 的整数。');
+  return {
+    [form.heatmapRouteField]: route,
+    viewport_width: width,
+    viewport_height: height,
+  };
+}
 export type AnalysisEditorSection =
   'range' | 'settings' | 'filters' | 'funnel' | 'retention' | 'segment' | 'path' | 'attribution';
 export function validateAnalysisSection(form: AnalysisForm, section: AnalysisEditorSection): void {
@@ -509,6 +551,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     form.mode !== 'segment' &&
     form.mode !== 'path' &&
     form.mode !== 'attribution' &&
+    form.mode !== 'heatmap' &&
     form.event
   )
     request.event_keys = [form.event];
@@ -531,7 +574,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
         '当前粒度可能超出结果行数，请增加行数、缩短时间或选择更大粒度。',
       );
   }
-  const args = readFilters(form);
+  const args = form.mode === 'heatmap' ? [] : readFilters(form);
   if (args.length) request.filter = { op: form.filterJoin, args };
   if (form.mode === 'journey') {
     if (!form.identity.trim())
@@ -567,6 +610,7 @@ export function buildRequest(form: AnalysisForm, environment: Environment): Quer
     request.subject = form.subject;
     request.attribution = readAttribution(form);
   }
+  if (form.mode === 'heatmap') request.heatmap = readHeatmap(form);
   return request;
 }
 export function metricLabel(request: QueryRequest, semanticMetric?: AnalysisForm['metric']) {
@@ -575,6 +619,49 @@ export function metricLabel(request: QueryRequest, semanticMetric?: AnalysisForm
     return `${request.subject === 'anonymous' ? '匿名标识' : '原始 UID'} UV`;
   return semanticMetric === 'pv' ? 'PV' : '事件数';
 }
+
+export const HEATMAP_COLUMNS = 20;
+export const HEATMAP_ROWS = 10;
+export type HeatmapCell = { x: number; y: number; clicks: number };
+const heatmapPalette = ['#60a5fa', '#3b82f6', '#2563eb', '#1e40af', '#172554'] as const;
+
+export function heatmapCells(rows: Record<string, unknown>[]): HeatmapCell[] {
+  const clicks = new Map<string, number>();
+  for (const row of rows) {
+    const x = row.x_bin;
+    const y = row.y_bin;
+    const value = row.clicks;
+    if (
+      typeof x === 'number' &&
+      Number.isInteger(x) &&
+      x >= 0 &&
+      x < HEATMAP_COLUMNS &&
+      typeof y === 'number' &&
+      Number.isInteger(y) &&
+      y >= 0 &&
+      y < HEATMAP_ROWS &&
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 0
+    )
+      clicks.set(`${x}:${y}`, value);
+  }
+  return Array.from({ length: HEATMAP_COLUMNS * HEATMAP_ROWS }, (_, index) => {
+    const x = index % HEATMAP_COLUMNS;
+    const y = Math.floor(index / HEATMAP_COLUMNS);
+    return { x, y, clicks: clicks.get(`${x}:${y}`) ?? 0 };
+  });
+}
+
+export function heatmapCellColor(clicks: number, maximum: number): string {
+  if (clicks <= 0 || maximum <= 0) return 'var(--color-surface-subtle)';
+  const index = Math.min(
+    heatmapPalette.length - 1,
+    Math.max(0, Math.ceil((clicks / maximum) * heatmapPalette.length) - 1),
+  );
+  return heatmapPalette[index]!;
+}
+
 export function formatTime(value: unknown, timezone: string) {
   if (typeof value !== 'string') return '—';
   const date = new Date(value);

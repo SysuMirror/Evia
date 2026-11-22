@@ -163,7 +163,7 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 	result := Result{Columns: plan.Columns, Rows: make([]map[string]any, 0), Metadata: metadata}
 	for _, row := range rows {
 		key := "received_at_ns"
-		if r.Kind == QueryKindTrend {
+		if r.Kind == QueryKindTrend || r.Kind == QueryKindHeatmap {
 			key = "watermark_ns"
 		}
 		if v, ok := integer(row[key]); ok {
@@ -233,6 +233,8 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 				row["bucket"] = time.UnixMilli(v).UTC().Format(time.RFC3339Nano)
 				delete(row, "bucket_ms")
 			}
+		} else if r.Kind == QueryKindHeatmap {
+			delete(row, "watermark_ns")
 		} else {
 			when, ok := integer(row["event_time_ns"])
 			if !ok {

@@ -11,6 +11,7 @@ func TestRequiresRawAccess(t *testing.T) {
 	}{
 		{"aggregate UID", Request{Kind: QueryKindTrend, Subject: SubjectUID, Metrics: []Metric{{Op: OpUnique}}}, false},
 		{"aggregate funnel", Request{Kind: QueryKindFunnel, Subject: SubjectUID}, false},
+		{"aggregate heatmap", Request{Kind: QueryKindHeatmap, Heatmap: &Heatmap{}}, false},
 		{"events", Request{Kind: QueryKindEvents}, true},
 		{"journey", Request{Kind: QueryKindJourney}, true},
 		{"explicit identity on count", Request{Kind: QueryKindTrend, IdentityFilter: &IdentityFilter{}}, true},

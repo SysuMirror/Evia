@@ -1308,8 +1308,9 @@ type QueryRequest struct {
 		DecayHalfLifeSeconds *int64            `json:"decay_half_life_seconds,omitempty"`
 		Model                string            `json:"model"`
 	} `json:"attribution,omitempty"`
-	Limit         *int64  `json:"limit,omitempty"`
-	Cursor        *string `json:"cursor,omitempty"`
+	Heatmap       json.RawMessage `json:"heatmap,omitempty"`
+	Limit         *int64          `json:"limit,omitempty"`
+	Cursor        *string         `json:"cursor,omitempty"`
 	EventVersions []struct {
 		EventKey      string `json:"event_key"`
 		SchemaVersion int64  `json:"schema_version"`

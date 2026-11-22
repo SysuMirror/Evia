@@ -94,6 +94,15 @@ type Attribution struct {
 	DecayHalfLifeSeconds int64  `json:"decay_half_life_seconds,omitempty"`
 }
 
+// Heatmap selects one exact route and one exact browser viewport. The event,
+// schema version and 20x10 coordinate grid are fixed by the v1 engine.
+type Heatmap struct {
+	RouteName      *string `json:"route_name,omitempty"`
+	RouteTemplate  *string `json:"route_template,omitempty"`
+	ViewportWidth  int     `json:"viewport_width"`
+	ViewportHeight int     `json:"viewport_height"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -118,6 +127,7 @@ type Request struct {
 	Segment          *Segment        `json:"segment,omitempty"`
 	Path             *Path           `json:"path,omitempty"`
 	Attribution      *Attribution    `json:"attribution,omitempty"`
+	Heatmap          *Heatmap        `json:"heatmap,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the
