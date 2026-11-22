@@ -295,17 +295,20 @@ func (w *ProbeWorker) Run(ctx context.Context) (runErr error) {
 				requests = append(requests, request)
 			}
 		}
-		bounded, cancel := context.WithTimeout(ctx, 20*time.Second)
+		// Readiness is the proof that the same Kafka→ClickHouse path is alive. A
+		// transient dependency outage must therefore leave the batch uncommitted and
+		// keep retrying, rather than terminate this task and make the supervisor stop
+		// the otherwise recoverable fact worker. Context cancellation still exits
+		// promptly; permanent failures remain visible as a stalled readiness lease.
 		if len(requests) > 0 {
-			e = retry(bounded, 100*time.Millisecond, time.Second, func() error { return w.store.write(bounded, requests) })
+			e = retry(ctx, 100*time.Millisecond, time.Second, func() error { return w.store.write(ctx, requests) })
 		}
 		if e == nil && len(poison) > 0 {
-			e = retry(bounded, 100*time.Millisecond, time.Second, func() error { return w.producer.Quarantine(bounded, poison) })
+			e = retry(ctx, 100*time.Millisecond, time.Second, func() error { return w.producer.Quarantine(ctx, poison) })
 		}
 		if e == nil && len(messages) > 0 {
-			e = w.reader.Commit(bounded, messages)
+			e = retry(ctx, 100*time.Millisecond, time.Second, func() error { return w.reader.Commit(ctx, messages) })
 		}
-		cancel()
 		w.reader.AllowRebalance()
 		if e != nil {
 			return e
