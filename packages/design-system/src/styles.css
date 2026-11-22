@@ -2499,6 +2499,7 @@ body {
 }
 .workspace {
   min-height: 100vh;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 84% 0%, rgb(213 226 241 / 54%), transparent 28rem),
     var(--color-background);
@@ -2956,6 +2957,7 @@ body {
 @media (max-width: 720px) {
   .workspace-header {
     height: 70px;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 14px;
     gap: 10px;
   }
@@ -2965,8 +2967,16 @@ body {
   .workspace-primary-nav {
     display: none;
   }
+  .evia-tabs,
+  .evia-tab-list {
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+  }
   .workspace-utilities {
+    grid-column: 2;
     gap: 7px;
+    min-width: 0;
+    max-width: 96px;
     margin-left: 0;
   }
   .account-avatar {
