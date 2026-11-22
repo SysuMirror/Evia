@@ -2291,6 +2291,9 @@ p {
   grid-template-columns: minmax(320px, 1.25fr) minmax(300px, 0.75fr);
   align-items: start;
 }
+.analysis-result-presentation-heatmap .evia-table {
+  min-width: 100% !important;
+}
 .analysis-heatmap-grid {
   border-color: var(--color-border);
   border-radius: 8px;

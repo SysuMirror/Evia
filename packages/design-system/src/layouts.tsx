@@ -88,8 +88,8 @@ export function WorkspaceShell({
   const groups = items.reduce<{ label: string; items: WorkspaceNavigationItem[] }[]>(
     (all, item) => {
       const label = item.group ?? '工作区';
-      const current = all.at(-1);
-      if (current?.label === label) current.items.push(item);
+      const current = all.find((candidate) => candidate.label === label);
+      if (current) current.items.push(item);
       else all.push({ label, items: [item] });
       return all;
     },
