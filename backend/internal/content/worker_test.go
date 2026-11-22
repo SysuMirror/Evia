@@ -38,6 +38,23 @@ func (s *fakeScanner) ScanEncryptedContent(context.Context, Cursor, int) ([]Encr
 	return s.chunks, s.err
 }
 
+type sequenceScanner struct {
+	batches [][]EncryptedChunk
+	calls   chan int
+}
+
+func (s *sequenceScanner) ScanEncryptedContent(context.Context, Cursor, int) ([]EncryptedChunk, error) {
+	index := len(s.batches)
+	if index == 0 {
+		s.calls <- 0
+		return nil, nil
+	}
+	batch := s.batches[0]
+	s.batches = s.batches[1:]
+	s.calls <- index
+	return batch, nil
+}
+
 type fakeDecryptor struct{ err error }
 
 func (d *fakeDecryptor) Decrypt(_ context.Context, encrypted EncryptedChunk) (DecryptedChunk, error) {
@@ -68,6 +85,46 @@ func TestWorkerDecryptsStoresAndAdvancesCursor(t *testing.T) {
 	}
 	if store.completed != 1 || store.released != 0 || len(store.records) != 1 || store.cursor.EventID != "event" || !store.cursor.ReceivedAt.Equal(now) {
 		t.Fatalf("worker outcome wrong: completed=%d released=%d records=%+v cursor=%+v", store.completed, store.released, store.records, store.cursor)
+	}
+}
+
+func TestWorkerImmediatelyContinuesAfterFullBacklogBatch(t *testing.T) {
+	now := time.Now().UTC()
+	chunks := make([]EncryptedChunk, MaxScanBatch)
+	for index := range chunks {
+		chunks[index] = EncryptedChunk{
+			ProjectID: "project", Environment: "development", EventID: string(rune(index + 1)), ReceivedAt: now.Add(time.Duration(index) * time.Nanosecond),
+			ContentType: "test_content", StreamID: "stream", ItemID: "item", ActorType: "browser",
+			ChunkIndex: 0, ChunkCount: 1, KeyID: "key", ContentLength: 5,
+		}
+	}
+	calls := make(chan int, 2)
+	scanner := &sequenceScanner{batches: [][]EncryptedChunk{chunks, nil}, calls: calls}
+	store := &fakeStore{claim: &Claim{Worker: "worker", Generation: 1}}
+	worker := &Worker{
+		Store: store, Scanner: scanner, Decryptor: &fakeDecryptor{}, Artifacts: fakeArtifacts{},
+		ID: "worker", Lease: time.Minute, Interval: 10 * time.Second,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+	select {
+	case <-calls:
+	case <-time.After(time.Second):
+		t.Fatal("first scan did not run")
+	}
+	select {
+	case <-calls:
+		// A fixed polling delay would make this wait ten seconds.
+	case <-time.After(2 * time.Second):
+		t.Fatal("full batch did not trigger immediate continuation")
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("worker cancellation mismatch: %v", err)
+	}
+	if store.completed != 1 || store.released != 1 {
+		t.Fatalf("unexpected rounds: completed=%d released=%d", store.completed, store.released)
 	}
 }
 
