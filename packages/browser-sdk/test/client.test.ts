@@ -2303,3 +2303,358 @@ test('encrypted content rejects malformed chunks before queue allocation', () =>
   assert.equal(client.pending, 0);
   client.destroy();
 });
+
+test('bulk encrypted admission is atomic and drains more than four batches to own outcomes', async () => {
+  const token = 't'.repeat(32);
+  const cfg: PublicConfig = {
+    ...encryptedContentConfig(7),
+    telemetry_token: token,
+    telemetry_expires_at: '2026-11-09T13:00:00Z',
+  };
+  const seenHeaders: string[] = [];
+  const { client, bodies } = setupAuto(
+    (body, init) => {
+      seenHeaders.push((init.headers as Record<string, string>)['X-Evia-Telemetry']!);
+      return receipt(body);
+    },
+    { maxBatchEvents: 2 },
+    cfg,
+  );
+  const chunks = Array.from({ length: 11 }, (_, index) =>
+    encryptedChunk({ itemId: `item-${index}` }),
+  );
+  const emissions = client.emitEncryptedContentChunks(chunks);
+  assert.equal(client.pending, 11);
+  const result = await client.drainUntilSettled(emissions, { timeoutMs: 5000 });
+
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.reason, 'settled');
+  assert.equal(result.rounds, 2);
+  assert.equal(result.pendingEventIds.length, 0);
+  assert.equal(result.outcomes.length, emissions.length);
+  assert.throws(() => {
+    (result.outcomes[0] as any).status = 'rejected';
+  });
+  assert.deepEqual(
+    bodies.map((body) => (JSON.parse(body) as Body).events.length),
+    [2, 2, 2, 2, 2, 1],
+  );
+  assert.deepEqual(
+    bodies.flatMap((body) => (JSON.parse(body) as Body).events.map((event) => event.event_id)),
+    emissions.map((emission) => emission.eventId),
+  );
+  assert.ok(seenHeaders.every((value) => value === token));
+  assert.ok(
+    bodies.every((body) =>
+      (JSON.parse(body) as Body).events.every((event) => event.release_revision === 7),
+    ),
+  );
+  client.destroy();
+});
+
+test('bulk admission rejects queue pressure without enqueuing a hidden prefix', async () => {
+  const { client } = setupAuto(
+    (body) => receipt(body),
+    { maxQueueEvents: 3 },
+    encryptedContentConfig(),
+  );
+  await client.init();
+  const unrelated = client.emit('page_opened');
+  assert.throws(
+    () =>
+      client.emitEncryptedContentChunks(
+        Array.from({ length: 3 }, (_, index) => encryptedChunk({ itemId: `full-${index}` })),
+      ),
+    (error) => error instanceof EviaSDKError && error.code === 'QUEUE_FULL',
+  );
+  assert.equal(client.pending, 1);
+  const admitted = client.emitEncryptedContentChunks([
+    encryptedChunk({ itemId: 'fit-1' }),
+    encryptedChunk({ itemId: 'fit-2' }),
+  ]);
+  const result = await client.drainUntilSettled(admitted);
+  assert.equal(result.status, 'accepted');
+  assert.equal((await unrelated.result).status, 'accepted');
+  client.destroy();
+
+  const bytes = setupAuto(
+    (body) => receipt(body),
+    { maxQueueEvents: 10, maxQueueBytes: 8192 },
+    encryptedContentConfig(),
+  );
+  assert.throws(
+    () =>
+      bytes.client.emitEncryptedContentChunks(
+        Array.from({ length: 4 }, (_, index) =>
+          encryptedChunk({
+            itemId: `byte-${index}`,
+            ciphertext: 'a'.repeat(1024),
+            wrappedKey: 'b'.repeat(1024),
+          }),
+        ),
+      ),
+    (error) => error instanceof EviaSDKError && error.code === 'QUEUE_FULL',
+  );
+  assert.equal(bytes.client.pending, 0);
+  const sparse = new Array<EncryptedContentChunk>(1);
+  assert.throws(
+    () => bytes.client.emitEncryptedContentChunks(sparse),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_BULK_SIZE',
+  );
+  assert.equal(bytes.client.pending, 0);
+  bytes.client.destroy();
+
+  const idle = setupAuto(
+    (body) => receipt(body),
+    { maxQueueEvents: 2, autoSessionEnd: true, sessionTimeoutMs: 60000 },
+    encryptedContentConfig(),
+  );
+  await idle.client.init();
+  idle.client.emit('page_opened');
+  idle.clock.time += 60000;
+  assert.throws(
+    () =>
+      idle.client.emitEncryptedContentChunks([
+        encryptedChunk({ itemId: 'idle-1' }),
+        encryptedChunk({ itemId: 'idle-2' }),
+      ]),
+    (error) => error instanceof EviaSDKError && error.code === 'QUEUE_FULL',
+  );
+  assert.equal(idle.client.pending, 1, 'failed admission must not enqueue an idle session end');
+  idle.client.destroy();
+});
+
+test('bulk drain max-round policy returns only its still-pending handles', async () => {
+  const { client } = setupAuto(
+    (body) => receipt(body),
+    { maxBatchEvents: 2 },
+    encryptedContentConfig(),
+  );
+  const emissions = client.emitEncryptedContentChunks(
+    Array.from({ length: 9 }, (_, index) => encryptedChunk({ itemId: `round-${index}` })),
+  );
+  const bounded = await client.drainUntilSettled(emissions, { maxRounds: 1 });
+  assert.equal(bounded.status, 'incomplete');
+  assert.equal(bounded.reason, 'max_rounds');
+  assert.equal(bounded.outcomes.length, 8);
+  assert.deepEqual(bounded.pendingEventIds, [emissions[8]!.eventId]);
+  assert.equal(client.pending, 1);
+
+  const resumed = await client.drainUntilSettled(emissions);
+  assert.equal(resumed.status, 'accepted');
+  assert.equal(resumed.outcomes.length, 9);
+  client.destroy();
+});
+
+test('bulk drain honors Retry-After and does not consume rounds while throttled', async () => {
+  let calls = 0;
+  const { client, clock, bodies } = setupAuto(
+    (body) =>
+      ++calls === 1
+        ? new Response(null, { status: 429, headers: { 'Retry-After': '2' } })
+        : receipt(body),
+    {},
+    encryptedContentConfig(),
+  );
+  const emissions = client.emitEncryptedContentChunks([encryptedChunk()]);
+  const draining = client.drainUntilSettled(emissions, { timeoutMs: 5000, maxRounds: 4 });
+  await pump();
+  assert.equal(bodies.length, 1);
+  await clock.advance(1999);
+  assert.equal(bodies.length, 1);
+  await clock.advance(1);
+  const result = await draining;
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.reason, 'settled');
+  assert.equal(result.rounds, 2);
+  assert.equal(bodies.length, 2);
+  client.destroy();
+});
+
+test('bulk drain never accepts an ambiguous then definitive failure', async () => {
+  let calls = 0;
+  const { client, clock, bodies } = setupAuto(
+    (body) =>
+      ++calls === 1
+        ? json({ batch_id: body.batch_id, receipt_id: receiptId, results: [] }, 202)
+        : new Response(null, { status: 400 }),
+    { maxAttempts: 2 },
+    encryptedContentConfig(),
+  );
+  const emissions = client.emitEncryptedContentChunks([encryptedChunk()]);
+  const draining = client.drainUntilSettled(emissions, { timeoutMs: 1000 });
+  await pump();
+  await clock.advance(10);
+  const result = await draining;
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.reason, 'settled');
+  assert.equal(result.pendingEventIds.length, 0);
+  assert.equal(result.outcomes[0]!.status, 'uncertain');
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0], bodies[1]);
+  client.destroy();
+});
+
+test('bulk drain timeout and cancellation retain pending queue work', async () => {
+  const timed = setupAuto(
+    () => new Response(null, { status: 429, headers: { 'Retry-After': '2' } }),
+    {},
+    encryptedContentConfig(),
+  );
+  const timedEmissions = timed.client.emitEncryptedContentChunks([encryptedChunk()]);
+  const timingOut = timed.client.drainUntilSettled(timedEmissions, { timeoutMs: 50 });
+  await pump();
+  await timed.clock.advance(50);
+  const timedResult = await timingOut;
+  assert.equal(timedResult.status, 'incomplete');
+  assert.equal(timedResult.reason, 'deadline');
+  assert.deepEqual(timedResult.pendingEventIds, [timedEmissions[0]!.eventId]);
+  assert.equal(timed.client.pending, 1);
+  timed.client.destroy();
+
+  const cancelled = setupAuto(() => new Promise<Response>(() => {}), {}, encryptedContentConfig());
+  const cancelledEmissions = cancelled.client.emitEncryptedContentChunks([encryptedChunk()]);
+  const controller = new AbortController();
+  const cancelling = cancelled.client.drainUntilSettled(cancelledEmissions, {
+    timeoutMs: 1000,
+    signal: controller.signal,
+  });
+  await pump();
+  controller.abort();
+  const cancelledResult = await cancelling;
+  assert.equal(cancelledResult.status, 'incomplete');
+  assert.equal(cancelledResult.reason, 'aborted');
+  assert.deepEqual(cancelledResult.pendingEventIds, [cancelledEmissions[0]!.eventId]);
+  assert.equal(cancelled.client.pending, 1);
+  cancelled.client.destroy();
+});
+
+test('concurrent bulk drains coalesce collection flights without losing either caller', async () => {
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { maxBatchEvents: 1 },
+    encryptedContentConfig(),
+  );
+  const emissions = client.emitEncryptedContentChunks(
+    Array.from({ length: 6 }, (_, index) => encryptedChunk({ itemId: `concurrent-${index}` })),
+  );
+  const [first, second] = await Promise.all([
+    client.drainUntilSettled(emissions.slice(0, 3)),
+    client.drainUntilSettled(emissions.slice(3)),
+  ]);
+  assert.equal(first.status, 'accepted');
+  assert.equal(second.status, 'accepted');
+  assert.equal(bodies.length, 6);
+  assert.equal(
+    new Set(bodies.map((body) => (JSON.parse(body) as Body).events[0]!.event_id)).size,
+    6,
+  );
+  client.destroy();
+});
+
+test('bulk drain success is scoped to provided emissions and retains unrelated retries', async () => {
+  const { client } = setupAuto(
+    (body) =>
+      body.events[0]!.event_key === 'sys.content_chunk'
+        ? receipt(body)
+        : new Response(null, { status: 429, headers: { 'Retry-After': '2' } }),
+    { maxBatchEvents: 1 },
+    encryptedContentConfig(),
+  );
+  const own = client.emitEncryptedContentChunks([encryptedChunk()]);
+  const unrelated = client.emit('page_opened');
+  const result = await client.drainUntilSettled(own, { timeoutMs: 1000 });
+  assert.equal(result.status, 'accepted');
+  assert.deepEqual(
+    result.outcomes.map((outcome) => outcome.eventId),
+    [own[0]!.eventId],
+  );
+  assert.equal(client.pending, 1);
+  let unrelatedSettled = false;
+  void unrelated.result.then(() => {
+    unrelatedSettled = true;
+  });
+  await pump();
+  assert.equal(unrelatedSettled, false);
+  client.destroy();
+});
+
+test('persisted bulk queue survives reload with stable ids and retry state', async () => {
+  const storage = new MapStorage();
+  const first = setupAuto(
+    () => new Response(null, { status: 503 }),
+    { storage, persistQueue: true, maxAttempts: 2 },
+    encryptedContentConfig(),
+  );
+  await first.client.init();
+  const emissions = first.client.emitEncryptedContentChunks([
+    encryptedChunk({ itemId: 'persist-1' }),
+    encryptedChunk({ itemId: 'persist-2' }),
+  ]);
+  await pump();
+  await first.client.flush();
+  const afterAttempt = JSON.parse(storage.read(queueStorageKey)!);
+  assert.deepEqual(
+    afterAttempt.entries.map((entry: any) => [entry.eventId, entry.attempts, entry.ambiguous]),
+    emissions.map((emission) => [emission.eventId, 1, true]),
+  );
+
+  const second = setupAuto(
+    (body) => receipt(body),
+    { storage, persistQueue: true, maxAttempts: 2 },
+    encryptedContentConfig(),
+  );
+  assert.equal(second.client.pending, 2);
+  await second.client.init();
+  await pump();
+  await second.client.flush();
+  const delivered = second.bodies.flatMap((body) =>
+    (JSON.parse(body) as Body).events.map((event) => event.event_id),
+  );
+  assert.deepEqual(
+    delivered,
+    emissions.map((emission) => emission.eventId),
+  );
+  assert.equal(JSON.parse(storage.read(queueStorageKey)!).entries.length, 0);
+  second.client.destroy();
+});
+
+test('reload never exceeds max attempts after an in-flight persisted submission', async () => {
+  const storage = new MapStorage();
+  let complete!: (response: Response) => void;
+  const first = setupAuto(
+    () =>
+      new Promise<Response>((resolve) => {
+        complete = resolve;
+      }),
+    { storage, persistQueue: true, maxAttempts: 1 },
+    encryptedContentConfig(),
+  );
+  await first.client.init();
+  const emissions = first.client.emitEncryptedContentChunks([encryptedChunk()]);
+  const firstFlush = first.client.flush();
+  await pump();
+  assert.equal(first.bodies.length, 1);
+  const inFlight = JSON.parse(storage.read(queueStorageKey)!);
+  assert.equal(inFlight.entries[0].eventId, emissions[0]!.eventId);
+  assert.equal(inFlight.entries[0].attempts, 1);
+  assert.equal(inFlight.entries[0].ambiguous, true);
+  assert.equal(inFlight.entries[0].retryCode, 'RETRY_EXHAUSTED');
+
+  const second = setupAuto(
+    (body) => receipt(body),
+    { storage, persistQueue: true, maxAttempts: 1 },
+    encryptedContentConfig(),
+  );
+  assert.equal(second.client.pending, 1);
+  await second.client.init();
+  await pump();
+  await second.client.flush();
+  assert.equal(second.bodies.length, 0, 'the reloaded client must not submit a second attempt');
+  assert.equal(second.client.pending, 0);
+  assert.equal(JSON.parse(storage.read(queueStorageKey)!).entries.length, 0);
+
+  complete(receipt(JSON.parse(first.bodies[0]!) as Body));
+  await firstFlush;
+  second.client.destroy();
+});

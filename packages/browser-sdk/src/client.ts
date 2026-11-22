@@ -1,6 +1,9 @@
 import type {
   BrowserClient,
   ClientOptions,
+  DrainUntilSettledOptions,
+  DrainUntilSettledReason,
+  DrainUntilSettledResult,
   Emission,
   EncryptedContentChunk,
   Envelope,
@@ -154,6 +157,8 @@ interface Entry {
   json?: string;
   attempts: number;
   ambiguous: boolean;
+  retryCode?: string;
+  retryReceiptId?: string;
   settle(outcome: EventOutcome): void;
 }
 interface Batch {
@@ -173,6 +178,8 @@ interface PersistedEntry {
   bytes: number;
   attempts: number;
   ambiguous: boolean;
+  retryCode?: string;
+  retryReceiptId?: string;
   json?: string;
 }
 interface PersistedQueue {
@@ -197,8 +204,16 @@ function isPersistedEntry(value: unknown): value is PersistedEntry {
     typeof candidate.bytes === 'number' &&
     candidate.bytes > 0 &&
     typeof candidate.attempts === 'number' &&
+    Number.isSafeInteger(candidate.attempts) &&
     candidate.attempts >= 0 &&
     typeof candidate.ambiguous === 'boolean' &&
+    (candidate.retryCode === undefined ||
+      (typeof candidate.retryCode === 'string' &&
+        candidate.retryCode.length <= 128 &&
+        /^[A-Z][A-Z0-9_]+$/.test(candidate.retryCode))) &&
+    (candidate.retryReceiptId === undefined ||
+      (typeof candidate.retryReceiptId === 'string' &&
+        uuidPattern.test(candidate.retryReceiptId))) &&
     (candidate.json === undefined || typeof candidate.json === 'string')
   );
 }
@@ -258,6 +273,66 @@ function freezeConfig(config: PublicConfig): PublicConfig {
   return config;
 }
 
+function encryptedContentProperties(chunk: EncryptedContentChunk): Properties {
+  if (chunk === null || typeof chunk !== 'object')
+    throw new EviaSDKError('INVALID_ENCRYPTED_CONTENT_CHUNK');
+  for (const [value, bound] of [
+    [chunk.contentType, 64],
+    [chunk.streamId, 128],
+    [chunk.itemId, 128],
+    [chunk.actorType, 32],
+    [chunk.keyId, 64],
+  ] as const)
+    requireText(value, bound, true);
+  const encoded = /^[A-Za-z0-9_-]+$/;
+  if (
+    !Number.isInteger(chunk.chunkIndex) ||
+    !Number.isInteger(chunk.chunkCount) ||
+    chunk.chunkCount < 1 ||
+    chunk.chunkCount > 32 ||
+    chunk.chunkIndex < 0 ||
+    chunk.chunkIndex >= chunk.chunkCount ||
+    !encoded.test(chunk.ciphertext) ||
+    chunk.ciphertext.length > 1024 ||
+    !encoded.test(chunk.nonce) ||
+    chunk.nonce.length > 64 ||
+    !encoded.test(chunk.wrappedKey) ||
+    chunk.wrappedKey.length > 1024 ||
+    chunk.alg !== 'A256GCM+RSA-OAEP-256' ||
+    chunk.aadVersion !== 'evia-content-v1' ||
+    chunk.padding !== 'fixed-600-v1' ||
+    !Number.isInteger(chunk.contentLength) ||
+    chunk.contentLength < 1 ||
+    chunk.contentLength > 1_000_000 ||
+    typeof chunk.truncated !== 'boolean' ||
+    (chunk.status !== undefined &&
+      (typeof chunk.status !== 'string' || chunk.status.length > 32)) ||
+    (chunk.durationMs !== undefined &&
+      (!Number.isInteger(chunk.durationMs) || chunk.durationMs < 0 || chunk.durationMs > 3_600_000))
+  )
+    throw new EviaSDKError('INVALID_ENCRYPTED_CONTENT_CHUNK');
+  const properties: Record<string, string | number | boolean> = {
+    content_type: chunk.contentType,
+    stream_id: chunk.streamId,
+    item_id: chunk.itemId,
+    actor_type: chunk.actorType,
+    chunk_index: chunk.chunkIndex,
+    chunk_count: chunk.chunkCount,
+    ciphertext: chunk.ciphertext,
+    nonce: chunk.nonce,
+    wrapped_key: chunk.wrappedKey,
+    key_id: chunk.keyId,
+    alg: chunk.alg,
+    aad_version: chunk.aadVersion,
+    padding: chunk.padding,
+    content_length: chunk.contentLength,
+    truncated: chunk.truncated,
+  };
+  if (chunk.status) properties.status = chunk.status;
+  if (chunk.durationMs !== undefined) properties.duration_ms = chunk.durationMs;
+  return properties;
+}
+
 export function createEviaClient(options: ClientOptions): BrowserClient {
   return new Client(options);
 }
@@ -306,6 +381,7 @@ class Client implements BrowserClient {
   private queue: Entry[] = [];
   private queueBytes = 0;
   private batch?: Batch;
+  private readonly ownedEmissions = new WeakSet<Emission>();
   private uid?: string;
   private anonymousId: string;
   private readonly tabId: string;
@@ -513,6 +589,8 @@ class Client implements BrowserClient {
             attempts: entry.attempts,
             ambiguous: entry.ambiguous,
           };
+          if (entry.retryCode !== undefined) persisted.retryCode = entry.retryCode;
+          if (entry.retryReceiptId !== undefined) persisted.retryReceiptId = entry.retryReceiptId;
           if (entry.json !== undefined) persisted.json = entry.json;
           return persisted;
         }),
@@ -555,6 +633,8 @@ class Client implements BrowserClient {
         bytes: item.bytes,
         attempts: item.attempts,
         ambiguous: item.ambiguous,
+        retryCode: item.retryCode,
+        retryReceiptId: item.retryReceiptId,
         json: item.json,
         // The original emitter no longer exists after a reload; the outcome is
         // observable only through delivery and the collector receipt.
@@ -672,63 +752,141 @@ class Client implements BrowserClient {
   // from leaking into the platform event contract.
   emitEncryptedContentChunk(chunk: EncryptedContentChunk): Emission {
     this.assertEnabled();
-    for (const [value, bound] of [
-      [chunk.contentType, 64],
-      [chunk.streamId, 128],
-      [chunk.itemId, 128],
-      [chunk.actorType, 32],
-      [chunk.keyId, 64],
-    ] as const)
-      requireText(value, bound, true);
-    const encoded = /^[A-Za-z0-9_-]+$/;
-    if (
-      !Number.isInteger(chunk.chunkIndex) ||
-      !Number.isInteger(chunk.chunkCount) ||
-      chunk.chunkCount < 1 ||
-      chunk.chunkCount > 32 ||
-      chunk.chunkIndex < 0 ||
-      chunk.chunkIndex >= chunk.chunkCount ||
-      !encoded.test(chunk.ciphertext) ||
-      chunk.ciphertext.length > 1024 ||
-      !encoded.test(chunk.nonce) ||
-      chunk.nonce.length > 64 ||
-      !encoded.test(chunk.wrappedKey) ||
-      chunk.wrappedKey.length > 1024 ||
-      chunk.alg !== 'A256GCM+RSA-OAEP-256' ||
-      chunk.aadVersion !== 'evia-content-v1' ||
-      chunk.padding !== 'fixed-600-v1' ||
-      !Number.isInteger(chunk.contentLength) ||
-      chunk.contentLength < 1 ||
-      chunk.contentLength > 1_000_000 ||
-      typeof chunk.truncated !== 'boolean' ||
-      (chunk.status !== undefined &&
-        (typeof chunk.status !== 'string' || chunk.status.length > 32)) ||
-      (chunk.durationMs !== undefined &&
-        (!Number.isInteger(chunk.durationMs) ||
-          chunk.durationMs < 0 ||
-          chunk.durationMs > 3_600_000))
-    )
-      throw new EviaSDKError('INVALID_ENCRYPTED_CONTENT_CHUNK');
-    const properties: Record<string, string | number | boolean> = {
-      content_type: chunk.contentType,
-      stream_id: chunk.streamId,
-      item_id: chunk.itemId,
-      actor_type: chunk.actorType,
-      chunk_index: chunk.chunkIndex,
-      chunk_count: chunk.chunkCount,
-      ciphertext: chunk.ciphertext,
-      nonce: chunk.nonce,
-      wrapped_key: chunk.wrappedKey,
-      key_id: chunk.keyId,
-      alg: chunk.alg,
-      aad_version: chunk.aadVersion,
-      padding: chunk.padding,
-      content_length: chunk.contentLength,
-      truncated: chunk.truncated,
-    };
-    if (chunk.status) properties.status = chunk.status;
-    if (chunk.durationMs !== undefined) properties.duration_ms = chunk.durationMs;
-    return this.enqueue(encryptedContentEventKey, properties, {});
+    return this.enqueue(encryptedContentEventKey, encryptedContentProperties(chunk), {});
+  }
+
+  // emitEncryptedContentChunks validates and reserves the complete list before
+  // mutating the queue. This all-or-none admission avoids losing a suffix when a
+  // high-volume producer reaches either queue bound partway through a loop.
+  emitEncryptedContentChunks(chunks: readonly EncryptedContentChunk[]): readonly Emission[] {
+    this.assertEnabled();
+    if (!Array.isArray(chunks) || chunks.length < 1 || chunks.length > this.maxQueueEvents)
+      throw new EviaSDKError('INVALID_BULK_SIZE');
+    for (let index = 0; index < chunks.length; index++)
+      if (!Object.prototype.hasOwnProperty.call(chunks, index))
+        throw new EviaSDKError('INVALID_BULK_SIZE');
+    const properties = chunks.map((chunk) => copyProperties(encryptedContentProperties(chunk)));
+    const createdAt = this.clock.now();
+    const rotatesSession =
+      createdAt - this.lastActivity >= this.sessionTimeout || createdAt < this.lastActivity;
+    const automaticEntries = rotatesSession && this.autoSessionEnd ? 1 : 0;
+    if (this.queue.length + properties.length + automaticEntries > this.maxQueueEvents)
+      throw new EviaSDKError('QUEUE_FULL');
+    if (this.sequence > Number.MAX_SAFE_INTEGER - properties.length - automaticEntries)
+      throw new EviaSDKError('SEQUENCE_EXHAUSTED');
+
+    // Reserve before touchSession(), whose optional idle session-end emission is
+    // observable. UUIDs have fixed width and an idle rotation only shortens page
+    // context, so this maximum-sequence envelope is a conservative byte preflight.
+    let preflightBytes = automaticEntries
+      ? byteLength(
+          JSON.stringify({
+            event_id: '00000000-0000-4000-8000-000000000000',
+            event_key: sessionEndEventKey,
+            occurred_at: new Date(createdAt).toISOString(),
+            identity: {
+              anonymous_id: this.anonymousId,
+              ...(this.uid === undefined ? {} : { uid: this.uid }),
+            },
+            context: { ...this.page, sequence: Number.MAX_SAFE_INTEGER },
+            sdk: { name: 'evia-browser', version: '0.1.0' },
+            properties: { reason: 'idle' },
+            schema_version: Number.MAX_SAFE_INTEGER,
+            release_revision: Number.MAX_SAFE_INTEGER,
+          }),
+        )
+      : 0;
+    for (const item of properties) {
+      const bytes = byteLength(
+        JSON.stringify({
+          event_id: '00000000-0000-4000-8000-000000000000',
+          event_key: encryptedContentEventKey,
+          occurred_at: new Date(createdAt).toISOString(),
+          identity: {
+            anonymous_id: this.anonymousId,
+            ...(this.uid === undefined ? {} : { uid: this.uid }),
+          },
+          context: { ...this.page, sequence: Number.MAX_SAFE_INTEGER },
+          sdk: { name: 'evia-browser', version: '0.1.0' },
+          properties: item,
+          schema_version: Number.MAX_SAFE_INTEGER,
+          release_revision: Number.MAX_SAFE_INTEGER,
+        }),
+      );
+      if (bytes > 8192) throw new EviaSDKError('EVENT_TOO_LARGE');
+      preflightBytes += bytes;
+    }
+    if (this.queueBytes + preflightBytes > this.maxQueueBytes) throw new EviaSDKError('QUEUE_FULL');
+    this.touchSession();
+    const entries: Entry[] = [];
+    const emissions: Emission[] = [];
+    let addedBytes = 0;
+    for (let index = 0; index < properties.length; index++) {
+      const eventId = this.uuid();
+      const draft: Entry['draft'] = {
+        event_id: eventId,
+        event_key: encryptedContentEventKey,
+        occurred_at: new Date(createdAt).toISOString(),
+        identity: {
+          anonymous_id: this.anonymousId,
+          ...(this.uid === undefined ? {} : { uid: this.uid }),
+        },
+        context: { ...this.page, sequence: this.sequence + index + 1 },
+        sdk: { name: 'evia-browser', version: '0.1.0' },
+        properties: properties[index]!,
+      };
+      const bytes = byteLength(
+        JSON.stringify({
+          ...draft,
+          schema_version: Number.MAX_SAFE_INTEGER,
+          release_revision: Number.MAX_SAFE_INTEGER,
+        }),
+      );
+      if (bytes > 8192) throw new EviaSDKError('EVENT_TOO_LARGE');
+      addedBytes += bytes;
+      if (this.queueBytes + addedBytes > this.maxQueueBytes) throw new EviaSDKError('QUEUE_FULL');
+      let settle!: Entry['settle'];
+      const result = new Promise<EventOutcome>((resolve) => {
+        settle = resolve;
+      });
+      entries.push({
+        eventId,
+        draft,
+        createdAt,
+        bytes,
+        attempts: 0,
+        ambiguous: false,
+        settle,
+      });
+      const emission = Object.freeze({ eventId, result });
+      this.ownedEmissions.add(emission);
+      emissions.push(emission);
+    }
+
+    this.sequence += entries.length;
+    this.persistSessionState();
+    this.queue.push(...entries);
+    this.queueBytes += addedBytes;
+    this.persistQueueState();
+    this.schedule(this.maxAge);
+    const generation = this.generation;
+    void this.init()
+      .then(() => {
+        if (generation !== this.generation || !this.enabled) return;
+        this.resolveQueuedEntries();
+      })
+      .catch((error: unknown) => {
+        if (generation !== this.generation) return;
+        for (const entry of entries)
+          if (this.queue.includes(entry))
+            this.finish(
+              entry,
+              'dropped',
+              error instanceof EviaSDKError ? error.code : 'CONFIG_UNAVAILABLE',
+              true,
+            );
+      });
+    return Object.freeze(emissions);
   }
 
   // reportOperationFailure enqueues one reserved sys.operation_failed event. The
@@ -827,7 +985,9 @@ class Client implements BrowserClient {
             true,
           );
       });
-    return Object.freeze({ eventId, result });
+    const emission = Object.freeze({ eventId, result });
+    this.ownedEmissions.add(emission);
+    return emission;
   }
 
   identify(uid: string): void {
@@ -1093,14 +1253,16 @@ class Client implements BrowserClient {
       this.timer = undefined;
       this.timerAt = Infinity;
     }
-    entry.settle({
-      eventId: entry.eventId,
-      status,
-      attempts: entry.attempts,
-      ...(code ? { code } : {}),
-      ...(retryable === undefined ? {} : { retryable }),
-      ...(receiptId ? { receiptId } : {}),
-    });
+    entry.settle(
+      Object.freeze({
+        eventId: entry.eventId,
+        status,
+        attempts: entry.attempts,
+        ...(code ? { code } : {}),
+        ...(retryable === undefined ? {} : { retryable }),
+        ...(receiptId ? { receiptId } : {}),
+      }),
+    );
   }
 
   private schedule(delay: number): void {
@@ -1140,6 +1302,179 @@ class Client implements BrowserClient {
     return flight;
   }
 
+  async drainUntilSettled(
+    emissions: readonly Emission[],
+    options: DrainUntilSettledOptions = {},
+  ): Promise<DrainUntilSettledResult> {
+    if (!Array.isArray(emissions) || emissions.length < 1 || emissions.length > 1000)
+      throw new EviaSDKError('INVALID_EMISSIONS');
+    const seen = new Set<string>();
+    for (const emission of emissions) {
+      if (
+        emission === null ||
+        typeof emission !== 'object' ||
+        !this.ownedEmissions.has(emission) ||
+        !uuidPattern.test(emission.eventId) ||
+        seen.has(emission.eventId) ||
+        !emission.result ||
+        typeof emission.result.then !== 'function'
+      )
+        throw new EviaSDKError('INVALID_EMISSIONS');
+      seen.add(emission.eventId);
+    }
+    const timeout = boundedInteger(options.timeoutMs, this.maxAge, 1, 55 * 60 * 1000);
+    const maxRounds = boundedInteger(options.maxRounds, 1024, 1, 4096);
+    if (
+      options.signal !== undefined &&
+      (typeof options.signal.aborted !== 'boolean' ||
+        typeof options.signal.addEventListener !== 'function' ||
+        typeof options.signal.removeEventListener !== 'function')
+    )
+      throw new EviaSDKError('INVALID_OPTION');
+    const deadline = this.clock.now() + timeout;
+    const outcomes: (EventOutcome | undefined)[] = Array(emissions.length).fill(undefined);
+    let invalidResult: unknown;
+    let wakeWaiter: (() => void) | undefined;
+    const observers = emissions.map((emission, index) =>
+      emission.result.then(
+        (outcome: EventOutcome) => {
+          if (
+            outcome === null ||
+            typeof outcome !== 'object' ||
+            outcome.eventId !== emission.eventId ||
+            !['accepted', 'rejected', 'dropped', 'uncertain'].includes(outcome.status) ||
+            !Number.isSafeInteger(outcome.attempts) ||
+            outcome.attempts < 0
+          )
+            invalidResult = new EviaSDKError('INVALID_EMISSION_RESULT');
+          else outcomes[index] = Object.freeze({ ...outcome });
+          wakeWaiter?.();
+        },
+        (error: unknown) => {
+          invalidResult =
+            error instanceof Error ? error : new EviaSDKError('INVALID_EMISSION_RESULT');
+          wakeWaiter?.();
+        },
+      ),
+    );
+    // Every observer handles both fulfillment and rejection, so none can become
+    // an unhandled promise when a timeout/cancellation returns before settlement.
+    void observers;
+
+    const snapshot = (reason: DrainUntilSettledReason, rounds: number): DrainUntilSettledResult => {
+      const settled = outcomes.filter((outcome): outcome is EventOutcome => outcome !== undefined);
+      const pendingEventIds = emissions
+        .filter((_, index) => outcomes[index] === undefined)
+        .map((emission) => emission.eventId);
+      const status =
+        pendingEventIds.length === 0 && settled.every((outcome) => outcome.status === 'accepted')
+          ? 'accepted'
+          : 'incomplete';
+      return Object.freeze({
+        status,
+        reason,
+        rounds,
+        outcomes: Object.freeze(settled),
+        pendingEventIds: Object.freeze(pendingEventIds),
+      });
+    };
+
+    const runBounded = <T>(operation: Promise<T>): Promise<'completed' | 'deadline' | 'aborted'> =>
+      new Promise((resolve) => {
+        let done = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const finish = (result: 'completed' | 'deadline' | 'aborted') => {
+          if (done) return;
+          done = true;
+          if (timer !== undefined) this.clock.clearTimeout(timer);
+          options.signal?.removeEventListener('abort', abort);
+          resolve(result);
+        };
+        const abort = () => finish('aborted');
+        if (options.signal?.aborted) {
+          finish('aborted');
+          return;
+        }
+        options.signal?.addEventListener('abort', abort, { once: true });
+        timer = this.clock.setTimeout(
+          () => finish('deadline'),
+          Math.max(0, deadline - this.clock.now()),
+        );
+        void operation.then(
+          () => finish('completed'),
+          () => finish('completed'),
+        );
+      });
+
+    const waitUntil = (until: number): Promise<'changed' | 'timer' | 'aborted'> =>
+      new Promise((resolve) => {
+        let done = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const finish = (result: 'changed' | 'timer' | 'aborted') => {
+          if (done) return;
+          done = true;
+          wakeWaiter = undefined;
+          if (timer !== undefined) this.clock.clearTimeout(timer);
+          options.signal?.removeEventListener('abort', abort);
+          resolve(result);
+        };
+        const abort = () => finish('aborted');
+        if (options.signal?.aborted) {
+          finish('aborted');
+          return;
+        }
+        wakeWaiter = () => finish('changed');
+        options.signal?.addEventListener('abort', abort, { once: true });
+        timer = this.clock.setTimeout(() => finish('timer'), Math.max(0, until - this.clock.now()));
+      });
+
+    await Promise.resolve();
+    if (invalidResult) throw invalidResult;
+    if (outcomes.every((outcome) => outcome !== undefined)) return snapshot('settled', 0);
+    if (options.signal?.aborted) return snapshot('aborted', 0);
+
+    // Wait for the single-flight configuration request started by emit(). This
+    // avoids consuming the round budget while envelopes are not yet sendable.
+    const initialized = this.init().catch(() => undefined);
+    const initialization = await runBounded(initialized);
+    await Promise.resolve();
+    if (invalidResult) throw invalidResult;
+    if (initialization !== 'completed') return snapshot(initialization, 0);
+
+    let rounds = 0;
+    while (true) {
+      if (invalidResult) throw invalidResult;
+      if (outcomes.every((outcome) => outcome !== undefined)) return snapshot('settled', rounds);
+      if (options.signal?.aborted) return snapshot('aborted', rounds);
+      if (this.clock.now() >= deadline) return snapshot('deadline', rounds);
+      if (rounds >= maxRounds) return snapshot('max_rounds', rounds);
+
+      rounds++;
+      const turn = await runBounded(this.flush());
+      await Promise.resolve();
+      if (invalidResult) throw invalidResult;
+      if (turn !== 'completed') return snapshot(turn, rounds);
+      if (outcomes.every((outcome) => outcome !== undefined)) return snapshot('settled', rounds);
+      if (rounds >= maxRounds) return snapshot('max_rounds', rounds);
+
+      const pendingIds = new Set(
+        emissions
+          .filter((_, index) => outcomes[index] === undefined)
+          .map((emission) => emission.eventId),
+      );
+      const hasProvidedQueueEntry = this.queue.some((entry) => pendingIds.has(entry.eventId));
+      if (hasProvidedQueueEntry && this.nextAttempt <= this.clock.now()) continue;
+      const wakeAt = hasProvidedQueueEntry
+        ? Math.min(deadline, this.nextAttempt || this.clock.now() + this.flushInterval)
+        : deadline;
+      const waited = await waitUntil(wakeAt);
+      await Promise.resolve();
+      if (invalidResult) throw invalidResult;
+      if (waited === 'aborted') return snapshot('aborted', rounds);
+      if (this.clock.now() >= deadline) return snapshot('deadline', rounds);
+    }
+  }
+
   private makeBatch(): Batch | undefined {
     const entries: Entry[] = [];
     const id = this.uuid();
@@ -1171,12 +1506,35 @@ class Client implements BrowserClient {
             'EVENT_EXPIRED',
             false,
           );
+      // A persisted entry can return after the final attempt was submitted but
+      // before this document observed its response. Never exceed maxAttempts on
+      // reload; the pre-submission ambiguity marker keeps that result uncertain.
+      for (const entry of [...this.queue])
+        if (entry.attempts >= this.maxAttempts)
+          this.finish(
+            entry,
+            entry.ambiguous ? 'uncertain' : 'rejected',
+            entry.retryCode ?? 'RETRY_EXHAUSTED',
+            true,
+            entry.retryReceiptId,
+          );
       if (this.batch?.entries.some((entry) => !this.queue.includes(entry))) this.batch = undefined;
       if (!this.queue.length || now < this.nextAttempt) break;
       const batch = this.batch ?? this.makeBatch();
       if (!batch) break;
       this.batch = batch;
-      for (const entry of batch.entries) entry.attempts++;
+      const ambiguityBeforeAttempt = new Map<Entry, boolean>();
+      for (const entry of batch.entries) {
+        ambiguityBeforeAttempt.set(entry, entry.ambiguous);
+        entry.attempts++;
+        // If the page disappears after submission, no response can prove that
+        // the collector did not accept it. A conclusive response below restores
+        // the previous ambiguity before applying its own classification.
+        entry.ambiguous = true;
+        entry.retryCode = 'RETRY_EXHAUSTED';
+        entry.retryReceiptId = undefined;
+      }
+      this.persistQueueState();
       try {
         const answer = await this.transport.request(
           `${this.endpoint}/v1/collect`,
@@ -1216,9 +1574,14 @@ class Client implements BrowserClient {
         if (answer.receipt) {
           for (const result of answer.receipt.results) {
             const entry = batch.entries[result.index]!;
-            if (result.status === 'accepted')
+            entry.ambiguous = ambiguityBeforeAttempt.get(entry)!;
+            if (result.status === 'accepted') {
               this.finish(entry, 'accepted', undefined, undefined, answer.receipt.receipt_id);
-            else if (!result.error!.retryable)
+              continue;
+            }
+            entry.retryCode = result.error!.code;
+            entry.retryReceiptId = answer.receipt.receipt_id;
+            if (!result.error!.retryable)
               this.finish(
                 entry,
                 entry.ambiguous ? 'uncertain' : 'rejected',
@@ -1235,6 +1598,7 @@ class Client implements BrowserClient {
                 answer.receipt.receipt_id,
               );
           }
+          this.persistQueueState();
           this.batch = undefined;
           if (batch.entries.some((entry) => this.queue.includes(entry))) {
             this.defer(batch, answer.delay);
@@ -1252,15 +1616,18 @@ class Client implements BrowserClient {
           const ambiguous =
             status !== 429 && (status === 408 || status >= 500 || (status >= 200 && status < 300));
           for (const entry of batch.entries) {
-            entry.ambiguous ||= ambiguous;
+            entry.ambiguous = ambiguityBeforeAttempt.get(entry)! || ambiguous;
+            entry.retryCode = `COLLECT_HTTP_${status}`;
+            entry.retryReceiptId = undefined;
             if (!retryable || entry.attempts >= this.maxAttempts)
               this.finish(
                 entry,
                 entry.ambiguous ? 'uncertain' : 'rejected',
-                `COLLECT_HTTP_${status}`,
+                entry.retryCode,
                 retryable,
               );
           }
+          this.persistQueueState();
           if (!retryable || batch.entries.every((entry) => !this.queue.includes(entry)))
             this.batch = undefined;
           else {
@@ -1275,6 +1642,7 @@ class Client implements BrowserClient {
           if (entry.attempts >= this.maxAttempts)
             this.finish(entry, 'uncertain', 'RETRY_EXHAUSTED', true);
         }
+        this.persistQueueState();
         if (batch.entries.every((entry) => !this.queue.includes(entry))) this.batch = undefined;
         else {
           this.defer(batch);

@@ -132,6 +132,32 @@ The collector returns per-event receipts for HTTP 202, including mixed accepted/
 
 `flush()` resolves with `{pending}` after its bounded turn, not after guaranteed delivery. Event outcome promises provide the individual results. New emissions may continue during a flush within the queue limits. The default memory queue does not survive process termination or reload; an opt-in durable mirror is described below. Delivery retries can produce duplicate receipts; the server deduplicates stable source/event IDs in its exact read view.
 
+### Bounded bulk admission and outcome-scoped drain
+
+High-volume producers that already hold encrypted content chunks can admit a non-empty list atomically with `emitEncryptedContentChunks(chunks)`. The SDK validates every chunk and reserves the complete list against the same configured queue event/byte limits before appending anything. If the list is malformed, larger than `maxQueueEvents`, or does not fit the remaining queue budget, the call throws without enqueuing a hidden prefix. It returns one `Emission` per input in the same order and does not call `flush()` per item. Individual events still use the existing batch event/byte limits, stable IDs, immutable configuration revision, telemetry token, retry and persistence path.
+
+Use `drainUntilSettled(emissions, options)` with non-duplicate handles created by the same client to drive repeated normal flush turns beyond the four-batch `flush()` limit while observing only those handles:
+
+```ts
+const emissions = evia.emitEncryptedContentChunks(encryptedChunks);
+const delivery = await evia.drainUntilSettled(emissions, {
+  timeoutMs: 5 * 60_000,
+  maxRounds: 1024,
+  signal: abortController.signal,
+});
+
+if (delivery.status !== 'accepted') {
+  // Inspect delivery.outcomes and delivery.pendingEventIds; do not advance the
+  // producer checkpoint. Queued events remain eligible for normal delivery.
+}
+```
+
+`status: "accepted"` is returned only when every provided handle has settled with an `accepted` receipt. A provided `rejected`, `dropped` or `uncertain` outcome, or any still-pending handle, always produces `status: "incomplete"`. `reason` is `settled`, `deadline`, `max_rounds` or `aborted`; `settled` only means every handle completed and is not itself a success signal. `outcomes` contains settled provided handles in input order, while `pendingEventIds` contains only unsettled provided IDs—unrelated queue entries never affect or appear in the result.
+
+The default timeout is the client's `maxAgeMs` (at most 55 minutes). `maxRounds` defaults to 1024 and is bounded to 1–4096; each round retains the ordinary maximum of four collection batches. Retry delays, including visible `Retry-After` on 429, wait without consuming rounds. Concurrent drain callers share the existing collection single flight. Aborting or timing out cancels only that caller's wait: it does not abort a shared request, delete queue entries or reinterpret pending work as delivered.
+
+With `persistQueue`, bulk entries are mirrored in one queue snapshot and retain event IDs, attempt counts and ambiguity across reload. The originating page's JavaScript promises still cannot survive reload, so a new page can redeliver rehydrated entries but cannot recreate the old `Emission[]` or claim their outcome-scoped success; producer checkpoints must remain outside that lost page or be reconciled from downstream durable state.
+
 ## Durable queue persistence (opt-in)
 
 Set `persistQueue: true` to write-through the bounded event queue onto the injected storage port (the browser `localStorage` adapter by default, injectable for tests and absent under SSR) under a dedicated `...:queue` key separate from the anonymous identifier. The existing event/byte bounds still apply and every storage failure fails soft back to memory, so collection is never broken by an unavailable store.

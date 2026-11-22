@@ -188,6 +188,38 @@ export interface Emission {
   readonly result: Promise<EventOutcome>;
 }
 
+export interface DrainUntilSettledOptions {
+  /**
+   * Maximum wall-clock time spent driving this drain call. Defaults to the
+   * client's maxAgeMs and is bounded to 55 minutes. Reaching the timeout does
+   * not cancel or remove queued events; normal delivery may continue.
+   */
+  timeoutMs?: number;
+  /**
+   * Maximum number of bounded flush turns. Each turn retains flush()'s existing
+   * limit of four collection batches. Defaults to 1024 and is capped at 4096.
+   */
+  maxRounds?: number;
+  /**
+   * Cancels only this caller's wait. Shared requests and queued events are not
+   * aborted, so another caller or the normal scheduler can continue delivery.
+   */
+  signal?: AbortSignal;
+}
+
+export type DrainUntilSettledReason = 'settled' | 'deadline' | 'max_rounds' | 'aborted';
+
+export interface DrainUntilSettledResult {
+  /** accepted is returned only when every provided emission settled accepted. */
+  readonly status: 'accepted' | 'incomplete';
+  readonly reason: DrainUntilSettledReason;
+  readonly rounds: number;
+  /** Settled outcomes, in the same relative order as the provided emissions. */
+  readonly outcomes: readonly EventOutcome[];
+  /** Only provided emissions that had not settled when the bounded drain stopped. */
+  readonly pendingEventIds: readonly string[];
+}
+
 export type OperationErrorCategory = 'validation' | 'network' | 'timeout' | 'http' | 'business';
 
 /**
@@ -260,6 +292,13 @@ export interface BrowserClient {
   refreshConfig(): Promise<PublicConfig>;
   emit(eventKey: string, properties?: Properties, options?: EventOptions): Emission;
   emitEncryptedContentChunk(chunk: EncryptedContentChunk): Emission;
+  /** Atomically admits a non-empty list within the existing queue event/byte bounds. */
+  emitEncryptedContentChunks(chunks: readonly EncryptedContentChunk[]): readonly Emission[];
+  /** Repeatedly drives bounded flush turns and reports only the provided emissions. */
+  drainUntilSettled(
+    emissions: readonly Emission[],
+    options?: DrainUntilSettledOptions,
+  ): Promise<DrainUntilSettledResult>;
   reportOperationFailure(failure: OperationFailure): Emission;
   identify(uid: string): void;
   reset(): void;
