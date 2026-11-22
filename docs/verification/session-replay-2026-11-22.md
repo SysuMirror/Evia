@@ -16,10 +16,10 @@
 newSSE `src/analytics/replay.ts`：
 
 - 按环境配置采样，采样决定与 replay stream 固定在 `sessionStorage`；默认关闭。
-- 每条会话默认 2 MiB 压缩后预算，可配置 64 KiB–8 MiB；累计字节写入 `sessionStorage`，硬刷新后继续计费；超过预算立即停止，不明文降级。
+- 每条会话默认 2 MiB gzip+base64url 编码字符预算，可配置 64 KiB–8 MiB；累计字符数写入 `sessionStorage`，硬刷新后继续计费；报告必须同时区分 encoded chars 与实际 gzip bytes。超过预算立即停止，不明文降级。
 - DOM snapshot 最多 4 Mi 字符；MutationObserver 记录 child/text/有限属性；每 3 秒或 100 条 flush。
 - scroll 最多每 250 ms 一条；click 用归一坐标和 bounded structural path；resize/navigation 单独记录。
-- payload 用浏览器 `CompressionStream(gzip)`，base64url 后按 16,000 字符分段，再逐 item 走 `emitEncryptedContentChunk`。
+- payload 用浏览器 `CompressionStream(gzip)`，base64url 后按 10,000 字符分段，使固定 padding 后的 encrypted chunks 落在 SDK 单个 20-event batch 内，再逐 item 走 `emitEncryptedContentChunk` 并等待 accepted。
 - 所有 payload 串行送入预算/加密队列，避免并行 flush 绕过预算。
 
 ## 隐私与安全
@@ -80,6 +80,18 @@ newSSE `src/analytics/replay.ts`：
 - 预览前再次移除 script/iframe/object/embed/base/link、事件处理器、外部 src/href/action 与凭据属性，注入 `default-src 'none'` CSP，并在不含任何 sandbox capability 的 iframe 中使用 `no-referrer` 展示。
 - 真实全栈 UI 基线：4 条 replay stream、所选流 6 个完整 item；stream/items/detail 请求全部 200，正式工作区重组 4 个 snapshot item 并显示登录页。追加已登录旅程后工作区列出 11 条流，最新短旅程 22 个完整 item，重组 13 个 snapshot segments 并恢复有 scoped 样式的登录后首页。全栈 Playwright spec 1/1、replay/permission model 5/5 通过。
 
+## v2 精确 mutation 播放
+
+在不改变通用 `sys.content_chunk`、加密、worker、存储和发现 API 的前提下，新增向后兼容内层 v2：
+
+- 每次文档加载有 `document_id/document_seq`，payload 与 mutation record 分别单调编号；route、capture time 和 payload ID 在入 delivery queue 前封存，网络延迟不再改变顺序语义。
+- sanitized snapshot 为 element/text/comment 分配文档内稳定 node ID；mutation 用 node ID 表达 text、attribute set/remove、child remove/add 与 `before_id` 插入锚点，不再依赖会随 DOM 变化的 nth-of-type path。
+- snapshot 带 `base_seq`；播放器只应用其后的连续记录，遇到 payload/record 序号缺口、未知节点、错误父节点或冲突 ID 立即停止，不做 best-effort 猜测。v1 历史流继续安全展示 snapshot，但明确标注不可精确播放。
+- 控制台读取 snapshot+mutations，在不进入 QueryClient 的局部状态中构建 timeline；提供播放/暂停/回到快照/进度 seek。iframe 仅增加 `allow-same-origin` 供可信父播放器操作 DOM，仍无 scripts/forms/popups/downloads，并保留 no-referrer 与 deny-all CSP。
+- 真实 v2 流 `d6d86bfa-2511-4b01-89e7-821e14c0c214`：浏览器、ClickHouse、PostgreSQL 均为 25 items / 335 encrypted chunks；正式播放器识别 v2、构建 117 条连续记录并实际 seek/apply 前 10 条，无 gap/unknown-node 错误。模型测试覆盖 v1、v2 连续 timeline、gap fail-closed 与 segment 冲突；全栈 browser spec 验证授权读取、sandbox capability 和 seek。
+
+明确边界：精确指 sanitized light DOM；Shadow DOM、iframe contents、canvas/WebGL、媒体状态和 CSSOM 后续变化不在 v2 范围。
+
 ## 修复的升级缺陷
 
 原始敏感消息迁移在已升级数据库中残留 `actor_type IN ('user','assistant')` 和状态枚举，违反通用平台模型并阻断 `actor_type=browser`。迁移 046 删除产品专属约束，改为 actor/status bounded string；新建库仍由当前 044 的通用定义建立约束。
@@ -88,6 +100,6 @@ newSSE `src/analytics/replay.ts`：
 
 ## 尚未完成
 
-- mutation 精确重放（正式工作区当前展示最新完整 snapshot，不逐帧应用 mutation）。
+- 多文档/多 checkpoint 章节切换、播放速度选择与 gap 后 resync 跳转；当前精确播放器聚焦最新完整 v2 snapshot 后的连续 sanitized light-DOM 记录。
 - 回放访问审计 UX、云对象存储适配器、生产 KMS/HSM gateway 实部署。
 - SPA 长会话的更完整节点 ID 模型、iframe/Shadow DOM 策略、性能与丢帧基准。
