@@ -2,7 +2,7 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
-**2026-11-22，控制台共享视觉系统重构**：设计系统统一为空气感暖白工作区、深色正文、柔和薰衣草层级与克制青绿色交互色；WorkspaceShell 保留 64px/220px 桌面契约和移动端横向可达导航，同时将头部账号区、导航、按钮与 Tabs 收敛为胶囊交互，Panel、DataSurface、DataTable、分析结果、看板卡片和会话回放预览统一圆角、边界与层级。未改变路由、权限、API、加载/错误/空态、对话框与键盘行为。`pnpm typecheck`、console production build、`pnpm format:check`、共享组件浏览器测试 11/11，以及分析/看板/回放 focused model tests 32/32 通过；无后端与专用账号时真实控制台桌面 1440×1000、移动 390×844 仅能验证连接失败态与零横向溢出，真实业务数据页面联调仍需依赖环境。
+**2026-11-22，控制台共享视觉系统重构**：设计系统统一为空气感暖白工作区、深色正文、柔和薰衣草层级与克制青绿色交互色；WorkspaceShell 保留 64px/220px 桌面契约和移动端横向可达导航，同时将头部账号区、导航、按钮与 Tabs 收敛为胶囊交互，Panel、DataSurface、DataTable、分析结果、看板卡片和会话回放预览统一圆角、边界与层级。未改变路由、权限、API、加载/错误/空态、对话框与键盘行为。`pnpm typecheck`、console production build、`pnpm format:check`、共享组件浏览器测试 11/11，以及分析/看板/回放 focused model tests 32/32 通过；合入主线后再用真实后端与专用账号捕获热力图和会话回放业务数据页面，1440×1000 下 header/220px rail/rounded workspace、表格、网格和回放层级均无裁切或overflow，视觉复核通过；移动组件 390×844 零横向溢出。
 
 **2026-11-22，移动端采集/回放/热力图补验**：用 Chromium `390×844`、deviceScaleFactor=3、isMobile+touch 走真实登录，覆盖首页、顶部搜索「大创」、热榜、商城、消息、小秋；63 批 collect 全202、13类事件、page error=0，移动布局截图完整。回放流 `763f9135-45ca-4a84-ac52-02577cbfa240` 在 CH/PG 为60完整items/846 chunks、明文字段0；Evia v2 工作区识别 viewport=390×844 并加载6条连续记录。移动 Home 热力图按精确390×844查询独立得到 `(9,5)=1`，控制台以纵向390:844比例渲染，证明不与桌面1440×1000事实混合。追加360×800窄Android、844×390手机横屏、768×1024平板竖屏矩阵，真实登录+触摸/滚动均collect全202、page error=0、document横向overflow=false；横屏安全进入真实帖子详情。截图/证据已补入 session-replay 与 heatmap verification。**
 
