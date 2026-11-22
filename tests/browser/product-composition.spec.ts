@@ -62,6 +62,37 @@ test.beforeEach(async ({ page }) => {
     if (path === `/api/v1/projects/${projectID}`) return route.fulfill({ json: project });
     if (path === `/api/v1/projects/${projectID}/diagnostics`)
       return route.fulfill({ json: diagnostics });
+    if (path === `/api/v1/projects/${projectID}/overview`)
+      return route.fulfill({
+        json: {
+          project_id: projectID,
+          environment: 'development',
+          from: '2026-11-15T12:00:00.000Z',
+          to: now,
+          interval: 'day',
+          total_events: 1284,
+          unique_sessions: 318,
+          identified_users: 146,
+          anonymous_ids: 287,
+          data_watermark: '2026-11-22T11:58:00.000Z',
+          trend: [
+            { bucket: '2026-11-20T00:00:00.000Z', events: 322, sessions: 102 },
+            { bucket: '2026-11-21T00:00:00.000Z', events: 418, sessions: 129 },
+            { bucket: '2026-11-22T00:00:00.000Z', events: 544, sessions: 151 },
+          ],
+          top_events: [
+            { event_key: 'sys.page_view', count: 544 },
+            { event_key: 'post.opened', count: 396 },
+            { event_key: 'search.performed', count: 188 },
+          ],
+          metadata: {
+            accuracy: 'exact',
+            coverage: 'provisional',
+            known_gaps: ['pipeline_completeness_not_established'],
+            generated_at: now,
+          },
+        },
+      });
     if (path === `/api/v1/projects/${projectID}/queries` && route.request().method() === 'POST')
       return route.fulfill({
         status: 202,
@@ -121,14 +152,70 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('project root lands on an honest overview backed by diagnostics', async ({ page }) => {
+test('project root lands on an honest real-data overview with secondary diagnostics', async ({
+  page,
+}) => {
   await page.goto(`/projects/${projectID}?environment=development`);
   await expect(page).toHaveURL(/\/overview\?environment=development$/);
   await expect(page.getByRole('heading', { name: '项目总览' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '开发环境运行概况' })).toBeVisible();
-  await expect(page.getByText('不能代表事实完整性')).toBeVisible();
-  await expect(page.getByRole('table', { name: '开发环境最近管道探针' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /高级查询工作台/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '近 7 天事件概览' })).toBeVisible();
+  await expect(page.getByText('1,284')).toBeVisible();
+  await expect(page.getByText('非空 UID，未做身份解析')).toBeVisible();
+  await expect(page.getByRole('img', { name: /项目事件趋势/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '热门事件' })).toBeVisible();
+  await expect(page.getByText('sys.page_view')).toBeVisible();
+  await expect(page.getByText('覆盖：暂定')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '采集诊断' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '查看全部诊断' })).toBeVisible();
+});
+
+test('overview keeps aggregate and diagnostics failures independent', async ({ page }) => {
+  await page.route(`**/api/v1/projects/${projectID}/overview**`, (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        code: 'QUERY_COST_EXCEEDED',
+        message: '聚合超过读取预算',
+        request_id: 'overview-test',
+      },
+    }),
+  );
+  await page.goto(`/projects/${projectID}/overview?environment=development`);
+  await expect(page.getByText('无法读取事件概览')).toBeVisible();
+  await expect(page.getByText('聚合超过读取预算')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '采集诊断' })).toBeVisible();
+  await expect(page.getByText('当前环境来源')).toBeVisible();
+});
+
+test('overview shows an honest empty aggregate without hiding diagnostics', async ({ page }) => {
+  await page.route(`**/api/v1/projects/${projectID}/overview**`, (route) =>
+    route.fulfill({
+      json: {
+        project_id: projectID,
+        environment: 'development',
+        from: '2026-11-15T12:00:00.000Z',
+        to: now,
+        interval: 'day',
+        total_events: 0,
+        unique_sessions: 0,
+        identified_users: 0,
+        anonymous_ids: 0,
+        data_watermark: null,
+        trend: [],
+        top_events: [],
+        metadata: {
+          accuracy: 'exact',
+          coverage: 'provisional',
+          known_gaps: ['pipeline_completeness_not_established'],
+          generated_at: now,
+        },
+      },
+    }),
+  );
+  await page.goto(`/projects/${projectID}/overview?environment=development`);
+  await expect(page.getByText('所选范围内没有可查询事件')).toBeVisible();
+  await expect(page.getByText('不以零值推断采集正常')).toBeVisible();
+  await expect(page.getByText('当前环境来源')).toBeVisible();
 });
 
 test('viewport click distribution keeps controls secondary after a real result', async ({

@@ -1180,6 +1180,40 @@ type ProjectMemberUpdate struct {
 	Role string `json:"role"`
 }
 
+type ProjectOverview struct {
+	ProjectID       string                      `json:"project_id"`
+	Environment     string                      `json:"environment"`
+	From            string                      `json:"from"`
+	To              string                      `json:"to"`
+	Interval        string                      `json:"interval"`
+	TotalEvents     int64                       `json:"total_events"`
+	UniqueSessions  int64                       `json:"unique_sessions"`
+	IdentifiedUsers int64                       `json:"identified_users"`
+	AnonymousIDs    int64                       `json:"anonymous_ids"`
+	DataWatermark   *string                     `json:"data_watermark"`
+	Trend           []ProjectOverviewTrendPoint `json:"trend"`
+	TopEvents       []ProjectOverviewTopEvent   `json:"top_events"`
+	Metadata        ProjectOverviewMetadata     `json:"metadata"`
+}
+
+type ProjectOverviewMetadata struct {
+	Accuracy    string   `json:"accuracy"`
+	Coverage    string   `json:"coverage"`
+	KnownGaps   []string `json:"known_gaps"`
+	GeneratedAt string   `json:"generated_at"`
+}
+
+type ProjectOverviewTopEvent struct {
+	EventKey string `json:"event_key"`
+	Count    int64  `json:"count"`
+}
+
+type ProjectOverviewTrendPoint struct {
+	Bucket   string `json:"bucket"`
+	Events   int64  `json:"events"`
+	Sessions int64  `json:"sessions"`
+}
+
 type ProjectSettings struct {
 	ProjectID string `json:"project_id"`
 	Name      string `json:"name"`

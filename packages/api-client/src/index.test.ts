@@ -1816,6 +1816,50 @@ test('diagnostics read uses the fixed project diagnostics path', async () => {
   assert.equal((init as RequestInit).signal?.aborted, true);
 });
 
+test('project overview read encodes the bounded aggregate scope', async () => {
+  const fetch = respond(200, {
+    project_id: 'p',
+    environment: 'development',
+    from: '2026-11-21T00:00:00Z',
+    to: '2026-11-22T00:00:00Z',
+    interval: 'hour',
+    total_events: 4,
+    unique_sessions: 2,
+    identified_users: 2,
+    anonymous_ids: 3,
+    data_watermark: '2026-11-21T23:00:00Z',
+    trend: [{ bucket: '2026-11-21T00:00:00Z', events: 4, sessions: 2 }],
+    top_events: [{ event_key: 'sys.page_view', count: 4 }],
+    metadata: {
+      accuracy: 'exact',
+      coverage: 'provisional',
+      known_gaps: ['pipeline_completeness_not_established'],
+      generated_at: '2026-11-22T00:00:01Z',
+    },
+  });
+  const controller = new AbortController();
+  const result = await api.getProjectOverview(
+    'p',
+    {
+      environment: 'development',
+      from: '2026-11-21T00:00:00Z',
+      to: '2026-11-22T00:00:00Z',
+      interval: 'hour',
+    },
+    controller.signal,
+  );
+  const [url, init] = fetch.mock.calls[0]!.arguments;
+  assert.equal(
+    url,
+    '/api/v1/projects/p/overview?environment=development&from=2026-11-21T00%3A00%3A00Z&to=2026-11-22T00%3A00%3A00Z&interval=hour',
+  );
+  assert.equal((init as RequestInit).method, 'GET');
+  assert.equal(result.total_events, 4);
+  assert.equal(result.metadata.accuracy, 'exact');
+  controller.abort();
+  assert.equal((init as RequestInit).signal?.aborted, true);
+});
+
 test('collection quota read and patch encode scope, revision and idempotency', async () => {
   const fetch = respond(200, {
     project_id: 'p',

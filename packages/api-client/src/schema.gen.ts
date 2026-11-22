@@ -1666,6 +1666,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getProjectOverview
+         * @description 读取最多七天、去重后的项目环境聚合概览；不返回事件、会话或身份原始行。
+         */
+        get: operations["getProjectOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/diagnostics": {
         parameters: {
             query?: never;
@@ -3420,6 +3440,58 @@ export interface components {
             window_hours: number;
             totals: components["schemas"]["DiagnosticsReasonCount"][];
             windows: components["schemas"]["DiagnosticsRejectionWindow"][];
+        };
+        ProjectOverviewTrendPoint: {
+            /** Format: date-time */
+            bucket: string;
+            events: number;
+            sessions: number;
+        };
+        ProjectOverviewTopEvent: {
+            event_key: string;
+            count: number;
+        };
+        ProjectOverviewMetadata: {
+            /**
+             * @description 所有计数使用精确聚合，不进行抽样或近似去重。
+             * @enum {string}
+             */
+            accuracy: "exact";
+            /**
+             * @description 结果仅覆盖当前可见的去重事实；不承诺全分区最终完整。
+             * @enum {string}
+             */
+            coverage: "provisional";
+            known_gaps: "pipeline_completeness_not_established"[];
+            /** Format: date-time */
+            generated_at: string;
+        };
+        ProjectOverview: {
+            /** Format: uuid */
+            project_id: string;
+            /**
+             * @description 实际授权并读取的项目环境。
+             * @enum {string}
+             */
+            environment: "development" | "staging" | "production";
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /**
+             * @description 返回趋势点的 UTC 桶粒度。
+             * @enum {string}
+             */
+            interval: "hour" | "day";
+            total_events: number;
+            unique_sessions: number;
+            identified_users: number;
+            anonymous_ids: number;
+            /** Format: date-time */
+            data_watermark: string | null;
+            trend: components["schemas"]["ProjectOverviewTrendPoint"][];
+            top_events: components["schemas"]["ProjectOverviewTopEvent"][];
+            metadata: components["schemas"]["ProjectOverviewMetadata"];
         };
         Diagnostics: {
             /** Format: uuid */
@@ -17604,6 +17676,96 @@ export interface operations {
             };
             /** @description 服务端错误 */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProjectOverview: {
+        parameters: {
+            query: {
+                environment: "development" | "staging" | "production";
+                from: string;
+                to: string;
+                interval?: "hour" | "day";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOverview"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 查询存储暂不可用或资源预算被突破 */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

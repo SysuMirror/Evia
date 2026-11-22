@@ -55,6 +55,7 @@ type API struct {
 	Archives         ArchiveService
 	Backfills        BackfillService
 	Diagnostics      DiagnosticsService
+	Overview         OverviewService
 	Quotas           QuotaService
 	QuotaRuntime     QuotaRuntime
 	Artifacts        ArtifactService
@@ -98,6 +99,7 @@ func (a *API) Handler() http.Handler {
 	(&ArchiveAPI{API: a, Service: a.Archives}).Register(mux)
 	(&BackfillAPI{API: a, Service: a.Backfills}).Register(mux)
 	(&DiagnosticsAPI{API: a, Service: a.Diagnostics}).Register(mux)
+	(&OverviewAPI{API: a, Service: a.Overview}).Register(mux)
 	(&QuotaAPI{API: a, Service: a.Quotas, Runtime: a.QuotaRuntime}).Register(mux)
 	(&ArtifactAPI{API: a, Service: a.Artifacts}).Register(mux)
 	(&ReportsAPI{API: a, Service: a.Reports}).Register(mux)

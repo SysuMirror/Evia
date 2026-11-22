@@ -28,6 +28,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
 	"github.com/howtomakeaname/Evia/backend/internal/exporting"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
+	"github.com/howtomakeaname/Evia/backend/internal/overview"
 	"github.com/howtomakeaname/Evia/backend/internal/pipeline"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/admissionstats"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/budget"
@@ -372,6 +373,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 			return err
 		}
 		engine = configuredEngine
+		api.Overview = overview.NewService(store, configuredEngine)
 		probes = append(probes, func(ctx context.Context) error { return clickHouseProbe(ctx, c, client) })
 	}
 	configureAnalysis(api, store, validator, engine)

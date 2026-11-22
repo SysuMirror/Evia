@@ -57,6 +57,7 @@ export type BackfillInput = components['schemas']['BackfillInput'];
 export type BackfillJob = components['schemas']['BackfillJob'];
 export type BackfillList = components['schemas']['BackfillList'];
 export type Diagnostics = components['schemas']['Diagnostics'];
+export type ProjectOverview = components['schemas']['ProjectOverview'];
 export type CollectionQuota = components['schemas']['CollectionQuota'];
 export type CollectionQuotaInput = components['schemas']['CollectionQuotaInput'];
 export type TypeScriptArtifact = components['schemas']['TypeScriptArtifact'];
@@ -1466,6 +1467,26 @@ export const api = {
     }),
   getDiagnostics: (projectID: string, signal?: AbortSignal) =>
     request<Diagnostics>(`${projectPath(projectID)}/diagnostics`, { signal }),
+  getProjectOverview: (
+    projectID: string,
+    options: {
+      environment: ProjectOverview['environment'];
+      from: string;
+      to: string;
+      interval?: ProjectOverview['interval'];
+    },
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams({
+      environment: options.environment,
+      from: options.from,
+      to: options.to,
+    });
+    if (options.interval) params.set('interval', options.interval);
+    return request<ProjectOverview>(`${projectPath(projectID)}/overview?${params.toString()}`, {
+      signal,
+    });
+  },
   getReleaseTypeScriptArtifact: (projectID: string, releaseID: string, signal?: AbortSignal) =>
     request<TypeScriptArtifact>(
       `${projectPath(projectID)}/releases/${encodeURIComponent(releaseID)}/artifacts/typescript`,

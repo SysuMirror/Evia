@@ -18721,6 +18721,160 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/overview": {
+      "get": {
+        "operationId": "getProjectOverview",
+        "summary": "getProjectOverview",
+        "description": "读取最多七天、去重后的项目环境聚合概览；不返回事件、会话或身份原始行。",
+        "security": [
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ],
+              "description": "读取事实的精确项目环境；机器凭据必须绑定同一环境。"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ],
+              "default": "hour",
+              "description": "趋势桶粒度；省略时按小时分桶。"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "查询存储暂不可用或资源预算被突破",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/diagnostics": {
       "get": {
         "operationId": "getProjectDiagnostics",
@@ -20433,60 +20587,117 @@
         "operationId": "listContentStreams",
         "summary": "listContentStreams",
         "security": [
-          { "consoleSession": [] },
-          { "machineCredential": [] }
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
         ],
         "parameters": [
           {
             "name": "project_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "environment",
             "in": "query",
             "required": true,
-            "schema": { "type": "string", "enum": ["development", "staging", "production"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
           },
           {
             "name": "content_types",
             "in": "query",
             "required": true,
             "description": "逗号分隔的 1–8 个通用内容类型；分页游标绑定归一化类型集合。",
-            "schema": { "type": "string", "minLength": 1, "maxLength": 519 }
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 519
+            }
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
           },
           {
             "name": "cursor",
             "in": "query",
-            "schema": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "成功",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContentStreamList" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentStreamList"
+                }
+              }
+            }
           },
           "400": {
             "description": "请求不合法",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "401": {
             "description": "未认证",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "403": {
             "description": "无权限",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "429": {
             "description": "限流",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -20496,65 +20707,126 @@
         "operationId": "listContentItems",
         "summary": "listContentItems",
         "security": [
-          { "consoleSession": [] },
-          { "machineCredential": [] }
+          {
+            "consoleSession": []
+          },
+          {
+            "machineCredential": []
+          }
         ],
         "parameters": [
           {
             "name": "project_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "stream_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "minLength": 1, "maxLength": 128 }
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
           },
           {
             "name": "environment",
             "in": "query",
             "required": true,
-            "schema": { "type": "string", "enum": ["development", "staging", "production"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ]
+            }
           },
           {
             "name": "content_types",
             "in": "query",
             "required": true,
-            "schema": { "type": "string", "minLength": 1, "maxLength": 519 }
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 519
+            }
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
           },
           {
             "name": "cursor",
             "in": "query",
-            "schema": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "成功",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContentItemList" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentItemList"
+                }
+              }
+            }
           },
           "400": {
             "description": "请求不合法",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "401": {
             "description": "未认证",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "403": {
             "description": "无权限",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           },
           "429": {
             "description": "限流",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -27586,6 +27858,186 @@
           "windows"
         ]
       },
+      "ProjectOverviewTrendPoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "events": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "bucket",
+          "events",
+          "sessions"
+        ]
+      },
+      "ProjectOverviewTopEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "event_key",
+          "count"
+        ]
+      },
+      "ProjectOverviewMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accuracy": {
+            "type": "string",
+            "enum": [
+              "exact"
+            ],
+            "description": "所有计数使用精确聚合，不进行抽样或近似去重。"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "provisional"
+            ],
+            "description": "结果仅覆盖当前可见的去重事实；不承诺全分区最终完整。"
+          },
+          "known_gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pipeline_completeness_not_established"
+              ],
+              "description": "当前已知覆盖缺口。"
+            },
+            "maxItems": 5
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "accuracy",
+          "coverage",
+          "known_gaps",
+          "generated_at"
+        ]
+      },
+      "ProjectOverview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ],
+            "description": "实际授权并读取的项目环境。"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "hour",
+              "day"
+            ],
+            "description": "返回趋势点的 UTC 桶粒度。"
+          },
+          "total_events": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unique_sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "identified_users": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "anonymous_ids": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "data_watermark": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "trend": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectOverviewTrendPoint"
+            },
+            "maxItems": 169
+          },
+          "top_events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectOverviewTopEvent"
+            },
+            "maxItems": 10
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ProjectOverviewMetadata"
+          }
+        },
+        "required": [
+          "project_id",
+          "environment",
+          "from",
+          "to",
+          "interval",
+          "total_events",
+          "unique_sessions",
+          "identified_users",
+          "anonymous_ids",
+          "data_watermark",
+          "trend",
+          "top_events",
+          "metadata"
+        ]
+      },
       "Diagnostics": {
         "type": "object",
         "additionalProperties": false,
@@ -28187,55 +28639,158 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "stream_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
           "content_types": {
-            "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
           },
           "actor_types": {
-            "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1, "maxLength": 32 }
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
           },
-          "first_received_at": { "type": "string", "format": "date-time" },
-          "last_received_at": { "type": "string", "format": "date-time" },
-          "item_count": { "type": "integer", "minimum": 1 }
+          "first_received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "item_count": {
+            "type": "integer",
+            "minimum": 1
+          }
         },
-        "required": ["stream_id", "content_types", "actor_types", "first_received_at", "last_received_at", "item_count"]
+        "required": [
+          "stream_id",
+          "content_types",
+          "actor_types",
+          "first_received_at",
+          "last_received_at",
+          "item_count"
+        ]
       },
       "ContentStreamList": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "items": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/ContentStreamSummary" } },
-          "next_cursor": { "type": "string", "minLength": 1, "maxLength": 2048 }
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ContentStreamSummary"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
         },
-        "required": ["items"]
+        "required": [
+          "items"
+        ]
       },
       "ContentItemSummary": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "content_type": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "stream_id": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "item_id": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "actor_type": { "type": "string", "minLength": 1, "maxLength": 32 },
-          "received_at": { "type": "string", "format": "date-time" },
-          "chunk_count": { "type": "integer", "minimum": 1, "maximum": 32 },
-          "content_length": { "type": "integer", "minimum": 1, "maximum": 1000000 },
-          "truncated": { "type": "boolean" },
-          "status": { "type": "string", "maxLength": 32 },
-          "duration_ms": { "type": "integer", "minimum": 0, "maximum": 3600000 }
+          "content_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "item_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "actor_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "chunk_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "content_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600000
+          }
         },
-        "required": ["content_type", "stream_id", "item_id", "actor_type", "received_at", "chunk_count", "content_length", "truncated"]
+        "required": [
+          "content_type",
+          "stream_id",
+          "item_id",
+          "actor_type",
+          "received_at",
+          "chunk_count",
+          "content_length",
+          "truncated"
+        ]
       },
       "ContentItemList": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "items": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/ContentItemSummary" } },
-          "next_cursor": { "type": "string", "minLength": 1, "maxLength": 2048 }
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ContentItemSummary"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
         },
-        "required": ["items"]
+        "required": [
+          "items"
+        ]
       },
       "ContentItem": {
         "type": "object",
