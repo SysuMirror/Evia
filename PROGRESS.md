@@ -2,6 +2,8 @@
 
 本文件区分计划、实现和验证。各模块按服务端、真实依赖、前端联调的顺序交付；原始 R1 范围保留。冻结快照 `8d2d9d5` 已于 **2026-11-07** 通过全后端真实依赖竞态测试和整条公开 HTTP 验收，详细命令、结果与限制见 [验证记录](docs/verification/backend-2026-11-07.md)。这不是完整 R1 或生产就绪声明。
 
+**2026-11-22，控制台产品构图闭环（Overview + 单任务 drilldown）**：glm-5.3-flash 在外壳结构PASS后从格式塔/产品叙事复审仍判FAIL，指出“消费级Dashboard外壳承载工程查询控制台内容”、无视觉主角、同质卡片抹平层级、heatmap语义实际为坐标矩阵、replay精确/快照/失败状态冲突。对应新增真实diagnostics驱动的项目总览并作为项目默认入口，只展示环境/探针新鲜度/风险与调查入口，不造mock KPI；当前heatmap诚实名为「视口点击分布」并从高级查询工作台分路由，查询条件降为次级折叠层、技术详情单一收拢；replay改为exact/snapshot-only/failed互斥状态，失败时隐藏无效播放控件，播放器首屏主位，会话选择器次位，传输/content tables下沉Diagnostics。项目root、Overview诚实状态、视口点击分布结果优先、replay失败互斥的product-composition测试4/4通过；format/typecheck/build通过。强制重启最新server并重新捕获Overview/heatmap/replay后，再用glm-5.3-flash直接读图，最终判定产品构图PASS、阻断性错位0项。提交：`b2e216a`、`3b4093f`。**
+
 **2026-11-22，glm-5.3-flash 视觉验收闭环**：首次对重启后的真实截图审阅明确判 FAIL：rail 随长页面漂移、顶部nav体量不足、heatmap查询区占首屏过多、replay播放器仍被长表压后。按审阅给出的视口比例继续修复：rail视口固定、top nav 42–46vw、heatmap 68:32并压缩查询层、replay 30:70且播放器进入首屏/会话6–8行内部滚动/记录下置或切换；同时移除重复快照加载动作并修复390px header/tab document overflow。重新强制重启dev server、真实登录并捕获heatmap/replay后，再次用glm-5.3-flash直接读图，最终判定 PASS、无阻断性结构差异；稀疏热力数据、真实回放错误和full-page sticky捕获被正确区分为非布局缺陷。workspace responsive 1/1、focused 23/24初次仅因移动overflow失败，修复后1/1；格式/typecheck/build与其余23项通过。提交：`02d8929`、`d919ce0`、`302d433`。**
 
 **2026-11-22，控制台工作区高相似结构重排**：WorkspaceShell 改为品牌+顶层分类胶囊导航、按当前分类显示的窄图标工具栏和浅色外画布上的单一白色圆角工作面；全部既有权限路由仍可通过分类与工具栏到达，图标链接提供可访问名称与悬浮提示，390×844 下分类和工具栏合并为带完整文字标签的菜单。分析、看板、会话回放统一首屏标题/摘要节奏，并保留热力图+结果表、非对称回放主从表格和既有看板布局比例。API、权限、加载/错误/空态、未保存保护及键盘语义未改变。TypeScript、生产构建、边界检查、格式检查和 focused 浏览器测试通过；workspace responsive 1/1、控件/分析/看板/回放组合44/44（专用5180 server）通过。重启非陈旧 dev server 后，真实认证 heatmap/replay 1440×1000 截图确认顶栏分类胶囊、窄图标rail、浅色canvas/单一白色workspace及非对称内容布局均已生效；390×844确定性截图无横向溢出。**
