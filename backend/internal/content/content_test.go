@@ -219,4 +219,23 @@ func TestFileStoreRoundTripAndHash(t *testing.T) {
 	if _, err = store.Read(context.Background(), "../private"); err == nil {
 		t.Fatal("unsafe object key must fail")
 	}
+
+	large := chunk
+	large.EventID = "large"
+	large.Plaintext = bytes.Repeat([]byte("x"), MaxPlaintextChunkLength)
+	largeKey, _, err := store.Put(context.Background(), large)
+	if err != nil {
+		t.Fatalf("maximum fixed-4096 plaintext chunk must be stored: %v", err)
+	}
+	largeRoundTrip, err := store.Read(context.Background(), largeKey)
+	if err != nil || !bytes.Equal(largeRoundTrip, large.Plaintext) {
+		t.Fatalf("maximum fixed-4096 plaintext chunk did not round trip: bytes=%d err=%v", len(largeRoundTrip), err)
+	}
+
+	tooLarge := chunk
+	tooLarge.EventID = "too-large"
+	tooLarge.Plaintext = bytes.Repeat([]byte("x"), MaxPlaintextChunkLength+1)
+	if _, _, err = store.Put(context.Background(), tooLarge); err == nil {
+		t.Fatal("oversized plaintext chunk reached the artifact store")
+	}
 }

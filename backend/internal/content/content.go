@@ -13,6 +13,7 @@ import (
 const (
 	MaxScanBatch               = 200
 	MaxContentChunks           = 32
+	MaxPlaintextChunkLength    = 4094 // fixed-4096-v2 block minus the authenticated two-byte length
 	MaxCiphertextEncodedLength = 5483 // base64url(4096 padded bytes + 16-byte GCM tag)
 )
 

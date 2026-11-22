@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/howtomakeaname/Evia/backend/internal/content"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -33,6 +34,32 @@ func testMessage(t *testing.T) Message {
 	}
 	return Message{Topic: "test.events", Partition: 1, Offset: 12, Value: value}
 }
+func TestContentCiphertextUsesContractSpecificStringBound(t *testing.T) {
+	ciphertext := strings.Repeat("A", content.MaxCiphertextEncodedLength)
+	valid := testRecord()
+	valid.EventKey = "sys.content_chunk"
+	valid.PropertiesJSON = json.RawMessage(`{"ciphertext":"` + ciphertext + `"}`)
+	encoded, e := EncodeRecord(valid)
+	if e != nil {
+		t.Fatalf("maximum fixed-4096 ciphertext must reach the durable queue: %v", e)
+	}
+	if _, e = DecodeRecord(encoded); e != nil {
+		t.Fatalf("maximum fixed-4096 ciphertext must survive queue decoding: %v", e)
+	}
+
+	tooLarge := valid
+	tooLarge.PropertiesJSON = json.RawMessage(`{"ciphertext":"` + ciphertext + `A"}`)
+	if _, e = EncodeRecord(tooLarge); e == nil {
+		t.Fatal("oversized content ciphertext reached the durable queue")
+	}
+
+	businessEvent := testRecord()
+	businessEvent.PropertiesJSON = json.RawMessage(`{"ciphertext":"` + ciphertext + `"}`)
+	if _, e = EncodeRecord(businessEvent); e == nil {
+		t.Fatal("content ciphertext allowance widened ordinary event properties")
+	}
+}
+
 func TestRecordValidationCanonicalizationAndScope(t *testing.T) {
 	r := testRecord()
 	b, e := EncodeRecord(r)

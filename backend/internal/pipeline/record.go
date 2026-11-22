@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/content"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/canonical"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/contract"
@@ -105,7 +106,7 @@ func normalizeRecord(r ingestion.Record) (ingestion.Record, error) {
 		return r, errInvalidRecord
 	}
 	for key, value := range object {
-		if !propertyKeyPattern.MatchString(key) || !validProperty(value) {
+		if !propertyKeyPattern.MatchString(key) || !validProperty(r.EventKey, key, value) {
 			return r, errInvalidRecord
 		}
 	}
@@ -200,7 +201,11 @@ func canonicalHash(r ingestion.Record) (string, error) {
 
 var propertyKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-func validProperty(value any) bool {
+func validProperty(eventKey, propertyKey string, value any) bool {
+	if eventKey == "sys.content_chunk" && propertyKey == "ciphertext" {
+		text, ok := value.(string)
+		return ok && utf8.ValidString(text) && utf8.RuneCountInString(text) <= content.MaxCiphertextEncodedLength
+	}
 	if values, ok := value.([]any); ok {
 		if len(values) > 20 {
 			return false

@@ -26,6 +26,9 @@ func NewFileStore(root string) (*FileStore, error) {
 }
 
 func (s *FileStore) Put(_ context.Context, chunk DecryptedChunk) (string, string, error) {
+	if len(chunk.Plaintext) < 1 || len(chunk.Plaintext) > MaxPlaintextChunkLength {
+		return "", "", errors.New("content object exceeds chunk bound")
+	}
 	identity := fmt.Sprintf("%s|%s|%s|%d|%s", chunk.ProjectID, chunk.Environment, chunk.ItemID, chunk.ChunkIndex, chunk.EventID)
 	nameHash := sha256.Sum256([]byte(identity))
 	objectKey := hex.EncodeToString(nameHash[:]) + ".chunk"
@@ -66,7 +69,7 @@ func (s *FileStore) Read(_ context.Context, objectKey string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 || len(data) > 600 {
+	if len(data) == 0 || len(data) > MaxPlaintextChunkLength {
 		return nil, errors.New("content object exceeds chunk bound")
 	}
 	return data, nil
