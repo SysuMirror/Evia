@@ -19,7 +19,7 @@ fixture 在 newSSE 登录页注入 100 条/波、每条 3000 hex 字符的高熵
 
 因此默认预算下 item/chunk 对账、完整 item 过滤、明文边界和预算停止语义通过。
 
-运行期间 ingest-worker 两次在长时间运行后出现 `facts` 阶段 11 次重试并自停，同时 readiness renewal 失败；ClickHouse 容器健康且本次目标流已完整对账。重启可继续消费，但该 operational stability gate 仍判失败，需增加可诊断的安全错误分类并定位永久失败批次，不能用重启掩盖。
+运行期间 ingest-worker 两次在长时间运行后出现 `facts` 阶段 11 次重试并自停，同时 readiness receipt/renewal 失败；ClickHouse 容器健康且本次目标流已完整对账。根因之一是 readiness ProbeWorker 仅重试20秒便返回，supervisor 随即取消仍可恢复的 fact worker。修复后 readiness batch 保持未提交并持续重试到依赖恢复或进程 context 取消；本机将 ClickHouse pause 25秒（超过旧上限）再恢复，ingest-worker 未退出并继续 renewal。旧 release 的单项 renewal 仍有失败告警，需要后续清理/分类，但不会再因 probe 短暂超时拖停整个进程。
 
 ## 性能结果与失败门禁
 
