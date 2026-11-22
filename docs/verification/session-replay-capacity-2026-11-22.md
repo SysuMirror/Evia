@@ -30,6 +30,8 @@ fixture 在 newSSE 登录页注入 100 条/波、每条 3000 hex 字符的高熵
 
 尝试过 8-item 并发 enqueue/flush 探针：wall time 降到 184.951 s，但预算已计 2,013,246 时只确认 9 items / 682 total events，暴露并发 flush/queue 竞争导致的严重完整性退化。该实验改动已立即回滚，未提交。这个结果证明不能以吞吐换取静默丢段。
 
+随后实现安全 bulk：分离 encryption enqueue 与确认，先单项建立 content config，再每组最多3 items（约54 events，给200-event/256KiB队列留余量），SDK 最多64轮有界 drain，并逐 emission outcome accepted 后记 item。复跑结果：2,016,232/2,097,152 encoded chars，ClickHouse/PostgreSQL 同为205 items / 3,436 chunks，全部 collect 202；wall 326.124s，比436.511s快25.3%，但仍是120s gate的2.72×，因此性能结论仍为失败。安全优化已保留，8-item丢段方案未保留。
+
 ## 弱网探针
 
 Chromium 移动上下文 `390×844` 使用 250 ms latency、32 KiB/s 上下行运行登录页 snapshot+100 mutations。保持页面 168.169 s 后，预算已计 56,016 encoded chars，但 accepted item 仍为0；因此 weak capture gate 失败，预定的首批 429/Retry-After 注入尚未进入可验证阶段。该结果要求先把 config/collector request timeout、持久队列续传和“预算计费早于 accepted”可观测性补齐，再运行完整 weak 四格，不得把静默等待视为通过。
