@@ -19,6 +19,8 @@ fixture 在 newSSE 登录页注入 100 条/波、每条 3000 hex 字符的高熵
 
 因此默认预算下 item/chunk 对账、完整 item 过滤、明文边界和预算停止语义通过。
 
+运行期间 ingest-worker 两次在长时间运行后出现 `facts` 阶段 11 次重试并自停，同时 readiness renewal 失败；ClickHouse 容器健康且本次目标流已完整对账。重启可继续消费，但该 operational stability gate 仍判失败，需增加可诊断的安全错误分类并定位永久失败批次，不能用重启掩盖。
+
 ## 性能结果与失败门禁
 
 - wall time：436.511 s。

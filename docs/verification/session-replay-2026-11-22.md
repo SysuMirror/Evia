@@ -55,6 +55,7 @@ newSSE `src/analytics/replay.ts`：
 - 最终样式流 `06997b4e-e594-47f7-8f6c-64dda21e7a39`：浏览器记 62 items；ClickHouse 与 PostgreSQL 同为 62 个 distinct/完整 items（snapshot 41 + mutations 21），三方严格相等；892 个密文块全 822 字符，CH `content` 字段计数 0。
 - snapshot 延迟至路由稳定后 2 秒，内联最多 1 MiB CSSOM，并只额外保留 Vue scope 标记；最终正式 Evia sandbox 可恢复已登录首页布局，组装 13 个 snapshot segment，页面正文长度 2489。
 - 移动端仿真使用 Chromium `390×844`、deviceScaleFactor=3、isMobile/touch，真实登录后覆盖首页、顶部搜索、热榜、商城、消息和小秋；63 批 collect 全 202、13 类事件、page error=0。流 `763f9135-45ca-4a84-ac52-02577cbfa240` 在 ClickHouse/PostgreSQL 为 60 个完整 items / 846 chunks、CH 明文字段0；正式 v2 工作区按 viewport=390×844 重建移动页面并加载 6 条连续记录。
+- 追加设备矩阵：Android narrow `360×800`、phone landscape `844×390`、tablet portrait `768×1024` 均走真实登录+首页触摸/滚动；分别 15/8/22 批 collect 全202，page error=0，document-level horizontal overflow 均为 false。横屏触摸命中真实帖子并安全进入详情，只读无业务写入。
 
 截图：
 
