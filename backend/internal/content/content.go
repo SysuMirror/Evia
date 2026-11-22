@@ -10,7 +10,11 @@ import (
 	"time"
 )
 
-const MaxScanBatch = 200
+const (
+	MaxScanBatch               = 200
+	MaxContentChunks           = 32
+	MaxCiphertextEncodedLength = 5483 // base64url(4096 padded bytes + 16-byte GCM tag)
+)
 
 type Cursor struct {
 	ReceivedAt time.Time

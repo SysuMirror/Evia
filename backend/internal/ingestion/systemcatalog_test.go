@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
@@ -105,6 +106,50 @@ func TestSystemCatalogPropertySchemaValidation(t *testing.T) {
 	}
 	if err := scrollSchema.Validate(outOfBounds); err == nil {
 		t.Fatal("page_scroll accepted an out-of-bounds ratio and an unknown direction")
+	}
+}
+
+func TestEncryptedContentCatalogBoundsBothPaddingModes(t *testing.T) {
+	catalog, err := LoadSystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, schema, ok := catalog.Rule("sys.content_chunk")
+	if !ok {
+		t.Fatal("content chunk rule missing")
+	}
+	properties := map[string]any{
+		"content_type": "generic_content", "stream_id": "stream", "item_id": "item", "actor_type": "producer",
+		"chunk_index": 31, "chunk_count": 32, "ciphertext": strings.Repeat("a", 1024),
+		"nonce": "nonce", "wrapped_key": "wrapped", "key_id": "key-1",
+		"alg": "A256GCM+RSA-OAEP-256", "aad_version": "evia-content-v1", "padding": "fixed-600-v1",
+		"content_length": 1, "truncated": false,
+	}
+	if err = schema.Validate(properties); err != nil {
+		t.Fatalf("maximum legacy chunk rejected: %v", err)
+	}
+	properties["ciphertext"] = strings.Repeat("a", 1025)
+	if err = schema.Validate(properties); err == nil {
+		t.Fatal("legacy ciphertext above 1024 characters accepted")
+	}
+	properties["padding"] = "fixed-4096-v2"
+	properties["ciphertext"] = strings.Repeat("a", 5483)
+	if err = schema.Validate(properties); err != nil {
+		t.Fatalf("maximum 4096-mode chunk rejected: %v", err)
+	}
+	properties["ciphertext"] = strings.Repeat("a", 5484)
+	if err = schema.Validate(properties); err == nil {
+		t.Fatal("4096-mode ciphertext above 5483 characters accepted")
+	}
+	properties["ciphertext"] = "ciphertext"
+	properties["chunk_count"] = 33
+	if err = schema.Validate(properties); err == nil {
+		t.Fatal("chunk count above 32 accepted")
+	}
+	properties["chunk_count"] = 32
+	properties["padding"] = "fixed-4096-v1"
+	if err = schema.Validate(properties); err == nil {
+		t.Fatal("unknown padding mode accepted")
 	}
 }
 

@@ -115,7 +115,7 @@ The structural path contains only lower-case tag names, a validated `role` and `
 
 ## Bounded delivery and receipts
 
-The default queue holds at most 200 events and 256 KiB of reserved event payload. An event is limited to 8 KiB of UTF-8 envelope bytes, 50 properties, scalar values or arrays of at most 20 scalars, strings of at most 1024 Unicode characters, and finite numbers within JavaScript's safe numeric range. Nulls, nested objects, nested arrays, invalid Unicode and accessor properties are rejected. Queue accounting reserves room for the largest supported revision/version, so the local byte bound can conservatively reject an envelope slightly below the server limit.
+The default queue holds at most 200 events and 256 KiB of reserved event payload. An event is limited to 8 KiB of UTF-8 envelope bytes, 50 properties, scalar values or arrays of at most 20 scalars, and finite numbers within JavaScript's safe numeric range. Ordinary strings are limited to 1024 Unicode characters; the reserved `sys.content_chunk.ciphertext` field alone permits up to 5483 base64url characters for a 4096-byte padded block plus its 16-byte GCM tag. Nulls, nested objects, nested arrays, invalid Unicode and accessor properties are rejected. Queue accounting reserves room for the largest supported revision/version, so the local byte bound can conservatively reject an envelope slightly below the server limit.
 
 Collection batches contain at most 20 events and 60 KiB by default, below the server's 50-event/256-KiB request limits. One collection request runs at a time. A flush sends at most four batches per turn, then schedules remaining work. A lifecycle flush sends at most one batch. Requests time out after five seconds; default retries use exponential delays from one second, at most three attempts and a five-minute total event age. All limits have validated finite configuration bounds. The maximum configurable age is 55 minutes, below the collector's one-hour occurrence-time window.
 
@@ -131,6 +131,10 @@ The collector returns per-event receipts for HTTP 202, including mixed accepted/
 | `uncertain` | An attempted event has no conclusive final acknowledgement. It may already have been accepted.                 |
 
 `flush()` resolves with `{pending}` after its bounded turn, not after guaranteed delivery. Event outcome promises provide the individual results. New emissions may continue during a flush within the queue limits. The default memory queue does not survive process termination or reload; an opt-in durable mirror is described below. Delivery retries can produce duplicate receipts; the server deduplicates stable source/event IDs in its exact read view.
+
+### Generic encrypted content padding modes
+
+`EncryptedContentChunk.padding` is a closed wire vocabulary. `fixed-600-v1` is unchanged and accepts ciphertext strings up to 1024 characters for existing chat and legacy producers; its decrypted block is exactly 600 bytes and carries at most 598 payload bytes after the embedded two-byte length. `fixed-4096-v2` accepts up to 5483 base64url characters, decrypts to exactly 4096 bytes and carries at most 4094 payload bytes. The larger optional mode reduces event and envelope overhead for high-volume generic content such as replay segments, but short payloads still consume a complete 4096-byte encrypted block. Both modes retain the same `evia-content-v1` AAD fields and the overall 8192-byte event-envelope limit. Unknown modes and envelopes whose realistic context pushes them over that total limit are rejected; the SDK never chooses a mode from `contentType`.
 
 ### Bounded bulk admission and outcome-scoped drain
 

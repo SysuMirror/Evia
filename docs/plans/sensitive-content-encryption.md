@@ -14,12 +14,12 @@
 - 密文：`ciphertext`、`nonce`、`wrapped_key`、`key_id`、`alg=A256GCM+RSA-OAEP-256`
 - 安全元数据：`content_length`、`truncated`，可选 `response_status`、`duration_ms`
 
-浏览器为每条消息生成随机 AES-256-GCM key；正文 UTF-8 按 ≤600 bytes 切块（最多 32），每块随机 96-bit nonce 与 AAD（project/environment/key/stream/item/actor/chunk/count/length/status）独立认证。AES key 经平台 RSA-OAEP-256 公钥包装，私钥永不进入浏览器；加密不可用/失败时 fail-closed，不降级明文。助手流仅在完成后加密最终答复，不逐 token 上报。
+生产方为每个内容项生成随机 AES-256-GCM key，最多提交 32 块，并显式选择固定块模式：`fixed-600-v1` 保持既有 600-byte 块（2-byte 长度 + 最多 598-byte payload），用于对话和旧接入兼容；`fixed-4096-v2` 使用 4096-byte 块（2-byte 长度 + 最多 4094-byte payload），供回放等高吞吐通用内容减少事件数。每块使用随机 96-bit nonce 与 AAD（project/environment/key/stream/item/actor/chunk/count/length/status）独立认证。AES key 经平台 RSA-OAEP-256 公钥包装，私钥永不进入浏览器；加密不可用/失败时 fail-closed，不降级明文。平台不按 `content_type` 推断模式，业务生产方自行映射内容语义。
 
 ## 平台实现
 
 1. `/v1/config` 可选 `content_encryption`：`key_id`、`alg=RSA-OAEP-256`、public JWK；参与 ETag 哈希，来源授权与 key 轮换配置由 serve 读取。配置另带 Ed25519 detached `config_signature`（签 canonical SHA-256 digest）；SDK 通过构建期 trust anchor 验签并拒绝 unsigned/替换公钥/私钥参数。SDK 支持 206 事件上限（200 项目 + 6 `sys.*`）。
-2. `evia content-worker` 通过 ClickHouse 游标读取 `sys.content_chunk`，持有 PostgreSQL generation lease；密文解包/认证任一步失败即不推进游标。AAD v1 绑定 project/environment/key/stream/item/actor/chunk/count/content_length/truncated/status/duration；每块明文随机 padding 到固定 600 bytes，隐藏实际块长。旧开发块只在空版本标记时走受限兼容分支。
+2. `evia content-worker` 通过 ClickHouse 游标读取 `sys.content_chunk`，持有 PostgreSQL generation lease；密文解包/认证任一步失败即不推进游标。AAD v1 绑定 project/environment/key/stream/item/actor/chunk/count/content_length/truncated/status/duration；解密器按闭集 padding 标记要求 opened plaintext **恰好**为 600 或 4096 bytes，再校验内嵌 2-byte payload 长度位于 `1..block-2`。未知标记、600/4096 降级或错配、AAD 篡改均 fail-closed。旧开发块只在空版本标记时走受限的 ≤600-byte 兼容分支，不猜测 4096 模式。
 3. `KeyUnwrapper` 是 KMS/HSM 端口：
    - 生产 `KMS` 适配器只向 HTTPS（本机开发可显式放行 loopback HTTP）发送 wrapped key + key_id，Bearer token 从 0600 文件读取；返回 32-byte AES key，不持久化、不记录日志。
    - 开发/单节点提供 0600 private JWK 适配器；private 参数从不进入 API/SDK。

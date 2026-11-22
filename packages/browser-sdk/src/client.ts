@@ -273,6 +273,11 @@ function freezeConfig(config: PublicConfig): PublicConfig {
   return config;
 }
 
+const maxFixed600CiphertextLength = 1024;
+// A 4096-byte padded block plus the 16-byte GCM tag encodes to 5483
+// unpadded base64url characters. The complete envelope remains capped at 8 KiB.
+const maxFixed4096CiphertextLength = 5483;
+
 function encryptedContentProperties(chunk: EncryptedContentChunk): Properties {
   if (chunk === null || typeof chunk !== 'object')
     throw new EviaSDKError('INVALID_ENCRYPTED_CONTENT_CHUNK');
@@ -285,6 +290,12 @@ function encryptedContentProperties(chunk: EncryptedContentChunk): Properties {
   ] as const)
     requireText(value, bound, true);
   const encoded = /^[A-Za-z0-9_-]+$/;
+  const ciphertextLimit =
+    chunk.padding === 'fixed-600-v1'
+      ? maxFixed600CiphertextLength
+      : chunk.padding === 'fixed-4096-v2'
+        ? maxFixed4096CiphertextLength
+        : 0;
   if (
     !Number.isInteger(chunk.chunkIndex) ||
     !Number.isInteger(chunk.chunkCount) ||
@@ -292,15 +303,15 @@ function encryptedContentProperties(chunk: EncryptedContentChunk): Properties {
     chunk.chunkCount > 32 ||
     chunk.chunkIndex < 0 ||
     chunk.chunkIndex >= chunk.chunkCount ||
+    ciphertextLimit === 0 ||
     !encoded.test(chunk.ciphertext) ||
-    chunk.ciphertext.length > 1024 ||
+    chunk.ciphertext.length > ciphertextLimit ||
     !encoded.test(chunk.nonce) ||
     chunk.nonce.length > 64 ||
     !encoded.test(chunk.wrappedKey) ||
     chunk.wrappedKey.length > 1024 ||
     chunk.alg !== 'A256GCM+RSA-OAEP-256' ||
     chunk.aadVersion !== 'evia-content-v1' ||
-    chunk.padding !== 'fixed-600-v1' ||
     !Number.isInteger(chunk.contentLength) ||
     chunk.contentLength < 1 ||
     chunk.contentLength > 1_000_000 ||
@@ -330,7 +341,7 @@ function encryptedContentProperties(chunk: EncryptedContentChunk): Properties {
   };
   if (chunk.status) properties.status = chunk.status;
   if (chunk.durationMs !== undefined) properties.duration_ms = chunk.durationMs;
-  return properties;
+  return Object.freeze(properties);
 }
 
 export function createEviaClient(options: ClientOptions): BrowserClient {
@@ -752,7 +763,7 @@ class Client implements BrowserClient {
   // from leaking into the platform event contract.
   emitEncryptedContentChunk(chunk: EncryptedContentChunk): Emission {
     this.assertEnabled();
-    return this.enqueue(encryptedContentEventKey, encryptedContentProperties(chunk), {});
+    return this.enqueue(encryptedContentEventKey, encryptedContentProperties(chunk), {}, true);
   }
 
   // emitEncryptedContentChunks validates and reserves the complete list before
@@ -765,7 +776,7 @@ class Client implements BrowserClient {
     for (let index = 0; index < chunks.length; index++)
       if (!Object.prototype.hasOwnProperty.call(chunks, index))
         throw new EviaSDKError('INVALID_BULK_SIZE');
-    const properties = chunks.map((chunk) => copyProperties(encryptedContentProperties(chunk)));
+    const properties = chunks.map((chunk) => encryptedContentProperties(chunk));
     const createdAt = this.clock.now();
     const rotatesSession =
       createdAt - this.lastActivity >= this.sessionTimeout || createdAt < this.lastActivity;
@@ -915,10 +926,17 @@ class Client implements BrowserClient {
 
   // enqueue builds and queues one envelope. Public callers validate the custom
   // event key in emit(); automatic collection passes the reserved sys.* key.
-  private enqueue(eventKey: string, properties: Properties, options: EventOptions): Emission {
+  private enqueue(
+    eventKey: string,
+    properties: Properties,
+    options: EventOptions,
+    prepared = false,
+  ): Emission {
     this.assertEnabled();
     if (this.queue.length >= this.maxQueueEvents) throw new EviaSDKError('QUEUE_FULL');
-    const copied = copyProperties(properties);
+    // Reserved encrypted content is rebuilt, bounded and frozen by
+    // encryptedContentProperties; custom properties retain the generic 1024-char copy gate.
+    const copied = prepared ? properties : copyProperties(properties);
     if (options.operationId !== undefined) requireText(options.operationId, 128, true);
     if (this.sequence >= Number.MAX_SAFE_INTEGER) throw new EviaSDKError('SEQUENCE_EXHAUSTED');
     this.touchSession();

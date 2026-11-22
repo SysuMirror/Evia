@@ -185,7 +185,7 @@
           "ciphertext": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 1024
+            "maxLength": 5483
           },
           "nonce": {
             "type": "string",
@@ -213,8 +213,10 @@
             ]
           },
           "padding": {
+            "description": "Authenticated fixed plaintext block mode. fixed-600-v1 preserves the chat-compatible 600-byte block with at most 598 payload bytes; fixed-4096-v2 uses a 4096-byte block with at most 4094 payload bytes for higher-volume generic content.",
             "enum": [
-              "fixed-600-v1"
+              "fixed-600-v1",
+              "fixed-4096-v2"
             ]
           },
           "content_length": {
@@ -235,6 +237,27 @@
             "maximum": 3600000
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "padding": {
+                  "const": "fixed-600-v1"
+                }
+              },
+              "required": [
+                "padding"
+              ]
+            },
+            "then": {
+              "properties": {
+                "ciphertext": {
+                  "maxLength": 1024
+                }
+              }
+            }
+          }
+        ],
         "required": [
           "content_type",
           "stream_id",

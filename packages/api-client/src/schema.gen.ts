@@ -4122,7 +4122,7 @@ export interface components {
                 version: string;
             };
             properties: {
-                [key: string]: (string | boolean | number) | (string | boolean | number)[];
+                [key: string]: ((string | boolean | number) | (string | boolean | number)[]) | string;
             };
         };
         "collect-request.schema": {

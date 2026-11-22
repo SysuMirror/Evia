@@ -240,7 +240,7 @@ export interface EncryptedContentChunk {
   keyId: string;
   alg: 'A256GCM+RSA-OAEP-256';
   aadVersion: 'evia-content-v1';
-  padding: 'fixed-600-v1';
+  padding: 'fixed-600-v1' | 'fixed-4096-v2';
   contentLength: number;
   truncated: boolean;
   status?: string;

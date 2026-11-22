@@ -1,6 +1,7 @@
 package content
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -45,6 +46,14 @@ func testDecryptor(t *testing.T) (*RSAOAEPDecryptor, *rsa.PublicKey) {
 
 func encryptTestChunk(t *testing.T, public *rsa.PublicKey, plaintext []byte) EncryptedChunk {
 	t.Helper()
+	return encryptTestChunkBlock(t, public, plaintext, "fixed-600-v1", 600, len(plaintext))
+}
+
+func encryptTestChunkBlock(t *testing.T, public *rsa.PublicKey, plaintext []byte, padding string, blockSize, embeddedLength int) EncryptedChunk {
+	t.Helper()
+	if blockSize < 2 || len(plaintext) > blockSize-2 {
+		t.Fatal("invalid encrypted test block")
+	}
 	rawKey := make([]byte, 32)
 	nonce := make([]byte, 12)
 	if _, err := rand.Read(rawKey); err != nil {
@@ -63,12 +72,12 @@ func encryptTestChunk(t *testing.T, public *rsa.PublicKey, plaintext []byte) Enc
 		ProjectID: "p", Environment: "development", EventID: "e", ReceivedAt: time.Now().UTC(),
 		ContentType: "ai_chat_message", StreamID: "conversation", ItemID: "message", ActorType: "user",
 		ChunkIndex: 0, ChunkCount: 1, KeyID: "key-1", Algorithm: "A256GCM+RSA-OAEP-256",
-		AADVersion: "evia-content-v1", Padding: "fixed-600-v1",
+		AADVersion: "evia-content-v1", Padding: padding,
 		Nonce: base64.RawURLEncoding.EncodeToString(nonce), WrappedKey: base64.RawURLEncoding.EncodeToString(wrapped),
 		ContentLength: len(plaintext),
 	}
-	padded := make([]byte, 600)
-	padded[0], padded[1] = byte(len(plaintext)>>8), byte(len(plaintext))
+	padded := make([]byte, blockSize)
+	padded[0], padded[1] = byte(embeddedLength>>8), byte(embeddedLength)
 	copy(padded[2:], plaintext)
 	if _, err = rand.Read(padded[2+len(plaintext):]); err != nil {
 		t.Fatal(err)
@@ -89,6 +98,64 @@ func TestRSAOAEPDecryptorAuthenticatesContent(t *testing.T) {
 	encrypted.ItemID = "tampered"
 	if _, err = decryptor.Decrypt(context.Background(), encrypted); err == nil {
 		t.Fatal("AAD tampering must fail closed")
+	}
+}
+
+func TestRSAOAEPDecryptorSupportsMixedFixedPaddingItems(t *testing.T) {
+	decryptor, public := testDecryptor(t)
+	cases := []struct {
+		padding   string
+		blockSize int
+		plaintext []byte
+	}{
+		{padding: "fixed-600-v1", blockSize: 600, plaintext: []byte("chat-compatible")},
+		{padding: "fixed-4096-v2", blockSize: 4096, plaintext: bytes.Repeat([]byte("r"), 4094)},
+	}
+	for _, tc := range cases {
+		encrypted := encryptTestChunkBlock(t, public, tc.plaintext, tc.padding, tc.blockSize, len(tc.plaintext))
+		decrypted, err := decryptor.Decrypt(context.Background(), encrypted)
+		if err != nil || !bytes.Equal(decrypted.Plaintext, tc.plaintext) {
+			t.Fatalf("%s decrypt mismatch: len=%d err=%v", tc.padding, len(decrypted.Plaintext), err)
+		}
+	}
+}
+
+func TestRSAOAEPDecryptorRejectsMalformedOrMismatchedPadding(t *testing.T) {
+	decryptor, public := testDecryptor(t)
+	plain := []byte("bounded")
+
+	malformedLength := encryptTestChunkBlock(t, public, plain, "fixed-4096-v2", 4096, 4095)
+	if _, err := decryptor.Decrypt(context.Background(), malformedLength); err == nil {
+		t.Fatal("embedded length beyond block payload must fail closed")
+	}
+	zeroLength := encryptTestChunkBlock(t, public, plain, "fixed-4096-v2", 4096, 0)
+	if _, err := decryptor.Decrypt(context.Background(), zeroLength); err == nil {
+		t.Fatal("zero embedded length must fail closed")
+	}
+	wrongOpenedLength := encryptTestChunkBlock(t, public, plain, "fixed-4096-v2", 4095, len(plain))
+	if _, err := decryptor.Decrypt(context.Background(), wrongOpenedLength); err == nil {
+		t.Fatal("non-exact opened block length must fail closed")
+	}
+
+	large := encryptTestChunkBlock(t, public, plain, "fixed-4096-v2", 4096, len(plain))
+	large.Padding = "fixed-600-v1"
+	if _, err := decryptor.Decrypt(context.Background(), large); err == nil {
+		t.Fatal("4096 to 600 padding downgrade must fail closed")
+	}
+	small := encryptTestChunk(t, public, plain)
+	small.Padding = "fixed-4096-v2"
+	if _, err := decryptor.Decrypt(context.Background(), small); err == nil {
+		t.Fatal("600 to 4096 padding tamper must fail closed")
+	}
+	small.Padding = "fixed-unknown-v9"
+	if _, err := decryptor.Decrypt(context.Background(), small); err == nil {
+		t.Fatal("unknown padding must fail closed")
+	}
+
+	unversionedLarge := encryptTestChunkBlock(t, public, plain, "fixed-4096-v2", 4096, len(plain))
+	unversionedLarge.AADVersion, unversionedLarge.Padding = "", ""
+	if _, err := decryptor.Decrypt(context.Background(), unversionedLarge); err == nil {
+		t.Fatal("legacy compatibility must not guess the 4096-byte mode")
 	}
 }
 

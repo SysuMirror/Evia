@@ -220,12 +220,20 @@ func (d *RSAOAEPDecryptor) Decrypt(ctx context.Context, chunk EncryptedChunk) (D
 		chunk.ChunkIndex, chunk.ChunkCount, chunk.ContentLength, boolInt(chunk.Truncated), chunk.Status, chunk.DurationMS,
 	))
 	var opened []byte
-	paddedV1 := false
-	if chunk.AADVersion == "evia-content-v1" && chunk.Padding == "fixed-600-v1" {
+	paddedBlockSize := 0
+	if chunk.AADVersion == "evia-content-v1" {
+		switch chunk.Padding {
+		case "fixed-600-v1":
+			paddedBlockSize = 600
+		case "fixed-4096-v2":
+			paddedBlockSize = 4096
+		default:
+			return DecryptedChunk{}, errors.New("content AAD or padding version is unsupported")
+		}
 		opened, err = gcm.Open(nil, nonce, ciphertext, aadV1)
-		if err != nil {
+		if err != nil && chunk.Padding == "fixed-600-v1" {
 			// Compatibility for the development window before content_type was
-			// added to v1 AAD. New producers always bind content_type.
+			// added to v1 AAD. The new 4096 mode was never emitted in that window.
 			preGenericAAD := []byte(fmt.Sprintf(
 				"evia-content-v1|%s|%s|%s|%s|%s|%s|%d|%d|%d|%d|%s|%d",
 				chunk.ProjectID, chunk.Environment, chunk.KeyID, chunk.StreamID, chunk.ItemID, chunk.ActorType,
@@ -233,16 +241,18 @@ func (d *RSAOAEPDecryptor) Decrypt(ctx context.Context, chunk EncryptedChunk) (D
 			))
 			opened, err = gcm.Open(nil, nonce, ciphertext, preGenericAAD)
 		}
-		paddedV1 = err == nil
 	} else if chunk.AADVersion == "" && chunk.Padding == "" {
 		// Compatibility for pre-v1 and the short-lived development transition:
-		// old chunks used the legacy AAD/plaintext, while transitional padded
-		// chunks used v1 AAD before version markers were published.
+		// old chunks used the legacy AAD/plaintext, while transitional 600-byte
+		// chunks used v1 AAD before version markers were published. This branch
+		// deliberately never guesses the newer 4096-byte mode.
 		legacyAAD := []byte(fmt.Sprintf("%s|%s|%d|%d|%s", chunk.KeyID, chunk.ItemID, chunk.ChunkIndex, chunk.ChunkCount, chunk.ActorType))
 		opened, err = gcm.Open(nil, nonce, ciphertext, legacyAAD)
 		if err != nil {
 			opened, err = gcm.Open(nil, nonce, ciphertext, aadV1)
-			paddedV1 = err == nil
+			if err == nil {
+				paddedBlockSize = 600
+			}
 		}
 	} else {
 		return DecryptedChunk{}, errors.New("content AAD or padding version is unsupported")
@@ -251,12 +261,12 @@ func (d *RSAOAEPDecryptor) Decrypt(ctx context.Context, chunk EncryptedChunk) (D
 		return DecryptedChunk{}, errors.New("content authentication failed")
 	}
 	var plaintext []byte
-	if paddedV1 {
-		if len(opened) != 600 {
+	if paddedBlockSize > 0 {
+		if len(opened) != paddedBlockSize {
 			return DecryptedChunk{}, errors.New("content authentication failed")
 		}
 		length := int(opened[0])<<8 | int(opened[1])
-		if length < 1 || length > 598 {
+		if length < 1 || length > paddedBlockSize-2 {
 			return DecryptedChunk{}, errors.New("content padding is invalid")
 		}
 		plaintext = append([]byte(nil), opened[2:2+length]...)

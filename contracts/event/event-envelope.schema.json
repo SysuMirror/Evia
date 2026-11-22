@@ -138,6 +138,12 @@
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]{0,63}$"
       },
+      "patternProperties": {
+        "^ciphertext$": {
+          "type": "string",
+          "maxLength": 5483
+        }
+      },
       "additionalProperties": {
         "anyOf": [
           {

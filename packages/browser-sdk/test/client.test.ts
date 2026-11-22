@@ -2286,6 +2286,73 @@ test('encrypted content uses the strict generic reserved envelope', async () => 
   client.destroy();
 });
 
+test('4096-padded content stays within ciphertext and total event bounds', async () => {
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { maxQueueBytes: 8192 },
+    encryptedContentConfig(),
+  );
+  await client.init();
+  client.identify('account-123');
+  client.navigate({
+    routeName: 'replay detail',
+    routeTemplate: '/projects/:projectId/replays/:replayId',
+    sourceModule: 'replay-player',
+    navigationType: 'push',
+  });
+  const emission = client.emitEncryptedContentChunk(
+    encryptedChunk({
+      contentType: 'session_replay_snapshot',
+      streamId: 'replay-2026-11-23-0001',
+      itemId: 'segment-000032',
+      actorType: 'browser',
+      ciphertext: 'a'.repeat(5483),
+      nonce: 'b'.repeat(16),
+      wrappedKey: 'c'.repeat(342),
+      padding: 'fixed-4096-v2',
+      contentLength: 4094,
+      status: 'complete',
+      durationMs: 1250,
+    }),
+  );
+  await client.flush();
+  assert.equal((await emission.result).status, 'accepted');
+  const event = (JSON.parse(bodies[0]!) as Body).events[0]!;
+  const eventBytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+  assert.ok(eventBytes < 8192, `realistic 4096-mode event used ${eventBytes} bytes`);
+  assert.equal(event.properties.padding, 'fixed-4096-v2');
+  assert.equal(event.properties.ciphertext.length, 5483);
+  client.destroy();
+});
+
+test('encrypted content enforces mode-specific ciphertext bounds', () => {
+  const { client } = setupAuto((body) => receipt(body), {}, encryptedContentConfig());
+  assert.doesNotThrow(() =>
+    client.emitEncryptedContentChunk(
+      encryptedChunk({ padding: 'fixed-600-v1', ciphertext: 'a'.repeat(1024) }),
+    ),
+  );
+  assert.throws(
+    () =>
+      client.emitEncryptedContentChunk(
+        encryptedChunk({ padding: 'fixed-600-v1', ciphertext: 'a'.repeat(1025) }),
+      ),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_ENCRYPTED_CONTENT_CHUNK',
+  );
+  client.destroy();
+
+  const modern = setupAuto((body) => receipt(body), {}, encryptedContentConfig());
+  assert.throws(
+    () =>
+      modern.client.emitEncryptedContentChunk(
+        encryptedChunk({ padding: 'fixed-4096-v2', ciphertext: 'a'.repeat(5484) }),
+      ),
+    (error) => error instanceof EviaSDKError && error.code === 'INVALID_ENCRYPTED_CONTENT_CHUNK',
+  );
+  assert.equal(modern.client.pending, 0);
+  modern.client.destroy();
+});
+
 test('encrypted content rejects malformed chunks before queue allocation', () => {
   const { client } = setupAuto((body) => receipt(body), {}, encryptedContentConfig());
   for (const malformed of [
@@ -2293,7 +2360,7 @@ test('encrypted content rejects malformed chunks before queue allocation', () =>
     encryptedChunk({ ciphertext: 'not+base64' }),
     encryptedChunk({ contentLength: 0 }),
     encryptedChunk({ streamId: '' }),
-    encryptedChunk({ padding: 'fixed-600-v2' as 'fixed-600-v1' }),
+    encryptedChunk({ padding: 'fixed-600-v2' as EncryptedContentChunk['padding'] }),
   ]) {
     assert.throws(
       () => client.emitEncryptedContentChunk(malformed),
@@ -2301,6 +2368,36 @@ test('encrypted content rejects malformed chunks before queue allocation', () =>
     );
   }
   assert.equal(client.pending, 0);
+  client.destroy();
+});
+
+test('bulk encrypted admission supports mixed modes at the 32-chunk item limit', async () => {
+  const { client, bodies } = setupAuto(
+    (body) => receipt(body),
+    { maxQueueEvents: 32 },
+    encryptedContentConfig(),
+  );
+  const chunks = Array.from({ length: 32 }, (_, index) =>
+    encryptedChunk({
+      itemId: 'mixed-mode-item',
+      chunkIndex: index,
+      chunkCount: 32,
+      padding: index % 2 === 0 ? 'fixed-600-v1' : 'fixed-4096-v2',
+      ciphertext: 'a'.repeat(index % 2 === 0 ? 822 : 5483),
+      contentLength: 32 * 4094,
+    }),
+  );
+  const emissions = client.emitEncryptedContentChunks(chunks);
+  const result = await client.drainUntilSettled(emissions, { timeoutMs: 5000 });
+  assert.equal(result.status, 'accepted');
+  const sent = bodies.flatMap((body) => (JSON.parse(body) as Body).events);
+  assert.equal(sent.length, 32);
+  assert.deepEqual(
+    sent.map((event) => event.properties.chunk_index),
+    Array.from({ length: 32 }, (_, index) => index),
+  );
+  assert.equal(sent.filter((event) => event.properties.padding === 'fixed-600-v1').length, 16);
+  assert.equal(sent.filter((event) => event.properties.padding === 'fixed-4096-v2').length, 16);
   client.destroy();
 });
 
