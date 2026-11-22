@@ -441,6 +441,7 @@ export function ReportsPage({ project, session, environment }: PageProps) {
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       render: (row) =>
         canWrite ? (
           <div className="report-actions">

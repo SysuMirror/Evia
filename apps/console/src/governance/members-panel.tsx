@@ -240,6 +240,7 @@ export function MembersPanel({ project, session, perform, busy }: MembersPanelPr
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       align: 'right',
       render: (row) => {
         const lastOwner = isLastEnabledOwner(members.data?.items ?? [], row.user_id);

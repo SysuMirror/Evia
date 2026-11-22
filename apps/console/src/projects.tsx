@@ -146,6 +146,7 @@ export function ProjectsPage({ session }: { session: Session }) {
     {
       header: '操作',
       key: 'actions',
+      kind: 'actions',
       width: 140,
       render: (project) => (
         <Button variant="link" onClick={() => void navigate(`/projects/${project.id}/events`)}>

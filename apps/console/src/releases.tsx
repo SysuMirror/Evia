@@ -207,6 +207,7 @@ export function ReleasesPage({ project, session, environment }: CatalogPageProps
     {
       key: 'action',
       header: '操作',
+      kind: 'actions',
       render: (release) => (
         <Button size="small" onClick={() => openDetails(release)}>
           查看详情

@@ -7,6 +7,7 @@ export interface DataTableColumn<T> {
   render: (row: T) => ReactNode;
   width?: CSSProperties['width'];
   align?: 'left' | 'center' | 'right';
+  kind?: 'data' | 'actions';
 }
 
 export interface DataTableProps<T> {
@@ -17,6 +18,7 @@ export interface DataTableProps<T> {
   empty?: ReactNode;
   loading?: boolean;
   minWidth?: CSSProperties['minWidth'];
+  density?: 'compact' | 'comfortable';
 }
 
 export function DataTable<T>({
@@ -27,6 +29,7 @@ export function DataTable<T>({
   empty = '暂无数据',
   loading = false,
   minWidth = 600,
+  density = 'compact',
 }: DataTableProps<T>) {
   const captionID = useId();
   return (
@@ -34,10 +37,10 @@ export function DataTable<T>({
       className="evia-table-region"
       role="region"
       aria-labelledby={captionID}
-      aria-busy={loading}
+      aria-busy={loading || undefined}
       tabIndex={0}
     >
-      <table className="evia-table" style={{ minWidth }}>
+      <table className={`evia-table evia-table-${density}`} style={{ minWidth }}>
         <caption id={captionID} className="sr-only">
           {caption}
         </caption>
@@ -47,6 +50,7 @@ export function DataTable<T>({
               <th
                 key={column.key}
                 scope="col"
+                className={column.kind === 'actions' ? 'evia-table-actions' : undefined}
                 style={{ width: column.width, textAlign: column.align }}
               >
                 {column.header}
@@ -58,7 +62,11 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr key={rowKey(row)}>
               {columns.map((column) => (
-                <td key={column.key} style={{ textAlign: column.align }}>
+                <td
+                  key={column.key}
+                  className={column.kind === 'actions' ? 'evia-table-actions' : undefined}
+                  style={{ textAlign: column.align }}
+                >
                   {column.render(row)}
                 </td>
               ))}

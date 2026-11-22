@@ -161,14 +161,24 @@ export function Modal({
         <h2 id={titleID}>{title}</h2>
         <Button
           variant="ghost"
+          size="small"
+          iconOnly
+          startIcon={
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path
+                d="m4.5 4.5 9 9m0-9-9 9"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          }
           className="evia-modal-close"
           data-modal-close
           aria-label="关闭"
           disabled={busy}
           onClick={onRequestClose}
-        >
-          ×
-        </Button>
+        />
       </header>
       <div className="evia-modal-body">{children}</div>
       {footer && <footer className="evia-modal-footer">{footer}</footer>}

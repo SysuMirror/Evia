@@ -286,6 +286,7 @@ export function MetricsPage({ project, session, environment }: PageProps) {
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       render: (row) =>
         canWrite ? (
           archivedView ? (

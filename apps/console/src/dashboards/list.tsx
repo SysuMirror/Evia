@@ -114,6 +114,7 @@ export function DashboardsList({
     {
       key: 'action',
       header: '操作',
+      kind: 'actions',
       render: (analysis) =>
         archivedView ? (
           <span className="dashboard-row-actions">

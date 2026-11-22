@@ -104,6 +104,7 @@ export function SavedAnalysesList({
     {
       key: 'action',
       header: '操作',
+      kind: 'actions',
       render: (analysis) =>
         archivedView ? (
           <Button size="small" disabled={busy || !canWrite} onClick={() => onUnarchive(analysis)}>

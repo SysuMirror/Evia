@@ -17,6 +17,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
   loading?: boolean;
   size?: 'small' | 'medium' | 'large';
+  startIcon?: ReactNode;
+  endIcon?: ReactNode;
+  iconOnly?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -29,6 +32,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     disabled,
     onFocus,
     onBlur,
+    startIcon,
+    endIcon,
+    iconOnly = false,
     children,
     ...props
   },
@@ -94,7 +100,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
       ref={buttonRef}
       type={type}
-      className={`evia-button evia-button-${variant} evia-button-${size} ${className}`}
+      className={`evia-button evia-button-${variant} evia-button-${size}${iconOnly ? ' evia-button-icon-only' : ''} ${className}`}
       disabled={disabled || loading}
       aria-busy={loading || props['aria-busy'] || undefined}
       onFocus={(event) => {
@@ -106,8 +112,20 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         onBlur?.(event);
       }}
     >
-      {loading && <span className="evia-spinner" aria-hidden="true" />}
-      {children}
+      {loading && <span className="evia-spinner evia-button-spinner" aria-hidden="true" />}
+      <span className={`evia-button-content${loading ? ' evia-button-content-loading' : ''}`}>
+        {startIcon && (
+          <span className="evia-button-icon" aria-hidden="true">
+            {startIcon}
+          </span>
+        )}
+        {children}
+        {endIcon && (
+          <span className="evia-button-icon" aria-hidden="true">
+            {endIcon}
+          </span>
+        )}
+      </span>
     </button>
   );
 });
@@ -126,6 +144,7 @@ export function Field({
   htmlFor,
   error,
   hint,
+  help,
   required,
   children,
   className = '',
@@ -134,6 +153,7 @@ export function Field({
   htmlFor: string;
   error?: ReactNode;
   hint?: ReactNode;
+  help?: ReactNode;
   required?: boolean;
   children: ReactNode;
   className?: string;
@@ -141,8 +161,9 @@ export function Field({
   const uniqueID = useId();
   const hintID = `${uniqueID}-hint`;
   const errorID = `${uniqueID}-error`;
+  const helpContent = help ?? hint;
   const describedBy =
-    [hint ? hintID : '', error ? errorID : ''].filter(Boolean).join(' ') || undefined;
+    [helpContent ? hintID : '', error ? errorID : ''].filter(Boolean).join(' ') || undefined;
   return (
     <FieldContext.Provider value={{ id: htmlFor, describedBy, invalid: Boolean(error), required }}>
       <div className={`evia-field ${className}`}>
@@ -156,9 +177,9 @@ export function Field({
           )}
         </label>
         {children}
-        {hint && (
+        {helpContent && (
           <div className="evia-field-hint" id={hintID}>
-            {hint}
+            {helpContent}
           </div>
         )}
         <div className="evia-field-error" id={errorID} aria-live="polite" aria-atomic="true">

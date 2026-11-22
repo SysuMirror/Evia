@@ -43,7 +43,9 @@
   --space-unit: 8px;
   --radius-control: 12px;
   --radius-panel: 24px;
+  --control-height-small: 34px;
   --control-height: 40px;
+  --control-height-large: 46px;
   --shadow-card: 0 1px 2px rgb(32 31 38 / 4%), 0 12px 36px rgb(63 51 78 / 5%);
   --shadow-floating: 0 18px 70px rgb(43 36 52 / 16%);
   --focus-ring: 0 0 0 3px rgb(20 118 109 / 16%);
@@ -338,9 +340,7 @@ p {
   gap: 8px;
 }
 .pagination-actions .evia-button {
-  height: 30px;
-  padding-inline: 10px;
-  font-size: 12px;
+  white-space: nowrap;
 }
 .muted {
   color: var(--color-muted);
@@ -620,10 +620,10 @@ p {
   border: 0;
 }
 .evia-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   min-height: var(--control-height);
   padding: 6px 16px;
   border: 1px solid var(--color-border-strong);
@@ -640,7 +640,27 @@ p {
     color 120ms,
     background-color 120ms,
     border-color 120ms,
-    box-shadow 120ms;
+    box-shadow 120ms,
+    transform 80ms;
+}
+.evia-button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.evia-button-content-loading {
+  opacity: 0;
+}
+.evia-button-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+.evia-button-icon > svg {
+  display: block;
 }
 .evia-button:hover:enabled {
   color: var(--color-accent);
@@ -708,6 +728,9 @@ p {
   border-color: transparent;
   text-decoration: underline;
 }
+.evia-button:active:enabled {
+  transform: translateY(1px);
+}
 .evia-button[aria-pressed='true']:enabled {
   color: var(--color-accent-active);
   background: var(--color-accent-soft);
@@ -729,13 +752,29 @@ p {
   opacity: 0.76;
 }
 .evia-button-small {
-  min-height: 30px;
-  padding: 4px 10px;
-  font-size: 12px;
+  min-height: var(--control-height-small);
+  padding: 4px 11px;
+  font-size: 13px;
 }
 .evia-button-large {
-  min-height: 42px;
-  padding: 8px 18px;
+  min-height: var(--control-height-large);
+  padding: 9px 20px;
+  font-size: 15px;
+}
+.evia-button-icon-only {
+  width: var(--control-height);
+  padding-inline: 0;
+}
+.evia-button-small.evia-button-icon-only {
+  width: var(--control-height-small);
+}
+.evia-button-large.evia-button-icon-only {
+  width: var(--control-height-large);
+}
+.evia-button-spinner {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  margin: -7.5px 0 0 -7.5px;
 }
 .evia-spinner {
   display: inline-block;
@@ -806,7 +845,9 @@ p {
   cursor: not-allowed;
 }
 .evia-input[readonly]:not(:disabled) {
+  border-color: var(--color-border);
   background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
   cursor: text;
 }
 .evia-input::placeholder {
@@ -815,9 +856,18 @@ p {
 .evia-textarea {
   resize: vertical;
   min-height: 96px;
+  padding-block: 10px;
 }
 .evia-select {
-  padding-right: 28px;
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%236a6673' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+.evia-select:disabled {
+  opacity: 1;
 }
 .evia-field-hint,
 .evia-field-error {
@@ -955,10 +1005,32 @@ p {
 }
 .evia-table th,
 .evia-table td {
-  padding: 14px 20px;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
   overflow-wrap: anywhere;
+}
+.evia-table-compact th,
+.evia-table-compact td {
+  padding: 11px 16px;
+}
+.evia-table-comfortable th,
+.evia-table-comfortable td {
+  padding: 15px 20px;
+}
+.evia-table .evia-table-actions {
+  width: 1%;
+  min-width: max-content;
+  white-space: nowrap;
+  text-align: right;
+}
+.evia-table td.evia-table-actions > .inline-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.evia-table td.evia-table-actions .evia-button:not(.evia-button-icon-only) {
+  min-height: var(--control-height-small);
+  padding: 4px 11px;
+  font-size: 13px;
 }
 .evia-table tr:last-child td {
   border-bottom: 0;
@@ -990,7 +1062,8 @@ p {
   width: min(960px, calc(100vw - 32px));
 }
 .evia-modal::backdrop {
-  background: rgb(15 23 42 / 32%);
+  background: rgb(32 31 38 / 34%);
+  backdrop-filter: blur(2px);
 }
 .evia-modal-header {
   display: flex;
@@ -1010,12 +1083,7 @@ p {
 }
 .evia-modal-close {
   flex-shrink: 0;
-  font-size: 22px;
-  font-weight: 400;
-  width: 32px;
-  min-height: 32px;
-  padding: 0;
-  margin: -3px -6px 0 0;
+  margin: -5px -6px 0 0;
 }
 .evia-modal-body {
   min-height: 0;
@@ -1031,6 +1099,8 @@ p {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 .evia-toast-region {
@@ -1078,7 +1148,16 @@ p {
     flex-wrap: wrap;
     gap: 8px;
   }
+  .evia-button-small,
+  .evia-table td.evia-table-actions .evia-button:not(.evia-button-icon-only) {
+    min-height: 40px;
+  }
+  .evia-tab-list > button {
+    min-height: 40px;
+  }
   .evia-modal-footer .evia-button {
+    flex: 1 1 140px;
+    min-height: 44px;
     white-space: normal;
   }
 }
@@ -1321,13 +1400,13 @@ p {
 }
 .evia-tab-list > button {
   flex-shrink: 0;
-  min-height: 36px;
+  min-height: 38px;
   padding: 7px 16px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 540;
   cursor: pointer;
 }
@@ -1336,7 +1415,7 @@ p {
   background: var(--color-surface-hover);
 }
 .evia-tab-list > button[aria-selected='true'] {
-  color: var(--color-text);
+  color: var(--color-accent-active);
   background: var(--color-surface-raised);
   box-shadow: 0 1px 3px rgb(32 31 38 / 8%);
   font-weight: 650;
@@ -1642,7 +1721,7 @@ p {
     flex-basis: 100%;
   }
   .evia-tab-list {
-    gap: 20px;
+    gap: 4px;
   }
 }
 @media (max-width: 400px) {

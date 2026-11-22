@@ -66,6 +66,7 @@ export function MachineDetail({
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       render: (row) => (
         <Button
           variant="link"

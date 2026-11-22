@@ -108,7 +108,12 @@ export function Tabs({
   const selected = enabled.find((item) => item.id === value) ?? enabled[0];
   return (
     <div className="evia-tabs">
-      <div className="evia-tab-list" role="tablist" aria-label={label}>
+      <div
+        className="evia-tab-list"
+        role="tablist"
+        aria-label={label}
+        aria-orientation="horizontal"
+      >
         {items.map((item, index) => (
           <button
             key={item.id}
@@ -135,7 +140,9 @@ export function Tabs({
               else if (event.key === 'End') next = enabled.at(-1);
               if (!next) return;
               event.preventDefault();
-              buttons.current.get(next.id)?.focus();
+              const nextButton = buttons.current.get(next.id);
+              nextButton?.focus();
+              nextButton?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
               onChange(next.id);
             }}
           >
@@ -149,7 +156,6 @@ export function Tabs({
           id={`${uniqueID}-panel-${index}`}
           role="tabpanel"
           aria-labelledby={`${uniqueID}-tab-${index}`}
-          tabIndex={0}
           hidden={selected?.id !== item.id}
           className="evia-tab-panel"
         >

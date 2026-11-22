@@ -244,6 +244,7 @@ export function ArchivingPage({ project, session, environment }: PageProps) {
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       render: (row) =>
         row.state === 'queued' ? (
           <Button variant="secondary" disabled={!!requests.busy} onClick={() => cancelJob(row)}>

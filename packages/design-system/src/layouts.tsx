@@ -229,6 +229,20 @@ export function DataSurface({
   );
 }
 
+function PaginationArrow({ direction }: { direction: 'previous' | 'next' }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d={direction === 'previous' ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function PaginationBar({
   page,
   count,
@@ -245,19 +259,29 @@ export function PaginationBar({
   onNext: () => void;
 }) {
   return (
-    <div className="pagination-bar">
-      <span className="pagination-summary">
+    <nav className="pagination-bar" aria-label="分页" aria-busy={busy || undefined}>
+      <span className="pagination-summary" aria-live="polite">
         第 {page} 页，本页 {count} 项
       </span>
       <div className="pagination-actions">
-        <Button disabled={page === 1 || busy} onClick={onPrevious}>
+        <Button
+          size="small"
+          startIcon={<PaginationArrow direction="previous" />}
+          disabled={page === 1 || busy}
+          onClick={onPrevious}
+        >
           上一页
         </Button>
-        <Button disabled={!hasNext || busy} onClick={onNext}>
+        <Button
+          size="small"
+          endIcon={<PaginationArrow direction="next" />}
+          disabled={!hasNext || busy}
+          onClick={onNext}
+        >
           下一页
         </Button>
       </div>
-    </div>
+    </nav>
   );
 }
 

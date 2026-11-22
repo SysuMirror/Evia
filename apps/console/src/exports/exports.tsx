@@ -245,6 +245,7 @@ export function ExportsPage({ project, session, environment }: PageProps) {
     {
       key: 'actions',
       header: '操作',
+      kind: 'actions',
       render: (row) => {
         if (row.state === 'queued') {
           return (
