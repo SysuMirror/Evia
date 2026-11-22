@@ -30,6 +30,10 @@ fixture 在 newSSE 登录页注入 100 条/波、每条 3000 hex 字符的高熵
 
 尝试过 8-item 并发 enqueue/flush 探针：wall time 降到 184.951 s，但预算已计 2,013,246 时只确认 9 items / 682 total events，暴露并发 flush/queue 竞争导致的严重完整性退化。该实验改动已立即回滚，未提交。这个结果证明不能以吞吐换取静默丢段。
 
+## 弱网探针
+
+Chromium 移动上下文 `390×844` 使用 250 ms latency、32 KiB/s 上下行运行登录页 snapshot+100 mutations。保持页面 168.169 s 后，预算已计 56,016 encoded chars，但 accepted item 仍为0；因此 weak capture gate 失败，预定的首批 429/Retry-After 注入尚未进入可验证阶段。该结果要求先把 config/collector request timeout、持久队列续传和“预算计费早于 accepted”可观测性补齐，再运行完整 weak 四格，不得把静默等待视为通过。
+
 ## 下一步
 
 在运行耗时约四倍的 8 MiB 矩阵前，先扩展 SDK 为显式 bulk emission/drain API：在单队列所有 emission 已取得句柄后，按 20-event batch 循环 flush，并逐 outcome 对账；不得并发调用现有 per-item flush。优化必须先复现 browser=CH=PG=artifact 等值，再运行 baseline/weak × 2/8 MiB 四格矩阵。
