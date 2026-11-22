@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   api,
@@ -40,7 +40,6 @@ const MAX_PREVIEW_ITEMS = 600;
 
 type PageProps = { project: Project; session: Session; environment: Environment };
 type Preview = { timeline: ReplayTimeline; srcDoc: string; itemCount: number };
-type MobilePanel = 'sessions' | 'records' | 'details';
 
 async function loadSnapshotPreview(
   projectID: string,
@@ -101,8 +100,6 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [playbackStep, setPlaybackStep] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('sessions');
-  const mobileTabsID = useId();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const previewController = useRef<AbortController | undefined>(undefined);
 
@@ -199,6 +196,33 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
   };
 
   const selectedSummary = streams.data?.items.find((row) => row.stream_id === selectedStream);
+  const playerState = previewError
+    ? 'failed'
+    : previewLoading
+      ? 'loading'
+      : preview?.timeline.exact
+        ? 'exact'
+        : preview
+          ? 'snapshot'
+          : selectedStream
+            ? 'ready'
+            : 'idle';
+  const playerStateLabel = {
+    idle: '待选择',
+    ready: '待加载',
+    loading: '组装中',
+    exact: '精确回放',
+    snapshot: '仅快照',
+    failed: '失败',
+  }[playerState];
+  const playerStateTone =
+    playerState === 'failed'
+      ? 'error'
+      : playerState === 'snapshot' || playerState === 'ready'
+        ? 'warning'
+        : playerState === 'exact'
+          ? 'success'
+          : 'neutral';
   const streamColumns: DataTableColumn<ContentStreamSummary>[] = [
     {
       key: 'stream',
@@ -259,17 +283,24 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
                 )
               }
               action={
-                selectedStream ? (
-                  <Button loading={previewLoading} onClick={() => void openPreview()}>
-                    加载安全快照预览
-                  </Button>
-                ) : undefined
+                <>
+                  <Badge tone={playerStateTone}>{playerStateLabel}</Badge>
+                  {selectedStream && (playerState === 'ready' || playerState === 'failed') ? (
+                    <Button loading={previewLoading} onClick={() => void openPreview()}>
+                      {playerState === 'failed' ? '重新加载' : '加载回放'}
+                    </Button>
+                  ) : undefined}
+                </>
               }
             />
-            {previewError && (
-              <div className="replay-local-error">
-                <Alert tone="error" title="无法重建当前回放">
-                  {previewError.message}
+            {playerState === 'failed' && previewError && (
+              <div className="replay-failed-state">
+                <Alert
+                  tone="error"
+                  title="无法重建当前回放"
+                  action={<Button onClick={() => void openPreview()}>重新加载</Button>}
+                >
+                  {previewError.message} 请检查内容完整性，或从会话列表选择其他记录。
                 </Alert>
               </div>
             )}
@@ -280,7 +311,7 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
             {selectedStream && !previewLoading && !preview && !previewError && (
               <EmptyPanel description="内容记录已就绪，使用播放器标题栏的加载操作开始。" />
             )}
-            {preview && (
+            {preview && !previewError && (
               <>
                 <div className="replay-preview-meta">
                   <span>路由：{preview.timeline.snapshot.route || '—'}</span>
@@ -295,8 +326,8 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
                 </div>
                 {!preview.timeline.exact && (
                   <div className="replay-local-error">
-                    <Alert tone="warning" title="当前章节只能安全显示快照">
-                      {preview.timeline.issue}
+                    <Alert tone="warning" title="仅显示安全快照，不提供播放控制">
+                      {preview.timeline.issue} 记录不满足精确播放条件，可检查快照或选择其他会话。
                     </Alert>
                   </div>
                 )}
@@ -356,36 +387,7 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
           </DataSurface>
         </div>
 
-        <div className="replay-mobile-segments" role="tablist" aria-label="会话回放信息">
-          {(
-            [
-              ['sessions', '会话'],
-              ['records', '记录'],
-              ['details', '详情'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              id={`${mobileTabsID}-${id}-tab`}
-              type="button"
-              role="tab"
-              aria-selected={mobilePanel === id}
-              aria-controls={`${mobileTabsID}-${id}-panel`}
-              tabIndex={mobilePanel === id ? 0 : -1}
-              onClick={() => setMobilePanel(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div
-          id={`${mobileTabsID}-sessions-panel`}
-          className="replay-session-panel"
-          data-mobile-active={mobilePanel === 'sessions' || undefined}
-          role="tabpanel"
-          aria-labelledby={`${mobileTabsID}-sessions-tab`}
-        >
+        <div className="replay-session-panel">
           <DataSurface label="回放会话流">
             <ResultHeader title="会话" summary="最近完整回放" />
             {streams.isError ? (
@@ -425,118 +427,117 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
           </DataSurface>
         </div>
 
-        <div
-          id={`${mobileTabsID}-records-panel`}
-          className="replay-records-panel"
-          data-mobile-active={mobilePanel === 'records' || undefined}
-          role="tabpanel"
-          aria-labelledby={`${mobileTabsID}-records-tab`}
-        >
-          <DataSurface label="会话内容项">
-            <ResultHeader
-              title="内容记录"
-              summary={selectedStream ? shortReplayID(selectedStream) : '选择会话后查看内容项'}
-            />
-            {!selectedStream ? (
-              <EmptyPanel description="尚未选择会话。" />
-            ) : items.isError ? (
-              <Alert
-                tone="error"
-                title="无法读取会话内容项"
-                action={<Button onClick={() => void items.refetch()}>重试</Button>}
-              >
-                {items.error instanceof ApiError ? items.error.message : '请稍后再试。'}
-              </Alert>
-            ) : (
-              <>
-                <div className="replay-records-scroll">
-                  <DataTable
-                    caption="回放内容项列表"
-                    columns={itemColumns}
-                    rows={items.data?.items ?? []}
-                    rowKey={(row) => row.item_id}
-                    minWidth={720}
-                    loading={items.isFetching}
-                    empty={<EmptyPanel description="该会话还没有完整内容项。" />}
-                  />
-                </div>
-                <PaginationBar
-                  page={itemCursors.length + 1}
-                  count={items.data?.items.length ?? 0}
-                  hasNext={!!items.data?.next_cursor}
-                  busy={items.isFetching}
-                  onPrevious={() => setItemCursors((current) => current.slice(0, -1))}
-                  onNext={() => {
-                    if (items.data?.next_cursor)
-                      setItemCursors((current) => [...current, items.data!.next_cursor!]);
-                  }}
+        <details className="replay-diagnostics">
+          <summary>
+            <span>
+              <strong>诊断与内容记录</strong>
+              <span>传输内容项、安全边界与会话标识</span>
+            </span>
+            <span>展开详情</span>
+          </summary>
+          <div className="replay-diagnostics-grid">
+            <div className="replay-records-panel">
+              <DataSurface label="会话内容项">
+                <ResultHeader
+                  title="内容记录"
+                  summary={selectedStream ? shortReplayID(selectedStream) : '选择会话后查看内容项'}
                 />
-              </>
-            )}
-          </DataSurface>
-        </div>
-
-        <div
-          id={`${mobileTabsID}-details-panel`}
-          className="replay-details-panel"
-          data-mobile-active={mobilePanel === 'details' || undefined}
-          role="tabpanel"
-          aria-labelledby={`${mobileTabsID}-details-tab`}
-        >
-          <DataSurface label="回放详情">
-            <ResultHeader title="安全与会话详情" />
-            <div className="replay-details-content">
-              <Alert
-                tone="info"
-                title="回放内容在浏览器端解密，并在禁脚本、禁网络的 sandbox 中预览。"
-              />
-              {selectedSummary ? (
-                <dl className="detail-list">
-                  <div>
-                    <dt>会话标识</dt>
-                    <dd>
-                      <code title={selectedSummary.stream_id}>
-                        {shortReplayID(selectedSummary.stream_id)}
-                      </code>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>内容类型</dt>
-                    <dd className="replay-badges">
-                      {selectedSummary.content_types.map((value) => (
-                        <Badge key={value}>
-                          {value === 'session_replay_snapshot' ? 'DOM 快照' : '增量记录'}
-                        </Badge>
-                      ))}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>记录范围</dt>
-                    <dd>
-                      {replayInstant(selectedSummary.first_received_at)} 至{' '}
-                      {replayInstant(selectedSummary.last_received_at)}
-                    </dd>
-                  </div>
-                  {preview && (
-                    <div>
-                      <dt>组装内容</dt>
-                      <dd>
-                        {preview.itemCount} 项，采集于{' '}
-                        {replayInstant(preview.timeline.snapshot.createdAt)}
-                      </dd>
+                {!selectedStream ? (
+                  <EmptyPanel description="尚未选择会话。" />
+                ) : items.isError ? (
+                  <Alert
+                    tone="error"
+                    title="无法读取会话内容项"
+                    action={<Button onClick={() => void items.refetch()}>重试</Button>}
+                  >
+                    {items.error instanceof ApiError ? items.error.message : '请稍后再试。'}
+                  </Alert>
+                ) : (
+                  <>
+                    <div className="replay-records-scroll">
+                      <DataTable
+                        caption="回放内容项列表"
+                        columns={itemColumns}
+                        rows={items.data?.items ?? []}
+                        rowKey={(row) => row.item_id}
+                        minWidth={720}
+                        loading={items.isFetching}
+                        empty={<EmptyPanel description="该会话还没有完整内容项。" />}
+                      />
                     </div>
-                  )}
-                </dl>
-              ) : (
-                <p className="evia-field-hint">选择会话后显示记录范围与内容类型。</p>
-              )}
-              <p className="evia-field-hint">
-                v2 仅精确播放已净化 light DOM；遇到序号缺口或未知节点立即停止。Shadow
-                DOM、iframe、canvas 与媒体状态不在当前捕获范围。
-              </p>
+                    <PaginationBar
+                      page={itemCursors.length + 1}
+                      count={items.data?.items.length ?? 0}
+                      hasNext={!!items.data?.next_cursor}
+                      busy={items.isFetching}
+                      onPrevious={() => setItemCursors((current) => current.slice(0, -1))}
+                      onNext={() => {
+                        if (items.data?.next_cursor)
+                          setItemCursors((current) => [...current, items.data!.next_cursor!]);
+                      }}
+                    />
+                  </>
+                )}
+              </DataSurface>
             </div>
-          </DataSurface>
-        </div>
+
+            <div className="replay-details-panel">
+              <DataSurface label="回放详情">
+                <ResultHeader title="安全与会话详情" />
+                <div className="replay-details-content">
+                  <Alert
+                    tone="info"
+                    title="回放内容在浏览器端解密，并在禁脚本、禁网络的 sandbox 中预览。"
+                  />
+                  {selectedSummary ? (
+                    <dl className="detail-list">
+                      <div>
+                        <dt>会话标识</dt>
+                        <dd>
+                          <code title={selectedSummary.stream_id}>
+                            {shortReplayID(selectedSummary.stream_id)}
+                          </code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>内容类型</dt>
+                        <dd className="replay-badges">
+                          {selectedSummary.content_types.map((value) => (
+                            <Badge key={value}>
+                              {value === 'session_replay_snapshot' ? 'DOM 快照' : '增量记录'}
+                            </Badge>
+                          ))}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>记录范围</dt>
+                        <dd>
+                          {replayInstant(selectedSummary.first_received_at)} 至{' '}
+                          {replayInstant(selectedSummary.last_received_at)}
+                        </dd>
+                      </div>
+                      {preview && (
+                        <div>
+                          <dt>组装内容</dt>
+                          <dd>
+                            {preview.itemCount} 项，采集于{' '}
+                            {replayInstant(preview.timeline.snapshot.createdAt)}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  ) : (
+                    <p className="evia-field-hint">选择会话后显示记录范围与内容类型。</p>
+                  )}
+                  <p className="evia-field-hint">
+                    v2 仅精确播放已净化 light DOM；遇到序号缺口或未知节点立即停止。Shadow
+                    DOM、iframe、canvas 与媒体状态不在当前捕获范围。
+                  </p>
+                </div>
+              </DataSurface>
+            </div>
+          </div>
+        </details>
       </div>
     </>
   );

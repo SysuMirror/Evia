@@ -67,7 +67,7 @@ export const modes: { id: AnalysisMode; label: string }[] = [
   { id: 'segment', label: '主体分群' },
   { id: 'path', label: '聚合路径' },
   { id: 'attribution', label: '归因分析' },
-  { id: 'heatmap', label: '点击热力图' },
+  { id: 'heatmap', label: '视口点击分布' },
 ];
 export const systemFields = [
   { key: 'event_key', label: '事件标识', type: 'string' },

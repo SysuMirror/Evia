@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 
 export type WorkspaceSection =
+  | 'overview'
   | 'events'
   | 'releases'
   | 'sources'
   | 'diagnostics'
+  | 'heatmap'
   | 'analysis'
   | 'saved-analyses'
   | 'dashboards'
@@ -21,6 +23,20 @@ export type WorkspaceSection =
   | 'formula-metrics';
 
 const paths: Record<WorkspaceSection, ReactNode> = {
+  overview: (
+    <>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6.5 10v10h11V10M9.5 20v-6h5v6" />
+    </>
+  ),
+  heatmap: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+    </>
+  ),
   exports: (
     <>
       <path d="M12 3v12m0 0l-4-4m4 4l4-4" />

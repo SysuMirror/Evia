@@ -44,6 +44,9 @@ import { NavigationIcon, type WorkspaceSection } from './navigation-icons';
 const ProjectsPage = lazy(() =>
   import('./projects').then((module) => ({ default: module.ProjectsPage })),
 );
+const OverviewPage = lazy(() =>
+  import('./overview/overview').then((module) => ({ default: module.OverviewPage })),
+);
 const CatalogPage = lazy(() =>
   import('./catalog').then((module) => ({ default: module.CatalogPage })),
 );
@@ -55,6 +58,9 @@ const SourcesPage = lazy(() =>
 );
 const AnalysisPage = lazy(() =>
   import('./analysis').then((module) => ({ default: module.AnalysisPage })),
+);
+const HeatmapPage = lazy(() =>
+  import('./analysis').then((module) => ({ default: module.HeatmapPage })),
 );
 const DashboardsPage = lazy(() =>
   import('./dashboards').then((module) => ({ default: module.DashboardsPage })),
@@ -230,11 +236,13 @@ function Workspace({ session }: { session: Session }) {
     enabled: !!projectID,
   });
   const sections: { path: WorkspaceSection; label: string; component: typeof CatalogPage }[] = [
+    { path: 'overview', label: '项目总览', component: OverviewPage },
     { path: 'events', label: '事件管理', component: CatalogPage },
     { path: 'releases', label: '发布管理', component: ReleasesPage },
     { path: 'sources', label: '接入来源', component: SourcesPage },
     { path: 'diagnostics', label: '采集诊断', component: DiagnosticsPage },
-    { path: 'analysis', label: '数据分析', component: AnalysisPage },
+    { path: 'heatmap', label: '视口点击分布', component: HeatmapPage },
+    { path: 'analysis', label: '高级查询工作台', component: AnalysisPage },
     { path: 'saved-analyses', label: '保存的分析', component: SavedAnalysesPage },
     { path: 'dashboards', label: '自定义看板', component: DashboardsPage },
     { path: 'reports', label: '分析报告', component: ReportsPage },
@@ -274,9 +282,11 @@ function Workspace({ session }: { session: Session }) {
       : []),
   ];
   const navigationGroup = (path: WorkspaceSection) => {
+    if (path === 'overview') return '总览';
     if (['events', 'releases', 'sources', 'diagnostics'].includes(path)) return '数据接入';
     if (
       [
+        'heatmap',
         'analysis',
         'saved-analyses',
         'dashboards',
@@ -390,7 +400,7 @@ function Workspace({ session }: { session: Session }) {
           ))}
           <Route
             path="/projects/:projectID"
-            element={<Navigate to={`events?environment=${environment}`} replace />}
+            element={<Navigate to={`overview?environment=${environment}`} replace />}
           />
           <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/login" element={<Navigate to="/projects" replace />} />

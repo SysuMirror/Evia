@@ -50,17 +50,17 @@ test('workspace categories and tool rail preserve route access on desktop and mo
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`http://127.0.0.1:5180/projects/${projectID}/analysis?environment=development`);
+  await page.goto(`/projects/${projectID}/analysis?environment=development`);
 
   const categories = page.getByRole('navigation', { name: '工作区分类' });
   await expect(categories).toBeVisible();
-  await expect(categories.getByRole('link')).toHaveCount(5);
+  await expect(categories.getByRole('link')).toHaveCount(6);
   await expect(categories.getByRole('link', { name: '洞察分析' })).toHaveAttribute(
     'aria-current',
     'location',
   );
   const toolRail = page.getByRole('navigation', { name: '功能导航' });
-  await expect(toolRail.getByRole('link', { name: '数据分析' })).toBeVisible();
+  await expect(toolRail.getByRole('link', { name: '高级查询工作台' })).toBeVisible();
   await expect(toolRail.getByRole('link', { name: '会话回放' })).toBeVisible();
   await expect(toolRail.getByRole('link', { name: '接入来源' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -74,9 +74,17 @@ test('workspace categories and tool rail preserve route access on desktop and mo
     'aria-expanded',
     'true',
   );
-  for (const destination of ['事件管理', '数据分析', '机器访问', '数据导出', '复合公式指标'])
+  for (const destination of [
+    '项目总览',
+    '事件管理',
+    '视口点击分布',
+    '高级查询工作台',
+    '机器访问',
+    '数据导出',
+    '复合公式指标',
+  ])
     await expect(toolRail.getByRole('link', { name: destination, exact: true })).toBeVisible();
-  await toolRail.getByRole('link', { name: '数据分析', exact: true }).click();
+  await toolRail.getByRole('link', { name: '高级查询工作台', exact: true }).click();
   await expect(toolRail).toBeHidden();
   await expect(page.getByRole('button', { name: '打开工作区菜单' })).toHaveAttribute(
     'aria-expanded',

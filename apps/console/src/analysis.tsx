@@ -224,7 +224,7 @@ function HeatmapGrid({
       <div
         className="analysis-heatmap-grid"
         role="img"
-        aria-label={`点击热力图，最高单格 ${maximum.toLocaleString('zh-CN')} 次；完整数值见下方结果表。`}
+        aria-label={`视口点击分布，最高单格 ${maximum.toLocaleString('zh-CN')} 次；完整数值见下方结果表。`}
         style={{ aspectRatio: `${viewportWidth} / ${viewportHeight}`, maxWidth: `${width}px` }}
       >
         {cells.map((item) => (
@@ -248,17 +248,36 @@ function HeatmapGrid({
   );
 }
 
-export function AnalysisPage({
+type AnalysisPageProps = { project: Project; session: Session; environment: Environment };
+type AnalysisWorkspaceKind = 'advanced' | 'heatmap';
+
+export function AnalysisPage(props: AnalysisPageProps) {
+  return <AnalysisWorkspace {...props} workspaceKind="advanced" />;
+}
+
+export function HeatmapPage(props: AnalysisPageProps) {
+  return <AnalysisWorkspace {...props} workspaceKind="heatmap" />;
+}
+
+function workspaceForm(timezone: string, workspaceKind: AnalysisWorkspaceKind): AnalysisForm {
+  const form = initialForm(timezone);
+  if (workspaceKind === 'heatmap') form.mode = 'heatmap';
+  return form;
+}
+
+function AnalysisWorkspace({
   project,
   session,
   environment,
-}: {
-  project: Project;
-  session: Session;
-  environment: Environment;
-}) {
-  const [form, setForm] = useState<AnalysisForm>(() => initialForm(project.timezone));
-  const [baseline, setBaseline] = useState(() => JSON.stringify(initialForm(project.timezone)));
+  workspaceKind,
+}: AnalysisPageProps & { workspaceKind: AnalysisWorkspaceKind }) {
+  const [form, setForm] = useState<AnalysisForm>(() =>
+    workspaceForm(project.timezone, workspaceKind),
+  );
+  const [baseline, setBaseline] = useState(() =>
+    JSON.stringify(workspaceForm(project.timezone, workspaceKind)),
+  );
+  const [heatmapControlsOpen, setHeatmapControlsOpen] = useState(true);
   const [storedSnapshot, setSnapshot] = useState<Snapshot>();
   const permissionKey = [...project.permissions].sort().join(',');
   const scope = `${project.id}:${environment}:${session.user_id}:${permissionKey}`;
@@ -307,7 +326,7 @@ export function AnalysisPage({
     queryFn: ({ pageParam, signal }) =>
       api.listEventDefinitions(project.id, { environment, cursor: pageParam, limit: 100 }, signal),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    enabled: canRead,
+    enabled: canRead && workspaceKind === 'advanced',
   });
   const events = useMemo(
     () =>
@@ -381,9 +400,10 @@ export function AnalysisPage({
     generation.current += 1;
     requestAbort.current?.abort();
     pollAbort.current?.abort();
-    const next = initialForm(project.timezone);
+    const next = workspaceForm(project.timezone, workspaceKind);
     setForm(next);
     setBaseline(JSON.stringify(next));
+    setHeatmapControlsOpen(true);
     setSnapshot(undefined);
     setObserving(false);
     setPropertyEvent('');
@@ -407,7 +427,7 @@ export function AnalysisPage({
       pendingNavigation.current = null;
       afterCloseNavigation.current = null;
     };
-  }, [project.id, environment, session.user_id, permissionKey]);
+  }, [project.id, environment, session.user_id, permissionKey, workspaceKind]);
 
   useEffect(
     () =>
@@ -576,6 +596,7 @@ export function AnalysisPage({
         started: Date.now(),
       });
       setBaseline(JSON.stringify(form));
+      if (workspaceKind === 'heatmap') setHeatmapControlsOpen(false);
       setObserving(true);
     } catch (failure) {
       if (!controller.signal.aborted && generation.current === epoch) reportFailure(failure);
@@ -758,9 +779,9 @@ export function AnalysisPage({
       }}
       className="analysis-query-form"
     >
-      {catalog.isPending ? (
+      {workspaceKind === 'advanced' && catalog.isPending ? (
         <LoadingPanel label="正在加载已发布事件" />
-      ) : catalog.isError ? (
+      ) : workspaceKind === 'advanced' && catalog.isError ? (
         <ErrorPanel message={catalog.error.message} retry={() => void catalog.refetch()} />
       ) : (
         <div className="analysis-query-bar">
@@ -1077,7 +1098,11 @@ export function AnalysisPage({
             type="submit"
             variant="primary"
             loading={submitting}
-            disabled={busy || blockedDetails || catalog.isPending || catalog.isError}
+            disabled={
+              busy ||
+              blockedDetails ||
+              (workspaceKind === 'advanced' && (catalog.isPending || catalog.isError))
+            }
           >
             运行查询
           </Button>
@@ -1107,28 +1132,56 @@ export function AnalysisPage({
     <>
       <PageHeading
         className="analysis-page-heading"
-        title="分析查询"
-        summary="组合事件、主体与时间条件，在同一工作区运行查询并检查完整结果。"
+        title={workspaceKind === 'heatmap' ? '视口点击分布' : '高级查询工作台'}
+        summary={
+          workspaceKind === 'heatmap'
+            ? '按精确路由与视口检查点击坐标分布；当前结果没有页面截图或 DOM 表面叠加。'
+            : '组合事件、主体与时间条件，运行高级查询并检查完整结果。'
+        }
       />
       {!canRead ? (
         <EmptyPanel description="暂无查询权限，需要项目读取权限。" />
       ) : (
         <div className="section-stack">
-          <Panel
-            label="查询条件"
-            className={`analysis-workbench${form.mode === 'heatmap' ? ' analysis-workbench-heatmap' : ''}`}
-          >
-            <Tabs
-              label="分析类型"
-              value={form.mode}
-              onChange={(value) => patch('mode', value as AnalysisMode)}
-              items={modes.map((mode) => ({
-                id: mode.id,
-                label: mode.label,
-                content: form.mode === mode.id ? queryEditor : null,
-              }))}
-            />
-          </Panel>
+          {workspaceKind === 'heatmap' ? (
+            <details
+              className="analysis-heatmap-query"
+              open={heatmapControlsOpen}
+              onToggle={(event) => setHeatmapControlsOpen(event.currentTarget.open)}
+            >
+              <summary>
+                <span>
+                  <strong>查询范围</strong>
+                  <span>
+                    {form.heatmapRoute || '尚未选择路由'}，{form.heatmapViewportWidth} ×{' '}
+                    {form.heatmapViewportHeight} 视口
+                  </span>
+                </span>
+                <span>{heatmapControlsOpen ? '收起条件' : '调整条件'}</span>
+              </summary>
+              <Panel
+                label="视口点击分布查询条件"
+                className="analysis-workbench analysis-workbench-heatmap"
+              >
+                {queryEditor}
+              </Panel>
+            </details>
+          ) : (
+            <Panel label="高级查询条件" className="analysis-workbench">
+              <Tabs
+                label="分析类型"
+                value={form.mode}
+                onChange={(value) => patch('mode', value as AnalysisMode)}
+                items={modes
+                  .filter((mode) => mode.id !== 'heatmap')
+                  .map((mode) => ({
+                    id: mode.id,
+                    label: mode.label,
+                    content: form.mode === mode.id ? queryEditor : null,
+                  }))}
+              />
+            </Panel>
+          )}
 
           {error !== undefined && (
             <ErrorPanel

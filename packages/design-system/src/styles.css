@@ -3126,3 +3126,65 @@ body {
     border-radius: 20px;
   }
 }
+
+.analysis-heatmap-query {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface-subtle);
+}
+
+.analysis-heatmap-query > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 52px;
+  padding: 10px 16px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.analysis-heatmap-query > summary::-webkit-details-marker {
+  display: none;
+}
+
+.analysis-heatmap-query > summary > span:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.analysis-heatmap-query > summary strong {
+  color: var(--color-text);
+}
+
+.analysis-heatmap-query > summary span span,
+.analysis-heatmap-query > summary > span:last-child {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.analysis-heatmap-query > .analysis-workbench.evia-panel {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.analysis-heatmap-query:not([open]) + .analysis-result.evia-panel {
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .analysis-heatmap-query > summary,
+  .analysis-heatmap-query > summary > span:first-child {
+    align-items: flex-start;
+  }
+
+  .analysis-heatmap-query > summary > span:first-child {
+    display: grid;
+    gap: 2px;
+  }
+}
