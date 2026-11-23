@@ -25,10 +25,31 @@ export interface ReplayPayload {
   payload: Record<string, unknown>;
 }
 
+export type ReplaySurfaceKind =
+  'open_shadow_root' | 'same_origin_iframe' | 'cross_origin_iframe' | 'canvas' | 'media';
+
+export interface ReplaySurface {
+  nodeID: number;
+  kind: ReplaySurfaceKind;
+  html?: string;
+  htmlTruncated: boolean;
+  width?: number;
+  height?: number;
+  mediaKind?: 'audio' | 'video';
+  currentTimeMS?: number;
+  durationMS?: number;
+  paused?: boolean;
+  muted?: boolean;
+  readyState?: number;
+  contentOmitted: boolean;
+}
+
 export interface ReplaySnapshot extends ReplayPayload {
   html: string;
   viewport: { width: number; height: number };
   baseSeq: number;
+  surfaces: ReplaySurface[];
+  surfaceStateExact: boolean;
 }
 
 export interface ReplayRecordV2 {
@@ -176,6 +197,70 @@ export async function decodeReplayPayloads(items: ContentItem[]): Promise<Replay
   return payloads.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
+function replaySurfaces(payload: Record<string, unknown>): ReplaySurface[] {
+  const value = payload.surfaces;
+  if (value === undefined) return [];
+  if (payload.surface_capture_version !== 1 || !Array.isArray(value) || value.length > 16)
+    throw new Error('回放嵌入表面格式无效。');
+  const kinds = new Set<ReplaySurfaceKind>([
+    'open_shadow_root',
+    'same_origin_iframe',
+    'cross_origin_iframe',
+    'canvas',
+    'media',
+  ]);
+  let htmlCharacters = 0;
+  return value.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+      throw new Error('回放嵌入表面格式无效。');
+    const surface = raw as Record<string, unknown>;
+    if (
+      !Number.isSafeInteger(surface.node_id) ||
+      Number(surface.node_id) < 1 ||
+      typeof surface.kind !== 'string' ||
+      !kinds.has(surface.kind as ReplaySurfaceKind)
+    )
+      throw new Error('回放嵌入表面格式无效。');
+    const kind = surface.kind as ReplaySurfaceKind;
+    const html = typeof surface.html === 'string' ? surface.html : undefined;
+    if (html && html.length > 256 * 1024) throw new Error('回放嵌入表面超过读取上限。');
+    htmlCharacters += html?.length ?? 0;
+    if (htmlCharacters > 1024 * 1024) throw new Error('回放嵌入表面总量超过读取上限。');
+    const contentOmitted = surface.content_omitted === true;
+    if (
+      ['cross_origin_iframe', 'canvas', 'media'].includes(kind) &&
+      (!contentOmitted || html !== undefined)
+    )
+      throw new Error('回放嵌入内容必须保持省略。');
+    const boundedInteger = (candidate: unknown, maximum: number): number | undefined => {
+      if (candidate === undefined) return undefined;
+      if (!Number.isSafeInteger(candidate) || Number(candidate) < 0 || Number(candidate) > maximum)
+        throw new Error('回放嵌入表面数值无效。');
+      return Number(candidate);
+    };
+    const mediaKind =
+      surface.media_kind === 'audio' || surface.media_kind === 'video'
+        ? surface.media_kind
+        : undefined;
+    if (kind === 'media' && !mediaKind) throw new Error('回放媒体类型无效。');
+    return {
+      nodeID: Number(surface.node_id),
+      kind,
+      html,
+      htmlTruncated: surface.html_truncated === true,
+      width: boundedInteger(surface.width, 16_384),
+      height: boundedInteger(surface.height, 16_384),
+      mediaKind,
+      currentTimeMS: boundedInteger(surface.current_time_ms, 24 * 60 * 60_000),
+      durationMS: boundedInteger(surface.duration_ms, 24 * 60 * 60_000),
+      paused: typeof surface.paused === 'boolean' ? surface.paused : undefined,
+      muted: typeof surface.muted === 'boolean' ? surface.muted : undefined,
+      readyState: boundedInteger(surface.ready_state, 4),
+      contentOmitted,
+    };
+  });
+}
+
 function replaySnapshots(payloads: ReplayPayload[]): ReplaySnapshot[] {
   const snapshots: ReplaySnapshot[] = [];
   for (const payload of payloads) {
@@ -201,6 +286,9 @@ function replaySnapshots(payloads: ReplayPayload[]): ReplaySnapshot[] {
       baseSeq: Number.isSafeInteger(payload.payload.base_seq)
         ? Number(payload.payload.base_seq)
         : 0,
+      surfaces: replaySurfaces(payload.payload),
+      surfaceStateExact:
+        payload.payload.surfaces === undefined || payload.payload.surface_state_exact === true,
     });
   }
   return snapshots.sort((left, right) => {

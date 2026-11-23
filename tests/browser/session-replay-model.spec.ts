@@ -74,6 +74,70 @@ function v2Item(payload: unknown, groupID: string, contentType: string): Content
   );
 }
 
+test('replay validates bounded embedded surfaces and keeps omitted content explicit', async () => {
+  const envelope = {
+    format: 'evia.session-replay.v1',
+    protocol_version: 2,
+    document_id: '33333333-3333-4333-8333-333333333333',
+    document_seq: 1,
+    payload_id: 'surface-snapshot',
+    payload_seq: 1,
+    time_origin_ms: 1,
+    route: '/surfaces',
+    created_at: '2026-11-22T02:00:00Z',
+    capture_scope: 'sanitized-dom-surfaces-v2',
+    mask_version: 1,
+    payload: {
+      kind: 'snapshot',
+      base_seq: 0,
+      html: '<html data-evia-rid="1"><body data-evia-rid="2"></body></html>',
+      viewport: { width: 1280, height: 720 },
+      surface_capture_version: 1,
+      surface_state_exact: false,
+      surfaces: [
+        { node_id: 3, kind: 'open_shadow_root', html: '<div>safe</div>' },
+        { node_id: 4, kind: 'cross_origin_iframe', content_omitted: true },
+        { node_id: 5, kind: 'canvas', width: 640, height: 360, content_omitted: true },
+        {
+          node_id: 6,
+          kind: 'media',
+          media_kind: 'video',
+          current_time_ms: 1200,
+          duration_ms: 5000,
+          paused: true,
+          muted: true,
+          ready_state: 4,
+          content_omitted: true,
+        },
+      ],
+    },
+  };
+  const payloads = await decodeReplayPayloads([
+    v2Item(envelope, 'surface-snapshot', 'session_replay_snapshot'),
+  ]);
+  const snapshot = latestSnapshot(payloads);
+  expect(snapshot?.surfaceStateExact).toBe(false);
+  expect(snapshot?.surfaces.map((surface) => surface.kind)).toEqual([
+    'open_shadow_root',
+    'cross_origin_iframe',
+    'canvas',
+    'media',
+  ]);
+  expect(snapshot?.surfaces[2]).toMatchObject({ width: 640, height: 360, contentOmitted: true });
+
+  const unsafe = structuredClone(envelope);
+  unsafe.payload.surfaces[1] = {
+    node_id: 4,
+    kind: 'cross_origin_iframe',
+    content_omitted: false,
+    html: '<p>must not be accepted</p>',
+  } as never;
+  const unsafePayloads = await decodeReplayPayloads([
+    v2Item(unsafe, 'unsafe-surface', 'session_replay_snapshot'),
+  ]);
+  expect(() => latestSnapshot(unsafePayloads)).toThrow('必须保持省略');
+});
+
 test('replay v2 builds a contiguous exact timeline and detects gaps', async () => {
   const base = {
     format: 'evia.session-replay.v1',
