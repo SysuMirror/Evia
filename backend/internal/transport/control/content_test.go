@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -75,24 +76,31 @@ func TestContentStreamDiscoveryMapsAndScopesCursor(t *testing.T) {
 	}}
 	handler := contentAPI(t, service)
 	base := "/api/v1/projects/" + projectID + "/content/streams?environment=development&content_types=session_replay_snapshot,session_replay_mutations&limit=1"
-	w := contentRequest(handler, base)
+	frozenAt := now.Add(30 * time.Second)
+	w := contentRequest(handler, base+"&as_of="+url.QueryEscape(frozenAt.Format(time.RFC3339Nano)))
 	governanceStatus(t, w, http.StatusOK)
 	var out wire.ContentStreamList
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 1 || out.NextCursor == nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 1 || out.NextCursor == nil || out.FrozenAt != frozenAt.Format(time.RFC3339Nano) {
 		t.Fatalf("bad stream list: %s", w.Body.String())
 	}
 	if out.Items[0].StreamID != "replay-1" || out.Items[0].ItemCount != 6 || len(out.Items[0].ContentTypes) != 2 {
 		t.Fatalf("bad stream mapping: %+v", out.Items[0])
 	}
-	if service.filter.Limit != 1 || strings.Join(service.filter.ContentTypes, ",") != "session_replay_mutations,session_replay_snapshot" {
+	if service.filter.Limit != 1 || !service.filter.AsOf.Equal(frozenAt) || strings.Join(service.filter.ContentTypes, ",") != "session_replay_mutations,session_replay_snapshot" {
 		t.Fatalf("bad stream filter: %+v", service.filter)
 	}
-	w = contentRequest(handler, base+"&cursor="+*out.NextCursor)
+	nextCursor := *out.NextCursor
+	w = contentRequest(handler, base+"&cursor="+nextCursor)
 	governanceStatus(t, w, http.StatusOK)
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.FrozenAt != frozenAt.Format(time.RFC3339Nano) {
+		t.Fatalf("cursor did not retain freeze: %s", w.Body.String())
+	}
 	if service.filter.After == nil || service.filter.After.ID != "replay-1" || !service.filter.After.ReceivedAt.Equal(now) {
 		t.Fatalf("cursor not restored: %+v", service.filter.After)
 	}
-	w = contentRequest(handler, base+"&cursor="+*out.NextCursor+"x")
+	w = contentRequest(handler, base+"&as_of="+url.QueryEscape(frozenAt.Format(time.RFC3339Nano))+"&cursor="+nextCursor)
+	governanceStatus(t, w, http.StatusBadRequest)
+	w = contentRequest(handler, base+"&cursor="+nextCursor+"x")
 	governanceStatus(t, w, http.StatusBadRequest)
 	w = contentRequest(handler, strings.Replace(base, "environment=development", "environment=staging", 1)+"&cursor="+*out.NextCursor)
 	governanceStatus(t, w, http.StatusBadRequest)
@@ -109,7 +117,7 @@ func TestContentItemDiscoveryMapsMetadata(t *testing.T) {
 	w := contentRequest(handler, path)
 	governanceStatus(t, w, http.StatusOK)
 	var out wire.ContentItemList
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 1 || out.FrozenAt == "" {
 		t.Fatalf("bad item list: %s", w.Body.String())
 	}
 	item := out.Items[0]
@@ -126,6 +134,8 @@ func TestContentDiscoveryRejectsInvalidInputAndAuthentication(t *testing.T) {
 		base + "?environment=development&content_types=bad%20type",
 		base + "?environment=development&content_types=one,one",
 		base + "?environment=development&content_types=one&unknown=1",
+		base + "?environment=development&content_types=one&as_of=not-a-time",
+		base + "?environment=development&content_types=one&as_of=" + url.QueryEscape(time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)),
 	} {
 		governanceStatus(t, contentRequest(handler, path), http.StatusBadRequest)
 	}

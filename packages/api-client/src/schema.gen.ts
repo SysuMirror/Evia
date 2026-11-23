@@ -3649,6 +3649,8 @@ export interface components {
             item_count: number;
         };
         ContentStreamList: {
+            /** Format: date-time */
+            frozen_at: string;
             items: components["schemas"]["ContentStreamSummary"][];
             next_cursor?: string;
         };
@@ -3666,6 +3668,8 @@ export interface components {
             duration_ms?: number;
         };
         ContentItemList: {
+            /** Format: date-time */
+            frozen_at: string;
             items: components["schemas"]["ContentItemSummary"][];
             next_cursor?: string;
         };
@@ -18990,6 +18994,8 @@ export interface operations {
                 /** @description 逗号分隔的 1–8 个通用内容类型；分页游标绑定归一化类型集合。 */
                 content_types: string;
                 limit?: number;
+                /** @description 可选 RFC3339 冻结时间；不同授权主体可复用同一时间取得可审计的一致快照。不能与 cursor 同时提供。 */
+                as_of?: string;
                 cursor?: string;
             };
             header?: never;
@@ -19053,6 +19059,8 @@ export interface operations {
                 environment: "development" | "staging" | "production";
                 content_types: string;
                 limit?: number;
+                /** @description 可选 RFC3339 冻结时间；不同授权主体可复用同一时间取得可审计的一致快照。不能与 cursor 同时提供。 */
+                as_of?: string;
                 cursor?: string;
             };
             header?: never;

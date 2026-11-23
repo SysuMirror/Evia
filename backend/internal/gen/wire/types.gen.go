@@ -212,6 +212,7 @@ type ContentItem struct {
 }
 
 type ContentItemList struct {
+	FrozenAt   string               `json:"frozen_at"`
 	Items      []ContentItemSummary `json:"items"`
 	NextCursor *string              `json:"next_cursor,omitempty"`
 }
@@ -230,6 +231,7 @@ type ContentItemSummary struct {
 }
 
 type ContentStreamList struct {
+	FrozenAt   string                 `json:"frozen_at"`
 	Items      []ContentStreamSummary `json:"items"`
 	NextCursor *string                `json:"next_cursor,omitempty"`
 }

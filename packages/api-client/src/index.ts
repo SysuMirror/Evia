@@ -225,6 +225,7 @@ export type MachinePrincipalPage = { cursor?: string; limit?: number };
 export type ContentDiscoveryPage = {
   environment: Environment;
   contentTypes: string[];
+  asOf?: string;
   cursor?: string;
   limit?: number;
 };
@@ -361,6 +362,9 @@ function contentDiscoveryQuery(page: ContentDiscoveryPage): string {
   const query = new URLSearchParams();
   query.set('environment', page.environment);
   query.set('content_types', [...page.contentTypes].sort().join(','));
+  if (page.asOf !== undefined && page.cursor !== undefined)
+    throw new Error('content discovery asOf and cursor are mutually exclusive');
+  if (page.asOf !== undefined) query.set('as_of', page.asOf);
   if (page.cursor !== undefined) query.set('cursor', page.cursor);
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   return `?${query.toString()}`;

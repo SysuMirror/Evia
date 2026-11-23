@@ -50,7 +50,7 @@ type contentPosition struct {
 func contentListInput(r *http.Request, actor, project, streamID string, codec interface {
 	Decode(string, string) (string, error)
 }) (string, content.DiscoveryFilter, string, error) {
-	q, err := governanceQuery(r, "environment", "content_types", "limit", "cursor")
+	q, err := governanceQuery(r, "environment", "content_types", "limit", "as_of", "cursor")
 	if err != nil {
 		return "", content.DiscoveryFilter{}, "", err
 	}
@@ -77,8 +77,12 @@ func contentListInput(r *http.Request, actor, project, streamID string, codec in
 		return "", content.DiscoveryFilter{}, "", err
 	}
 	scope := "content_discovery:" + actor + ":" + project + ":" + environment + ":" + streamID + ":" + strings.Join(contentTypes, ",")
-	filter := content.DiscoveryFilter{ContentTypes: contentTypes, AsOf: time.Now().UTC(), Limit: limit}
+	now := time.Now().UTC()
+	filter := content.DiscoveryFilter{ContentTypes: contentTypes, AsOf: now, Limit: limit}
 	if raw := q.Get("cursor"); raw != "" {
+		if q.Get("as_of") != "" {
+			return "", content.DiscoveryFilter{}, "", fault.New(fault.Invalid, "INVALID_CONTENT_DISCOVERY", "冻结时间不能与游标同时提供")
+		}
 		decoded, decodeErr := codec.Decode(scope, raw)
 		if decodeErr != nil {
 			return "", content.DiscoveryFilter{}, "", governanceCursorError()
@@ -97,6 +101,12 @@ func contentListInput(r *http.Request, actor, project, streamID string, codec in
 		}
 		filter.AsOf = asOf
 		filter.After = &content.DiscoveryPosition{ReceivedAt: receivedAt, ID: position.ID}
+	} else if raw := q.Get("as_of"); raw != "" {
+		asOf, parseErr := time.Parse(time.RFC3339Nano, raw)
+		if parseErr != nil || asOf.Before(time.Unix(0, 0)) || asOf.After(now) {
+			return "", content.DiscoveryFilter{}, "", fault.New(fault.Invalid, "INVALID_CONTENT_DISCOVERY", "冻结时间无效")
+		}
+		filter.AsOf = asOf.UTC()
 	}
 	return environment, filter, scope, nil
 }
@@ -126,7 +136,7 @@ func (a *ContentAPI) listStreams(w http.ResponseWriter, r *http.Request, actor a
 	if err != nil {
 		return err
 	}
-	out := wire.ContentStreamList{Items: make([]wire.ContentStreamSummary, 0, len(page.Items))}
+	out := wire.ContentStreamList{FrozenAt: governanceTime(filter.AsOf), Items: make([]wire.ContentStreamSummary, 0, len(page.Items))}
 	for _, item := range page.Items {
 		out.Items = append(out.Items, wire.ContentStreamSummary{
 			StreamID: item.StreamID, ContentTypes: item.ContentTypes, ActorTypes: item.ActorTypes,
@@ -158,7 +168,7 @@ func (a *ContentAPI) listItems(w http.ResponseWriter, r *http.Request, actor aut
 	if err != nil {
 		return err
 	}
-	out := wire.ContentItemList{Items: make([]wire.ContentItemSummary, 0, len(page.Items))}
+	out := wire.ContentItemList{FrozenAt: governanceTime(filter.AsOf), Items: make([]wire.ContentItemSummary, 0, len(page.Items))}
 	for _, item := range page.Items {
 		mapped := wire.ContentItemSummary{
 			ContentType: item.ContentType, StreamID: item.StreamID, ItemID: item.ItemID, ActorType: item.ActorType,

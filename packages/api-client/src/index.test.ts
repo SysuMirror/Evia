@@ -1041,12 +1041,18 @@ test('content discovery canonicalizes types and encodes stream and item identifi
   };
   await api.listContentStreams('p/q', page, controller.signal);
   await api.listContentItems('p/q', 'stream/one', page, controller.signal);
+  const frozen = { ...page, cursor: undefined, asOf: '2026-11-23T04:00:00Z' };
+  await api.listContentStreams('p/q', frozen, controller.signal);
+  await api.listContentItems('p/q', 'stream/one', frozen, controller.signal);
+  assert.throws(() => api.listContentStreams('p/q', { ...page, asOf: frozen.asOf }, controller.signal), /mutually exclusive/);
   await api.getContentItem('p/q', 'item/one', 'development', controller.signal);
   assert.deepEqual(
     fetch.mock.calls.map((call) => call.arguments[0]),
     [
       '/api/v1/projects/p%2Fq/content/streams?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&cursor=a%2B%2F%3D&limit=25',
       '/api/v1/projects/p%2Fq/content/streams/stream%2Fone/items?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&cursor=a%2B%2F%3D&limit=25',
+      '/api/v1/projects/p%2Fq/content/streams?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&as_of=2026-11-23T04%3A00%3A00Z&limit=25',
+      '/api/v1/projects/p%2Fq/content/streams/stream%2Fone/items?environment=development&content_types=session_replay_mutations%2Csession_replay_snapshot&as_of=2026-11-23T04%3A00%3A00Z&limit=25',
       '/api/v1/projects/p%2Fq/content/items/item%2Fone?environment=development',
     ],
   );
