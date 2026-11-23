@@ -2,13 +2,9 @@
 
 ## 结论
 
-四格均执行了真实浏览器→collector/Kafka→ClickHouse→content-worker→PostgreSQL/artifact 路径。SDK 原生 bulk drain、accepted 后预算提交、弱网配置续传、429 Retry-After、worker hold/drain/restart 均取得实证；但**整份 evaluator 仍应判失败**，不能宣称四格容量全部通过：
+四格均执行了真实浏览器→collector/Kafka→ClickHouse→content-worker→PostgreSQL/artifact 路径。原 600-byte / 512 MiB 开发依赖实跑暴露了预算、尾项、磁盘和采样缺口；在完成 4 KiB 优化、预算 checkpoint、双 canary、pagehide 终态、共享 `as_of` 分页与独立 benchmark ClickHouse 扩容后，**正式 v2 evaluator 四格 PASS，global failures=0**。机器可读证据为 [`data/session-replay-capacity-formal-2026-11-23.json`](data/session-replay-capacity-formal-2026-11-23.json)。
 
-1. 2 MiB 两格与 8 MiB baseline 没有由 fixture 明确记录 `largest_attempted_rejected_payload_encoded_chars`，也没有 accepted/reserved/pending 最终 checkpoint，因此这些格的预算边界证据不满足 evaluator 固定合同，尽管使用量接近上限且没有 overshoot。
-2. 原 600-byte 8 MiB weak 在固定观测窗只 accepted 6,399,837 / 8,388,608 encoded chars（76.3%）；后续 4 KiB 重跑已以 accepted=8,103,551、reserved/pending=0、下一份实际 rejected payload=525,514 证明跨越预算边界，并将 chunks 降至 2,037，但这只核销 weak 8 单格的吞吐/边界缺口。
-3. baseline 8 MiB 首次 fixture 在浏览器 close 时留下 1 个 2/28 chunk 的未跟踪尾项；发现 API正确排除它，后续 fixture 已改为在页面存活时显式触发一次性 pagehide 并等待稳定，但该格未重新跑完整 8 MiB。
-4. 本机 ClickHouse 依赖盘最大仅约 512 MiB，低于 runbook 2 GiB reserve，不能满足正式资源环境门禁。
-5. RSS、artifact-ready p95 与 owner/machine page p95 没有取得至少 30 个同频样本，正式 evaluator 必须失败。
+这不是放宽门禁：ClickHouse before/after reserve 分别约 240.2/239.8 GiB（固定门禁 2 GiB）；四格分别取得 150/331/394/948 组 RSS 样本、每格 owner/machine 各 30 组分页延迟、每 chunk artifact-ready 样本；owner session 与 machine credential 在真实 post-freeze item 存在时共享同一 `frozen_at`，冻结集合 hash 相等，live 分页可见新增项。baseline worker 以同 PID 从 100 pending chunks graceful drain 至 0（437ms），weak worker 以新 PID 从 57 pending chunks restart recovery 至 0（73,860ms），均无重复 event。
 
 ## SDK 与 producer 修复
 
@@ -40,9 +36,22 @@
 
 同 workload 下 accepted 提升 26.6%，content chunks 减少 81.8%，HTTP batches 减少 35.4%，wall 降低 14.7%，p95 降低 6.6%。60-wave 证据格最终 checkpoint 为 accepted=8,103,551、reserved=0、pending=0；下一份实际 payload 为 525,514 chars，且 `8,103,551 + 525,514 > 8,388,608`，因此不是“没生成够数据”，而是确实命中 whole-payload 预算拒绝。ClickHouse / PostgreSQL / distinct artifact objects 均为 2,037，512 complete items，全部 ciphertext 5483 chars 且 padding 为 `fixed-4096-v2`。
 
-4 KiB 已修复旧 8 MiB weak 格的吞吐与预算边界缺口，但**整份正式 evaluator 仍保持 FAIL**：本机 ClickHouse 仅余约 33.5 MiB，低于 2 GiB reserve；该容量 workload 没有重新注入双 canary，也没有补齐至少 30 个同频 RSS/artifact-ready/owner-page/machine-page 样本和 shared first-page freeze。下面四格表保留原 600-byte 历史结果，不能把新的单格通过改写成整份矩阵 PASS。
+上述单格优化之后，另在独立 benchmark namespace 复跑完整四格并补齐所有 v2 证据，结果如下；再往下的表保留原 600-byte 历史结果用于对照。
 
-## 浏览器 capture 结果
+## 正式 4 KiB 四格 v2 PASS
+
+| cell | accepted chars | rejected payload | chunks/items | wall | collect p95/max | artifact p95/max | RSS samples |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2 MiB baseline | 1,971,221 | 525,540 | 495 / 125 | 155.157s | 24/72ms | 4956/5203ms | 150 |
+| 2 MiB weak | 1,971,636 | 525,552 | 497 / 127 | 344.271s | 2014/2015ms | 4861/5114ms | 331 |
+| 8 MiB baseline | 8,281,887 | 525,568 | 2,081 / 522 | 410.347s | 15/64ms | 5099/5303ms | 394 |
+| 8 MiB weak | 8,103,449 | 525,623 | 2,037 / 512 | 988.413s | 2013/2058ms | 4922/5272ms | 948 |
+
+每格 accepted + 实际 rejected payload 均跨越预算，accepted/reserved/pending checkpoint 最终为 accepted/0/0；pagehide 在 context close 前完成。CH distinct chunks、PG chunks、artifact objects 与 browser accepted chunks 四方逐格相等；raw items 全部 complete，plaintext rows=0。两条独立 canary 在浏览器 request properties、ClickHouse properties 和对应 artifact plaintext 三处均为 0 命中。
+
+共享冻结分页以真实 worker completion batch 作为 post-freeze items：四格 frozen/final items 分别为 119/125、124/127、515/522、509/512；owner/machine frozen hash 完全相等，live 页能看到 6/3/7/3 个 post-freeze items。owner p95 为 9/9/11/13ms，machine p95 为 9/10/12/13ms，均为每格 30 samples。
+
+## 浏览器 capture 结果（原 600-byte 历史格）
 
 预算单位均为 gzip 后 base64url encoded characters，不是 gzip bytes。
 

@@ -1,0 +1,364 @@
+{
+  "api_url": "http://127.0.0.1:18090",
+  "budget_unit": "encoded_base64url_characters",
+  "evaluation_version": 2,
+  "global_failures": [],
+  "gzip_volume_unit": "bytes",
+  "namespace": "evia_bench_0d94d0a2c057",
+  "passed": true,
+  "report_kind": "evia_session_replay_capacity",
+  "scenarios": [
+    {
+      "budget_encoded_chars": 2097152,
+      "capture": {
+        "pagehide_finalized_before_context_close": true,
+        "report_only": true,
+        "wall_time_ms": 155157
+      },
+      "clickhouse_disk_reserve": {
+        "after_bytes": 257518043136,
+        "before_bytes": 257887813632,
+        "minimum_bytes": 2147483648
+      },
+      "failures": [],
+      "latency": {
+        "artifact_ready": {
+          "limit_ms": 120000,
+          "max_ms": 5203,
+          "p95_ms": 4956,
+          "samples": 495
+        },
+        "collect_ack": {
+          "limit_ms": 2000,
+          "max_ms": 72,
+          "p95_ms": 24,
+          "samples": 85
+        },
+        "machine_page": {
+          "limit_ms": 2000,
+          "max_ms": 10,
+          "p95_ms": 9,
+          "samples": 30
+        },
+        "owner_page": {
+          "limit_ms": 2000,
+          "max_ms": 9,
+          "p95_ms": 9,
+          "samples": 30
+        }
+      },
+      "limits": {
+        "api_peak_rss_bytes": 2147483648,
+        "artifact_ready_p95_ms": 120000,
+        "collect_ack_p95_ms": 2000,
+        "content_worker_peak_rss_bytes": 2147483648,
+        "machine_page_p95_ms": 2000,
+        "owner_page_p95_ms": 2000,
+        "worker_transition_ms": 120000
+      },
+      "passed": true,
+      "privacy_canaries": 2,
+      "profile": "baseline",
+      "reconciliation": {
+        "browser_accepted_chunks": 495,
+        "browser_accepted_items": 125,
+        "clickhouse_distinct_chunks": 495,
+        "clickhouse_distinct_items": 125,
+        "clickhouse_incomplete_raw_items": 0,
+        "clickhouse_raw_items": 125,
+        "postgres_artifacts": 495,
+        "postgres_chunks": 495,
+        "postgres_incomplete_raw_items": 0,
+        "postgres_items": 125,
+        "postgres_raw_items": 125
+      },
+      "resources": {
+        "api_cpu_millicores": 2000,
+        "api_memory_bytes": 2147483648,
+        "content_worker_cpu_millicores": 2000,
+        "content_worker_memory_bytes": 2147483648
+      },
+      "rss": {
+        "api_peak_bytes": 75931648,
+        "content_worker_peak_bytes": 33001472,
+        "samples": 150
+      },
+      "volume_units": {
+        "accepted_encoded_chars_total": 1971221,
+        "accepted_gzip_bytes_total": 1478415,
+        "budget_boundary_reached_sessions": 1,
+        "budget_checkpoint": {
+          "accepted_encoded_chars": 1971221,
+          "pending_encoded_chars": 0,
+          "reserved_encoded_chars": 0
+        },
+        "largest_attempted_rejected_payload_encoded_chars": 525540,
+        "max_session_encoded_chars": 1971221
+      }
+    },
+    {
+      "budget_encoded_chars": 2097152,
+      "capture": {
+        "pagehide_finalized_before_context_close": true,
+        "report_only": true,
+        "wall_time_ms": 344271
+      },
+      "clickhouse_disk_reserve": {
+        "after_bytes": 257518043136,
+        "before_bytes": 257887813632,
+        "minimum_bytes": 2147483648
+      },
+      "failures": [],
+      "latency": {
+        "artifact_ready": {
+          "limit_ms": 300000,
+          "max_ms": 5114,
+          "p95_ms": 4861,
+          "samples": 497
+        },
+        "collect_ack": {
+          "limit_ms": 5000,
+          "max_ms": 2015,
+          "p95_ms": 2014,
+          "samples": 88
+        },
+        "machine_page": {
+          "limit_ms": 5000,
+          "max_ms": 10,
+          "p95_ms": 10,
+          "samples": 30
+        },
+        "owner_page": {
+          "limit_ms": 5000,
+          "max_ms": 11,
+          "p95_ms": 9,
+          "samples": 30
+        }
+      },
+      "limits": {
+        "api_peak_rss_bytes": 3221225472,
+        "artifact_ready_p95_ms": 300000,
+        "collect_ack_p95_ms": 5000,
+        "content_worker_peak_rss_bytes": 3221225472,
+        "machine_page_p95_ms": 5000,
+        "owner_page_p95_ms": 5000,
+        "worker_transition_ms": 300000
+      },
+      "passed": true,
+      "privacy_canaries": 2,
+      "profile": "weak",
+      "reconciliation": {
+        "browser_accepted_chunks": 497,
+        "browser_accepted_items": 127,
+        "clickhouse_distinct_chunks": 497,
+        "clickhouse_distinct_items": 127,
+        "clickhouse_incomplete_raw_items": 0,
+        "clickhouse_raw_items": 127,
+        "postgres_artifacts": 497,
+        "postgres_chunks": 497,
+        "postgres_incomplete_raw_items": 0,
+        "postgres_items": 127,
+        "postgres_raw_items": 127
+      },
+      "resources": {
+        "api_cpu_millicores": 1000,
+        "api_memory_bytes": 1073741824,
+        "content_worker_cpu_millicores": 500,
+        "content_worker_memory_bytes": 1073741824
+      },
+      "rss": {
+        "api_peak_bytes": 73396224,
+        "content_worker_peak_bytes": 32124928,
+        "samples": 331
+      },
+      "volume_units": {
+        "accepted_encoded_chars_total": 1971636,
+        "accepted_gzip_bytes_total": 1478725,
+        "budget_boundary_reached_sessions": 1,
+        "budget_checkpoint": {
+          "accepted_encoded_chars": 1971636,
+          "pending_encoded_chars": 0,
+          "reserved_encoded_chars": 0
+        },
+        "largest_attempted_rejected_payload_encoded_chars": 525552,
+        "max_session_encoded_chars": 1971636
+      }
+    },
+    {
+      "budget_encoded_chars": 8388608,
+      "capture": {
+        "pagehide_finalized_before_context_close": true,
+        "report_only": true,
+        "wall_time_ms": 410347
+      },
+      "clickhouse_disk_reserve": {
+        "after_bytes": 257518043136,
+        "before_bytes": 257887813632,
+        "minimum_bytes": 2147483648
+      },
+      "failures": [],
+      "latency": {
+        "artifact_ready": {
+          "limit_ms": 120000,
+          "max_ms": 5303,
+          "p95_ms": 5099,
+          "samples": 2081
+        },
+        "collect_ack": {
+          "limit_ms": 2000,
+          "max_ms": 64,
+          "p95_ms": 15,
+          "samples": 349
+        },
+        "machine_page": {
+          "limit_ms": 2000,
+          "max_ms": 13,
+          "p95_ms": 12,
+          "samples": 30
+        },
+        "owner_page": {
+          "limit_ms": 2000,
+          "max_ms": 11,
+          "p95_ms": 11,
+          "samples": 30
+        }
+      },
+      "limits": {
+        "api_peak_rss_bytes": 2147483648,
+        "artifact_ready_p95_ms": 120000,
+        "collect_ack_p95_ms": 2000,
+        "content_worker_peak_rss_bytes": 2147483648,
+        "machine_page_p95_ms": 2000,
+        "owner_page_p95_ms": 2000,
+        "worker_transition_ms": 120000
+      },
+      "passed": true,
+      "privacy_canaries": 2,
+      "profile": "baseline",
+      "reconciliation": {
+        "browser_accepted_chunks": 2081,
+        "browser_accepted_items": 522,
+        "clickhouse_distinct_chunks": 2081,
+        "clickhouse_distinct_items": 522,
+        "clickhouse_incomplete_raw_items": 0,
+        "clickhouse_raw_items": 522,
+        "postgres_artifacts": 2081,
+        "postgres_chunks": 2081,
+        "postgres_incomplete_raw_items": 0,
+        "postgres_items": 522,
+        "postgres_raw_items": 522
+      },
+      "resources": {
+        "api_cpu_millicores": 2000,
+        "api_memory_bytes": 2147483648,
+        "content_worker_cpu_millicores": 2000,
+        "content_worker_memory_bytes": 2147483648
+      },
+      "rss": {
+        "api_peak_bytes": 77684736,
+        "content_worker_peak_bytes": 33193984,
+        "samples": 394
+      },
+      "volume_units": {
+        "accepted_encoded_chars_total": 8281887,
+        "accepted_gzip_bytes_total": 6211412,
+        "budget_boundary_reached_sessions": 1,
+        "budget_checkpoint": {
+          "accepted_encoded_chars": 8281887,
+          "pending_encoded_chars": 0,
+          "reserved_encoded_chars": 0
+        },
+        "largest_attempted_rejected_payload_encoded_chars": 525568,
+        "max_session_encoded_chars": 8281887
+      }
+    },
+    {
+      "budget_encoded_chars": 8388608,
+      "capture": {
+        "pagehide_finalized_before_context_close": true,
+        "report_only": true,
+        "wall_time_ms": 988413
+      },
+      "clickhouse_disk_reserve": {
+        "after_bytes": 257518043136,
+        "before_bytes": 257887813632,
+        "minimum_bytes": 2147483648
+      },
+      "failures": [],
+      "latency": {
+        "artifact_ready": {
+          "limit_ms": 300000,
+          "max_ms": 5272,
+          "p95_ms": 4922,
+          "samples": 2037
+        },
+        "collect_ack": {
+          "limit_ms": 5000,
+          "max_ms": 2058,
+          "p95_ms": 2013,
+          "samples": 345
+        },
+        "machine_page": {
+          "limit_ms": 5000,
+          "max_ms": 14,
+          "p95_ms": 13,
+          "samples": 30
+        },
+        "owner_page": {
+          "limit_ms": 5000,
+          "max_ms": 13,
+          "p95_ms": 13,
+          "samples": 30
+        }
+      },
+      "limits": {
+        "api_peak_rss_bytes": 3221225472,
+        "artifact_ready_p95_ms": 300000,
+        "collect_ack_p95_ms": 5000,
+        "content_worker_peak_rss_bytes": 3221225472,
+        "machine_page_p95_ms": 5000,
+        "owner_page_p95_ms": 5000,
+        "worker_transition_ms": 300000
+      },
+      "passed": true,
+      "privacy_canaries": 2,
+      "profile": "weak",
+      "reconciliation": {
+        "browser_accepted_chunks": 2037,
+        "browser_accepted_items": 512,
+        "clickhouse_distinct_chunks": 2037,
+        "clickhouse_distinct_items": 512,
+        "clickhouse_incomplete_raw_items": 0,
+        "clickhouse_raw_items": 512,
+        "postgres_artifacts": 2037,
+        "postgres_chunks": 2037,
+        "postgres_incomplete_raw_items": 0,
+        "postgres_items": 512,
+        "postgres_raw_items": 512
+      },
+      "resources": {
+        "api_cpu_millicores": 1000,
+        "api_memory_bytes": 1073741824,
+        "content_worker_cpu_millicores": 500,
+        "content_worker_memory_bytes": 1073741824
+      },
+      "rss": {
+        "api_peak_bytes": 77299712,
+        "content_worker_peak_bytes": 34492416,
+        "samples": 948
+      },
+      "volume_units": {
+        "accepted_encoded_chars_total": 8103449,
+        "accepted_gzip_bytes_total": 6077583,
+        "budget_boundary_reached_sessions": 1,
+        "budget_checkpoint": {
+          "accepted_encoded_chars": 8103449,
+          "pending_encoded_chars": 0,
+          "reserved_encoded_chars": 0
+        },
+        "largest_attempted_rejected_payload_encoded_chars": 525623,
+        "max_session_encoded_chars": 8103449
+      }
+    }
+  ]
+}
