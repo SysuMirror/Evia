@@ -25,6 +25,7 @@ import {
   Select,
   type DataTableColumn,
 } from '@evia/design-system';
+import { ReplayAccessHistory } from './access-history';
 import {
   applyReplayRecords,
   buildReplayChapters,
@@ -103,6 +104,8 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
   const [chapterIndex, setChapterIndex] = useState(0);
   const [playbackStep, setPlaybackStep] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [accessHistoryRefresh, setAccessHistoryRefresh] = useState(0);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const previewController = useRef<AbortController | undefined>(undefined);
   const activeChapter = preview?.chapters[chapterIndex];
@@ -197,7 +200,10 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
       if (!controller.signal.aborted)
         setPreviewError(error instanceof Error ? error : new Error('无法加载回放快照。'));
     } finally {
-      if (!controller.signal.aborted) setPreviewLoading(false);
+      if (!controller.signal.aborted) {
+        setPreviewLoading(false);
+        setAccessHistoryRefresh((current) => current + 1);
+      }
     }
   };
 
@@ -457,15 +463,28 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
           </DataSurface>
         </div>
 
-        <details className="replay-diagnostics">
+        <details
+          className="replay-diagnostics"
+          onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)}
+        >
           <summary>
             <span>
-              <strong>诊断与内容记录</strong>
-              <span>传输内容项、安全边界与会话标识</span>
+              <strong>访问历史、诊断与内容记录</strong>
+              <span>敏感内容访问、传输内容项与安全边界</span>
             </span>
             <span>展开详情</span>
           </summary>
           <div className="replay-diagnostics-grid">
+            {project.permissions.includes('audit.read') && (
+              <ReplayAccessHistory
+                key={`${environment}:${selectedStream ?? ''}`}
+                project={project}
+                environment={environment}
+                streamID={selectedStream}
+                active={diagnosticsOpen}
+                refreshToken={accessHistoryRefresh}
+              />
+            )}
             <div className="replay-records-panel">
               <DataSurface label="会话内容项">
                 <ResultHeader

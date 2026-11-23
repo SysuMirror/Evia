@@ -3,12 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import {
   api,
   ApiError,
+  type Environment,
   type Project,
   type ProjectAuditEntry,
   type Session,
 } from '@evia/api-client';
 import {
   Alert,
+  Badge,
   Button,
   DataSurface,
   DataTable,
@@ -16,6 +18,7 @@ import {
   Field,
   Input,
   PaginationBar,
+  Select,
   Toolbar,
   type DataTableColumn,
 } from '@evia/design-system';
@@ -35,11 +38,17 @@ interface AuditPanelProps {
   session: Session;
 }
 
+type AuditOutcome = '' | ProjectAuditEntry['outcome'];
+type AuditEnvironment = '' | Environment;
+
 interface SubmittedFilter {
   from: string;
   to: string;
   action: string;
   actorID: string;
+  environment: AuditEnvironment;
+  outcome: AuditOutcome;
+  resourceKeyPrefix: string;
 }
 
 export function AuditPanel({ project, session }: AuditPanelProps) {
@@ -49,12 +58,18 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
   const [rangeTouched, setRangeTouched] = useState(false);
   const [action, setAction] = useState('');
   const [actorID, setActorID] = useState('');
+  const [environment, setEnvironment] = useState<AuditEnvironment>('');
+  const [outcome, setOutcome] = useState<AuditOutcome>('');
+  const [resourceKeyPrefix, setResourceKeyPrefix] = useState('');
   const [filterError, setFilterError] = useState('');
   const [submitted, setSubmitted] = useState<SubmittedFilter>({
     from: initial.from,
     to: initial.to,
     action: '',
     actorID: '',
+    environment: '',
+    outcome: '',
+    resourceKeyPrefix: '',
   });
   const [cursors, setCursors] = useState<string[]>([]);
 
@@ -85,6 +100,9 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
       to: range.to,
       action: action.trim(),
       actorID: actorID.trim(),
+      environment,
+      outcome,
+      resourceKeyPrefix: resourceKeyPrefix.trim(),
     });
   };
 
@@ -98,6 +116,9 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
           to: submitted.to,
           action: submitted.action || undefined,
           actorID: submitted.actorID || undefined,
+          environment: submitted.environment || undefined,
+          outcome: submitted.outcome || undefined,
+          resourceKeyPrefix: submitted.resourceKeyPrefix || undefined,
           cursor: cursors.at(-1),
           limit: 20,
         },
@@ -117,7 +138,17 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
         </span>
       ),
     },
+    { key: 'environment', header: '环境', render: (row) => row.environment ?? '—' },
     { key: 'action', header: '操作', render: (row) => <code>{row.action}</code> },
+    {
+      key: 'outcome',
+      header: '结果',
+      render: (row) => (
+        <Badge tone={row.outcome === 'success' ? 'success' : 'error'}>
+          {row.outcome === 'success' ? '成功' : '失败'}
+        </Badge>
+      ),
+    },
     { key: 'resource', header: '资源', render: (row) => <code>{shortID(row.resource_key)}</code> },
     {
       key: 'credential',
@@ -172,6 +203,40 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
               onChange={(event) => setActorID(event.target.value)}
             />
           </Field>
+          <Field label="环境" htmlFor="governance-audit-environment">
+            <Select
+              id="governance-audit-environment"
+              value={environment}
+              options={[
+                { value: '', label: '全部环境' },
+                { value: 'development', label: 'development' },
+                { value: 'staging', label: 'staging' },
+                { value: 'production', label: 'production' },
+              ]}
+              onChange={(event) => setEnvironment(event.target.value as AuditEnvironment)}
+            />
+          </Field>
+          <Field label="结果" htmlFor="governance-audit-outcome">
+            <Select
+              id="governance-audit-outcome"
+              value={outcome}
+              options={[
+                { value: '', label: '全部结果' },
+                { value: 'success', label: '成功' },
+                { value: 'failure', label: '失败' },
+              ]}
+              onChange={(event) => setOutcome(event.target.value as AuditOutcome)}
+            />
+          </Field>
+          <Field label="资源键前缀" htmlFor="governance-audit-resource">
+            <Input
+              id="governance-audit-resource"
+              value={resourceKeyPrefix}
+              maxLength={512}
+              autoComplete="off"
+              onChange={(event) => setResourceKeyPrefix(event.target.value)}
+            />
+          </Field>
         </div>
       </Toolbar>
       {filterError && (
@@ -200,7 +265,7 @@ export function AuditPanel({ project, session }: AuditPanelProps) {
             columns={columns}
             rows={audit.data?.items ?? []}
             rowKey={(row) => row.id}
-            minWidth={720}
+            minWidth={1040}
             loading={audit.isFetching}
             empty={<EmptyPanel description="所选范围内没有审计记录。" />}
           />

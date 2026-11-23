@@ -13347,6 +13347,43 @@
             }
           },
           {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "development",
+                "staging",
+                "production"
+              ],
+              "description": "仅返回在指定授权环境内发生的操作。"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "success",
+                "failure"
+              ],
+              "description": "success 表示受保护操作完成；failure 表示授权后操作未返回资源。"
+            }
+          },
+          {
+            "name": "resource_key_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -26789,11 +26826,28 @@
             ],
             "format": "uuid"
           },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "staging",
+              "production"
+            ],
+            "description": "环境作用域；不绑定环境的历史项目操作省略此字段。"
+          },
           "action": {
             "type": "string"
           },
           "resource_key": {
             "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failure"
+            ],
+            "description": "success 表示操作完成；failure 表示操作已授权但未返回受保护资源。"
           },
           "occurred_at": {
             "type": "string",
@@ -26808,6 +26862,7 @@
           "credential_id",
           "action",
           "resource_key",
+          "outcome",
           "occurred_at"
         ]
       },

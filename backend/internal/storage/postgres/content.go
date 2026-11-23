@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"time"
+	"unicode/utf8"
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/content"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 	"github.com/jackc/pgx/v5"
 )
 
 var _ content.WorkerStore = (*Store)(nil)
-var _ content.ReadStore = (*Store)(nil)
+var _ content.Store = (*Store)(nil)
 
 func (s *Store) ClaimContent(ctx context.Context, worker string, lease time.Duration) (*content.Claim, error) {
 	if worker == "" || lease < 30*time.Second || lease > 5*time.Minute {
@@ -235,6 +237,29 @@ func (s *Store) ListContentItems(ctx context.Context, actor, project, environmen
 		return content.ItemPage{}, err
 	}
 	return page, nil
+}
+
+func (s *Store) RecordContentAccess(ctx context.Context, audit content.AccessAudit) error {
+	if utf8.RuneCountInString(audit.ItemID) < 1 || utf8.RuneCountInString(audit.ItemID) > 128 ||
+		utf8.RuneCountInString(audit.ContentType) > 64 || utf8.RuneCountInString(audit.StreamID) > 128 ||
+		!env.Valid(audit.Environment) || (audit.Outcome != content.AccessOutcomeSuccess && audit.Outcome != content.AccessOutcomeFailure) {
+		return fault.New(fault.Invalid, "INVALID_CONTENT_AUDIT", "内容访问审计元数据无效")
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+	if err = s.contentReadAuthority(ctx, tx, audit.ActorID, audit.ProjectID, audit.Environment); err != nil {
+		return err
+	}
+	resource := content.AccessResourceKey(audit.ContentType, audit.StreamID, audit.ItemID)
+	if _, err = tx.Exec(ctx, `INSERT INTO audit_entries(project_id,actor_id,environment,action,resource_key,outcome)
+		VALUES($1,$2,$3,$4,$5,$6)`, audit.ProjectID, audit.ActorID, audit.Environment,
+		content.AuditActionItemRead, resource, audit.Outcome); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) GetContentItem(ctx context.Context, actor, project, environment, itemID string) ([]content.Record, error) {

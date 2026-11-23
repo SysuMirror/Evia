@@ -29,7 +29,7 @@
 | `DELETE P/members/{user_id}` | 无正文；200 被移除成员的操作快照 `{member,revision}` 和 `ETag` |
 | `GET P/settings` | 无查询参数；返回 `{project_id,name,timezone,revision}` 和 `ETag` |
 | `PATCH P/settings` | 完整 `{name,timezone}`；返回更新后的设置和 `ETag` |
-| `GET P/audit-logs` | 必需 `from`、`to`，可选 `action`、`actor_id`、`limit`、`cursor`；返回 `{items,next_cursor}` |
+| `GET P/audit-logs` | 必需 `from`、`to`，可选 `action`、`actor_id`、`environment`、`outcome`、`resource_key_prefix`、`limit`、`cursor`；返回 `{items,next_cursor}` |
 
 所有 POST/PATCH/DELETE 都必须带单一 `Idempotency-Key` 和带双引号的 `If-Match`，以及会话 `X-CSRF-Token`。例如 `If-Match: "3"`。幂等键是 1–128 个可见 ASCII 字符。未知/重复查询参数、未知 JSON 字段、重复 JSON key 和尾随 JSON 都拒绝。成员 DELETE 不接受正文。
 
@@ -55,17 +55,19 @@
 
 ### 审计分页
 
-`from`、`to` 使用 RFC3339 时间，范围为半开区间 `[from,to)`，最大 31 天。`action` 是最长 128 字符的精确操作名，`actor_id` 是精确主体 UUID。默认 50、最多 100 条，按 `(occurred_at,id)` 倒序。
+`from`、`to` 使用 RFC3339 时间，范围为半开区间 `[from,to)`，最大 31 天。`action` 是最长 128 字符的精确操作名，`actor_id` 是精确主体 UUID；还可按闭集环境、`success` / `failure` 结果与最长 512 字符的资源键前缀组合筛选。默认 50、最多 100 条，按 `(occurred_at,id)` 倒序。
 
-每条结果只包含 `id`、`project_id`、`actor_id`、`actor_kind`、`credential_id`、`action`、`resource_key`、`occurred_at`。审计 bigint ID 以十进制字符串表示。机器操作可以返回对应凭据 ID，不返回凭据内容、请求正文、密码或业务事件。人类操作的 `credential_id` 为 null；运维账号操作（创建、停用/启用状态转换、密码重置，迁移 028 起以 `event_type` 闭集列区分）保存在独立 `account_provision_events` 中，不冒用人类主体，也不出现在项目审计接口中。
+每条结果只包含 `id`、`project_id`、`actor_id`、`actor_kind`、`credential_id`、`environment`、`action`、`resource_key`、`outcome`、`occurred_at`。审计 bigint ID 以十进制字符串表示。不绑定环境的既有项目操作省略 `environment`，既有成功提交的操作返回 `outcome: success`。机器操作可以返回对应凭据 ID，不返回凭据内容、请求正文、密码、解密内容、密文或业务事件。人类操作的 `credential_id` 为 null；运维账号操作（创建、停用/启用状态转换、密码重置，迁移 028 起以 `event_type` 闭集列区分）保存在独立 `account_provision_events` 中，不冒用人类主体，也不出现在项目审计接口中。
 
-游标签名绑定读取者、项目、规范化的精确时间/操作/主体条件，不能换筛选条件后继续使用。数据库时间精度为微秒，存储查询对纳秒边界做向上取整，保持半开区间比较的真实语义。同一时间戳使用 bigint ID 消除排序歧义。
+敏感内容项读取使用通用 `content.item.read` 操作；资源键仅编码内容类型、流与内容项标识。返回内容前会重新检查 owner 或机器 `content.read` 的精确项目/环境权限并提交成功审计；工件缺失、hash 不符或组装失败记录 `failure`，审计提交失败则不返回内容。该行为属于通用项目审计，不新增会话回放专用后端。
+
+游标签名绑定读取者、项目、规范化的全部精确筛选条件，不能换筛选条件后继续使用。数据库时间精度为微秒，存储查询对纳秒边界做向上取整，保持半开区间比较的真实语义。同一时间戳使用 bigint ID 消除排序歧义。
 
 分页不锁定跨页事务快照，尚未提交的较早操作可能稍后才可见。每次读取重新授权。读取本身不写审计，避免分页不断产生自己的新条目。查询复用现有项目/时间索引；本轮没有大规模审计检索的容量结论。
 
 ## 迁移与验证
 
-使用新二进制显式执行 `evia migrate` 应用到迁移目录最新编号（治理能力落在 `011`，该命令会顺序应用全部待执行迁移），再启动 API 和工作进程。迁移新增两个项目修订、共享治理幂等记录和运维账号创建审计，不改写历史事件或已发布定义。没有自动启动迁移或回滚命令；生产升级仍需独立备份、锁等待评估和恢复演练。
+使用新二进制显式执行 `evia migrate` 应用到迁移目录最新编号（基础治理能力落在 `011`，内容访问环境/结果列与查询索引落在 `050`，该命令会顺序应用全部待执行迁移），再启动 API 和工作进程。`050` 为既有条目回填 `outcome=success`，环境保持 null；不改写历史事件、敏感内容或已发布定义。没有自动启动迁移或回滚命令；生产升级仍需独立备份、锁等待评估和恢复演练。
 
 本地真实接口验证：
 

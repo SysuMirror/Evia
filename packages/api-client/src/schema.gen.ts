@@ -3228,8 +3228,18 @@ export interface components {
             actor_kind: "human" | "machine";
             /** Format: uuid */
             credential_id: string | null;
+            /**
+             * @description 环境作用域；不绑定环境的历史项目操作省略此字段。
+             * @enum {string}
+             */
+            environment?: "development" | "staging" | "production";
             action: string;
             resource_key: string;
+            /**
+             * @description success 表示操作完成；failure 表示操作已授权但未返回受保护资源。
+             * @enum {string}
+             */
+            outcome: "success" | "failure";
             /** Format: date-time */
             occurred_at: string;
         };
@@ -13929,6 +13939,9 @@ export interface operations {
                 to: string;
                 action?: string;
                 actor_id?: string;
+                environment?: "development" | "staging" | "production";
+                outcome?: "success" | "failure";
+                resource_key_prefix?: string;
                 limit?: number;
                 cursor?: string;
             };

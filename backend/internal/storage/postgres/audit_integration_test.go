@@ -10,6 +10,7 @@ import (
 
 	"github.com/howtomakeaname/Evia/backend/internal/access"
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
+	"github.com/howtomakeaname/Evia/backend/internal/content"
 )
 
 func auditLogInsert(t *testing.T, f catalogFixture, actor, project, action, resource string, occurred time.Time) string {
@@ -154,6 +155,62 @@ func TestAuditLogMachineOperationSafeAttributionAndNoReadAudit(t *testing.T) {
 	}
 	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_entries`).Scan(&after); e != nil || after != before {
 		t.Fatal("reads inflated audit log", before, after, e)
+	}
+}
+
+func TestContentAccessAuditPreservesHumanAndMachineIdentityScopeAndFilters(t *testing.T) {
+	f := catalogDB(t)
+	ctx := context.Background()
+	ownerAudit := content.AccessAudit{
+		ActorID: f.owner, ProjectID: f.project, Environment: "development",
+		ContentType: "session_replay_snapshot", StreamID: "replay / 一", ItemID: "item-owner", Outcome: content.AccessOutcomeFailure,
+	}
+	if err := f.s.RecordContentAccess(ctx, ownerAudit); err != nil {
+		t.Fatal(err)
+	}
+	machines := access.NewMachines(f.s)
+	issued, err := machines.CreatePrincipal(ctx, f.owner, f.project, "content-audit-machine", access.MachineCreate{
+		Name: "Content audit machine", Environment: "development", Permissions: []string{access.PermissionContentRead}, ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := machines.AuthenticateMachine(ctx, issued.SecretOnce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	machineAudit := ownerAudit
+	machineAudit.ActorID, machineAudit.ItemID, machineAudit.Outcome = identity.PrincipalID, "item-machine", content.AccessOutcomeSuccess
+	if err = f.s.RecordContentAccess(access.WithIdentity(ctx, identity), machineAudit); err != nil {
+		t.Fatal(err)
+	}
+
+	filter := access.AuditFilter{
+		From: time.Now().Add(-time.Hour), To: time.Now().Add(time.Hour), Action: content.AuditActionItemRead,
+		Environment: "development", ResourceKeyPrefix: content.AccessResourcePrefix("replay / 一"),
+	}
+	items, err := access.NewAuditLogs(f.s).List(ctx, f.owner, f.project, filter, nil, 10)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("content access audits: %#v %v", items, err)
+	}
+	byOutcome := map[string]access.AuditEntry{}
+	for _, item := range items {
+		byOutcome[item.Outcome] = item
+		if item.Environment == nil || *item.Environment != "development" || item.Action != content.AuditActionItemRead {
+			t.Fatalf("lost environment/action: %#v", item)
+		}
+	}
+	if byOutcome[access.AuditOutcomeFailure].ActorKind != access.PrincipalKindHuman || byOutcome[access.AuditOutcomeFailure].CredentialID != nil {
+		t.Fatalf("human attribution changed: %#v", byOutcome[access.AuditOutcomeFailure])
+	}
+	machine := byOutcome[access.AuditOutcomeSuccess]
+	if machine.ActorKind != access.PrincipalKindMachine || machine.ActorID != identity.PrincipalID || machine.CredentialID == nil || *machine.CredentialID != identity.CredentialID {
+		t.Fatalf("machine attribution changed: %#v", machine)
+	}
+	filter.Outcome = access.AuditOutcomeFailure
+	items, err = access.NewAuditLogs(f.s).List(ctx, f.owner, f.project, filter, nil, 10)
+	if err != nil || len(items) != 1 || items[0].Outcome != access.AuditOutcomeFailure {
+		t.Fatalf("outcome filter failed: %#v %v", items, err)
 	}
 }
 

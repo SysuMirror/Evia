@@ -49,6 +49,11 @@ func TestAuditLogValidation(t *testing.T) {
 		{"uppercase_action", "INVALID_AUDIT_ACTION", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) { f.Action = "Project.read" }},
 		{"long_action", "INVALID_AUDIT_ACTION", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) { f.Action = strings.Repeat("a", 129) }},
 		{"actor", "INVALID_ACTOR_ID", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) { f.ActorID = "bad" }},
+		{"environment", "INVALID_AUDIT_ENVIRONMENT", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) { f.Environment = "preview" }},
+		{"outcome", "INVALID_AUDIT_OUTCOME", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) { f.Outcome = "unknown" }},
+		{"resource_prefix_long", "INVALID_AUDIT_RESOURCE", func(f *AuditFilter, _ **AuditPosition, _, _ *string, _ *int) {
+			f.ResourceKeyPrefix = strings.Repeat("x", 513)
+		}},
 		{"reader", "INVALID_ACTOR_ID", func(_ *AuditFilter, _ **AuditPosition, reader, _ *string, _ *int) { *reader = "bad" }},
 		{"project", "INVALID_PROJECT_ID", func(_ *AuditFilter, _ **AuditPosition, _, project *string, _ *int) { *project = "bad" }},
 		{"zero_limit", "INVALID_LIMIT", func(_ *AuditFilter, _ **AuditPosition, _, _ *string, limit *int) { *limit = 0 }},
@@ -90,6 +95,7 @@ func TestAuditLogUTCPrecisionLimitAndDependencyFailure(t *testing.T) {
 	filter.To = filter.From.Add(31 * 24 * time.Hour)
 	filter.From, filter.To = filter.From.In(time.FixedZone("offset", 19800)), filter.To.In(time.FixedZone("offset", 19800))
 	filter.Action, filter.ActorID = strings.Repeat("a", 128), auditTestReader
+	filter.Environment, filter.Outcome, filter.ResourceKeyPrefix = "development", AuditOutcomeFailure, strings.Repeat("资", 512)
 	position := &AuditPosition{OccurredAt: filter.From.Add(time.Second).Truncate(time.Microsecond), ID: "9223372036854775807"}
 	if _, err := svc.List(context.Background(), auditTestReader, auditTestProject, filter, position, 100); err != nil {
 		t.Fatal(err)

@@ -1044,7 +1044,10 @@ test('content discovery canonicalizes types and encodes stream and item identifi
   const frozen = { ...page, cursor: undefined, asOf: '2026-11-23T04:00:00Z' };
   await api.listContentStreams('p/q', frozen, controller.signal);
   await api.listContentItems('p/q', 'stream/one', frozen, controller.signal);
-  assert.throws(() => api.listContentStreams('p/q', { ...page, asOf: frozen.asOf }, controller.signal), /mutually exclusive/);
+  assert.throws(
+    () => api.listContentStreams('p/q', { ...page, asOf: frozen.asOf }, controller.signal),
+    /mutually exclusive/,
+  );
   await api.getContentItem('p/q', 'item/one', 'development', controller.signal);
   assert.deepEqual(
     fetch.mock.calls.map((call) => call.arguments[0]),
@@ -1176,8 +1179,11 @@ test('governance reads encode scope and audit filters without leaking unknown pa
     {
       from: '2026-11-01T00:00:00Z',
       to: '2026-11-08T00:00:00Z',
-      action: 'project.settings.update',
+      action: 'content.item.read',
       actorID: 'a/b',
+      environment: 'development',
+      outcome: 'failure',
+      resourceKeyPrefix: 'content.item?stream_id=replay%2F1&',
       cursor: 'c',
       limit: 50,
     },
@@ -1188,7 +1194,7 @@ test('governance reads encode scope and audit filters without leaking unknown pa
     [
       '/api/v1/projects/p%2Fq/members?cursor=a%2B%2F%3D&limit=5',
       '/api/v1/projects/p%2Fq/settings',
-      '/api/v1/projects/p%2Fq/audit-logs?from=2026-11-01T00%3A00%3A00Z&to=2026-11-08T00%3A00%3A00Z&action=project.settings.update&actor_id=a%2Fb&cursor=c&limit=50',
+      '/api/v1/projects/p%2Fq/audit-logs?from=2026-11-01T00%3A00%3A00Z&to=2026-11-08T00%3A00%3A00Z&action=content.item.read&actor_id=a%2Fb&environment=development&outcome=failure&resource_key_prefix=content.item%3Fstream_id%3Dreplay%252F1%26&cursor=c&limit=50',
     ],
   );
   controller.abort();

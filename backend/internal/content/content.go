@@ -7,6 +7,7 @@ package content
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 )
 
@@ -71,6 +72,31 @@ type Item struct {
 	DurationMS                               int
 }
 
+const (
+	AuditActionItemRead  = "content.item.read"
+	AccessOutcomeSuccess = "success"
+	AccessOutcomeFailure = "failure"
+)
+
+type AccessAudit struct {
+	ActorID, ProjectID, Environment        string
+	ContentType, StreamID, ItemID, Outcome string
+}
+
+// AccessResourceKey is safe operational metadata. It deliberately excludes
+// plaintext, ciphertext, object keys, key identifiers and credential material.
+func accessKeyPart(value string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(value))
+}
+
+func AccessResourcePrefix(streamID string) string {
+	return "content.item?stream=" + accessKeyPart(streamID) + "&"
+}
+
+func AccessResourceKey(contentType, streamID, itemID string) string {
+	return AccessResourcePrefix(streamID) + "type=" + accessKeyPart(contentType) + "&item=" + accessKeyPart(itemID)
+}
+
 type DiscoveryPosition struct {
 	ReceivedAt time.Time
 	ID         string
@@ -133,4 +159,13 @@ type ReadStore interface {
 	ListContentStreams(context.Context, string, string, string, DiscoveryFilter) (StreamPage, error)
 	ListContentItems(context.Context, string, string, string, string, DiscoveryFilter) (ItemPage, error)
 	GetContentItem(context.Context, string, string, string, string) ([]Record, error)
+}
+
+type AccessAuditStore interface {
+	RecordContentAccess(context.Context, AccessAudit) error
+}
+
+type Store interface {
+	ReadStore
+	AccessAuditStore
 }

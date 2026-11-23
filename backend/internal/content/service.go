@@ -6,16 +6,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"sort"
+	"time"
 )
 
+const accessAuditTimeout = 3 * time.Second
+
 type Service struct {
-	store     ReadStore
+	store     Store
 	artifacts ArtifactStore
 }
 
-func NewService(store ReadStore, artifacts ArtifactStore) (*Service, error) {
+func NewService(store Store, artifacts ArtifactStore) (*Service, error) {
 	if store == nil || artifacts == nil {
-		return nil, errors.New("content service requires index and artifact store")
+		return nil, errors.New("content service requires index, audit and artifact stores")
 	}
 	return &Service{store: store, artifacts: artifacts}, nil
 }
@@ -29,36 +32,67 @@ func (s *Service) ListItems(ctx context.Context, actor, project, environment, st
 }
 
 func (s *Service) GetItem(ctx context.Context, actor, project, environment, itemID string) (Item, error) {
+	audit := AccessAudit{ActorID: actor, ProjectID: project, Environment: environment, ItemID: itemID}
 	records, err := s.store.GetContentItem(ctx, actor, project, environment, itemID)
 	if err != nil {
-		return Item{}, err
+		return s.accessFailure(ctx, audit, err)
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].ChunkIndex < records[j].ChunkIndex })
-	if len(records) == 0 || records[0].ChunkCount != len(records) {
-		return Item{}, errors.New("content item is incomplete")
+	if len(records) == 0 {
+		return s.accessFailure(ctx, audit, errors.New("content item is incomplete"))
 	}
-	var content []byte
+	first := records[0]
+	if first.ContentType == "" || first.StreamID == "" || first.ItemID != itemID {
+		return s.accessFailure(ctx, audit, errors.New("content item metadata is invalid"))
+	}
+	audit.ContentType, audit.StreamID = first.ContentType, first.StreamID
+	if first.ChunkCount != len(records) {
+		return s.accessFailure(ctx, audit, errors.New("content item is incomplete"))
+	}
+	var plaintext []byte
 	for index, record := range records {
-		if record.ChunkIndex != index || record.ChunkCount != len(records) {
-			return Item{}, errors.New("content item chunk order is invalid")
+		if record.ChunkIndex != index || record.ChunkCount != len(records) || record.ContentType != first.ContentType ||
+			record.StreamID != first.StreamID || record.ItemID != first.ItemID {
+			return s.accessFailure(ctx, audit, errors.New("content item chunk order or metadata is invalid"))
 		}
 		data, readErr := s.artifacts.Read(ctx, record.ObjectKey)
 		if readErr != nil {
-			return Item{}, readErr
+			return s.accessFailure(ctx, audit, readErr)
 		}
 		hash := sha256.Sum256(data)
 		if hex.EncodeToString(hash[:]) != record.SHA256 {
-			return Item{}, errors.New("content artifact hash mismatch")
+			return s.accessFailure(ctx, audit, errors.New("content artifact hash mismatch"))
 		}
-		content = append(content, data...)
+		plaintext = append(plaintext, data...)
 	}
-	first := records[0]
+	audit.Outcome = AccessOutcomeSuccess
+	if err = s.recordAccess(ctx, audit); err != nil {
+		// The plaintext has not crossed the service boundary. An unavailable or
+		// revoked audit path therefore fails closed rather than returning content.
+		return Item{}, err
+	}
 	return Item{
 		ProjectID: project, Environment: environment,
 		ContentType: first.ContentType,
 		StreamID:    first.StreamID, ItemID: first.ItemID, ActorType: first.ActorType,
-		Content: string(content), Truncated: first.Truncated, ContentLength: first.ContentLength,
+		Content: string(plaintext), Truncated: first.Truncated, ContentLength: first.ContentLength,
 		KeyID: first.KeyID, ReceivedAt: first.ReceivedAt,
 		Status: first.Status, DurationMS: first.DurationMS,
 	}, nil
+}
+
+func (s *Service) recordAccess(ctx context.Context, audit AccessAudit) error {
+	// Audit attribution values survive a client disconnect, but the detached
+	// write remains strictly bounded and reauthorizes in persistence.
+	auditCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), accessAuditTimeout)
+	defer cancel()
+	return s.store.RecordContentAccess(auditCtx, audit)
+}
+
+func (s *Service) accessFailure(ctx context.Context, audit AccessAudit, cause error) (Item, error) {
+	audit.Outcome = AccessOutcomeFailure
+	if err := s.recordAccess(ctx, audit); err != nil {
+		return Item{}, err
+	}
+	return Item{}, cause
 }

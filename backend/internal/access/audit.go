@@ -5,16 +5,19 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
+	"github.com/howtomakeaname/Evia/backend/internal/platform/env"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/fault"
 )
 
 // AuditEntry exposes operational metadata only. Credentials are identifiers,
 // never credential material; actor display names are intentionally excluded.
 type AuditEntry struct {
-	ID, ProjectID, ActorID, ActorKind, Action, ResourceKey string
-	CredentialID                                           *string
-	OccurredAt                                             time.Time
+	ID, ProjectID, ActorID, ActorKind, Action, ResourceKey, Outcome string
+	CredentialID                                                    *string
+	Environment                                                     *string
+	OccurredAt                                                      time.Time
 }
 
 type AuditPosition struct {
@@ -22,9 +25,14 @@ type AuditPosition struct {
 	ID         string
 }
 
+const (
+	AuditOutcomeSuccess = "success"
+	AuditOutcomeFailure = "failure"
+)
+
 type AuditFilter struct {
-	From, To        time.Time
-	Action, ActorID string
+	From, To                                                 time.Time
+	Action, ActorID, Environment, Outcome, ResourceKeyPrefix string
 }
 
 type AuditStore interface {
@@ -54,6 +62,15 @@ func ValidateAuditQuery(reader, project string, filter AuditFilter, after *Audit
 	}
 	if filter.ActorID != "" && !projectIDPattern.MatchString(filter.ActorID) {
 		return fault.New(fault.Invalid, "INVALID_ACTOR_ID", "主体标识格式不正确")
+	}
+	if filter.Environment != "" && !env.Valid(filter.Environment) {
+		return fault.New(fault.Invalid, "INVALID_AUDIT_ENVIRONMENT", "审计环境筛选无效")
+	}
+	if filter.Outcome != "" && filter.Outcome != AuditOutcomeSuccess && filter.Outcome != AuditOutcomeFailure {
+		return fault.New(fault.Invalid, "INVALID_AUDIT_OUTCOME", "审计结果筛选无效")
+	}
+	if utf8.RuneCountInString(filter.ResourceKeyPrefix) > 512 {
+		return fault.New(fault.Invalid, "INVALID_AUDIT_RESOURCE", "审计资源筛选无效")
 	}
 	if after != nil {
 		id, err := strconv.ParseInt(after.ID, 10, 64)

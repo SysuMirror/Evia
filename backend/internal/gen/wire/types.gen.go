@@ -1134,8 +1134,10 @@ type ProjectAuditEntry struct {
 	ActorID      string  `json:"actor_id"`
 	ActorKind    string  `json:"actor_kind"`
 	CredentialID *string `json:"credential_id"`
+	Environment  *string `json:"environment,omitempty"`
 	Action       string  `json:"action"`
 	ResourceKey  string  `json:"resource_key"`
+	Outcome      string  `json:"outcome"`
 	OccurredAt   string  `json:"occurred_at"`
 }
 

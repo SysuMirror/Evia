@@ -57,12 +57,16 @@ func (s *Store) ListAuditLogs(ctx context.Context, reader, project string, filte
 		positionTime := after.OccurredAt.UTC()
 		afterTime, afterID = &positionTime, after.ID
 	}
-	rows, e := tx.Query(ctx, `SELECT e.id::text,e.project_id::text,e.actor_id::text,p.kind,e.action,e.resource_key,e.credential_id::text,e.occurred_at
+	rows, e := tx.Query(ctx, `SELECT e.id::text,e.project_id::text,e.actor_id::text,p.kind,e.action,e.resource_key,
+ e.credential_id::text,e.environment,e.outcome,e.occurred_at
  FROM audit_entries e JOIN principals p ON p.id=e.actor_id
  WHERE e.project_id=$1 AND e.occurred_at >= $2 AND e.occurred_at < $3
  AND ($4='' OR e.action=$4) AND ($5='' OR e.actor_id=nullif($5,'')::uuid)
- AND ($6::timestamptz IS NULL OR (e.occurred_at,e.id)<($6,nullif($7,'')::bigint))
- ORDER BY e.occurred_at DESC,e.id DESC LIMIT $8`, project, auditBoundary(filter.From), auditBoundary(filter.To), filter.Action, filter.ActorID, afterTime, afterID, limit)
+ AND ($6='' OR e.environment=$6) AND ($7='' OR e.outcome=$7)
+ AND ($8='' OR left(e.resource_key,length($8))=$8)
+ AND ($9::timestamptz IS NULL OR (e.occurred_at,e.id)<($9,nullif($10,'')::bigint))
+ ORDER BY e.occurred_at DESC,e.id DESC LIMIT $11`, project, auditBoundary(filter.From), auditBoundary(filter.To),
+		filter.Action, filter.ActorID, filter.Environment, filter.Outcome, filter.ResourceKeyPrefix, afterTime, afterID, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -70,7 +74,8 @@ func (s *Store) ListAuditLogs(ctx context.Context, reader, project string, filte
 	entries := make([]access.AuditEntry, 0)
 	for rows.Next() {
 		var entry access.AuditEntry
-		if e = rows.Scan(&entry.ID, &entry.ProjectID, &entry.ActorID, &entry.ActorKind, &entry.Action, &entry.ResourceKey, &entry.CredentialID, &entry.OccurredAt); e != nil {
+		if e = rows.Scan(&entry.ID, &entry.ProjectID, &entry.ActorID, &entry.ActorKind, &entry.Action, &entry.ResourceKey,
+			&entry.CredentialID, &entry.Environment, &entry.Outcome, &entry.OccurredAt); e != nil {
 			return nil, e
 		}
 		entry.OccurredAt = entry.OccurredAt.UTC()

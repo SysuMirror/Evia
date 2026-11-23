@@ -9,10 +9,13 @@ import (
 )
 
 type serviceReadStore struct {
-	records    []Record
-	streamPage StreamPage
-	itemPage   ItemPage
-	err        error
+	records      []Record
+	streamPage   StreamPage
+	itemPage     ItemPage
+	err          error
+	auditErr     error
+	audits       *[]AccessAudit
+	auditCtxErrs *[]error
 }
 
 func (s serviceReadStore) ListContentStreams(context.Context, string, string, string, DiscoveryFilter) (StreamPage, error) {
@@ -23,6 +26,15 @@ func (s serviceReadStore) ListContentItems(context.Context, string, string, stri
 }
 func (s serviceReadStore) GetContentItem(context.Context, string, string, string, string) ([]Record, error) {
 	return s.records, s.err
+}
+func (s serviceReadStore) RecordContentAccess(ctx context.Context, audit AccessAudit) error {
+	if s.audits != nil {
+		*s.audits = append(*s.audits, audit)
+	}
+	if s.auditCtxErrs != nil {
+		*s.auditCtxErrs = append(*s.auditCtxErrs, ctx.Err())
+	}
+	return s.auditErr
 }
 
 type serviceArtifacts struct {
@@ -51,7 +63,8 @@ func TestServiceAssemblesAndAuthenticatesContentArtifacts(t *testing.T) {
 		{ContentType: "session_replay_snapshot", StreamID: "stream", ItemID: "item", ActorType: "browser", ChunkIndex: 1, ChunkCount: 2, ObjectKey: "two", SHA256: contentHash(second), ContentLength: 12},
 		{ContentType: "session_replay_snapshot", StreamID: "stream", ItemID: "item", ActorType: "browser", ChunkIndex: 0, ChunkCount: 2, ObjectKey: "one", SHA256: contentHash(first), ContentLength: 12},
 	}
-	service, err := NewService(serviceReadStore{records: records}, serviceArtifacts{values: map[string][]byte{"one": first, "two": second}})
+	var audits []AccessAudit
+	service, err := NewService(serviceReadStore{records: records, audits: &audits}, serviceArtifacts{values: map[string][]byte{"one": first, "two": second}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +75,47 @@ func TestServiceAssemblesAndAuthenticatesContentArtifacts(t *testing.T) {
 	if item.Content != "hello replay" || item.ContentType != "session_replay_snapshot" || item.StreamID != "stream" {
 		t.Fatalf("bad assembled item: %+v", item)
 	}
+	if len(audits) != 1 || audits[0].Outcome != AccessOutcomeSuccess || audits[0].ContentType != "session_replay_snapshot" ||
+		audits[0].StreamID != "stream" || audits[0].ItemID != "item" {
+		t.Fatalf("safe success audit missing: %+v", audits)
+	}
+}
+
+func TestServiceRecordsFailureAfterRequestCancellation(t *testing.T) {
+	var audits []AccessAudit
+	var contextErrors []error
+	service, err := NewService(serviceReadStore{err: context.Canceled, audits: &audits, auditCtxErrs: &contextErrors}, serviceArtifacts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err = service.GetItem(ctx, "actor", "project", "development", "item"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("request cancellation lost: %v", err)
+	}
+	if len(audits) != 1 || audits[0].Outcome != AccessOutcomeFailure || len(contextErrors) != 1 || contextErrors[0] != nil {
+		t.Fatalf("canceled request did not use detached bounded audit: audits=%+v context_errors=%v", audits, contextErrors)
+	}
+}
+
+func TestServiceFailsClosedWhenAccessAuditCannotCommit(t *testing.T) {
+	data := []byte("sensitive plaintext")
+	auditErr := errors.New("audit unavailable")
+	service, err := NewService(serviceReadStore{
+		records:  []Record{{ContentType: "session_replay_snapshot", StreamID: "stream / 中文", ItemID: "item", ChunkIndex: 0, ChunkCount: 1, ObjectKey: "one", SHA256: contentHash(data)}},
+		auditErr: auditErr,
+	}, serviceArtifacts{values: map[string][]byte{"one": data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := service.GetItem(context.Background(), "actor", "project", "development", "item")
+	if !errors.Is(err, auditErr) || item.Content != "" {
+		t.Fatalf("content crossed failed audit boundary: item=%+v err=%v", item, err)
+	}
+	resource := AccessResourceKey("session_replay_snapshot", "stream / 中文", "item")
+	if resource != "content.item?stream=c3RyZWFtIC8g5Lit5paH&type=c2Vzc2lvbl9yZXBsYXlfc25hcHNob3Q&item=aXRlbQ" {
+		t.Fatalf("unexpected safe resource key: %q", resource)
+	}
 }
 
 func TestServiceRejectsIncompleteOrTamperedContent(t *testing.T) {
@@ -71,17 +125,22 @@ func TestServiceRejectsIncompleteOrTamperedContent(t *testing.T) {
 		records   []Record
 		artifacts serviceArtifacts
 	}{
-		{name: "incomplete", records: []Record{{ChunkIndex: 0, ChunkCount: 2, ObjectKey: "one", SHA256: contentHash(data)}}, artifacts: serviceArtifacts{values: map[string][]byte{"one": data}}},
-		{name: "hash mismatch", records: []Record{{ChunkIndex: 0, ChunkCount: 1, ObjectKey: "one", SHA256: contentHash([]byte("other"))}}, artifacts: serviceArtifacts{values: map[string][]byte{"one": data}}},
-		{name: "read failure", records: []Record{{ChunkIndex: 0, ChunkCount: 1, ObjectKey: "one", SHA256: contentHash(data)}}, artifacts: serviceArtifacts{err: errors.New("unavailable")}},
+		{name: "incomplete", records: []Record{{ContentType: "session_replay_snapshot", StreamID: "stream", ItemID: "item", ChunkIndex: 0, ChunkCount: 2, ObjectKey: "one", SHA256: contentHash(data)}}, artifacts: serviceArtifacts{values: map[string][]byte{"one": data}}},
+		{name: "hash mismatch", records: []Record{{ContentType: "session_replay_snapshot", StreamID: "stream", ItemID: "item", ChunkIndex: 0, ChunkCount: 1, ObjectKey: "one", SHA256: contentHash([]byte("other"))}}, artifacts: serviceArtifacts{values: map[string][]byte{"one": data}}},
+		{name: "read failure", records: []Record{{ContentType: "session_replay_snapshot", StreamID: "stream", ItemID: "item", ChunkIndex: 0, ChunkCount: 1, ObjectKey: "one", SHA256: contentHash(data)}}, artifacts: serviceArtifacts{err: errors.New("unavailable")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			service, err := NewService(serviceReadStore{records: tc.records}, tc.artifacts)
+			var audits []AccessAudit
+			service, err := NewService(serviceReadStore{records: tc.records, audits: &audits}, tc.artifacts)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if _, err = service.GetItem(context.Background(), "actor", "project", "development", "item"); err == nil {
 				t.Fatal("invalid content item must fail")
+			}
+			if len(audits) != 1 || audits[0].Outcome != AccessOutcomeFailure || audits[0].ItemID != "item" ||
+				audits[0].StreamID != "stream" || audits[0].ContentType != "session_replay_snapshot" {
+				t.Fatalf("safe scoped failure audit missing: %+v", audits)
 			}
 		})
 	}

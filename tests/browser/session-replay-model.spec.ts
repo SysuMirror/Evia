@@ -3,8 +3,10 @@ import type { ContentItem } from '../../packages/api-client/src/index';
 import {
   buildReplayChapters,
   buildReplayTimeline,
+  contentAccessResourcePrefix,
   decodeReplayPayloads,
   latestSnapshot,
+  parseContentAccessResource,
 } from '../../apps/console/src/session-replay/model';
 
 function encoded(value: unknown) {
@@ -34,6 +36,20 @@ const rawPayload = {
   created_at: '2026-11-22T02:00:00Z',
   payload: { html: '<html><body>masked</body></html>', viewport: { width: 1440, height: 900 } },
 };
+
+test('replay access history builds scoped prefixes and parses only safe resource metadata', () => {
+  const prefix = contentAccessResourcePrefix('replay / 一');
+  expect(prefix).toBe('content.item?stream=cmVwbGF5IC8g5LiA&');
+  expect(
+    parseContentAccessResource(`${prefix}type=c2Vzc2lvbl9yZXBsYXlfc25hcHNob3Q&item=aXRlbS8x`),
+  ).toEqual({
+    contentType: 'session_replay_snapshot',
+    streamID: 'replay / 一',
+    itemID: 'item/1',
+  });
+  expect(contentAccessResourcePrefix('session~*')).toBe('content.item?stream=c2Vzc2lvbn4q&');
+  expect(parseContentAccessResource('dashboard-1')).toEqual({});
+});
 
 test('replay model reconstructs complete segmented payloads and selects latest snapshot', async () => {
   const data = encoded(rawPayload);

@@ -187,6 +187,9 @@ export type ProjectAuditPage = {
   to: string;
   action?: string;
   actorID?: string;
+  environment?: Environment;
+  outcome?: ProjectAuditEntry['outcome'];
+  resourceKeyPrefix?: string;
   cursor?: string;
   limit?: number;
 };
@@ -381,6 +384,9 @@ function auditQuery(page: ProjectAuditPage): string {
   query.set('to', page.to);
   if (page.action) query.set('action', page.action);
   if (page.actorID) query.set('actor_id', page.actorID);
+  if (page.environment) query.set('environment', page.environment);
+  if (page.outcome) query.set('outcome', page.outcome);
+  if (page.resourceKeyPrefix) query.set('resource_key_prefix', page.resourceKeyPrefix);
   if (page.cursor !== undefined) query.set('cursor', page.cursor);
   if (page.limit !== undefined) query.set('limit', String(page.limit));
   return `?${query.toString()}`;

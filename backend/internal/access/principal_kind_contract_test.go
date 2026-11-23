@@ -13,7 +13,8 @@ import (
 // ProjectAuditEntry.actor_kind OpenAPI enum. Both values are observable in
 // Go through AuditEntry.ActorKind, so the assertion is full set equality;
 // the storage-side copy is the migration 010 CHECK constraint.
-func TestPrincipalKindVocabularyContract(t *testing.T) {
+func projectAuditEnum(t *testing.T, property string) []string {
+	t.Helper()
 	var bundle struct {
 		Defs map[string]map[string]any `json:"$defs"`
 	}
@@ -24,23 +25,41 @@ func TestPrincipalKindVocabularyContract(t *testing.T) {
 	if !ok {
 		t.Fatal("ProjectAuditEntry schema missing properties")
 	}
-	raw, ok := props["actor_kind"].(map[string]any)["enum"].([]any)
+	raw, ok := props[property].(map[string]any)["enum"].([]any)
 	if !ok {
-		t.Fatal("ProjectAuditEntry.actor_kind enum missing")
+		t.Fatalf("ProjectAuditEntry.%s enum missing", property)
 	}
-	got := make([]string, 0, len(raw))
+	values := make([]string, 0, len(raw))
 	for _, value := range raw {
-		got = append(got, value.(string))
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("ProjectAuditEntry.%s contains non-string enum value", property)
+		}
+		values = append(values, text)
 	}
-	want := append([]string(nil), PrincipalKinds...)
-	sort.Strings(got)
+	sort.Strings(values)
+	return values
+}
+
+func assertVocabulary(t *testing.T, name string, got, want []string) {
+	t.Helper()
 	sort.Strings(want)
 	if len(got) != len(want) {
-		t.Fatalf("principal kind drift: contract %v != Go %v", got, want)
+		t.Fatalf("%s drift: contract %v != Go %v", name, got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("principal kind drift: contract %v != Go %v", got, want)
+			t.Fatalf("%s drift: contract %v != Go %v", name, got, want)
 		}
 	}
+}
+
+func TestPrincipalKindVocabularyContract(t *testing.T) {
+	assertVocabulary(t, "principal kind", projectAuditEnum(t, "actor_kind"), append([]string(nil), PrincipalKinds...))
+}
+
+// TestAuditOutcomeVocabularyContract prevents the persistence/service result
+// vocabulary from drifting from the generic project audit wire contract.
+func TestAuditOutcomeVocabularyContract(t *testing.T) {
+	assertVocabulary(t, "audit outcome", projectAuditEnum(t, "outcome"), []string{AuditOutcomeSuccess, AuditOutcomeFailure})
 }

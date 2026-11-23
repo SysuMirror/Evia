@@ -220,7 +220,9 @@ func TestGovernanceStrictQueryIdentifiersAndLimits(t *testing.T) {
 		governanceBase + "/audit-logs?" + auditRange + "&actor_id=invalid",
 		governanceBase + "/audit-logs?from=2026-10-01T00:00:00Z&to=2026-11-10T00:00:00Z",
 		governanceBase + "/audit-logs?from=2026-11-10T00:00:00Z&to=2026-11-01T00:00:00Z",
-		governanceBase + "/audit-logs?" + auditRange + "&environment=development",
+		governanceBase + "/audit-logs?" + auditRange + "&environment=preview",
+		governanceBase + "/audit-logs?" + auditRange + "&outcome=unknown",
+		governanceBase + "/audit-logs?" + auditRange + "&resource_key_prefix=" + strings.Repeat("x", 513),
 		governanceBase + "/audit-logs?" + auditRange + "&cursor=invalid",
 	} {
 		t.Run(path, func(t *testing.T) {
@@ -406,30 +408,39 @@ func TestGovernanceMembershipPaginationRevisionAndScope(t *testing.T) {
 }
 
 func auditFixture(id string) access.AuditEntry {
-	return access.AuditEntry{ID: id, ProjectID: projectID, ActorID: userID, ActorKind: access.PrincipalKindHuman, Action: "project.settings.update", ResourceKey: projectID, OccurredAt: time.Date(2026, 11, 8, 12, 0, 0, 123456000, time.UTC)}
+	environment := "development"
+	return access.AuditEntry{ID: id, ProjectID: projectID, ActorID: userID, ActorKind: access.PrincipalKindHuman, Environment: &environment, Action: "content.item.read", ResourceKey: "content.item?stream_id=replay-1&content_type=session_replay_snapshot&item_id=item-1", Outcome: access.AuditOutcomeSuccess, OccurredAt: time.Date(2026, 11, 8, 12, 0, 0, 123456000, time.UTC)}
 }
 
 func TestGovernanceAuditPaginationCanonicalFiltersAndWire(t *testing.T) {
 	store := &governanceStore{audit: []access.AuditEntry{auditFixture("12"), auditFixture("11")}}
 	a, handler := governanceAPI(t, store)
-	path := governanceBase + "/audit-logs?" + auditRange + "&limit=1&action=project.settings.update&actor_id=" + userID
+	resourcePrefix := "content.item?stream_id=replay-1&"
+	path := governanceBase + "/audit-logs?" + auditRange + "&limit=1&action=content.item.read&actor_id=" + userID +
+		"&environment=development&outcome=success&resource_key_prefix=" + url.QueryEscape(resourcePrefix)
 	w := governanceRequest(handler, "GET", path, "", nil)
 	governanceStatus(t, w, 200)
 	var out wire.ProjectAuditList
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Items) != 1 || out.NextCursor == nil || out.Items[0].OccurredAt != "2026-11-08T12:00:00.123456Z" || out.Items[0].CredentialID != nil || !strings.Contains(w.Body.String(), `"credential_id":null`) {
 		t.Fatal(w.Body.String(), err)
 	}
-	if store.limit != 2 || store.filter.Action != "project.settings.update" || store.filter.ActorID != userID || w.Header().Get("ETag") != "" {
+	if store.limit != 2 || store.filter.Action != "content.item.read" || store.filter.ActorID != userID ||
+		store.filter.Environment != "development" || store.filter.Outcome != access.AuditOutcomeSuccess ||
+		store.filter.ResourceKeyPrefix != resourcePrefix || out.Items[0].Environment == nil || out.Items[0].Outcome != "success" || w.Header().Get("ETag") != "" {
 		t.Fatal("audit filter or list semantics changed")
 	}
-	canonical := governanceBase + "/audit-logs?from=2026-11-01T08%3A00%3A00%2B08%3A00&to=2026-11-10T08%3A00%3A00%2B08%3A00&action=project.settings.update&actor_id=" + userID + "&cursor=" + url.QueryEscape(*out.NextCursor)
+	canonical := governanceBase + "/audit-logs?from=2026-11-01T08%3A00%3A00%2B08%3A00&to=2026-11-10T08%3A00%3A00%2B08%3A00&action=content.item.read&actor_id=" + userID +
+		"&environment=development&outcome=success&resource_key_prefix=" + url.QueryEscape(resourcePrefix) + "&cursor=" + url.QueryEscape(*out.NextCursor)
 	governanceStatus(t, governanceRequest(handler, "GET", canonical, "", nil), 200)
 	if store.after == nil || store.after.ID != "12" || !store.after.OccurredAt.Equal(auditFixture("12").OccurredAt) || store.filter.From.Location() != time.UTC {
 		t.Fatal("audit position or canonical UTC filter lost")
 	}
 	for _, altered := range []string{
-		strings.Replace(path, "project.settings.update", "project.create", 1),
+		strings.Replace(path, "content.item.read", "project.create", 1),
 		strings.Replace(path, "actor_id="+userID, "actor_id="+memberID, 1),
+		strings.Replace(path, "environment=development", "environment=staging", 1),
+		strings.Replace(path, "outcome=success", "outcome=failure", 1),
+		strings.Replace(path, url.QueryEscape(resourcePrefix), url.QueryEscape("content.item?stream_id=other&"), 1),
 		strings.Replace(path, "2026-11-01", "2026-11-02", 1),
 		strings.Replace(path, "2026-11-10", "2026-11-09", 1),
 	} {

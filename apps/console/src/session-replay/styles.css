@@ -20,6 +20,7 @@
 
 .replay-player .data-surface,
 .replay-session-panel .data-surface,
+.replay-access-panel .data-surface,
 .replay-records-panel .data-surface,
 .replay-details-panel .data-surface {
   overflow: hidden;
@@ -33,6 +34,7 @@
 
 .replay-player .result-header,
 .replay-session-panel .result-header,
+.replay-access-panel .result-header,
 .replay-records-panel .result-header,
 .replay-details-panel .result-header {
   flex: 0 0 auto;
@@ -214,10 +216,54 @@
   border-top: 1px solid var(--color-border);
 }
 
+.replay-access-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: 14px;
+}
+
 .replay-records-panel,
 .replay-details-panel {
   min-width: 0;
-  padding-top: 14px;
+}
+
+.replay-access-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.replay-access-filters .evia-field {
+  min-width: 210px;
+}
+
+.replay-access-scroll {
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.replay-access-actor,
+.replay-access-resource {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-access-credential {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.replay-access-resource span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.replay-access-panel .pagination-bar {
+  padding-inline: 12px;
 }
 
 .replay-records-scroll {

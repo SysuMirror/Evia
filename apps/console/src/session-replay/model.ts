@@ -525,6 +525,47 @@ export function sandboxSnapshotHTML(html: string): string {
   return `<!doctype html>${document.documentElement.outerHTML}`;
 }
 
+export type ContentAccessResource = {
+  contentType?: string;
+  streamID?: string;
+  itemID?: string;
+};
+
+function encodeAccessKeyPart(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function decodeAccessKeyPart(value: string | null): string | undefined {
+  if (value === null || !/^[A-Za-z0-9_-]*$/.test(value)) return undefined;
+  try {
+    const padded = value
+      .replaceAll('-', '+')
+      .replaceAll('_', '/')
+      .padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+export function contentAccessResourcePrefix(streamID: string): string {
+  return `content.item?stream=${encodeAccessKeyPart(streamID)}&`;
+}
+
+export function parseContentAccessResource(resourceKey: string): ContentAccessResource {
+  if (!resourceKey.startsWith('content.item?')) return {};
+  const query = new URLSearchParams(resourceKey.slice('content.item?'.length));
+  return {
+    contentType: decodeAccessKeyPart(query.get('type')),
+    streamID: decodeAccessKeyPart(query.get('stream')),
+    itemID: decodeAccessKeyPart(query.get('item')),
+  };
+}
+
 export function shortReplayID(value: string): string {
   return value.length <= 18 ? value : `${value.slice(0, 8)}…${value.slice(-6)}`;
 }

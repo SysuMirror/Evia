@@ -24,7 +24,7 @@
    - 生产 `KMS` 适配器只向 HTTPS（本机开发可显式放行 loopback HTTP）发送 wrapped key + key_id，Bearer token 从 0600 文件读取；返回 32-byte AES key，不持久化、不记录日志。
    - 开发/单节点提供 0600 private JWK 适配器；private 参数从不进入 API/SDK。
 4. 解密块写入 0700 根目录、0600 原子文件（sha256 校验，路径由作用域/message/chunk/event 哈希生成，禁止路径逃逸）；PostgreSQL 迁移 044 只保存对象 key、hash、会话/消息/角色/分片/长度/状态与 durable cursor。
-5. `GET /api/v1/projects/{project_id}/content/items/{item_id}?environment=...` 按 chunk 索引组装并逐块校验 sha256。人类仅 owner 可读；机器需专用 `content.read`，未认证 401、非 owner/无 grant fail-closed。
+5. `GET /api/v1/projects/{project_id}/content/items/{item_id}?environment=...` 按 chunk 索引组装并逐块校验 sha256。人类仅 owner 可读；机器需专用 `content.read`，未认证 401、非 owner/无 grant fail-closed。每次已授权尝试通过通用项目审计写入 `content.item.read`、主体/凭据归属、项目/环境、安全资源键、时间与 success/failure；不写明文、密文、对象 key、密钥或凭据内容，成功审计不能提交时不返回内容。
 6. 浏览器采集请求带 5 分钟窗口轮换的 HMAC `X-Evia-Telemetry` token，绑定 source/project/environment/origin/config revision/write_key hash/expiry；collector 在来源解析后复核 scope 且要求事件 revision 一致。缺失/篡改/过期 token 均 401，CORS 只额外允许该固定 header。
 
 ## 验证证据
