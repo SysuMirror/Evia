@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { ContentItem } from '../../packages/api-client/src/index';
 import {
+  buildReplayChapters,
   buildReplayTimeline,
   decodeReplayPayloads,
   latestSnapshot,
@@ -137,6 +138,64 @@ test('replay v2 builds a contiguous exact timeline and detects gaps', async () =
   );
   expect(gap?.exact).toBe(false);
   expect(gap?.issue).toContain('#4');
+});
+
+test('replay chapters fail closed on a gap and resync at the next complete snapshot', async () => {
+  const base = {
+    format: 'evia.session-replay.v1',
+    protocol_version: 2,
+    document_id: '22222222-2222-4222-8222-222222222222',
+    document_seq: 1,
+    time_origin_ms: 1,
+    route: '/chaptered',
+    capture_scope: 'sanitized-light-dom-v1',
+    mask_version: 1,
+  };
+  const snapshot = (group: string, payloadSeq: number, baseSeq: number, createdAt: string) =>
+    v2Item(
+      {
+        ...base,
+        created_at: createdAt,
+        payload_id: group,
+        payload_seq: payloadSeq,
+        payload: {
+          kind: 'snapshot',
+          base_seq: baseSeq,
+          html: `<html data-evia-rid="1"><body data-evia-rid="2"><!--evia-rid:3-->${group}</body></html>`,
+          viewport: { width: 1280, height: 720 },
+        },
+      },
+      group,
+      'session_replay_snapshot',
+    );
+  const mutation = (group: string, payloadSeq: number, seq: number, createdAt: string) =>
+    v2Item(
+      {
+        ...base,
+        created_at: createdAt,
+        payload_id: group,
+        payload_seq: payloadSeq,
+        payload: {
+          kind: 'mutations',
+          records: [{ seq, at: seq * 10, type: 'text', data: { node_id: 3, text: group } }],
+        },
+      },
+      group,
+      'session_replay_mutations',
+    );
+  const payloads = await decodeReplayPayloads([
+    snapshot('chapter-1', 1, 2, '2026-11-22T02:00:00Z'),
+    mutation('gap-record', 2, 4, '2026-11-22T02:00:01Z'),
+    snapshot('chapter-2', 3, 4, '2026-11-22T02:00:02Z'),
+    mutation('recovered-record', 4, 5, '2026-11-22T02:00:03Z'),
+  ]);
+  const chapters = buildReplayChapters(payloads);
+  expect(chapters).toHaveLength(2);
+  expect(chapters[0]?.timeline.exact).toBe(false);
+  expect(chapters[0]?.timeline.issue).toContain('#3');
+  expect(chapters[1]?.timeline.exact).toBe(true);
+  expect(chapters[1]?.timeline.records.map((record) => record.seq)).toEqual([5]);
+  expect(chapters[1]?.resyncedFromIssue).toContain('#3');
 });
 
 test('replay v2 applies exact text, attribute and child operations in a browser DOM', async ({

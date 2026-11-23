@@ -110,6 +110,16 @@
   padding-inline: 12px;
 }
 
+.replay-chapter-selector {
+  flex: 0 0 auto;
+  max-width: 440px;
+  padding: 10px 16px 0;
+}
+
+.replay-chapter-selector .evia-field {
+  margin: 0;
+}
+
 .replay-preview-meta {
   flex: 0 0 auto;
   display: flex;

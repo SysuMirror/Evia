@@ -45,6 +45,17 @@ export interface ReplayTimeline {
   issue?: string;
 }
 
+export interface ReplayChapter {
+  id: string;
+  index: number;
+  documentID?: string;
+  documentSeq?: number;
+  startedAt: string;
+  endedAt?: string;
+  timeline: ReplayTimeline;
+  resyncedFromIssue?: string;
+}
+
 function segmentEnvelope(content: string): SegmentEnvelope {
   const value = JSON.parse(content) as Partial<SegmentEnvelope>;
   if (
@@ -165,7 +176,7 @@ export async function decodeReplayPayloads(items: ContentItem[]): Promise<Replay
   return payloads.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
-export function latestSnapshot(payloads: ReplayPayload[]): ReplaySnapshot | undefined {
+function replaySnapshots(payloads: ReplayPayload[]): ReplaySnapshot[] {
   const snapshots: ReplaySnapshot[] = [];
   for (const payload of payloads) {
     const html = payload.payload.html;
@@ -192,14 +203,29 @@ export function latestSnapshot(payloads: ReplayPayload[]): ReplaySnapshot | unde
         : 0,
     });
   }
-  return snapshots.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  return snapshots.sort((left, right) => {
+    const documentOrder = (left.documentSeq ?? 0) - (right.documentSeq ?? 0);
+    if (documentOrder !== 0) return documentOrder;
+    const payloadOrder = (left.payloadSeq ?? 0) - (right.payloadSeq ?? 0);
+    return payloadOrder !== 0 ? payloadOrder : left.createdAt.localeCompare(right.createdAt);
+  });
 }
 
-export function buildReplayTimeline(payloads: ReplayPayload[]): ReplayTimeline | undefined {
-  const snapshot = latestSnapshot(payloads);
-  if (!snapshot) return undefined;
+export function latestSnapshot(payloads: ReplayPayload[]): ReplaySnapshot | undefined {
+  return replaySnapshots(payloads).at(-1);
+}
+
+function timelineFromSnapshot(
+  payloads: ReplayPayload[],
+  snapshot: ReplaySnapshot,
+  nextSnapshot?: ReplaySnapshot,
+): ReplayTimeline {
   if (snapshot.protocolVersion !== 2 || !snapshot.documentID)
     return { snapshot, records: [], exact: false, issue: 'v1 录制仅支持静态快照。' };
+  const upperSeq =
+    nextSnapshot?.documentID === snapshot.documentID
+      ? nextSnapshot.baseSeq
+      : Number.MAX_SAFE_INTEGER;
   const records: ReplayRecordV2[] = [];
   for (const payload of payloads) {
     if (
@@ -219,7 +245,8 @@ export function buildReplayTimeline(payloads: ReplayPayload[]): ReplayTimeline |
         record.data &&
         typeof record.data === 'object' &&
         !Array.isArray(record.data) &&
-        Number(record.seq) > snapshot.baseSeq
+        Number(record.seq) > snapshot.baseSeq &&
+        Number(record.seq) <= upperSeq
       )
         records.push(record as ReplayRecordV2);
     }
@@ -237,6 +264,36 @@ export function buildReplayTimeline(payloads: ReplayPayload[]): ReplayTimeline |
     expected++;
   }
   return { snapshot, records, exact: true };
+}
+
+export function buildReplayChapters(payloads: ReplayPayload[]): ReplayChapter[] {
+  const snapshots = replaySnapshots(payloads);
+  const chapters: ReplayChapter[] = [];
+  for (let index = 0; index < snapshots.length; index++) {
+    const snapshot = snapshots[index]!;
+    const nextSnapshot = snapshots[index + 1];
+    const timeline = timelineFromSnapshot(payloads, snapshot, nextSnapshot);
+    const previous = chapters.at(-1);
+    const resyncedFromIssue =
+      previous && previous.documentID === snapshot.documentID && !previous.timeline.exact
+        ? (previous.timeline.issue ?? '前一章节不完整。')
+        : undefined;
+    chapters.push({
+      id: snapshot.groupID,
+      index,
+      documentID: snapshot.documentID,
+      documentSeq: snapshot.documentSeq,
+      startedAt: snapshot.createdAt,
+      endedAt: nextSnapshot?.createdAt,
+      timeline,
+      ...(resyncedFromIssue ? { resyncedFromIssue } : {}),
+    });
+  }
+  return chapters;
+}
+
+export function buildReplayTimeline(payloads: ReplayPayload[]): ReplayTimeline | undefined {
+  return buildReplayChapters(payloads).at(-1)?.timeline;
 }
 
 function replayNodeMap(
