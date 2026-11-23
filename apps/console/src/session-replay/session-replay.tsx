@@ -362,7 +362,20 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
                     v{activeTimeline.snapshot.protocolVersion}，记录 {playbackStep}/
                     {activeTimeline.records.length}
                   </span>
+                  <span>
+                    嵌入表面：{activeTimeline.snapshot.surfaces.length}
+                    {activeTimeline.snapshot.surfaceStateExact ? '（精确）' : '（静态/语义）'}
+                  </span>
                 </div>
+                {activeTimeline.snapshot.surfaces.length > 0 &&
+                  !activeTimeline.snapshot.surfaceStateExact && (
+                    <div className="replay-local-error">
+                      <Alert tone="warning" title="嵌入表面按安全快照展示">
+                        open Shadow DOM 与同源 iframe 仅保留净化后的静态结构；跨源 iframe、canvas
+                        像素和音视频内容明确省略。动态状态只在下一份完整 snapshot 重新同步。
+                      </Alert>
+                    </div>
+                  )}
                 {!activeTimeline.exact && (
                   <div className="replay-local-error">
                     <Alert tone="warning" title="仅显示安全快照，不提供播放控制">
@@ -580,8 +593,9 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
                   )}
                   <p className="evia-field-hint">
                     v2
-                    按完整快照拆分章节；遇到序号缺口或未知节点立即停止当前章节，并只从下一份完整快照重新同步。Shadow
-                    DOM、iframe、canvas 与媒体状态不在当前捕获范围。
+                    按完整快照拆分章节；遇到序号缺口或未知节点立即停止当前章节，并只从下一份完整快照重新同步。open
+                    Shadow DOM 与同源 iframe 提供净化静态结构；跨源 frame、canvas
+                    像素和媒体内容始终省略。
                   </p>
                 </div>
               </DataSurface>
