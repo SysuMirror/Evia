@@ -16,13 +16,26 @@ test('unauthenticated landing and split login adapt cleanly on desktop and mobil
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('洞见每一次交互');
-  await expect(page.getByRole('link', { name: '登录控制台', exact: true })).toBeVisible();
+  await expect(page.locator('.evia-landing-hero-video')).toHaveAttribute(
+    'src',
+    '/media/hero-horizon.mp4',
+  );
+  const heroCta = page
+    .locator('.evia-landing-hero')
+    .getByRole('link', { name: '登录控制台', exact: true });
+  await expect(heroCta).toBeVisible();
+  await page.getByRole('tab', { name: '强类型契约与多环境发布' }).click();
+  await expect(page.getByRole('tabpanel')).toContainText("evia.emit('checkout_completed'");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-  await page.getByRole('link', { name: '登录控制台', exact: true }).click();
+  await heroCta.click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
   await expect(page.locator('.auth-showcase')).toBeVisible();
+  await expect(page.locator('.auth-showcase-video')).toHaveAttribute(
+    'src',
+    '/media/auth-studio.mp4',
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.getByRole('link', { name: /返回首页/ }).click();
@@ -31,7 +44,10 @@ test('unauthenticated landing and split login adapt cleanly on desktop and mobil
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole('link', { name: '进入控制台', exact: true }).click();
+  await page
+    .getByRole('banner', { name: '主导航' })
+    .getByRole('link', { name: '进入控制台', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.locator('.auth-showcase')).toBeHidden();
   await expect(page.getByLabel('账号', { exact: false })).toBeVisible();

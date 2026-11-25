@@ -67,113 +67,25 @@ export function AuthLayout({
         </footer>
       </div>
       <aside className="auth-showcase" aria-hidden="true">
-        <div className="auth-showcase-bg">
-          <svg
-            className="auth-showcase-art"
-            viewBox="0 0 640 960"
-            fill="none"
-            preserveAspectRatio="xMidYMid slice"
-          >
-            <defs>
-              <radialGradient id="evia-auth-glow-a" cx="72%" cy="22%" r="58%">
-                <stop offset="0%" stopColor="#8fa2ff" stopOpacity="0.58" />
-                <stop offset="45%" stopColor="#5264ff" stopOpacity="0.24" />
-                <stop offset="100%" stopColor="#0d1326" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="evia-auth-glow-b" cx="24%" cy="74%" r="54%">
-                <stop offset="0%" stopColor="#d99a82" stopOpacity="0.34" />
-                <stop offset="50%" stopColor="#4f6096" stopOpacity="0.18" />
-                <stop offset="100%" stopColor="#0b1020" stopOpacity="0" />
-              </radialGradient>
-              <linearGradient id="evia-auth-ribbon-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#a7b8ff" stopOpacity="0.55" />
-                <stop offset="52%" stopColor="#6374ff" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="#e2b49c" stopOpacity="0.08" />
-              </linearGradient>
-              <linearGradient id="evia-auth-ribbon-2" x1="100%" y1="15%" x2="10%" y2="95%">
-                <stop offset="0%" stopColor="#f0c8b4" stopOpacity="0.32" />
-                <stop offset="55%" stopColor="#6c80ff" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#1b2644" stopOpacity="0" />
-              </linearGradient>
-              <linearGradient id="evia-auth-ridge" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#1f2c4d" stopOpacity="0.72" />
-                <stop offset="100%" stopColor="#090e1c" stopOpacity="0.96" />
-              </linearGradient>
-            </defs>
-            <rect width="640" height="960" fill="#0d1326" />
-            <rect width="640" height="960" fill="url(#evia-auth-glow-a)" />
-            <rect width="640" height="960" fill="url(#evia-auth-glow-b)" />
-            <path
-              d="M-60 330 C 120 220, 290 420, 480 270 C 570 200, 650 185, 720 220 L 720 440 C 570 390, 420 510, 230 430 C 90 370, 0 430, -60 470 Z"
-              fill="url(#evia-auth-ribbon-1)"
-            />
-            <path
-              d="M-40 560 C 140 445, 310 610, 520 470 C 600 418, 660 420, 720 460 L 720 680 C 560 630, 390 730, 190 660 C 70 618, 0 650, -40 690 Z"
-              fill="url(#evia-auth-ribbon-2)"
-            />
-            <path
-              d="M-40 720 Q 140 620, 320 675 T 680 610 L 680 980 L -40 980 Z"
-              fill="url(#evia-auth-ridge)"
-            />
-            <g stroke="#ffffff" strokeOpacity="0.07" strokeWidth="1">
-              <circle cx="490" cy="210" r="150" />
-              <circle cx="490" cy="210" r="235" />
-              <circle cx="140" cy="650" r="190" />
-            </g>
-          </svg>
-        </div>
-        <div className="auth-showcase-inner">
-          <div className="auth-showcase-pill">
-            <span className="auth-showcase-dot" />
-            <span>自托管 · 全链路私有部署</span>
-          </div>
-          <div className="auth-showcase-card">
-            <div className="auth-showcase-card-head">
-              <div>
-                <div className="auth-showcase-label">实时事件吞吐</div>
-                <div className="auth-showcase-value">248,920</div>
-              </div>
-              <span className="auth-showcase-delta">+18.4%</span>
-            </div>
-            <svg className="auth-showcase-spark" viewBox="0 0 420 80" fill="none">
-              <defs>
-                <linearGradient id="evia-spark-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8fa2ff" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#8fa2ff" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M4 64 C 46 57, 74 46, 110 49 C 148 52, 180 28, 224 33 C 266 38, 300 18, 344 21 C 378 23, 396 12, 412 10 L 412 78 L 4 78 Z"
-                fill="url(#evia-spark-fill)"
-              />
-              <path
-                d="M4 64 C 46 57, 74 46, 110 49 C 148 52, 180 28, 224 33 C 266 38, 300 18, 344 21 C 378 23, 396 12, 412 10"
-                stroke="#b8c4ff"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-              />
-              <circle cx="412" cy="10" r="4.5" fill="#ffffff" />
-            </svg>
-            <div className="auth-showcase-metrics">
-              <div>
-                <span>漏斗转化</span>
-                <strong>42.6%</strong>
-              </div>
-              <div>
-                <span>次日留存</span>
-                <strong>61.8%</strong>
-              </div>
-              <div>
-                <span>数据出境</span>
-                <strong>0 字节</strong>
-              </div>
-            </div>
-          </div>
-          <div className="auth-showcase-caption">
-            <h2>连接事件、路径与业务增长</h2>
-            <p>从实时埋点采集到多维洞察与合规治理，一切尽在掌控。</p>
-          </div>
-        </div>
+        <img
+          className="auth-showcase-poster"
+          src="/media/auth-studio-poster.jpg"
+          alt=""
+          loading="eager"
+          decoding="async"
+        />
+        <video
+          className="auth-showcase-video"
+          src="/media/auth-studio.mp4"
+          poster="/media/auth-studio-poster.jpg"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+        />
+        <div className="auth-showcase-scrim" />
+        <div className="auth-showcase-credit">Evia 映途 · 私有化事件与产品分析</div>
       </aside>
     </div>
   );
