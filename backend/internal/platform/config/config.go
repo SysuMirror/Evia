@@ -25,6 +25,18 @@ type Kafka struct {
 	Username, Password                        string
 }
 type ClickHouse struct{ URL, Database, Username, Password string }
+type OAuthProvider struct {
+	ID            string
+	DisplayName   string
+	ClientID      string
+	ClientSecret  string
+	RedirectURI   string
+	AuthorizeURL  string
+	TokenURL      string
+	UserInfoURL   string
+	IntrospectURL string
+	Scopes        []string
+}
 type Config struct {
 	DatabaseURL, Listen, Origin string
 	// MetricsListen optionally exposes /metrics and /healthz on a dedicated
@@ -84,6 +96,7 @@ type Config struct {
 	TelemetrySigningKey   []byte
 	ConfigSigningKeyID    string
 	ConfigSigningJWKPath  string
+	OAuthProviders        []OAuthProvider
 }
 
 var (
@@ -202,6 +215,9 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	}
 	if command == "serve" {
 		if err = c.readHTTP(get); err != nil {
+			return c, err
+		}
+		if err = c.readOAuth(get); err != nil {
 			return c, err
 		}
 		if raw := get("EVIA_SOURCE_SECRET_KEY"); raw != "" {
@@ -332,6 +348,130 @@ func (c *Config) readHTTP(get func(string) string) error {
 		}
 	}
 	return nil
+}
+
+// ReadOAuth parses optional OAuth2 login providers (currently UniSSO) without
+// requiring full HTTP server settings so deployment self-checks can reuse it.
+func ReadOAuth(get func(string) string) ([]OAuthProvider, error) {
+	var c Config
+	if err := c.readOAuth(get); err != nil {
+		return nil, err
+	}
+	return c.OAuthProviders, nil
+}
+
+func (c *Config) readOAuth(get func(string) string) error {
+	clientID := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_CLIENT_SECRET"))
+	redirectURI := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_REDIRECT_URI"))
+	issuer := strings.TrimSuffix(strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_ISSUER")), "/")
+	authorizeURL := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_AUTHORIZE_URL"))
+	tokenURL := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_TOKEN_URL"))
+	userInfoURL := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_USERINFO_URL"))
+	introspectURL := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_INTROSPECT_URL"))
+	displayName := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_DISPLAY_NAME"))
+	rawScopes := strings.TrimSpace(get("EVIA_OAUTH2_UNISSO_SCOPES"))
+
+	anySet := clientID != "" || clientSecret != "" || redirectURI != "" || issuer != "" ||
+		authorizeURL != "" || tokenURL != "" || userInfoURL != "" || introspectURL != ""
+	if !anySet {
+		return nil
+	}
+	if clientID == "" || clientSecret == "" || redirectURI == "" {
+		return errors.New("EVIA_OAUTH2_UNISSO_CLIENT_ID, EVIA_OAUTH2_UNISSO_CLIENT_SECRET and EVIA_OAUTH2_UNISSO_REDIRECT_URI must be configured together")
+	}
+	if err := validateOAuthRedirectURI(redirectURI); err != nil {
+		return err
+	}
+	if issuer == "" && (authorizeURL == "" || tokenURL == "" || userInfoURL == "") {
+		return errors.New("EVIA_OAUTH2_UNISSO_ISSUER is required when explicit OAuth2 endpoints are not all provided")
+	}
+	if issuer != "" {
+		if err := validateOAuthEndpointURL("EVIA_OAUTH2_UNISSO_ISSUER", issuer); err != nil {
+			return err
+		}
+	}
+	if authorizeURL == "" {
+		authorizeURL = issuer + "/authorize"
+	}
+	if tokenURL == "" {
+		tokenURL = issuer + "/api/oauth/token"
+	}
+	if userInfoURL == "" {
+		userInfoURL = issuer + "/api/oauth/userinfo"
+	}
+	if introspectURL == "" && issuer != "" {
+		introspectURL = issuer + "/api/oauth/introspect"
+	}
+	for _, check := range []struct {
+		name, value string
+	}{
+		{"EVIA_OAUTH2_UNISSO_AUTHORIZE_URL", authorizeURL},
+		{"EVIA_OAUTH2_UNISSO_TOKEN_URL", tokenURL},
+		{"EVIA_OAUTH2_UNISSO_USERINFO_URL", userInfoURL},
+	} {
+		if err := validateOAuthEndpointURL(check.name, check.value); err != nil {
+			return err
+		}
+	}
+	if introspectURL != "" {
+		if err := validateOAuthEndpointURL("EVIA_OAUTH2_UNISSO_INTROSPECT_URL", introspectURL); err != nil {
+			return err
+		}
+	}
+	if displayName == "" {
+		displayName = "UniSSO"
+	}
+	if len(displayName) > 100 {
+		return errors.New("EVIA_OAUTH2_UNISSO_DISPLAY_NAME must be 100 bytes or fewer")
+	}
+	scopes := []string{"openid", "profile:username", "profile:name", "email"}
+	if rawScopes != "" {
+		scopes = strings.Fields(rawScopes)
+	}
+	c.OAuthProviders = append(c.OAuthProviders, OAuthProvider{
+		ID:            "unisso",
+		DisplayName:   displayName,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		RedirectURI:   redirectURI,
+		AuthorizeURL:  authorizeURL,
+		TokenURL:      tokenURL,
+		UserInfoURL:   userInfoURL,
+		IntrospectURL: introspectURL,
+		Scopes:        scopes,
+	})
+	return nil
+}
+
+func validateOAuthRedirectURI(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Fragment != "" || u.RawQuery != "" || u.User != nil {
+		return errors.New("EVIA_OAUTH2_UNISSO_REDIRECT_URI must be a clean https URL or http://localhost URL without query or fragment")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := u.Hostname()
+	if u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1") {
+		return nil
+	}
+	return errors.New("EVIA_OAUTH2_UNISSO_REDIRECT_URI must use https or localhost http")
+}
+
+func validateOAuthEndpointURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Fragment != "" || u.User != nil {
+		return errors.New(name + " must be a valid URL")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := u.Hostname()
+	if u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1") {
+		return nil
+	}
+	return errors.New(name + " must use https or localhost http")
 }
 
 func (c *Config) readBudget(get func(string) string) error {

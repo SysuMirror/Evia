@@ -1136,6 +1136,34 @@ type MetricVersionList struct {
 	NextCursor *string         `json:"next_cursor"`
 }
 
+type OAuthAuthorizeInput struct {
+	Provider string  `json:"provider"`
+	Next     *string `json:"next,omitempty"`
+}
+
+type OAuthAuthorizeResponse struct {
+	AuthorizationURL string `json:"authorization_url"`
+}
+
+type OAuthCallbackInput struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+type OAuthCallbackResponse struct {
+	Session  Session `json:"session"`
+	NextPath string  `json:"next_path"`
+}
+
+type OAuthProvider struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+type OAuthProviderList struct {
+	Items []OAuthProvider `json:"items"`
+}
+
 type ParameterBinding struct {
 	ParameterID string          `json:"parameter_id"`
 	Field       json.RawMessage `json:"field"`

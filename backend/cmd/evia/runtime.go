@@ -37,6 +37,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/platform/cursor"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/ids"
+	"github.com/howtomakeaname/Evia/backend/internal/platform/oauth2client"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/observe"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/telemetry"
 	"github.com/howtomakeaname/Evia/backend/internal/quotas"
@@ -248,6 +249,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Accounts = access.NewAccounts(store)
 	api.Invitations = access.NewInvitations(store)
+	api.OAuth = access.NewOAuth(store, oauth2client.New(nil), toAccessOAuthProviders(c.OAuthProviders))
 	api.Erasure = store
 	api.Identity = store
 	if c.ContentDir != "" {

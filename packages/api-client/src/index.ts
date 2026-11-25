@@ -141,6 +141,12 @@ export type InvitationPreviewRequest = components['schemas']['InvitationPreviewR
 export type InvitationPreview = components['schemas']['InvitationPreview'];
 export type InvitationAcceptRequest = components['schemas']['InvitationAcceptRequest'];
 export type InvitationAcceptResponse = components['schemas']['InvitationAcceptResponse'];
+export type OAuthProvider = components['schemas']['OAuthProvider'];
+export type OAuthProviderList = components['schemas']['OAuthProviderList'];
+export type OAuthAuthorizeInput = components['schemas']['OAuthAuthorizeInput'];
+export type OAuthAuthorizeResponse = components['schemas']['OAuthAuthorizeResponse'];
+export type OAuthCallbackInput = components['schemas']['OAuthCallbackInput'];
+export type OAuthCallbackResponse = components['schemas']['OAuthCallbackResponse'];
 export type ProjectInvitationPage = { cursor?: string; limit?: number };
 export type ProjectAuditEntry = components['schemas']['ProjectAuditEntry'];
 export type ProjectAuditList = components['schemas']['ProjectAuditList'];
@@ -317,6 +323,7 @@ async function request<T>(
     if (
       response.status === 401 &&
       path !== '/api/v1/session/login' &&
+      !path.startsWith('/api/v1/auth/oauth2/') &&
       problem.code !== 'INVALID_CREDENTIALS'
     ) {
       for (const listener of unauthorizedListeners) listener();
@@ -412,6 +419,20 @@ export const api = {
   login: (body: components['schemas']['LoginInput']) =>
     request<Session>('/api/v1/session/login', { method: 'POST', body }),
   logout: (csrf: string) => request<void>('/api/v1/session', { method: 'DELETE', csrf }),
+  oauthProviders: (signal?: AbortSignal) =>
+    request<OAuthProviderList>('/api/v1/auth/oauth2/providers', { signal }),
+  startOAuthAuthorize: (body: OAuthAuthorizeInput, signal?: AbortSignal) =>
+    request<OAuthAuthorizeResponse>('/api/v1/auth/oauth2/authorize', {
+      method: 'POST',
+      body,
+      signal,
+    }),
+  completeOAuthCallback: (body: OAuthCallbackInput, signal?: AbortSignal) =>
+    request<OAuthCallbackResponse>('/api/v1/auth/oauth2/callback', {
+      method: 'POST',
+      body,
+      signal,
+    }),
   getAccountProfile: (signal?: AbortSignal) =>
     request<AccountProfile>('/api/v1/account', { signal }),
   updateAccountProfile: (body: AccountProfileUpdate, csrf: string, signal?: AbortSignal) =>

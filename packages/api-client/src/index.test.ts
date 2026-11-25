@@ -2127,3 +2127,38 @@ test('project invitation management and public acceptance routes encode scope an
   controller.abort();
   assert.equal(authAcceptInit.signal?.aborted, true);
 });
+
+test('oauth2 endpoints route correctly and suppress global 401 listener', async () => {
+  const fetch = respond(200, { items: [{ id: 'unisso', display_name: 'UniSSO' }] });
+  const controller = new AbortController();
+  await api.oauthProviders(controller.signal);
+  await api.startOAuthAuthorize({ provider: 'unisso', next: '/projects' }, controller.signal);
+  await api.completeOAuthCallback({ code: 'auth-code', state: 'auth-state' }, controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/auth/oauth2/providers',
+      '/api/v1/auth/oauth2/authorize',
+      '/api/v1/auth/oauth2/callback',
+    ],
+  );
+  const authorizeInit = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(authorizeInit.method, 'POST');
+  assert.equal(authorizeInit.body, JSON.stringify({ provider: 'unisso', next: '/projects' }));
+  const callbackInit = fetch.mock.calls[2]!.arguments[1] as RequestInit;
+  assert.equal(callbackInit.method, 'POST');
+  assert.equal(callbackInit.body, JSON.stringify({ code: 'auth-code', state: 'auth-state' }));
+
+  mock.restoreAll();
+  let unauthorizedEvents = 0;
+  const unsubscribe = subscribeUnauthorized(() => {
+    unauthorizedEvents += 1;
+  });
+  respond(401, { code: 'ACCOUNT_DISABLED', message: '账号已停用' });
+  await assert.rejects(
+    () => api.completeOAuthCallback({ code: 'c', state: 's' }),
+    (err: unknown) => err instanceof ApiError && err.code === 'ACCOUNT_DISABLED',
+  );
+  unsubscribe();
+  assert.equal(unauthorizedEvents, 0);
+});

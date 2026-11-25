@@ -115,6 +115,9 @@ const AccountPage = lazy(() =>
 const InvitePage = lazy(() =>
   import('./invite/invite-page').then((module) => ({ default: module.InvitePage })),
 );
+const OAuthCallbackPage = lazy(() =>
+  import('./auth/oauth-callback-page').then((module) => ({ default: module.OAuthCallbackPage })),
+);
 const LandingPage = lazy(() =>
   import('./landing/landing-page').then((module) => ({ default: module.LandingPage })),
 );
@@ -164,9 +167,17 @@ function Failure({ error, retry }: { error: Error; retry?: () => void }) {
 function LoginPage() {
   const cache = useQueryClient();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [activeOAuthProvider, setActiveOAuthProvider] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
+  const nextPath = safeNextPath(params.get('next'));
+  const oauthProviders = useQuery({
+    queryKey: ['oauth-providers'],
+    queryFn: ({ signal }) => api.oauthProviders(signal),
+    staleTime: 5 * 60_000,
+  });
   const login = useMutation({
     mutationFn: api.login,
     onSuccess: (session) => {
@@ -174,6 +185,21 @@ function LoginPage() {
       cache.setQueryData(['session'], session);
     },
   });
+  const oauthStart = useMutation({
+    mutationFn: (provider: string) => api.startOAuthAuthorize({ provider, next: nextPath }),
+    onMutate: (provider) => {
+      setActiveOAuthProvider(provider);
+    },
+    onSuccess: ({ authorization_url }) => {
+      window.location.assign(authorization_url);
+    },
+    onError: () => {
+      setActiveOAuthProvider(null);
+    },
+  });
+  const busy = login.isPending || oauthStart.isPending;
+  const authError = login.error ?? oauthStart.error;
+  const providers = oauthProviders.data?.items ?? [];
   return (
     <AuthLayout
       onNavigate={(href) => void navigate(href)}
@@ -185,12 +211,15 @@ function LoginPage() {
     >
       <h1>欢迎回来</h1>
       <p className="auth-subtitle">登录 Evia 控制台，继续你的产品与事件分析。</p>
-      {login.error && <Failure error={login.error} />}
+      {authError && <Failure error={authError} />}
       <form
         className="console-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!login.isPending) login.mutate({ username, password });
+          if (!busy) {
+            oauthStart.reset();
+            login.mutate({ username, password });
+          }
         }}
       >
         <Field label="账号" htmlFor="login-username" error={errors.username} required>
@@ -204,7 +233,7 @@ function LoginPage() {
             pattern={'[a-zA-Z0-9_.@\\-]{1,100}'}
             required
             value={username}
-            disabled={login.isPending}
+            disabled={busy}
             onChange={(event) => {
               setUsername(event.target.value);
               setErrors((current) => ({ ...current, username: undefined }));
@@ -227,7 +256,7 @@ function LoginPage() {
             maxLength={72}
             required
             value={password}
-            disabled={login.isPending}
+            disabled={busy}
             onChange={(event) => {
               setPassword(event.target.value);
               setErrors((current) => ({ ...current, password: undefined }));
@@ -235,10 +264,40 @@ function LoginPage() {
             onInvalid={() => setErrors((current) => ({ ...current, password: '请输入密码' }))}
           />
         </Field>
-        <Button variant="primary" type="submit" className="auth-submit" loading={login.isPending}>
+        <Button
+          variant="primary"
+          type="submit"
+          className="auth-submit"
+          loading={login.isPending}
+          disabled={busy}
+        >
           登录
         </Button>
       </form>
+      {providers.length > 0 && (
+        <>
+          <div className="auth-divider" role="separator">
+            <span>或使用单点登录</span>
+          </div>
+          <div className="auth-oauth-list">
+            {providers.map((provider) => (
+              <Button
+                key={provider.id}
+                type="button"
+                className="auth-oauth-button"
+                loading={oauthStart.isPending && activeOAuthProvider === provider.id}
+                disabled={busy}
+                onClick={() => {
+                  login.reset();
+                  oauthStart.mutate(provider.id);
+                }}
+              >
+                使用 {provider.display_name} 登录
+              </Button>
+            ))}
+          </div>
+        </>
+      )}
       <p className="auth-help">
         账号问题请联系平台管理员 · <Link to="/">了解 Evia</Link>
       </p>
@@ -474,6 +533,7 @@ function Root() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/user/login/oauth2/callback" element={<OAuthCallbackPage />} />
           <Route path="/invite" element={<InvitePage session={null} />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
@@ -483,6 +543,7 @@ function Root() {
     <DraftNavigationProvider>
       <Suspense fallback={<LoadingPanel />}>
         <Routes>
+          <Route path="/user/login/oauth2/callback" element={<OAuthCallbackPage />} />
           <Route path="/invite" element={<InvitePage session={session.data} />} />
           <Route path="*" element={<Workspace session={session.data} />} />
         </Routes>

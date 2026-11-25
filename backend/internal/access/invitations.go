@@ -148,6 +148,9 @@ func (a *Accounts) ChangePassword(ctx context.Context, current Session, currentP
 		}
 		return Session{}, "", err
 	}
+	if existingHash == OAuthPasswordSentinel {
+		return Session{}, "", fault.New(fault.Invalid, "PASSWORD_NOT_SET", "当前账号通过单点登录创建，未设置本地密码")
+	}
 	if bcrypt.CompareHashAndPassword([]byte(existingHash), []byte(currentPassword)) != nil {
 		return Session{}, "", fault.New(fault.Unauthenticated, "INVALID_CREDENTIALS", "当前密码不正确")
 	}
