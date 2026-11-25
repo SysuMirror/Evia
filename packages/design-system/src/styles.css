@@ -174,6 +174,25 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 2px 2px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.account-trigger:hover {
+  background: var(--color-surface-subtle);
+}
+.account-trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
 .workspace-body {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

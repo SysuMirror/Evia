@@ -2042,3 +2042,88 @@ test('report delete sends CSRF and accepts an empty 204 body', async () => {
   assert.equal((init as RequestInit).method, 'DELETE');
   assert.equal(((init as RequestInit).headers as Headers).get('X-CSRF-Token'), 'csrf');
 });
+
+test('account profile and password routes send CSRF and expected payloads', async () => {
+  const fetch = respond(200, {
+    user_id: 'u-1',
+    username: 'alice',
+    display_name: 'Alice Chen',
+    created_at: '2026-11-12T00:00:00Z',
+    csrf_token: 'rotated-csrf',
+    expires_at: '2026-11-19T00:00:00Z',
+  });
+  const controller = new AbortController();
+  await api.getAccountProfile(controller.signal);
+  await api.updateAccountProfile({ display_name: 'Alice Chen' }, 'csrf-1', controller.signal);
+  await api.changeAccountPassword(
+    { current_password: 'old-password-1234', new_password: 'new-password-5678' },
+    'csrf-1',
+    controller.signal,
+  );
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    ['/api/v1/account', '/api/v1/account/profile', '/api/v1/account/password'],
+  );
+  assert.equal((fetch.mock.calls[0]!.arguments[1] as RequestInit).method, 'GET');
+  const patchInit = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(patchInit.method, 'PATCH');
+  assert.equal((patchInit.headers as Headers).get('X-CSRF-Token'), 'csrf-1');
+  assert.deepEqual(JSON.parse(patchInit.body as string), { display_name: 'Alice Chen' });
+  const pwInit = fetch.mock.calls[2]!.arguments[1] as RequestInit;
+  assert.equal(pwInit.method, 'POST');
+  assert.equal((pwInit.headers as Headers).get('X-CSRF-Token'), 'csrf-1');
+  assert.deepEqual(JSON.parse(pwInit.body as string), {
+    current_password: 'old-password-1234',
+    new_password: 'new-password-5678',
+  });
+  controller.abort();
+  assert.equal(pwInit.signal?.aborted, true);
+});
+
+test('project invitation management and public acceptance routes encode scope and optional CSRF', async () => {
+  const fetch = respond(200, { items: [], next_cursor: null });
+  const controller = new AbortController();
+  await api.listProjectInvitations('p/q', { cursor: 'cur+1', limit: 20 }, controller.signal);
+  await api.createProjectInvitation(
+    'p/q',
+    { role: 'editor', note: 'Frontend', expires_in_hours: 168 },
+    'csrf-1',
+    controller.signal,
+  );
+  await api.revokeProjectInvitation('p/q', 'inv/1', 'csrf-1', controller.signal);
+  await api.previewInvitation({ token: 'tok-secret-123456' }, controller.signal);
+  await api.acceptInvitation(
+    {
+      token: 'tok-secret-123456',
+      username: 'newuser',
+      display_name: 'New User',
+      password: 'long-password-1234',
+    },
+    undefined,
+    controller.signal,
+  );
+  await api.acceptInvitation({ token: 'tok-secret-123456' }, 'csrf-existing', controller.signal);
+  assert.deepEqual(
+    fetch.mock.calls.map((call) => call.arguments[0]),
+    [
+      '/api/v1/projects/p%2Fq/invitations?cursor=cur%2B1&limit=20',
+      '/api/v1/projects/p%2Fq/invitations',
+      '/api/v1/projects/p%2Fq/invitations/inv%2F1',
+      '/api/v1/invitations/preview',
+      '/api/v1/invitations/accept',
+      '/api/v1/invitations/accept',
+    ],
+  );
+  const createInit = fetch.mock.calls[1]!.arguments[1] as RequestInit;
+  assert.equal(createInit.method, 'POST');
+  assert.equal((createInit.headers as Headers).get('X-CSRF-Token'), 'csrf-1');
+  const revokeInit = fetch.mock.calls[2]!.arguments[1] as RequestInit;
+  assert.equal(revokeInit.method, 'DELETE');
+  assert.equal((revokeInit.headers as Headers).get('X-CSRF-Token'), 'csrf-1');
+  const anonAcceptInit = fetch.mock.calls[4]!.arguments[1] as RequestInit;
+  assert.equal((anonAcceptInit.headers as Headers).get('X-CSRF-Token'), null);
+  const authAcceptInit = fetch.mock.calls[5]!.arguments[1] as RequestInit;
+  assert.equal((authAcceptInit.headers as Headers).get('X-CSRF-Token'), 'csrf-existing');
+  controller.abort();
+  assert.equal(authAcceptInit.signal?.aborted, true);
+});

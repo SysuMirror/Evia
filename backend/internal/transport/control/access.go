@@ -30,6 +30,8 @@ type AccessService interface {
 type API struct {
 	Boundary         *httpapi.Boundary
 	Access           AccessService
+	Accounts         AccountService
+	Invitations      InvitationService
 	Machines         MachineService
 	Memberships      MembershipService
 	Settings         SettingsService
@@ -82,6 +84,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{project_id}", a.projectAuth(false, a.getProject))
 	a.registerMachines(mux)
 	a.registerGovernance(mux)
+	a.registerAccountAndInvitations(mux)
 	a.registerCatalog(mux)
 	a.registerSources(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)

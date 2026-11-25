@@ -69,6 +69,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 export function WorkspaceShell({
   children,
   account,
+  onOpenAccount,
   onLogout,
   busy,
   onNavigate,
@@ -77,6 +78,7 @@ export function WorkspaceShell({
 }: {
   children: ReactNode;
   account: string;
+  onOpenAccount?: () => void;
   onLogout: () => void;
   busy: boolean;
   onNavigate?: (href: string) => void;
@@ -122,12 +124,29 @@ export function WorkspaceShell({
         </nav>
         <div className="workspace-utilities">
           <div className="account-actions" aria-label={`当前账号：${account}`}>
-            <span className="account-avatar" title={account} aria-hidden="true">
-              {account.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="account-name" title={account}>
-              {account}
-            </span>
+            {onOpenAccount ? (
+              <button
+                type="button"
+                className="account-trigger"
+                onClick={onOpenAccount}
+                aria-label="账号设置"
+                title="账号设置"
+              >
+                <span className="account-avatar" aria-hidden="true">
+                  {account.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="account-name">{account}</span>
+              </button>
+            ) : (
+              <>
+                <span className="account-avatar" title={account} aria-hidden="true">
+                  {account.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="account-name" title={account}>
+                  {account}
+                </span>
+              </>
+            )}
             <Button
               className="workspace-logout"
               variant="ghost"

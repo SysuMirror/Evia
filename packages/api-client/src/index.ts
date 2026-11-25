@@ -130,6 +130,18 @@ export type ProjectMemberAdd = components['schemas']['ProjectMemberAdd'];
 export type ProjectMemberUpdate = components['schemas']['ProjectMemberUpdate'];
 export type ProjectMemberResult = components['schemas']['ProjectMemberResult'];
 export type ProjectMemberList = components['schemas']['ProjectMemberList'];
+export type AccountProfile = components['schemas']['AccountProfile'];
+export type AccountProfileUpdate = components['schemas']['AccountProfileUpdate'];
+export type AccountPasswordChange = components['schemas']['AccountPasswordChange'];
+export type ProjectInvitation = components['schemas']['ProjectInvitation'];
+export type ProjectInvitationCreate = components['schemas']['ProjectInvitationCreate'];
+export type ProjectInvitationIssued = components['schemas']['ProjectInvitationIssued'];
+export type ProjectInvitationList = components['schemas']['ProjectInvitationList'];
+export type InvitationPreviewRequest = components['schemas']['InvitationPreviewRequest'];
+export type InvitationPreview = components['schemas']['InvitationPreview'];
+export type InvitationAcceptRequest = components['schemas']['InvitationAcceptRequest'];
+export type InvitationAcceptResponse = components['schemas']['InvitationAcceptResponse'];
+export type ProjectInvitationPage = { cursor?: string; limit?: number };
 export type ProjectAuditEntry = components['schemas']['ProjectAuditEntry'];
 export type ProjectAuditList = components['schemas']['ProjectAuditList'];
 export type MetricDefinition = components['schemas']['MetricDefinition'];
@@ -296,14 +308,18 @@ async function request<T>(
     throw new ApiError(0, 'NETWORK_ERROR', '无法连接服务，请检查网络后重试。');
   }
   if (!response.ok) {
-    if (response.status === 401 && path !== '/api/v1/session/login') {
-      for (const listener of unauthorizedListeners) listener();
-    }
     let problem: Partial<components['schemas']['Problem']> = {};
     try {
       problem = await response.json();
     } catch {
       /* Reverse proxies may return non-JSON failures. */
+    }
+    if (
+      response.status === 401 &&
+      path !== '/api/v1/session/login' &&
+      problem.code !== 'INVALID_CREDENTIALS'
+    ) {
+      for (const listener of unauthorizedListeners) listener();
     }
     if (problem.code === 'PROJECT_NOT_FOUND' || problem.code === 'PROJECT_FORBIDDEN') {
       const project = /^\/api\/v1\/projects\/([^/?#]+)(?:\/|[?#]|$)/.exec(path);
@@ -396,6 +412,35 @@ export const api = {
   login: (body: components['schemas']['LoginInput']) =>
     request<Session>('/api/v1/session/login', { method: 'POST', body }),
   logout: (csrf: string) => request<void>('/api/v1/session', { method: 'DELETE', csrf }),
+  getAccountProfile: (signal?: AbortSignal) =>
+    request<AccountProfile>('/api/v1/account', { signal }),
+  updateAccountProfile: (body: AccountProfileUpdate, csrf: string, signal?: AbortSignal) =>
+    request<AccountProfile>('/api/v1/account/profile', {
+      method: 'PATCH',
+      body,
+      csrf,
+      signal,
+    }),
+  changeAccountPassword: (body: AccountPasswordChange, csrf: string, signal?: AbortSignal) =>
+    request<Session>('/api/v1/account/password', {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  previewInvitation: (body: InvitationPreviewRequest, signal?: AbortSignal) =>
+    request<InvitationPreview>('/api/v1/invitations/preview', {
+      method: 'POST',
+      body,
+      signal,
+    }),
+  acceptInvitation: (body: InvitationAcceptRequest, csrf?: string, signal?: AbortSignal) =>
+    request<InvitationAcceptResponse>('/api/v1/invitations/accept', {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
   projects: (cursor?: string, signal?: AbortSignal) =>
     request<ProjectList>(
       `/api/v1/projects?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
@@ -513,6 +558,41 @@ export const api = {
         csrf,
         signal,
         headers: { 'If-Match': `"${revision}"`, 'Idempotency-Key': idempotencyKey },
+      },
+    ),
+  listProjectInvitations: (
+    projectID: string,
+    page: ProjectInvitationPage = {},
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectInvitationList>(
+      `${projectPath(projectID)}/invitations${catalogQuery({ cursor: page.cursor, limit: page.limit })}`,
+      { signal },
+    ),
+  createProjectInvitation: (
+    projectID: string,
+    body: ProjectInvitationCreate,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectInvitationIssued>(`${projectPath(projectID)}/invitations`, {
+      method: 'POST',
+      body,
+      csrf,
+      signal,
+    }),
+  revokeProjectInvitation: (
+    projectID: string,
+    invitationID: string,
+    csrf: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ProjectInvitation>(
+      `${projectPath(projectID)}/invitations/${encodeURIComponent(invitationID)}`,
+      {
+        method: 'DELETE',
+        csrf,
+        signal,
       },
     ),
   getSettings: (projectID: string, signal?: AbortSignal) =>

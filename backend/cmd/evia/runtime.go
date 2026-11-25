@@ -246,6 +246,8 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Memberships = access.NewMemberships(store)
 	api.Settings = access.NewSettings(store)
 	api.AuditLogs = access.NewAuditLogs(store)
+	api.Accounts = access.NewAccounts(store)
+	api.Invitations = access.NewInvitations(store)
 	api.Erasure = store
 	api.Identity = store
 	if c.ContentDir != "" {

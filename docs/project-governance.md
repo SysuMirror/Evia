@@ -30,6 +30,14 @@
 | `GET P/settings` | 无查询参数；返回 `{project_id,name,timezone,revision}` 和 `ETag` |
 | `PATCH P/settings` | 完整 `{name,timezone}`；返回更新后的设置和 `ETag` |
 | `GET P/audit-logs` | 必需 `from`、`to`，可选 `action`、`actor_id`、`environment`、`outcome`、`resource_key_prefix`、`limit`、`cursor`；返回 `{items,next_cursor}` |
+| `GET P/invitations` | owner 可选 `limit`、`cursor`；返回 `{items,next_cursor}`（不回显一次性明文 token） |
+| `POST P/invitations` | owner `{role,note?,expires_in_hours?}`；201 `{invitation,invite_token}`，明文一次性 token 仅创建响应返回一次 |
+| `DELETE P/invitations/{invitation_id}` | owner 无正文；200 返回已撤销的邀请记录 |
+| `POST /api/v1/invitations/preview` | 公开 `{token}`；返回有效待接受邀请的项目名称、赋予角色、备注与过期时间 |
+| `POST /api/v1/invitations/accept` | 公开或已登录 `{token,username?,display_name?,password?}`；新用户自助注册并登录，或已登录账号直接加入项目，返回 `{project_id,role,session}` |
+| `GET /api/v1/account` | 已登录用户读取自身账号资料 `{user_id,username,display_name,created_at}` |
+| `PATCH /api/v1/account/profile` | 已登录用户修改显示名称 `{display_name}`（需 CSRF） |
+| `POST /api/v1/account/password` | 已登录用户凭当前密码修改密码 `{current_password,new_password}`（需 CSRF），自动撤销其他会话并轮换当前会话 |
 
 所有 POST/PATCH/DELETE 都必须带单一 `Idempotency-Key` 和带双引号的 `If-Match`，以及会话 `X-CSRF-Token`。例如 `If-Match: "3"`。幂等键是 1–128 个可见 ASCII 字符。未知/重复查询参数、未知 JSON 字段、重复 JSON key 和尾随 JSON 都拒绝。成员 DELETE 不接受正文。
 
@@ -67,7 +75,7 @@
 
 ## 迁移与验证
 
-使用新二进制显式执行 `evia migrate` 应用到迁移目录最新编号（基础治理能力落在 `011`，内容访问环境/结果列与查询索引落在 `050`，该命令会顺序应用全部待执行迁移），再启动 API 和工作进程。`050` 为既有条目回填 `outcome=success`，环境保持 null；不改写历史事件、敏感内容或已发布定义。没有自动启动迁移或回滚命令；生产升级仍需独立备份、锁等待评估和恢复演练。
+使用新二进制显式执行 `evia migrate` 应用到迁移目录最新编号（基础治理能力落在 `011`，内容访问环境/结果列与查询索引落在 `050`，一次性项目邀请表落在 `052`，该命令会顺序应用全部待执行迁移），再启动 API 和工作进程。`050` 为既有条目回填 `outcome=success`，环境保持 null；不改写历史事件、敏感内容或已发布定义。没有自动启动迁移或回滚命令；生产升级仍需独立备份、锁等待评估和恢复演练。
 
 本地真实接口验证：
 
@@ -78,4 +86,4 @@ python tooling/verification/browser_runtime.py run /path/to/private-synthetic-ru
 
 只支持 loopback API，使用专用合成数据库；会通过运维 CLI 创建三个合成账号，通过 API 创建项目并检查 44 个请求，不清空现有数据。账号与项目保留在专用验证环境中，用户凭据不会进入输出。该链已纳入 CI，详见[本轮验证](verification/project-governance-2026-11-09.md)。
 
-账号停用/启用、密码恢复与按账号的类型化审计历史已由运维命令交付（见[账号运维](runbooks/accounts.md)），机器权限变更与项目配额管理也已交付对应控制台工作区；仅邀请/注册自助因依赖邮件投递通道仍缺。项目治理控制台的成员、设置与审计分区已交付，数据生命周期、高级分析与生产容量由独立模块负责，不属于本模块范围。
+账号停用/启用、密码恢复与按账号的类型化审计历史已由运维命令交付（见[账号运维](runbooks/accounts.md)），个人资料/密码自助修改（`/account`）、无邮件依赖的一次性项目邀请链接与受邀自助注册/加入（项目治理「邀请链接」分区及 `/invite`），以及机器权限变更与项目配额管理均已交付对应控制台工作区。数据生命周期、高级分析与生产容量由独立模块负责，不属于本模块范围。

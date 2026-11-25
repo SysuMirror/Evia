@@ -108,14 +108,23 @@ const FormulaMetricsPage = lazy(() =>
     default: module.FormulaMetricsPage,
   })),
 );
+const AccountPage = lazy(() =>
+  import('./account/account').then((module) => ({ default: module.AccountPage })),
+);
+const InvitePage = lazy(() =>
+  import('./invite/invite-page').then((module) => ({ default: module.InvitePage })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
   { value: 'production', label: '生产环境' },
 ];
 
+const safeNextPath = (raw: string | null) =>
+  raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/projects';
+
 const expire = (error: Error) => {
-  if (error instanceof ApiError && error.status === 401) {
+  if (error instanceof ApiError && error.status === 401 && error.code !== 'INVALID_CREDENTIALS') {
     client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     client.setQueryData(['session'], null);
   }
@@ -321,6 +330,7 @@ function Workspace({ session }: { session: Session }) {
     <WorkspaceShell
       account={session.display_name}
       busy={logout.isPending}
+      onOpenAccount={() => navigation.request(() => void navigate('/account'))}
       onNavigate={(href) => void navigate(href)}
       navigation={navigationItems}
       projectContext={
@@ -371,6 +381,7 @@ function Workspace({ session }: { session: Session }) {
       <Suspense fallback={<LoadingPanel />}>
         <Routes>
           <Route path="/projects" element={<ProjectsPage session={session} />} />
+          <Route path="/account" element={<AccountPage session={session} />} />
           {sections.map(({ path, component: Page }) => (
             <Route
               key={path}
@@ -403,7 +414,10 @@ function Workspace({ session }: { session: Session }) {
             element={<Navigate to={`overview?environment=${environment}`} replace />}
           />
           <Route path="/" element={<Navigate to="/projects" replace />} />
-          <Route path="/login" element={<Navigate to="/projects" replace />} />
+          <Route
+            path="/login"
+            element={<Navigate to={safeNextPath(parameters.get('next'))} replace />}
+          />
           <Route
             path="*"
             element={
@@ -439,14 +453,22 @@ function Root() {
     );
   if (!session.data)
     return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<LoadingPanel />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/invite" element={<InvitePage session={null} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   return (
     <DraftNavigationProvider>
-      <Workspace session={session.data} />
+      <Suspense fallback={<LoadingPanel />}>
+        <Routes>
+          <Route path="/invite" element={<InvitePage session={session.data} />} />
+          <Route path="*" element={<Workspace session={session.data} />} />
+        </Routes>
+      </Suspense>
     </DraftNavigationProvider>
   );
 }

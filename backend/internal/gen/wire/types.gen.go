@@ -3,6 +3,22 @@ package wire
 
 import "encoding/json"
 
+type AccountPasswordChange struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type AccountProfile struct {
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type AccountProfileUpdate struct {
+	DisplayName string `json:"display_name"`
+}
+
 type Activation struct {
 	Environment           string `json:"environment"`
 	ActiveReleaseRevision int64  `json:"active_release_revision"`
@@ -890,6 +906,32 @@ type IdentityRevisionList struct {
 	NextCursor *string            `json:"next_cursor,omitempty"`
 }
 
+type InvitationAcceptRequest struct {
+	Token       string  `json:"token"`
+	Username    *string `json:"username,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
+	Password    *string `json:"password,omitempty"`
+}
+
+type InvitationAcceptResponse struct {
+	Session     Session `json:"session"`
+	ProjectID   string  `json:"project_id"`
+	ProjectName string  `json:"project_name"`
+	Role        string  `json:"role"`
+}
+
+type InvitationPreview struct {
+	ProjectID   string `json:"project_id"`
+	ProjectName string `json:"project_name"`
+	Role        string `json:"role"`
+	Note        string `json:"note"`
+	ExpiresAt   string `json:"expires_at"`
+}
+
+type InvitationPreviewRequest struct {
+	Token string `json:"token"`
+}
+
 type LoginInput struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -1150,6 +1192,38 @@ type ProjectAuditList struct {
 type ProjectInput struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
+}
+
+type ProjectInvitation struct {
+	ID                   string  `json:"id"`
+	ProjectID            string  `json:"project_id"`
+	Role                 string  `json:"role"`
+	Note                 string  `json:"note"`
+	Status               string  `json:"status"`
+	CreatedBy            string  `json:"created_by"`
+	CreatedByDisplayName string  `json:"created_by_display_name"`
+	CreatedAt            string  `json:"created_at"`
+	ExpiresAt            string  `json:"expires_at"`
+	AcceptedBy           *string `json:"accepted_by"`
+	AcceptedUsername     *string `json:"accepted_username"`
+	AcceptedAt           *string `json:"accepted_at"`
+	RevokedAt            *string `json:"revoked_at"`
+}
+
+type ProjectInvitationCreate struct {
+	Role           string  `json:"role"`
+	Note           *string `json:"note,omitempty"`
+	ExpiresInHours *int64  `json:"expires_in_hours,omitempty"`
+}
+
+type ProjectInvitationIssued struct {
+	Invitation  ProjectInvitation `json:"invitation"`
+	InviteToken string            `json:"invite_token"`
+}
+
+type ProjectInvitationList struct {
+	Items      []ProjectInvitation `json:"items"`
+	NextCursor *string             `json:"next_cursor"`
 }
 
 type ProjectList struct {

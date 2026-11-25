@@ -5,6 +5,7 @@ import { ErrorPanel, PageHeading, Tabs } from '@evia/design-system';
 import { useGovernanceRequest } from './use-governance-request';
 import { SettingsPanel } from './settings-panel';
 import { MembersPanel } from './members-panel';
+import { InvitationsPanel } from './invitations-panel';
 import { AuditPanel } from './audit-panel';
 import './styles.css';
 
@@ -55,6 +56,18 @@ export function GovernancePage({ project, session }: PageProps) {
             label: '成员管理',
             content: (
               <MembersPanel
+                project={project}
+                session={session}
+                perform={requests.perform}
+                busy={requests.busy}
+              />
+            ),
+          },
+          {
+            id: 'invitations',
+            label: '邀请链接',
+            content: (
+              <InvitationsPanel
                 project={project}
                 session={session}
                 perform={requests.perform}
