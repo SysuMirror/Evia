@@ -179,14 +179,6 @@ export function LandingPage() {
         root.style.setProperty('--cap-progress', capProgress.toFixed(4));
       }
 
-      if (closingRef.current) {
-        const r = closingRef.current.getBoundingClientRect();
-        const closingProgress = reducedMotion
-          ? 1
-          : clamp01((vh - r.top) / Math.max(1, vh * 0.78));
-        root.style.setProperty('--closing-progress', closingProgress.toFixed(4));
-      }
-
       const archRect = archRef.current?.getBoundingClientRect();
       const nextMode: HeaderMode =
         scrollY <= 40
@@ -427,7 +419,6 @@ export function LandingPage() {
         <section ref={archRef} id="architecture" className="evia-light-section">
           <div className="evia-container">
             <div className="evia-light-head" data-reveal="up">
-              <span className="evia-light-eyebrow">隐私与数据主权</span>
               <h2>隐私不是附加项，而是默认前提</h2>
               <p>从浏览器端默认脱敏加密到自有集群独立落盘，每一层设计都围绕「最小化、可验证、可删除」构建。</p>
             </div>
@@ -448,158 +439,19 @@ export function LandingPage() {
                 <p>原生支持用户一键退出分析，并内建按主体彻底擦除、数据保留期自动清理与全量操作审计追踪。</p>
               </div>
             </div>
-            <div
-              className="evia-arch-diagram"
-              role="region"
-              aria-label="Evia 隐私优先自托管架构图"
-              data-reveal="up"
-              data-delay="2"
-            >
-              <div className="evia-arch-bar">
-                <div className="evia-arch-bar-title">
-                  <span className="evia-arch-bar-dot" aria-hidden="true" />
-                  <span>隐私保护数据流与信任边界</span>
-                </div>
-                <div className="evia-arch-legend">
-                  <span className="evia-arch-legend-item">
-                    <i className="evia-arch-swatch evia-arch-swatch--indigo" aria-hidden="true" />
-                    端侧加密与白名单边界
-                  </span>
-                  <span className="evia-arch-legend-item">
-                    <i className="evia-arch-swatch evia-arch-swatch--emerald" aria-hidden="true" />
-                    自有集群隔离存储
-                  </span>
-                </div>
-              </div>
-
-              <div className="evia-arch-canvas">
-                <div className="evia-arch-zone evia-arch-zone--client">
-                  <div className="evia-arch-zone-head">
-                    <span className="evia-arch-step">01</span>
-                    <span className="evia-arch-zone-label">用户浏览器 | 端侧隐私边界</span>
-                  </div>
-                  <div className="evia-arch-card">
-                    <h4>脱敏与端到端封装</h4>
-                    <ul className="evia-arch-nodes">
-                      <li>
-                        <strong>默认输入脱敏</strong>
-                        <span>密码、令牌与表单自动掩码</span>
-                      </li>
-                      <li>
-                        <strong>尊重退出偏好</strong>
-                        <span>用户一键关闭即时生效</span>
-                      </li>
-                      <li>
-                        <strong>客户端混合加密</strong>
-                        <span>RSA-OAEP + AES-256-GCM 封装</span>
-                      </li>
-                    </ul>
-                    <div className="evia-arch-chip">Ed25519 配置签名校验</div>
-                  </div>
-                </div>
-
-                <div className="evia-arch-connector" aria-hidden="true">
-                  <span className="evia-arch-connector-label">密文 / 白名单信号</span>
-                  <div className="evia-arch-connector-line">
-                    <svg viewBox="0 0 24 12" width="24" height="12" fill="none">
-                      <path
-                        d="M1 6h20m0 0-4.5-4.5M21 6l-4.5 4.5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="evia-arch-zone evia-arch-zone--cluster">
-                  <div className="evia-arch-zone-head">
-                    <span className="evia-arch-step evia-arch-step--emerald">02 / 03</span>
-                    <span className="evia-arch-zone-label">
-                      你的自有集群 | 数据不出域，无第三方中转
-                    </span>
-                  </div>
-
-                  <div className="evia-arch-cluster-flow">
-                    <div className="evia-arch-card">
-                      <div className="evia-arch-card-kicker">契约准入与解耦</div>
-                      <h4>校验网关与消息总线</h4>
-                      <ul className="evia-arch-nodes">
-                        <li>
-                          <strong>白名单契约校验</strong>
-                          <span>拦截未声明字段，Redis 实时配额</span>
-                        </li>
-                        <li>
-                          <strong>异步解耦总线</strong>
-                          <span>Kafka 缓冲落盘，不经外部中转</span>
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div
-                      className="evia-arch-connector evia-arch-connector--inner"
-                      aria-hidden="true"
-                    >
-                      <span className="evia-arch-connector-label">隔离落盘</span>
-                      <div className="evia-arch-connector-line">
-                        <svg viewBox="0 0 24 12" width="24" height="12" fill="none">
-                          <path
-                            d="M1 6h20m0 0-4.5-4.5M21 6l-4.5 4.5"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-
-                    <div className="evia-arch-card">
-                      <div className="evia-arch-card-kicker">主权存储与合规</div>
-                      <h4>列式洞察与权限治理</h4>
-                      <ul className="evia-arch-nodes">
-                        <li>
-                          <strong>列式分析引擎</strong>
-                          <span>ClickHouse 支撑漏斗、留存与看板</span>
-                        </li>
-                        <li>
-                          <strong>治理与合规中心</strong>
-                          <span>PostgreSQL 审计、保留与一键擦除</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  <div className="evia-arch-trust-foot">
-                    <span>私钥仅由授权主体保管</span>
-                    <span className="evia-arch-trust-sep" aria-hidden="true">
-                      |
-                    </span>
-                    <span>敏感内容按需端侧解密</span>
-                    <span className="evia-arch-trust-sep" aria-hidden="true">
-                      |
-                    </span>
-                    <span>全量操作自动写入审计日志</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
         <section ref={closingRef} id="get-started" className="evia-closing-section">
-          <div className="evia-closing-glow" aria-hidden="true" />
           <div className="evia-container">
-            <div className="evia-closing-card" data-reveal="up">
-              <span className="evia-closing-eyebrow">PRIVACY-FIRST SELF-HOSTED ANALYTICS</span>
+            <div className="evia-closing-inner" data-reveal="up">
               <h2>守护用户隐私，更清晰地理解你的产品</h2>
               <p>使用平台管理员分配的账号登录 Evia 映途控制台，在自有基础设施中开启安全可控的产品洞察。</p>
               <div className="evia-closing-actions">
                 <Link to="/login" className="evia-landing-primary-btn">
                   登录控制台
                 </Link>
-                <a href="#architecture" className="evia-landing-secondary-btn">
+                <a href="#architecture" className="evia-text-link">
                   了解隐私保护
                 </a>
               </div>
@@ -619,14 +471,8 @@ export function LandingPage() {
                 </span>
               </Link>
               <p className="evia-footer-desc">
-                以隐私保护为先的自托管产品分析平台，坚持最小化数据边界、客户端脱敏加密与自有集群存储。
+                以隐私保护为先的自托管产品分析平台，坚持最小化边界、端到端加密与自有集群存储。
               </p>
-              <div className="evia-footer-badges" aria-label="核心承诺">
-                <span>私有部署</span>
-                <span>端到端加密</span>
-                <span>默认脱敏</span>
-                <span>合规可删</span>
-              </div>
             </div>
 
             <div className="evia-footer-col">
@@ -674,7 +520,7 @@ export function LandingPage() {
             </div>
 
             <div className="evia-footer-col">
-              <h4>快速入口</h4>
+              <h4>账号与入口</h4>
               <ul>
                 <li>
                   <Link to="/login">控制台登录</Link>
@@ -694,7 +540,7 @@ export function LandingPage() {
               © {new Date().getFullYear()} Evia 映途. All rights reserved.
             </p>
             <p className="evia-footer-meta">
-              自托管隐私优先产品分析平台 | 数据仅留存于部署方自有基础设施
+              Evia 映途为自托管产品分析平台，所有分析数据、身份边界与审计日志均留存于部署方自有基础设施，不经第三方云中转。
             </p>
           </div>
         </div>
