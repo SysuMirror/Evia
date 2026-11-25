@@ -299,7 +299,7 @@ function LoginPage() {
         </>
       )}
       <p className="auth-help">
-        账号问题请联系平台管理员 · <Link to="/">了解 Evia</Link>
+        账号问题请联系平台管理员 | <Link to="/">了解 Evia</Link>
       </p>
     </AuthLayout>
   );

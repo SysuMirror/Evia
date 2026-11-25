@@ -257,7 +257,7 @@ export const changeCategoryLabels: Record<MetricChange['category'], string> = {
 
 export function describeChange(change: MetricChange): string {
   const category = changeCategoryLabels[change.category] ?? change.category;
-  return `${category} · ${change.path}`;
+  return `${category} | ${change.path}`;
 }
 
 export const MAX_METRIC_RANGE_DAYS = 31;

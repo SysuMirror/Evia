@@ -333,7 +333,7 @@ function SessionReplayWorkspace({ project, environment }: PageProps) {
                         value={String(chapterIndex)}
                         options={preview.chapters.map((chapter) => ({
                           value: String(chapter.index),
-                          label: `第 ${chapter.index + 1} 章 · ${replayInstant(chapter.startedAt)}${chapter.timeline.exact ? '' : ' · 不完整'}`,
+                          label: `第 ${chapter.index + 1} 章 | ${replayInstant(chapter.startedAt)}${chapter.timeline.exact ? '' : ' | 不完整'}`,
                         }))}
                         onChange={(event) => {
                           setPlaying(false);

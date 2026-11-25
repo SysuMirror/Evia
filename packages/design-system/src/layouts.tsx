@@ -63,7 +63,7 @@ export function AuthLayout({
           <div className="auth-form">{children}</div>
         </main>
         <footer className="auth-footnote">
-          <span>Evia 映途 · 自托管实时产品分析平台</span>
+          <span>Evia 映途 | 自托管实时产品分析平台</span>
         </footer>
       </div>
       <aside className="auth-showcase" aria-hidden="true">
@@ -85,7 +85,7 @@ export function AuthLayout({
           preload="metadata"
         />
         <div className="auth-showcase-scrim" />
-        <div className="auth-showcase-credit">Evia 映途 · 私有化事件与产品分析</div>
+        <div className="auth-showcase-credit">Evia 映途 | 私有化事件与产品分析</div>
       </aside>
     </div>
   );

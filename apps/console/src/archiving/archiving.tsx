@@ -97,7 +97,7 @@ export function ArchivingPage({ project, session, environment }: PageProps) {
       { value: '', label: materialized.length ? '请选择归档清单' : '当前环境暂无可回补清单' },
       ...materialized.map((manifest) => ({
         value: manifest.manifest_id,
-        label: `${shortHash(manifest.manifest_id)} · ${manifest.row_count} 行 · ${formatInstant(manifest.created_at)}`,
+        label: `${shortHash(manifest.manifest_id)} | ${manifest.row_count} 行 | ${formatInstant(manifest.created_at)}`,
       })),
     ],
     [materialized],

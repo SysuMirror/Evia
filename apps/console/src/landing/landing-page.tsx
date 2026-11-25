@@ -254,7 +254,7 @@ export function LandingPage() {
               </div>
             </div>
             <p className="evia-stack-line">
-              PostgreSQL 元数据与治理 · ClickHouse 列式引擎 · Kafka 事件总线 · Redis 实时准入 ·
+              PostgreSQL 元数据与治理 | ClickHouse 列式引擎 | Kafka 事件总线 | Redis 实时准入 |
               Ed25519 配置签名
             </p>
           </div>
