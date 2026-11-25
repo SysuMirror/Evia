@@ -84,7 +84,7 @@ export function InvitePage({ session }: { session: Session | null }) {
 
   if (!token || token.length < 16) {
     return (
-      <AuthLayout>
+      <AuthLayout onNavigate={(href) => void navigate(href)}>
         <h1>项目邀请</h1>
         <ErrorPanel message="邀请链接缺少有效凭证，请联系项目所有者重新发送。" />
         <p className="auth-help">
@@ -96,7 +96,7 @@ export function InvitePage({ session }: { session: Session | null }) {
 
   if (preview.isPending) {
     return (
-      <AuthLayout>
+      <AuthLayout onNavigate={(href) => void navigate(href)}>
         <h1>项目邀请</h1>
         <LoadingPanel label="正在校验邀请链接" />
       </AuthLayout>
@@ -105,7 +105,7 @@ export function InvitePage({ session }: { session: Session | null }) {
 
   if (preview.isError) {
     return (
-      <AuthLayout>
+      <AuthLayout onNavigate={(href) => void navigate(href)}>
         <h1>项目邀请</h1>
         <ErrorPanel
           message={

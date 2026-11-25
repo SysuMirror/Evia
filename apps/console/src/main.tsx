@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createBrowserRouter,
+  Link,
   Navigate,
   Route,
   RouterProvider,
@@ -114,6 +115,9 @@ const AccountPage = lazy(() =>
 const InvitePage = lazy(() =>
   import('./invite/invite-page').then((module) => ({ default: module.InvitePage })),
 );
+const LandingPage = lazy(() =>
+  import('./landing/landing-page').then((module) => ({ default: module.LandingPage })),
+);
 const environments = [
   { value: 'development', label: '开发环境' },
   { value: 'staging', label: '预发环境' },
@@ -159,6 +163,7 @@ function Failure({ error, retry }: { error: Error; retry?: () => void }) {
 }
 function LoginPage() {
   const cache = useQueryClient();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
@@ -170,8 +175,16 @@ function LoginPage() {
     },
   });
   return (
-    <AuthLayout>
-      <h1>登录</h1>
+    <AuthLayout
+      onNavigate={(href) => void navigate(href)}
+      topAction={
+        <Link to="/" className="auth-back-link">
+          ← 返回首页
+        </Link>
+      }
+    >
+      <h1>欢迎回来</h1>
+      <p className="auth-subtitle">登录 Evia 控制台，继续你的产品与事件分析。</p>
       {login.error && <Failure error={login.error} />}
       <form
         className="console-form"
@@ -185,6 +198,7 @@ function LoginPage() {
             id="login-username"
             name="username"
             autoComplete="username"
+            placeholder="请输入账号"
             autoFocus
             maxLength={100}
             pattern={'[a-zA-Z0-9_.@\\-]{1,100}'}
@@ -209,6 +223,7 @@ function LoginPage() {
             name="password"
             type="password"
             autoComplete="current-password"
+            placeholder="请输入密码"
             maxLength={72}
             required
             value={password}
@@ -224,7 +239,9 @@ function LoginPage() {
           登录
         </Button>
       </form>
-      <p className="auth-help">账号问题请联系平台管理员。</p>
+      <p className="auth-help">
+        账号问题请联系平台管理员 · <Link to="/">了解 Evia</Link>
+      </p>
     </AuthLayout>
   );
 }
@@ -455,6 +472,7 @@ function Root() {
     return (
       <Suspense fallback={<LoadingPanel />}>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/invite" element={<InvitePage session={null} />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
