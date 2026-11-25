@@ -2236,17 +2236,18 @@ p {
 }
 .analysis-query-footer .evia-button[aria-haspopup='dialog']:not([aria-pressed='true']) {
   color: var(--color-text);
-  border-color: transparent;
-  background: var(--color-surface-inset);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
 }
 .analysis-query-footer
   .evia-button[aria-haspopup='dialog']:hover:enabled:not([aria-pressed='true']) {
-  border-color: transparent;
-  background: var(--color-surface-hover);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-surface-raised);
 }
 .analysis-query-footer
   .evia-button[aria-haspopup='dialog']:active:enabled:not([aria-pressed='true']) {
-  background: #ded6e7;
+  background: var(--color-surface-subtle);
 }
 
 .analysis-query-bar > .evia-field:last-child:not(:first-child) {
@@ -2638,8 +2639,8 @@ p {
   --color-accent-active: #0b5b55;
   --color-accent-soft: #dff2ef;
   --color-focus: #126f68;
-  --radius-control: 12px;
-  --radius-panel: 24px;
+  --radius-control: 10px;
+  --radius-panel: 16px;
   --shadow-card: 0 20px 52px rgb(38 42 64 / 7%);
   --focus-ring: 0 0 0 3px rgb(19 125 115 / 16%);
 }
@@ -2995,11 +2996,15 @@ body {
   background: #f4f4f7;
 }
 .analysis-workbench.evia-panel {
-  padding: 18px 20px;
+  padding: 18px 22px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
   background: #f7f7fa;
 }
 .analysis-result.evia-panel {
   padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
   background: #ffffff;
 }
 .analysis-result-presentation-heatmap {
@@ -3043,47 +3048,44 @@ body {
   font-size: 13px;
 }
 .analysis-workbench-heatmap.evia-panel {
-  padding: 8px 18px 10px;
+  padding: 18px 20px 20px;
 }
 .analysis-workbench-heatmap .evia-tab-list > button {
   min-height: 36px;
   padding-block: 6px 8px;
 }
 .analysis-workbench-heatmap .evia-tab-panel {
-  padding-top: 8px;
+  padding-top: 12px;
 }
 .analysis-workbench-heatmap .analysis-query-form {
-  gap: 6px;
+  gap: 14px;
 }
 .analysis-workbench-heatmap .analysis-query-bar {
-  grid-template-columns: minmax(140px, 0.9fr) minmax(180px, 1.2fr) minmax(110px, 0.65fr) minmax(
-      110px,
-      0.65fr
-    );
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
 }
 .analysis-workbench-heatmap .evia-field {
-  gap: 3px;
+  gap: 6px;
 }
 .analysis-workbench-heatmap .evia-label {
-  font-size: 12px;
+  font-size: 13px;
 }
 .analysis-workbench-heatmap .evia-input {
-  min-height: 34px;
-  padding-block: 5px;
+  min-height: 38px;
+  padding: 7px 11px;
 }
 .analysis-workbench-heatmap .field-help,
 .analysis-workbench-heatmap .analysis-query-summary {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .analysis-workbench-heatmap .analysis-query-footer {
-  padding-top: 4px;
+  padding-top: 14px;
 }
 .analysis-workbench-heatmap .analysis-query-footer .evia-button {
-  min-height: 34px;
-  padding-block: 4px;
+  min-height: 36px;
+  padding: 5px 14px;
 }
 .analysis-result-presentation-heatmap {
   grid-template-columns: minmax(0, 2.125fr) minmax(270px, 1fr);
@@ -3128,6 +3130,9 @@ body {
   .workspace-primary-nav a {
     padding-inline: 10px;
     font-size: 12px;
+  }
+  .analysis-workbench-heatmap .analysis-query-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .analysis-result-presentation-heatmap {
     grid-template-columns: minmax(0, 1fr);
@@ -3319,7 +3324,7 @@ body {
   justify-content: space-between;
   gap: 18px;
   min-height: 52px;
-  padding: 10px 16px;
+  padding: 12px 20px;
   color: var(--color-text-secondary);
   cursor: pointer;
   list-style: none;
