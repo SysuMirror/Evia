@@ -29,6 +29,10 @@ test('unauthenticated landing and split login adapt cleanly on desktop and mobil
     'src',
     '/evia-icon-white.png',
   );
+  await expect(page.locator('.evia-landing-footer')).toContainText(
+    `© ${new Date().getFullYear()} Evia 映途`,
+  );
+  await expect(page.locator('#architecture')).toContainText('隐私不是附加项，而是默认前提');
   const heroCta = page
     .locator('.evia-landing-hero')
     .getByRole('link', { name: '登录控制台', exact: true });
