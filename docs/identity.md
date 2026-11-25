@@ -32,10 +32,13 @@ erasure 作业 rebuilding 阶段在完成校验后调用 `RetireIdentitySubject`
 - 共享 API 客户端新增 `listIdentityRevisions`/`getIdentityRevision`/`resolveIdentityMember`；人类项目权限投影补 `queries.read`（全员）与 `queries.raw.read`（owner/editor），机器权限不变。
 - 验证：模型单测 6 例（表单校验/状态词表/最新完成修订选择/解析摘要/格式化退化）；全栈浏览器 spec（`EVIA_E2E_FULL_STACK` 门控）：真实 SDK `autoIdentityLink` 双设备 → identity-worker 折叠 → 工作区列表/跨设备解析/404 错误态全链通过；桌面/解析结果/移动端真实截图（验证记录）。
 
-## 尚未交付（按规划切片推进）
+## 已交付（切片⑤：历史修订成员快照与自动清理器）
 
-- 历史修订成员快照（或 delta 重放）：resolve 与查询钉版暂仅最新 completed 修订。
-- 保留策略清理（决策：90 天或 1000 个取大）尚未实现，v1 不删除修订。
+- **不可变成员快照（迁移 051 `identity_revision_members` + `identity_revisions.snapshot_available`）**：`CommitFold` 在提交 `completed` 修订的同一事务内把当前作用域成员整表快照写入 `identity_revision_members` 并置 `snapshot_available=true`（升级回填各作用域最新 completed 修订；更早无快照历史修订维持 `snapshot_available=false` 并继续以 `IDENTITY_REVISION_NOT_RESOLVABLE` fail-closed）。
+- **任意历史修订解析与查询钉版**：`ResolveMember`、`ExpansionMembers` 与 `materializeIdentityExpansion` 按目标修订的 `identity_revision_members` 快照执行——合并前后的历史修订各自返回彼时真实的 person 归属与成员集合；对早于该修订创建且在目标修订已退役的 person 沿 `superseded_by` 定位到该修订内的存活者，对晚于目标修订创建的 person fail-closed。
+- **erasure 快照清除**：`RetireIdentitySubject` 同步清除所有历史修订快照中包含被删身份的受污染 person 成员行，避免已删身份经由历史修订重新暴露。
+- **自动保留清理器**：`identity-worker` 每轮在作用域折叠完成后调用 `PruneRevisions`，严格按「最近 90 天或最近 1000 个 completed 修订（取大）」清理更早前缀（默认 `EVIA_IDENTITY_RETENTION_DAYS=90`、`EVIA_IDENTITY_RETENTION_MIN_REVISIONS=1000`），通过 `ON DELETE CASCADE` 级联删除对应快照行并在 `identity_fold_state.pruned_through_revision` 记录清理水位；后续对已清理修订的查询、解析与详情访问统一 fail-closed 返回 `409 IDENTITY_REVISION_PRUNED`（与不存在的 `404 IDENTITY_REVISION_NOT_FOUND` 区分）；Prometheus 暴露 `evia_identity_revisions_pruned_total{outcome}`。
+- **控制台交互**：身份修订表展示成员快照状态，身份解析工具栏支持下拉选择任意带快照的已完成历史修订并区分展示已清理/无快照/未入图错误态。
 
 ## 运行
 

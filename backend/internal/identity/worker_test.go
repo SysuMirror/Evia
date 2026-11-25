@@ -18,6 +18,9 @@ type fakeFoldStore struct {
 	commitErr error
 	committed int
 	released  int
+	pruned    int
+	pruneDel  int64
+	pruneErr  error
 }
 
 func (s *fakeFoldStore) FoldScopes(context.Context) ([]Scope, error) { return s.scopes, nil }
@@ -34,6 +37,10 @@ func (s *fakeFoldStore) ReleaseFold(context.Context, *FoldClaim) error {
 	return nil
 }
 func (s *fakeFoldStore) RecordFoldFailure(context.Context, *FoldClaim, string) error { return nil }
+func (s *fakeFoldStore) PruneRevisions(context.Context, Scope, time.Time, time.Duration, int) (int64, error) {
+	s.pruned++
+	return s.pruneDel, s.pruneErr
+}
 func (s *fakeFoldStore) ListRevisions(context.Context, string, string, string, ReadFilter) (Page, error) {
 	return Page{}, nil
 }
@@ -74,6 +81,8 @@ func (o *recordingObserver) FoldUnchanged(Scope)     { o.events = append(o.event
 func (o *recordingObserver) FoldCompleted(Scope, int64, int64, int64) {
 	o.events = append(o.events, "completed")
 }
+func (o *recordingObserver) FoldPruned(Scope, int64) { o.events = append(o.events, "pruned") }
+func (o *recordingObserver) FoldPruneFailed(Scope)   { o.events = append(o.events, "prune-failed") }
 
 func claimedFoldStore() *fakeFoldStore {
 	return &fakeFoldStore{
@@ -186,5 +195,26 @@ func TestWorkerSkipsHeldLease(t *testing.T) {
 	worker.RunOnce(context.Background())
 	if store.committed != 0 || store.released != 0 || len(observer.events) != 0 {
 		t.Fatalf("held lease must be a silent skip: committed=%d released=%d events=%v", store.committed, store.released, observer.events)
+	}
+}
+
+func TestWorkerPrunesExpiredRevisions(t *testing.T) {
+	store := claimedFoldStore()
+	store.pruneDel = 3
+	observer := &recordingObserver{}
+	worker := NewWorker(store, &fakeLinkFacts{}, &fakeTombstones{}, observer, WorkerOptions{Worker: "w1"})
+	worker.RunOnce(context.Background())
+	if store.pruned != 1 {
+		t.Fatalf("expected prune after unchanged round, got %d", store.pruned)
+	}
+	if len(observer.events) != 3 || observer.events[2] != "pruned" {
+		t.Fatalf("observer events wrong: %v", observer.events)
+	}
+
+	store.pruneErr = errors.New("db busy")
+	observer.events = nil
+	worker.RunOnce(context.Background())
+	if len(observer.events) != 3 || observer.events[2] != "prune-failed" {
+		t.Fatalf("prune failure must be observed: %v", observer.events)
 	}
 }

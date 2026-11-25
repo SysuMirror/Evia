@@ -14,6 +14,7 @@ import (
 type identityMetricsObserver struct {
 	scopes   *observe.Counter
 	rounds   *observe.Counter
+	pruned   *observe.Counter
 	duration *observe.Histogram
 }
 
@@ -25,6 +26,9 @@ func newIdentityMetricsObserver(registry *observe.Registry) identity.Observer {
 		rounds: registry.Counter("evia_identity_folds_total",
 			"Identity fold terminal handling, partitioned by outcome and durable failure code.",
 			"outcome", "code"),
+		pruned: registry.Counter("evia_identity_revisions_pruned_total",
+			"Identity revisions pruned or prune failures during retention sweeps.",
+			"outcome"),
 		duration: registry.Histogram("evia_identity_fold_duration_seconds",
 			"Wall-clock duration of one identity fold scope round.",
 			observe.DefaultDurationBuckets),
@@ -65,4 +69,14 @@ func (o *identityMetricsObserver) FoldFailed(_ identity.Scope, code string) {
 
 func (o *identityMetricsObserver) FoldDuration(_ identity.Scope, duration time.Duration) {
 	o.duration.Observe(duration.Seconds())
+}
+
+func (o *identityMetricsObserver) FoldPruned(_ identity.Scope, deleted int64) {
+	if deleted > 0 {
+		o.pruned.Add(float64(deleted), "deleted")
+	}
+}
+
+func (o *identityMetricsObserver) FoldPruneFailed(identity.Scope) {
+	o.pruned.Inc("failed")
 }

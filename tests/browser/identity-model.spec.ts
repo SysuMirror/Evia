@@ -5,7 +5,9 @@ import {
   formatInstant,
   latestCompletedRevision,
   memberKindLabel,
+  resolvableRevisions,
   resolutionSummary,
+  resolveErrorMessage,
   revisionStateLabel,
   revisionStateTone,
   shortID,
@@ -53,16 +55,23 @@ function revision(overrides: Partial<IdentityRevision> = {}): IdentityRevision {
   };
 }
 
-test('the latest completed revision is the resolvable target', () => {
+test('completed snapshotted revisions are resolvable and default to latest', () => {
   const items = [
-    revision({ revision: 3, state: 'failed', error_code: 'IDENTITY_FOLD_COMMIT_FAILED' }),
-    revision({ revision: 2 }),
-    revision({ revision: 1 }),
+    revision({ revision: 4, state: 'failed', error_code: 'IDENTITY_FOLD_COMMIT_FAILED' }),
+    revision({ revision: 3, snapshot_available: true }),
+    revision({ revision: 2, snapshot_available: true }),
+    revision({ revision: 1, snapshot_available: false }),
   ];
-  expect(latestCompletedRevision(items)?.revision).toBe(2);
+  expect(resolvableRevisions(items).map((item) => item.revision)).toEqual([3, 2]);
+  expect(latestCompletedRevision(items)?.revision).toBe(3);
   expect(
-    latestCompletedRevision([revision({ revision: 3, state: 'failed', error_code: 'x' })]),
+    latestCompletedRevision([revision({ revision: 4, state: 'failed', error_code: 'x' })]),
   ).toBeNull();
+  expect(resolveErrorMessage(409, 'IDENTITY_REVISION_PRUNED', 'fallback')).toContain('保留窗口');
+  expect(resolveErrorMessage(409, 'IDENTITY_REVISION_NOT_RESOLVABLE', 'fallback')).toContain(
+    '快照',
+  );
+  expect(resolveErrorMessage(404, 'IDENTITY_REVISION_NOT_FOUND', 'fallback')).toContain('尚未进入');
 });
 
 test('resolution summaries expose members with formatted instants', () => {

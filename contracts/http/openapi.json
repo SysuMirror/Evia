@@ -20471,6 +20471,16 @@
               }
             }
           },
+          "409": {
+            "description": "修订已超出保留窗口并被清理",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "429": {
             "description": "限流",
             "content": {
@@ -28567,6 +28577,10 @@
           "error_code": {
             "type": "string",
             "maxLength": 128
+          },
+          "snapshot_available": {
+            "type": "boolean",
+            "description": "该修订是否持久化了完整成员快照并支持历史钉版解析与查询展开。"
           }
         },
         "required": [

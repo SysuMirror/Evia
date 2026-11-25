@@ -43,12 +43,14 @@ func (a *IdentityAPI) Register(mux *http.ServeMux) {
 }
 
 func identityRevisionWire(revision identity.Revision) wire.IdentityRevision {
+	snapshotAvailable := revision.SnapshotAvailable
 	out := wire.IdentityRevision{
-		Revision:    revision.Revision,
-		EdgeCount:   revision.EdgeCount,
-		PersonCount: revision.ActivePersonCount,
-		MemberCount: revision.MemberCount,
-		State:       revision.State,
+		Revision:          revision.Revision,
+		EdgeCount:         revision.EdgeCount,
+		PersonCount:       revision.ActivePersonCount,
+		MemberCount:       revision.MemberCount,
+		State:             revision.State,
+		SnapshotAvailable: &snapshotAvailable,
 	}
 	if revision.Watermark != nil {
 		formatted := revision.Watermark.UTC().Format(time.RFC3339Nano)

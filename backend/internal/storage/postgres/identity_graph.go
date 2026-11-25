@@ -113,8 +113,10 @@ func (s *Store) ClaimScope(ctx context.Context, scope identity.Scope, worker str
 		return nil, false, e
 	}
 	var nextRevision int64
-	if e = tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0)+1 FROM identity_revisions
-		 WHERE project_id=$1 AND environment=$2`, scope.ProjectID, scope.Environment).Scan(&nextRevision); e != nil {
+	if e = tx.QueryRow(ctx, `SELECT GREATEST(
+		 COALESCE((SELECT MAX(revision) FROM identity_revisions WHERE project_id=$1 AND environment=$2), 0),
+		 COALESCE((SELECT pruned_through_revision FROM identity_fold_state WHERE project_id=$1 AND environment=$2), 0)
+		 )+1`, scope.ProjectID, scope.Environment).Scan(&nextRevision); e != nil {
 		return nil, false, e
 	}
 	graph, e := s.loadIdentityGraph(ctx, tx, scope)
@@ -300,10 +302,18 @@ func (s *Store) CommitFold(ctx context.Context, claim *identity.FoldClaim, outco
 		}
 	}
 	if _, e = tx.Exec(ctx, `INSERT INTO identity_revisions
-		 (project_id,environment,revision,watermark_received_at,edge_count,person_count,member_count,state,built_at)
-		 VALUES($1,$2,$3,$4,$5,$6,$7,'completed',now())`,
+		 (project_id,environment,revision,watermark_received_at,edge_count,person_count,member_count,state,built_at,snapshot_available)
+		 VALUES($1,$2,$3,$4,$5,$6,$7,'completed',now(),true)`,
 		claim.ProjectID, claim.Environment, outcome.NextRevision, outcome.Watermark,
 		outcome.EdgeCount, outcome.ActivePersonCount, outcome.MemberCount); e != nil {
+		return e
+	}
+	if _, e = tx.Exec(ctx, `INSERT INTO identity_revision_members
+		 (project_id,environment,revision,resolved_person_id,member_kind,member_value,first_seen_at,joined_revision)
+		 SELECT project_id,environment,$3,resolved_person_id,member_kind,member_value,first_seen_at,joined_revision
+		 FROM identity_person_members
+		 WHERE project_id=$1 AND environment=$2`,
+		claim.ProjectID, claim.Environment, outcome.NextRevision); e != nil {
 		return e
 	}
 	if _, e = tx.Exec(ctx, `UPDATE identity_fold_state
@@ -316,12 +326,79 @@ func (s *Store) CommitFold(ctx context.Context, claim *identity.FoldClaim, outco
 	return tx.Commit(ctx)
 }
 
-const identityRevisionColumns = `revision,watermark_received_at,edge_count,person_count,member_count,state,built_at,error_code`
+func (s *Store) PruneRevisions(ctx context.Context, scope identity.Scope, now time.Time, retentionWindow time.Duration, minCompleted int) (int64, error) {
+	if retentionWindow <= 0 {
+		return 0, identityInvalid("身份修订保留窗口必须大于零")
+	}
+	if minCompleted < 1 {
+		minCompleted = 1
+	}
+	tx, e := s.Pool.Begin(ctx)
+	if e != nil {
+		return 0, e
+	}
+	defer tx.Rollback(context.Background())
+	var prunedThrough int64
+	if e = tx.QueryRow(ctx, `SELECT pruned_through_revision FROM identity_fold_state
+	 WHERE project_id=$1 AND environment=$2 FOR UPDATE`,
+		scope.ProjectID, scope.Environment).Scan(&prunedThrough); errors.Is(e, pgx.ErrNoRows) {
+		return 0, tx.Commit(ctx)
+	} else if e != nil {
+		return 0, e
+	}
+	var latestCompleted int64
+	if e = tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'`,
+		scope.ProjectID, scope.Environment).Scan(&latestCompleted); e != nil {
+		return 0, e
+	}
+	if latestCompleted == 0 {
+		return 0, tx.Commit(ctx)
+	}
+	var floorByCount int64
+	if e = tx.QueryRow(ctx, `SELECT revision FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'
+	 ORDER BY revision DESC OFFSET $3 LIMIT 1`,
+		scope.ProjectID, scope.Environment, minCompleted-1).Scan(&floorByCount); errors.Is(e, pgx.ErrNoRows) {
+		return 0, tx.Commit(ctx)
+	} else if e != nil {
+		return 0, e
+	}
+	cutoff := now.UTC().Add(-retentionWindow)
+	var oldestRetained int64
+	if e = tx.QueryRow(ctx, `SELECT COALESCE(MIN(revision),$3) FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND state='completed'
+	   AND (revision >= $4 OR COALESCE(built_at, created_at) >= $5 OR revision = $3)`,
+		scope.ProjectID, scope.Environment, latestCompleted, floorByCount, cutoff).Scan(&oldestRetained); e != nil {
+		return 0, e
+	}
+	var deletedCount, maxDeleted int64
+	if e = tx.QueryRow(ctx, `WITH deleted AS (
+		 DELETE FROM identity_revisions
+		 WHERE project_id=$1 AND environment=$2 AND revision < $3
+		 RETURNING revision
+	 )
+	 SELECT COUNT(*), COALESCE(MAX(revision),0) FROM deleted`,
+		scope.ProjectID, scope.Environment, oldestRetained).Scan(&deletedCount, &maxDeleted); e != nil {
+		return 0, e
+	}
+	if deletedCount > 0 && maxDeleted > prunedThrough {
+		if _, e = tx.Exec(ctx, `UPDATE identity_fold_state
+		 SET pruned_through_revision=GREATEST(pruned_through_revision,$3), updated_at=now()
+		 WHERE project_id=$1 AND environment=$2`,
+			scope.ProjectID, scope.Environment, maxDeleted); e != nil {
+			return 0, e
+		}
+	}
+	return deletedCount, tx.Commit(ctx)
+}
+
+const identityRevisionColumns = `revision,watermark_received_at,edge_count,person_count,member_count,state,built_at,error_code,snapshot_available`
 
 func scanIdentityRevision(row pgx.Row) (identity.Revision, error) {
 	var r identity.Revision
 	e := row.Scan(&r.Revision, &r.Watermark, &r.EdgeCount, &r.ActivePersonCount, &r.MemberCount,
-		&r.State, &r.BuiltAt, &r.ErrorCode)
+		&r.State, &r.BuiltAt, &r.ErrorCode, &r.SnapshotAvailable)
 	return r, e
 }
 
@@ -331,7 +408,7 @@ func scanIdentityRevisionRows(rows pgx.Rows) ([]identity.Revision, error) {
 	for rows.Next() {
 		var r identity.Revision
 		if e := rows.Scan(&r.Revision, &r.Watermark, &r.EdgeCount, &r.ActivePersonCount, &r.MemberCount,
-			&r.State, &r.BuiltAt, &r.ErrorCode); e != nil {
+			&r.State, &r.BuiltAt, &r.ErrorCode, &r.SnapshotAvailable); e != nil {
 			return nil, e
 		}
 		items = append(items, r)
@@ -403,6 +480,42 @@ func (s *Store) ListRevisions(ctx context.Context, actor, project, environment s
 	return page, tx.Commit(ctx)
 }
 
+func checkRevisionPrunedTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64) error {
+	var prunedThrough int64
+	if e := tx.QueryRow(ctx, `SELECT pruned_through_revision FROM identity_fold_state
+	 WHERE project_id=$1 AND environment=$2`,
+		scope.ProjectID, scope.Environment).Scan(&prunedThrough); errors.Is(e, pgx.ErrNoRows) {
+		return identityNotFound("身份修订不存在")
+	} else if e != nil {
+		return e
+	}
+	if revision <= prunedThrough {
+		return fault.New(fault.Conflict, "IDENTITY_REVISION_PRUNED", "该身份修订已超出保留窗口并被清理")
+	}
+	return identityNotFound("身份修订不存在")
+}
+
+func checkResolvableRevisionTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64) error {
+	var (
+		state             string
+		snapshotAvailable bool
+	)
+	if e := tx.QueryRow(ctx, `SELECT state, snapshot_available FROM identity_revisions
+	 WHERE project_id=$1 AND environment=$2 AND revision=$3`,
+		scope.ProjectID, scope.Environment, revision).Scan(&state, &snapshotAvailable); errors.Is(e, pgx.ErrNoRows) {
+		return checkRevisionPrunedTx(ctx, tx, scope, revision)
+	} else if e != nil {
+		return e
+	}
+	if state != identity.RevisionCompleted {
+		return fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE", "仅已完成的身份修订可解析")
+	}
+	if !snapshotAvailable {
+		return fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE", "该历史身份修订缺少成员快照，无法解析")
+	}
+	return nil
+}
+
 func (s *Store) GetRevision(ctx context.Context, actor, project, environment string, revision int64) (identity.Revision, error) {
 	if e := validateIdentityRead(actor, project, environment); e != nil {
 		return identity.Revision{}, e
@@ -421,7 +534,7 @@ func (s *Store) GetRevision(ctx context.Context, actor, project, environment str
 	item, e := scanIdentityRevision(tx.QueryRow(ctx, `SELECT `+identityRevisionColumns+` FROM identity_revisions
 		 WHERE project_id=$1 AND environment=$2 AND revision=$3`, project, environment, revision))
 	if errors.Is(e, pgx.ErrNoRows) {
-		return identity.Revision{}, identityNotFound("身份修订不存在")
+		return identity.Revision{}, checkRevisionPrunedTx(ctx, tx, identity.Scope{ProjectID: project, Environment: environment}, revision)
 	}
 	if e != nil {
 		return identity.Revision{}, e
@@ -429,11 +542,8 @@ func (s *Store) GetRevision(ctx context.Context, actor, project, environment str
 	return item, tx.Commit(ctx)
 }
 
-// ResolveMember answers the forward lookup for one raw identity. v1 resolves
-// against the current registry, so the requested revision must be the scope's
-// latest completed snapshot; historical member snapshots are a documented
-// follow-up and older pins fail closed instead of answering from a state the
-// revision never captured.
+// ResolveMember answers the forward lookup for one raw identity against any
+// completed revision that carries a persisted member snapshot.
 func (s *Store) ResolveMember(ctx context.Context, actor, project, environment string, revision int64, kind, value string) (identity.Resolution, error) {
 	if e := validateIdentityRead(actor, project, environment); e != nil {
 		return identity.Resolution{}, e
@@ -455,54 +565,28 @@ func (s *Store) ResolveMember(ctx context.Context, actor, project, environment s
 	if e = s.identityReadAuthority(ctx, tx, actor, project, environment, true); e != nil {
 		return identity.Resolution{}, e
 	}
-	var exists int
-	if e = tx.QueryRow(ctx, `SELECT 1 FROM identity_revisions
-		 WHERE project_id=$1 AND environment=$2 AND revision=$3`, project, environment, revision).Scan(&exists); errors.Is(e, pgx.ErrNoRows) {
-		return identity.Resolution{}, identityNotFound("身份修订不存在")
-	} else if e != nil {
+	scope := identity.Scope{ProjectID: project, Environment: environment}
+	if e = checkResolvableRevisionTx(ctx, tx, scope, revision); e != nil {
 		return identity.Resolution{}, e
-	}
-	var latest int64
-	if e = tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
-		 WHERE project_id=$1 AND environment=$2 AND state='completed'`, project, environment).Scan(&latest); e != nil {
-		return identity.Resolution{}, e
-	}
-	if revision != latest {
-		return identity.Resolution{}, fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE",
-			"当前仅支持解析最新完成修订；历史成员快照尚未提供")
 	}
 	var personID string
-	if e = tx.QueryRow(ctx, `SELECT resolved_person_id::text FROM identity_person_members
-		 WHERE project_id=$1 AND environment=$2 AND member_kind=$3 AND member_value=$4`,
-		project, environment, kind, value).Scan(&personID); errors.Is(e, pgx.ErrNoRows) {
-		return identity.Resolution{}, identityNotFound("该身份尚未进入身份图")
+	if e = tx.QueryRow(ctx, `SELECT resolved_person_id::text FROM identity_revision_members
+		 WHERE project_id=$1 AND environment=$2 AND revision=$3 AND member_kind=$4 AND member_value=$5`,
+		project, environment, revision, kind, value).Scan(&personID); errors.Is(e, pgx.ErrNoRows) {
+		return identity.Resolution{}, identityNotFound("该身份未出现在该修订的身份图中")
 	} else if e != nil {
 		return identity.Resolution{}, e
 	}
-	resolved := personID
-	for depth := 0; depth < identity.MaxRedirectDepth; depth++ {
-		var superseded *string
-		if e = tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
-			 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
-			project, environment, resolved).Scan(&superseded); e != nil {
-			return identity.Resolution{}, e
-		}
-		if superseded == nil {
-			break
-		}
-		resolved = *superseded
-		if depth == identity.MaxRedirectDepth-1 {
-			return identity.Resolution{}, fault.New(fault.Conflict, "IDENTITY_REDIRECT_TOO_DEEP", "身份重定向链超出可解析深度")
-		}
-	}
 	members, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value,first_seen_at,joined_revision
-		 FROM identity_person_members WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
-		project, environment, resolved)
+		 FROM identity_revision_members
+		 WHERE project_id=$1 AND environment=$2 AND revision=$3 AND resolved_person_id=$4
+		 ORDER BY member_kind, member_value`,
+		project, environment, revision, personID)
 	if e != nil {
 		return identity.Resolution{}, e
 	}
 	defer members.Close()
-	resolution := identity.Resolution{Revision: revision, ResolvedPersonID: resolved}
+	resolution := identity.Resolution{Revision: revision, ResolvedPersonID: personID}
 	for members.Next() {
 		var member identity.Member
 		if e = members.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value, &member.FirstSeenAt, &member.JoinedRevision); e != nil {
@@ -527,9 +611,8 @@ func (s *Store) LatestCompletedRevision(ctx context.Context, scope identity.Scop
 	return latest, e
 }
 
-// ExpansionMembers resolves one person pin to its member set for a query
-// plan. Only the latest completed revision is expandable in v1; older pins
-// fail closed rather than expanding from state the revision never captured.
+// ExpansionMembers resolves one person pin to its member set for a query plan
+// against any completed revision carrying a member snapshot.
 func (s *Store) ExpansionMembers(ctx context.Context, scope identity.Scope, revision int64, resolvedPersonID string) ([]identity.Member, error) {
 	if revision <= 0 {
 		return nil, fault.New(fault.Invalid, "IDENTITY_REVISION_NOT_FOUND", "身份修订编号无效")
@@ -542,58 +625,11 @@ func (s *Store) ExpansionMembers(ctx context.Context, scope identity.Scope, revi
 		return nil, e
 	}
 	defer tx.Rollback(context.Background())
-	var exists int
-	if e = tx.QueryRow(ctx, `SELECT 1 FROM identity_revisions
-	 WHERE project_id=$1 AND environment=$2 AND revision=$3`,
-		scope.ProjectID, scope.Environment, revision).Scan(&exists); errors.Is(e, pgx.ErrNoRows) {
-		return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "身份修订不存在")
-	} else if e != nil {
+	if e = checkResolvableRevisionTx(ctx, tx, scope, revision); e != nil {
 		return nil, e
 	}
-	var latest int64
-	if e = tx.QueryRow(ctx, `SELECT COALESCE(MAX(revision),0) FROM identity_revisions
-	 WHERE project_id=$1 AND environment=$2 AND state='completed'`,
-		scope.ProjectID, scope.Environment).Scan(&latest); e != nil {
-		return nil, e
-	}
-	if revision != latest {
-		return nil, fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE",
-			"当前仅支持最新完成修订；历史成员快照尚未提供")
-	}
-	resolved := resolvedPersonID
-	for depth := 0; depth < identity.MaxRedirectDepth; depth++ {
-		var superseded *string
-		if e = tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
-		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
-			scope.ProjectID, scope.Environment, resolved).Scan(&superseded); errors.Is(e, pgx.ErrNoRows) {
-			return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不存在")
-		} else if e != nil {
-			return nil, e
-		}
-		if superseded == nil {
-			break
-		}
-		resolved = *superseded
-		if depth == identity.MaxRedirectDepth-1 {
-			return nil, fault.New(fault.Conflict, "IDENTITY_REDIRECT_TOO_DEEP", "身份重定向链超出可解析深度")
-		}
-	}
-	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value,first_seen_at,joined_revision
-	 FROM identity_person_members WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
-		scope.ProjectID, scope.Environment, resolved)
+	members, e := expansionMembersTx(ctx, tx, scope, revision, resolvedPersonID)
 	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	var members []identity.Member
-	for rows.Next() {
-		var member identity.Member
-		if e = rows.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value, &member.FirstSeenAt, &member.JoinedRevision); e != nil {
-			return nil, e
-		}
-		members = append(members, member)
-	}
-	if e = rows.Err(); e != nil {
 		return nil, e
 	}
 	return members, tx.Commit(ctx)
@@ -619,6 +655,20 @@ func (s *Store) RetireIdentitySubject(ctx context.Context, claim erasure.Claim) 
 		return e
 	}
 	defer tx.Rollback(context.Background())
+	// Remove contaminated person snapshots across all historical revisions so
+	// erased identities can never be resolved from an older pinned snapshot.
+	if _, e = tx.Exec(ctx, `DELETE FROM identity_revision_members m
+	 USING (
+	   SELECT DISTINCT revision, resolved_person_id
+	   FROM identity_revision_members
+	   WHERE project_id=$1 AND environment=$2 AND member_kind=$3 AND member_value=$4
+	 ) hit
+	 WHERE m.project_id=$1 AND m.environment=$2
+	   AND m.revision=hit.revision
+	   AND m.resolved_person_id=hit.resolved_person_id`,
+		claim.ProjectID, claim.Environment, claim.SubjectKind, claim.SubjectValue); e != nil {
+		return e
+	}
 	var owners []string
 	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text FROM identity_person_members
 	 WHERE project_id=$1 AND environment=$2 AND member_kind=$3 AND member_value=$4`,
@@ -706,19 +756,9 @@ func (s *Store) materializeIdentityExpansion(ctx context.Context, tx pgx.Tx, pro
 		}
 		revision := latest
 		pinned = &revision
-	} else {
-		var exists int
-		if e = tx.QueryRow(ctx, `SELECT 1 FROM identity_revisions
-		 WHERE project_id=$1 AND environment=$2 AND revision=$3`,
-			project, request.Environment, *pinned).Scan(&exists); errors.Is(e, pgx.ErrNoRows) {
-			return fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "身份修订不存在")
-		} else if e != nil {
-			return e
-		}
-		if *pinned != latest {
-			return fault.New(fault.Conflict, "IDENTITY_REVISION_NOT_RESOLVABLE",
-				"当前仅支持最新完成修订；历史成员快照尚未提供")
-		}
+	}
+	if e = checkResolvableRevisionTx(ctx, tx, scope, *pinned); e != nil {
+		return e
 	}
 	expansion := &analysis.IdentityExpansion{Revision: *pinned}
 	if request.IdentityFilter != nil && request.IdentityFilter.ResolvedPersonID != nil {
@@ -791,30 +831,56 @@ func latestCompletedRevisionTx(ctx context.Context, tx pgx.Tx, scope identity.Sc
 	return latest, e
 }
 
-// expansionMembersTx follows redirect chains for one person inside the
-// enqueue transaction.
+// expansionMembersTx resolves one person pin against the exact snapshot of
+// revision. Redirects are only followed when the person was already retired at
+// or before revision (absent from revision's snapshot); persons created after
+// revision fail closed.
 func expansionMembersTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64, resolvedPersonID string) ([]identity.Member, error) {
+	var createRevision int64
+	if e := tx.QueryRow(ctx, `SELECT create_revision FROM identity_persons
+	 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
+		scope.ProjectID, scope.Environment, resolvedPersonID).Scan(&createRevision); errors.Is(e, pgx.ErrNoRows) {
+		return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不存在")
+	} else if e != nil {
+		return nil, e
+	}
+	if createRevision > revision {
+		return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 尚未在该修订中存在")
+	}
 	resolved := resolvedPersonID
 	for depth := 0; depth < identity.MaxRedirectDepth; depth++ {
+		members, e := snapshotPersonMembersTx(ctx, tx, scope, revision, resolved)
+		if e != nil {
+			return nil, e
+		}
+		if len(members) > 0 {
+			return members, nil
+		}
 		var superseded *string
-		if e := tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
+		if e = tx.QueryRow(ctx, `SELECT superseded_by::text FROM identity_persons
 		 WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
 			scope.ProjectID, scope.Environment, resolved).Scan(&superseded); errors.Is(e, pgx.ErrNoRows) {
-			return nil, fault.New(fault.NotFound, "IDENTITY_REVISION_NOT_FOUND", "resolved person 不存在")
+			return nil, nil
 		} else if e != nil {
 			return nil, e
 		}
 		if superseded == nil {
-			break
+			return nil, nil
 		}
 		resolved = *superseded
 		if depth == identity.MaxRedirectDepth-1 {
 			return nil, fault.New(fault.Conflict, "IDENTITY_REDIRECT_TOO_DEEP", "身份重定向链超出可解析深度")
 		}
 	}
-	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value
-	 FROM identity_person_members WHERE project_id=$1 AND environment=$2 AND resolved_person_id=$3`,
-		scope.ProjectID, scope.Environment, resolved)
+	return nil, nil
+}
+
+func snapshotPersonMembersTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64, resolvedPersonID string) ([]identity.Member, error) {
+	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value,first_seen_at,joined_revision
+	 FROM identity_revision_members
+	 WHERE project_id=$1 AND environment=$2 AND revision=$3 AND resolved_person_id=$4
+	 ORDER BY member_kind, member_value`,
+		scope.ProjectID, scope.Environment, revision, resolvedPersonID)
 	if e != nil {
 		return nil, e
 	}
@@ -822,7 +888,7 @@ func expansionMembersTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, re
 	var members []identity.Member
 	for rows.Next() {
 		var member identity.Member
-		if e = rows.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value); e != nil {
+		if e = rows.Scan(&member.ResolvedPersonID, &member.Kind, &member.Value, &member.FirstSeenAt, &member.JoinedRevision); e != nil {
 			return nil, e
 		}
 		members = append(members, member)
@@ -834,43 +900,33 @@ type scopedMember struct {
 	resolved, kind, value string
 }
 
-// scopeMappingTx loads every active person and member of the pinned revision
-// for whole-graph subject mapping.
+// scopeMappingTx loads every active person and member of the pinned revision's
+// persisted snapshot for whole-graph subject mapping.
 func scopeMappingTx(ctx context.Context, tx pgx.Tx, scope identity.Scope, revision int64) ([]string, []scopedMember, error) {
-	persons, e := tx.Query(ctx, `SELECT resolved_person_id::text FROM identity_persons
-	 WHERE project_id=$1 AND environment=$2 AND state='active'`,
-		scope.ProjectID, scope.Environment)
+	rows, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value
+	 FROM identity_revision_members
+	 WHERE project_id=$1 AND environment=$2 AND revision=$3
+	 ORDER BY resolved_person_id, member_kind, member_value`,
+		scope.ProjectID, scope.Environment, revision)
 	if e != nil {
 		return nil, nil, e
 	}
-	var active []string
-	for persons.Next() {
-		var person string
-		if e = persons.Scan(&person); e != nil {
-			persons.Close()
+	defer rows.Close()
+	var (
+		active []string
+		all    []scopedMember
+		last   string
+	)
+	for rows.Next() {
+		var member scopedMember
+		if e = rows.Scan(&member.resolved, &member.kind, &member.value); e != nil {
 			return nil, nil, e
 		}
-		active = append(active, person)
-	}
-	if e = persons.Err(); e != nil {
-		persons.Close()
-		return nil, nil, e
-	}
-	persons.Close()
-	members, e := tx.Query(ctx, `SELECT resolved_person_id::text,member_kind,member_value
-	 FROM identity_person_members WHERE project_id=$1 AND environment=$2`,
-		scope.ProjectID, scope.Environment)
-	if e != nil {
-		return nil, nil, e
-	}
-	defer members.Close()
-	var all []scopedMember
-	for members.Next() {
-		var member scopedMember
-		if e = members.Scan(&member.resolved, &member.kind, &member.value); e != nil {
-			return nil, nil, e
+		if member.resolved != last {
+			active = append(active, member.resolved)
+			last = member.resolved
 		}
 		all = append(all, member)
 	}
-	return active, all, members.Err()
+	return active, all, rows.Err()
 }

@@ -65,6 +65,11 @@ const (
 	DefaultPollInterval = time.Minute
 	// DefaultLease bounds one fold round's claim.
 	DefaultLease = 5 * time.Minute
+	// DefaultRetentionWindow retains completed revisions for at least 90 days.
+	DefaultRetentionWindow = 90 * 24 * time.Hour
+	// DefaultRetentionMinCount retains at least the newest 1000 completed
+	// revisions even if older than DefaultRetentionWindow (whichever keeps more).
+	DefaultRetentionMinCount = 1000
 )
 
 // Scope addresses one project/environment graph. Graphs never merge across
@@ -117,6 +122,7 @@ type Revision struct {
 	State             string
 	BuiltAt           *time.Time
 	ErrorCode         *string
+	SnapshotAvailable bool
 }
 
 // LinkScan is one scanned identity-link pair candidate for folding.
@@ -249,6 +255,11 @@ type Store interface {
 	// RecordFoldFailure parks a failed revision for diagnosis without moving
 	// the watermark, then releases the lease.
 	RecordFoldFailure(ctx context.Context, claim *FoldClaim, code string) error
+	// PruneRevisions deletes revisions older than both retentionWindow and the
+	// newest minCompleted completed revisions (whichever retains more), advancing
+	// the scope's pruned_through_revision watermark so pinned lookups fail with
+	// IDENTITY_REVISION_PRUNED.
+	PruneRevisions(ctx context.Context, scope Scope, now time.Time, retentionWindow time.Duration, minCompleted int) (int64, error)
 	// Read APIs (authorization enforced by the adapter).
 	ListRevisions(ctx context.Context, actor, project, environment string, filter ReadFilter) (Page, error)
 	GetRevision(ctx context.Context, actor, project, environment string, revision int64) (Revision, error)

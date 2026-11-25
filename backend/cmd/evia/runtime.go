@@ -684,7 +684,9 @@ func identityWorkerRuntime(ctx context.Context, c config.Config, store *postgres
 	}
 	registry := observe.NewRegistry("identity-worker")
 	worker := identity.NewWorker(store, scanner, store, newIdentityMetricsObserver(registry), identity.WorkerOptions{
-		Worker: c.InstanceID + "-" + ids.New(),
+		Worker:            c.InstanceID + "-" + ids.New(),
+		RetentionWindow:   time.Duration(c.IdentityRetentionDays) * 24 * time.Hour,
+		RetentionMinCount: c.IdentityRetentionMinCount,
 	})
 	logger.Info("identity worker starting")
 	return supervise(ctx, append(metricsTasks(c, "identity-worker", registry), task{name: "identity worker", run: worker.Run}), 15*time.Second)

@@ -21,7 +21,9 @@ import {
   formatInstant,
   latestCompletedRevision,
   memberKindLabel,
+  resolvableRevisions,
   resolutionSummary,
+  resolveErrorMessage,
   revisionStateLabel,
   revisionStateTone,
   shortID,
@@ -46,7 +48,12 @@ export function IdentityPage({ project, environment }: PageProps) {
   const [form, setForm] = useState<ResolveFormState>(defaultResolveForm());
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [lookupError, setLookupError] = useState('');
-  const [resolvedFor, setResolvedFor] = useState<{ revision: number; value: string } | null>(null);
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(null);
+  const [resolvedFor, setResolvedFor] = useState<{
+    revision: number;
+    kind: MemberKind;
+    value: string;
+  } | null>(null);
 
   const listKey = ['identity-revisions', project.id, environment, cursors.at(-1) ?? ''] as const;
   const revisions = useQuery({
@@ -60,24 +67,29 @@ export function IdentityPage({ project, environment }: PageProps) {
     enabled: allowed,
   });
 
+  const resolvable = resolvableRevisions(revisions.data?.items ?? []);
   const completed = latestCompletedRevision(revisions.data?.items ?? []);
+  const targetRevision =
+    (selectedRevision !== null && resolvable.some((item) => item.revision === selectedRevision)
+      ? selectedRevision
+      : completed?.revision) ?? null;
+
   const resolveKey = ['identity-resolve', project.id, environment, resolvedFor] as const;
   const resolution = useQuery({
     queryKey: resolveKey,
     queryFn: ({ signal }) => {
-      if (!resolvedFor || !completed) throw new Error('no revision');
+      if (!resolvedFor) throw new Error('no revision');
       return api.resolveIdentityMember(
         project.id,
-        completed.revision,
+        resolvedFor.revision,
         {
           environment,
-          [resolvedFor.value && form.memberKind === 'uid' ? 'uid' : 'anonymous_id']:
-            resolvedFor.value,
+          [resolvedFor.kind === 'uid' ? 'uid' : 'anonymous_id']: resolvedFor.value,
         },
         signal,
       );
     },
-    enabled: allowed && rawAllowed && !!completed && !!resolvedFor,
+    enabled: allowed && rawAllowed && !!resolvedFor,
     retry: false,
   });
 
@@ -102,8 +114,8 @@ export function IdentityPage({ project, environment }: PageProps) {
       setFormErrors(errors);
       return;
     }
-    if (!completed) {
-      setLookupError('当前环境还没有已完成的身份修订，无法解析。');
+    if (!targetRevision) {
+      setLookupError('当前环境还没有带成员快照的已完成身份修订，无法解析。');
       return;
     }
     if (!rawAllowed) {
@@ -112,8 +124,18 @@ export function IdentityPage({ project, environment }: PageProps) {
     }
     setFormErrors([]);
     setLookupError('');
-    setResolvedFor({ revision: completed.revision, value: form.memberValue.trim() });
+    setResolvedFor({
+      revision: targetRevision,
+      kind: form.memberKind,
+      value: form.memberValue.trim(),
+    });
   };
+
+  const revisionOptions = resolvable.map((item, index) => ({
+    value: String(item.revision),
+    label:
+      index === 0 && cursors.length === 0 ? `#${item.revision}（最新完成）` : `#${item.revision}`,
+  }));
 
   const columns: DataTableColumn<import('@evia/api-client').IdentityRevision>[] = [
     { key: 'revision', header: '修订', render: (row) => <code>#{row.revision}</code> },
@@ -123,6 +145,18 @@ export function IdentityPage({ project, environment }: PageProps) {
       render: (row) => (
         <Badge tone={revisionStateTone(row.state)}>{revisionStateLabel(row.state)}</Badge>
       ),
+    },
+    {
+      key: 'snapshot',
+      header: '成员快照',
+      render: (row) =>
+        row.state !== 'completed' ? (
+          '—'
+        ) : row.snapshot_available === false ? (
+          <Badge tone="neutral">无快照</Badge>
+        ) : (
+          <Badge tone="success">可钉版</Badge>
+        ),
     },
     {
       key: 'watermark',
@@ -160,13 +194,28 @@ export function IdentityPage({ project, environment }: PageProps) {
       <div className="inline-notice">
         <Alert
           tone="info"
-          title="身份修订由 identity-worker 从 sys.identity_link 事实折叠生成：不可变快照、单调合并（古老分量存活）。解析当前仅支持最新完成修订。"
+          title="身份修订由 identity-worker 从 sys.identity_link 事实折叠生成：不可变成员快照、单调合并（古老分量存活），支持按任意保留期内的历史完成修订解析与钉版查询（默认保留最近 90 天或 1000 个完成修订，取大）。"
         />
       </div>
 
       <DataSurface label="解析身份">
         <Toolbar label="身份解析查询">
           <div className="identity-fields">
+            {revisionOptions.length > 0 && (
+              <Field label="目标修订" htmlFor="identity-target-revision">
+                <Select
+                  id="identity-target-revision"
+                  value={targetRevision ? String(targetRevision) : ''}
+                  options={revisionOptions}
+                  disabled={resolution.isFetching}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    setSelectedRevision(Number.isFinite(parsed) ? parsed : null);
+                    setLookupError('');
+                  }}
+                />
+              </Field>
+            )}
             <Field label="身份类型" htmlFor="identity-member-kind">
               <Select
                 id="identity-member-kind"
@@ -213,11 +262,13 @@ export function IdentityPage({ project, environment }: PageProps) {
         {resolution.isError && (
           <div className="inline-notice">
             <Alert tone="error" title="身份解析失败">
-              {resolution.error instanceof ApiError && resolution.error.status === 404
-                ? '该身份尚未进入身份图，或不在最新完成修订中。'
-                : resolution.error instanceof ApiError
-                  ? resolution.error.message
-                  : '请稍后再试。'}
+              {resolution.error instanceof ApiError
+                ? resolveErrorMessage(
+                    resolution.error.status,
+                    resolution.error.code,
+                    resolution.error.message,
+                  )
+                : '请稍后再试。'}
             </Alert>
           </div>
         )}

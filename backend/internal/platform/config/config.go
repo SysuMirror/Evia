@@ -42,8 +42,10 @@ type Config struct {
 	// RetentionEnforcement gates destructive age-based deletion. The default
 	// false makes the retention worker a safe dry-run that only counts expired
 	// facts; an operator must explicitly opt in to actually delete them.
-	RetentionEnforcement   bool
-	RetentionSweepInterval time.Duration
+	RetentionEnforcement      bool
+	RetentionSweepInterval    time.Duration
+	IdentityRetentionDays     int
+	IdentityRetentionMinCount int
 	// IngestLagInterval controls consumer lag sampling on the ingest worker.
 	// The default 30s keeps scrape noise low; an explicit zero disables the
 	// lag monitor. Other commands leave the field unused.
@@ -262,6 +264,14 @@ func ReadFor(command string, get func(string) string) (Config, error) {
 	}
 	if command == "query-worker" {
 		if c.QueryWorkers, err = integer(get, "EVIA_QUERY_WORKERS", 2, 1, 16); err != nil {
+			return c, err
+		}
+	}
+	if command == "identity-worker" {
+		if c.IdentityRetentionDays, err = integer(get, "EVIA_IDENTITY_RETENTION_DAYS", 90, 1, 3650); err != nil {
+			return c, err
+		}
+		if c.IdentityRetentionMinCount, err = integer(get, "EVIA_IDENTITY_RETENTION_MIN_REVISIONS", 1000, 1, 100000); err != nil {
 			return c, err
 		}
 	}

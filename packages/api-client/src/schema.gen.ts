@@ -3613,6 +3613,8 @@ export interface components {
             /** Format: date-time */
             built_at?: string;
             error_code?: string;
+            /** @description 该修订是否持久化了完整成员快照并支持历史钉版解析与查询展开。 */
+            snapshot_available?: boolean;
         };
         IdentityRevisionList: {
             items: components["schemas"]["IdentityRevision"][];
@@ -18901,6 +18903,15 @@ export interface operations {
             };
             /** @description 不存在或不可见 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 修订已超出保留窗口并被清理 */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -59,9 +59,33 @@ export function revisionStateTone(state: RevisionState): BadgeTone {
   return STATE_TONES[state] ?? 'neutral';
 }
 
-/** The only revision a v1 resolve lookup may target is the latest completed one. */
+/** Completed revisions that carry a member snapshot can be resolved directly. */
+export function resolvableRevisions(revisions: IdentityRevision[]): IdentityRevision[] {
+  return revisions.filter(
+    (item) => item.state === 'completed' && item.snapshot_available !== false,
+  );
+}
+
+/** The newest completed revision with a snapshot is the default resolve target. */
 export function latestCompletedRevision(revisions: IdentityRevision[]): IdentityRevision | null {
-  return revisions.find((item) => item.state === 'completed') ?? null;
+  return resolvableRevisions(revisions)[0] ?? null;
+}
+
+export function resolveErrorMessage(
+  status: number | undefined,
+  code: string | undefined,
+  fallback: string,
+): string {
+  if (code === 'IDENTITY_REVISION_PRUNED') {
+    return '该身份修订已超出保留窗口并被自动清理，请选择仍在保留期内的修订。';
+  }
+  if (code === 'IDENTITY_REVISION_NOT_RESOLVABLE') {
+    return '该修订尚未完成或缺少历史成员快照，无法解析。';
+  }
+  if (status === 404) {
+    return '该身份尚未进入该修订的身份图。';
+  }
+  return fallback;
 }
 
 export function memberKindLabel(kind: string): string {

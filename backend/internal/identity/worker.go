@@ -20,6 +20,8 @@ type Observer interface {
 	FoldCompleted(scope Scope, edges, persons, members int64)
 	FoldFailed(scope Scope, code string)
 	FoldDuration(scope Scope, duration time.Duration)
+	FoldPruned(scope Scope, deleted int64)
+	FoldPruneFailed(scope Scope)
 }
 
 // NoopObserver discards every report.
@@ -34,25 +36,31 @@ func (NoopObserver) FoldUnchanged(Scope)                      {}
 func (NoopObserver) FoldCompleted(Scope, int64, int64, int64) {}
 func (NoopObserver) FoldFailed(Scope, string)                 {}
 func (NoopObserver) FoldDuration(Scope, time.Duration)        {}
+func (NoopObserver) FoldPruned(Scope, int64)                  {}
+func (NoopObserver) FoldPruneFailed(Scope)                    {}
 
 // Worker folds identity graphs. One worker instance claims scopes through the
 // store lease, so replicas partition work without coordinating in memory.
 type Worker struct {
-	store      Store
-	facts      LinkFacts
-	tombstones Tombstones
-	observer   Observer
-	worker     string
-	scanLimit  int
-	lease      time.Duration
-	interval   time.Duration
+	store             Store
+	facts             LinkFacts
+	tombstones        Tombstones
+	observer          Observer
+	worker            string
+	scanLimit         int
+	lease             time.Duration
+	interval          time.Duration
+	retentionWindow   time.Duration
+	retentionMinCount int
 }
 
 type WorkerOptions struct {
-	Worker    string
-	ScanLimit int
-	Lease     time.Duration
-	Interval  time.Duration
+	Worker            string
+	ScanLimit         int
+	Lease             time.Duration
+	Interval          time.Duration
+	RetentionWindow   time.Duration
+	RetentionMinCount int
 }
 
 func NewWorker(store Store, facts LinkFacts, tombstones Tombstones, observer Observer, options WorkerOptions) *Worker {
@@ -68,18 +76,26 @@ func NewWorker(store Store, facts LinkFacts, tombstones Tombstones, observer Obs
 	if options.Interval <= 0 {
 		options.Interval = DefaultPollInterval
 	}
+	if options.RetentionWindow <= 0 {
+		options.RetentionWindow = DefaultRetentionWindow
+	}
+	if options.RetentionMinCount <= 0 {
+		options.RetentionMinCount = DefaultRetentionMinCount
+	}
 	if observer == nil {
 		observer = NoopObserver{}
 	}
 	return &Worker{
-		store:      store,
-		facts:      facts,
-		tombstones: tombstones,
-		observer:   observer,
-		worker:     options.Worker,
-		scanLimit:  options.ScanLimit,
-		lease:      options.Lease,
-		interval:   options.Interval,
+		store:             store,
+		facts:             facts,
+		tombstones:        tombstones,
+		observer:          observer,
+		worker:            options.Worker,
+		scanLimit:         options.ScanLimit,
+		lease:             options.Lease,
+		interval:          options.Interval,
+		retentionWindow:   options.RetentionWindow,
+		retentionMinCount: options.RetentionMinCount,
 	}
 }
 
@@ -133,6 +149,7 @@ func (w *Worker) foldScope(ctx context.Context, scope Scope) {
 	if len(links) == 0 {
 		w.observer.FoldUnchanged(scope)
 		w.release(claim)
+		w.pruneScope(ctx, scope)
 		return
 	}
 	uids := make([]string, 0, len(links))
@@ -168,6 +185,7 @@ func (w *Worker) foldScope(ctx context.Context, scope Scope) {
 	if !outcome.Changed {
 		w.observer.FoldUnchanged(scope)
 		w.release(claim)
+		w.pruneScope(ctx, scope)
 		return
 	}
 	if outcome.Watermark.Before(claim.Watermark) {
@@ -178,6 +196,18 @@ func (w *Worker) foldScope(ctx context.Context, scope Scope) {
 		return
 	}
 	w.observer.FoldCompleted(scope, outcome.EdgeCount, outcome.ActivePersonCount, outcome.MemberCount)
+	w.pruneScope(ctx, scope)
+}
+
+func (w *Worker) pruneScope(ctx context.Context, scope Scope) {
+	deleted, err := w.store.PruneRevisions(ctx, scope, time.Now().UTC(), w.retentionWindow, w.retentionMinCount)
+	if err != nil {
+		w.observer.FoldPruneFailed(scope)
+		return
+	}
+	if deleted > 0 {
+		w.observer.FoldPruned(scope, deleted)
+	}
 }
 
 func (w *Worker) release(claim *FoldClaim) {

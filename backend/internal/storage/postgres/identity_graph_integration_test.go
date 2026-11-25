@@ -108,15 +108,23 @@ func TestIdentityFoldBuildsMergesAndServesRevisions(t *testing.T) {
 		t.Fatalf("revision detail wrong: %+v %v", detail, e)
 	}
 
-	// Resolve against the latest completed revision follows the redirect and
-	// returns the merged membership.
+	// Resolve against the latest completed revision returns the merged membership.
 	resolution, e := f.s.ResolveMember(ctx, f.owner, f.project, "development", 2, identity.MemberUID, "u2")
 	if e != nil || resolution.ResolvedPersonID != survivor || len(resolution.Members) != 4 {
 		t.Fatalf("resolution wrong: %+v %v", resolution, e)
 	}
-	// Historical revision pins fail closed until member snapshots exist.
-	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 1, identity.MemberUID, "u2"); e == nil {
-		t.Fatal("old revision must not resolve")
+	// Historical revision pins resolve from revision 1's exact pre-merge snapshot:
+	// u1 and u2 belonged to two distinct 2-member persons before the rev 2 merge.
+	histU1, e := f.s.ResolveMember(ctx, f.owner, f.project, "development", 1, identity.MemberUID, "u1")
+	if e != nil || histU1.Revision != 1 || len(histU1.Members) != 2 {
+		t.Fatalf("historical u1 resolution wrong: %+v %v", histU1, e)
+	}
+	histU2, e := f.s.ResolveMember(ctx, f.owner, f.project, "development", 1, identity.MemberUID, "u2")
+	if e != nil || histU2.Revision != 1 || len(histU2.Members) != 2 || histU2.ResolvedPersonID == histU1.ResolvedPersonID {
+		t.Fatalf("historical u2 resolution wrong: %+v vs %+v (%v)", histU2, histU1, e)
+	}
+	if !detail.SnapshotAvailable {
+		t.Fatalf("completed revision must report snapshot_available=true: %+v", detail)
 	}
 
 	// The watermark only moves with a committed revision.
@@ -320,9 +328,89 @@ func TestIdentityErasureRetiresGraphAndPreventsResurrection(t *testing.T) {
 	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_person_members WHERE project_id=$1 AND member_value='u1'`, f.project).Scan(&resurrected); e != nil || resurrected != 0 {
 		t.Fatalf("erased identity resurrected into the graph: %d %v", resurrected, e)
 	}
+	// Historical revision snapshots must also be purged of the erased identity.
+	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 1, identity.MemberUID, "u1"); e == nil {
+		t.Fatal("erased identity must not resolve from historical revision 1 snapshot")
+	}
+	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 2, identity.MemberUID, "u1"); e == nil {
+		t.Fatal("erased identity must not resolve from historical revision 2 snapshot")
+	}
+	// Untouched pre-merge person in rev 1 (u2) stays intact.
+	if res, e := f.s.ResolveMember(ctx, f.owner, f.project, "development", 1, identity.MemberUID, "u2"); e != nil || len(res.Members) != 2 {
+		t.Fatalf("unrelated pre-merge person in rev 1 must survive erasure of u1: %+v %v", res, e)
+	}
 	var regrouped int
 	if e = f.s.Pool.QueryRow(ctx, `SELECT count(*) FROM identity_person_members WHERE project_id=$1 AND member_value='u2'`, f.project).Scan(&regrouped); e != nil || regrouped != 1 {
 		t.Fatalf("survivor must regroup under a fresh person: %d %v", regrouped, e)
+	}
+}
+
+func TestIdentityRevisionPruningHonorsMaxOfWindowAndCount(t *testing.T) {
+	f := identityDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	for i := 1; i <= 5; i++ {
+		f.foldOnce(t, []identity.LinkScan{
+			linkScan(fmt.Sprintf("u%d", i), fmt.Sprintf("11111111-1111-4111-8111-1111111111%02d", i), now.Add(time.Duration(i)*time.Minute)),
+		})
+	}
+	// Backdate revisions 1..3 beyond 90 days while keeping 4..5 recent.
+	if _, e := f.s.Pool.Exec(ctx, `UPDATE identity_revisions
+	 SET built_at = now() - interval '120 days', created_at = now() - interval '120 days'
+	 WHERE project_id=$1 AND environment='development' AND revision <= 3`, f.project); e != nil {
+		t.Fatal(e)
+	}
+
+	// Retention minCount=5 keeps everything even though rev 1..3 are > 90 days old.
+	if deleted, e := f.s.PruneRevisions(ctx, f.scope, time.Now().UTC(), 90*24*time.Hour, 5); e != nil || deleted != 0 {
+		t.Fatalf("minCount must protect old revisions: deleted=%d err=%v", deleted, e)
+	}
+	// Retention window=365d keeps everything even though minCount=2.
+	if deleted, e := f.s.PruneRevisions(ctx, f.scope, time.Now().UTC(), 365*24*time.Hour, 2); e != nil || deleted != 0 {
+		t.Fatalf("window must protect revisions within retention age: deleted=%d err=%v", deleted, e)
+	}
+	// With window=90d and minCount=2, rev 1..3 are both outside the newest 2
+	// and older than 90d, so exactly 3 revisions are pruned.
+	deleted, e := f.s.PruneRevisions(ctx, f.scope, time.Now().UTC(), 90*24*time.Hour, 2)
+	if e != nil || deleted != 3 {
+		t.Fatalf("expected 3 pruned revisions, got %d err=%v", deleted, e)
+	}
+	// Cascade must remove snapshot rows for pruned revisions while keeping 4..5.
+	var remainingSnapshots int
+	if e = f.s.Pool.QueryRow(ctx, `SELECT count(DISTINCT revision) FROM identity_revision_members
+	 WHERE project_id=$1 AND environment='development'`, f.project).Scan(&remainingSnapshots); e != nil || remainingSnapshots != 2 {
+		t.Fatalf("expected 2 snapshotted revisions remaining, got %d err=%v", remainingSnapshots, e)
+	}
+	// Pruned revision lookups fail closed with IDENTITY_REVISION_PRUNED (409),
+	// distinct from never-existing revisions (IDENTITY_REVISION_NOT_FOUND).
+	if _, e = f.s.GetRevision(ctx, f.owner, f.project, "development", 2); e == nil || e.Error()[:len("IDENTITY_REVISION_PRUNED")] != "IDENTITY_REVISION_PRUNED" {
+		t.Fatalf("pruned GetRevision error wrong: %v", e)
+	}
+	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 2, identity.MemberUID, "u2"); e == nil || e.Error()[:len("IDENTITY_REVISION_PRUNED")] != "IDENTITY_REVISION_PRUNED" {
+		t.Fatalf("pruned ResolveMember error wrong: %v", e)
+	}
+	trend := queryRequest(t, "trend")
+	trend.Subject = analysis.SubjectResolvedPerson
+	trend.Metrics = []analysis.Metric{{Op: analysis.OpUnique}}
+	prunedRev := int64(2)
+	trend.IdentityRevision = &prunedRev
+	if _, e = f.s.EnqueueQuery(ctx, f.viewer, f.project, trend); e == nil || e.Error()[:len("IDENTITY_REVISION_PRUNED")] != "IDENTITY_REVISION_PRUNED" {
+		t.Fatalf("pruned EnqueueQuery error wrong: %v", e)
+	}
+	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 99, identity.MemberUID, "u2"); e == nil || e.Error()[:len("IDENTITY_REVISION_NOT_FOUND")] != "IDENTITY_REVISION_NOT_FOUND" {
+		t.Fatalf("unknown revision error wrong: %v", e)
+	}
+	// Surviving historical revision 4 still resolves cleanly.
+	if res, e := f.s.ResolveMember(ctx, f.owner, f.project, "development", 4, identity.MemberUID, "u4"); e != nil || len(res.Members) != 2 {
+		t.Fatalf("surviving revision 4 must resolve: %+v %v", res, e)
+	}
+	// Unsnapshotted legacy revision fails closed with IDENTITY_REVISION_NOT_RESOLVABLE.
+	if _, e = f.s.Pool.Exec(ctx, `UPDATE identity_revisions SET snapshot_available=false
+	 WHERE project_id=$1 AND environment='development' AND revision=4`, f.project); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.s.ResolveMember(ctx, f.owner, f.project, "development", 4, identity.MemberUID, "u4"); e == nil || e.Error()[:len("IDENTITY_REVISION_NOT_RESOLVABLE")] != "IDENTITY_REVISION_NOT_RESOLVABLE" {
+		t.Fatalf("unsnapshotted revision error wrong: %v", e)
 	}
 }
 
@@ -383,12 +471,35 @@ func TestIdentityQueryExpansionMaterialization(t *testing.T) {
 		t.Fatalf("pinned expansion wrong: %+v", stored.IdentityExpansion)
 	}
 
-	// Unknown and stale revision pins fail closed at admission.
-	stale := trend
-	revision := int64(1)
-	stale.IdentityRevision = &revision
-	if _, e = f.s.EnqueueQuery(ctx, f.viewer, f.project, stale); e == nil {
-		t.Fatal("stale revision pin must fail closed")
+	// Historical revision pins materialize revision 1's pre-merge graph (2 persons
+	// of 2 members each), while unknown revisions still fail closed.
+	historicalTrend := trend
+	rev1 := int64(1)
+	historicalTrend.IdentityRevision = &rev1
+	histJob, e := f.s.EnqueueQuery(ctx, f.viewer, f.project, historicalTrend)
+	if e != nil {
+		t.Fatalf("historical revision trend enqueue failed: %v", e)
+	}
+	if e = f.s.Pool.QueryRow(ctx, `SELECT request FROM analysis_query_jobs WHERE id=$1`, histJob.ID).Scan(&raw); e != nil {
+		t.Fatal(e)
+	}
+	stored = analysis.Request{}
+	if e = json.Unmarshal([]byte(raw), &stored); e != nil {
+		t.Fatal(e)
+	}
+	if stored.IdentityExpansion == nil || stored.IdentityExpansion.Revision != 1 || len(stored.IdentityExpansion.Mapping) != 2 {
+		t.Fatalf("historical expansion wrong: %+v", stored.IdentityExpansion)
+	}
+	// Pinned retired person resolves to its pre-merge 2 members at rev 1, and
+	// follows the merge redirect to the 4 merged members at rev 2.
+	retiredPerson := first.NewPersons[1].ResolvedPersonID
+	rev1Members, e := f.s.ExpansionMembers(ctx, f.scope, 1, retiredPerson)
+	if e != nil || len(rev1Members) != 2 {
+		t.Fatalf("rev 1 expansion for pre-merge person wrong: %+v %v", rev1Members, e)
+	}
+	rev2Members, e := f.s.ExpansionMembers(ctx, f.scope, 2, retiredPerson)
+	if e != nil || len(rev2Members) != 4 {
+		t.Fatalf("rev 2 expansion for redirected person wrong: %+v %v", rev2Members, e)
 	}
 	missing := trend
 	unknown := int64(9)
