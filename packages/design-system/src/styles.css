@@ -1068,7 +1068,7 @@ p {
   gap: 16px;
   padding: 13px 16px;
   border: 1px solid var(--color-info-border);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--color-info-surface);
   color: #4a4267;
   font-size: 13px;
@@ -2759,19 +2759,18 @@ body {
 }
 .workspace-nav {
   position: sticky;
-  z-index: 20;
+  z-index: 30;
   top: 112px;
   align-self: start;
   width: 80px;
   height: calc(100vh - 130px);
   min-height: 520px;
   padding: 28px 16px;
-  overflow-y: auto;
+  overflow: visible;
   border: 0;
   border-radius: 40px;
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
-  scrollbar-width: none;
 }
 .workspace-nav nav {
   display: grid;
@@ -2844,6 +2843,7 @@ body {
   border-radius: 9px;
   color: #ffffff;
   background: #1d1b3a;
+  box-shadow: 0 8px 24px rgb(25 24 45 / 20%);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.2;
@@ -2947,19 +2947,49 @@ body {
 }
 .evia-panel {
   border-color: var(--color-border);
-  border-radius: 24px;
+  border-radius: 16px;
   background: var(--color-surface-subtle);
   box-shadow: none;
 }
 .data-surface {
-  padding: 0;
+  padding: 20px 22px;
   border: 1px solid var(--color-border);
-  border-radius: 24px;
+  border-radius: 16px;
   background: var(--color-surface);
   box-shadow: none;
 }
+.data-surface + .data-surface,
+.data-surface + .evia-panel,
+.evia-panel + .data-surface {
+  margin-top: 20px;
+}
+.section-stack > .data-surface + .data-surface,
+.section-stack > .data-surface + .evia-panel,
+.section-stack > .evia-panel + .data-surface {
+  margin-top: 0;
+}
+.data-surface:has(> .evia-table-region:first-child):not(
+    :has(> :not(.evia-table-region):not(.pagination-bar))
+  ):not(:has(> .evia-table-region + .evia-table-region)) {
+  padding: 0;
+}
+.data-surface .evia-table-region {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+.data-surface:has(> .evia-table-region:first-child):not(
+    :has(> :not(.evia-table-region):not(.pagination-bar))
+  ):not(:has(> .evia-table-region + .evia-table-region))
+  > .evia-table-region {
+  border: 0;
+  border-radius: 0;
+}
+.data-surface > .evia-table-region + .evia-table-region {
+  margin-top: 16px;
+}
 .evia-table-region {
-  border-radius: 18px 18px 0 0;
+  border-radius: 12px 12px 0 0;
 }
 .evia-table th {
   background: #f4f4f7;

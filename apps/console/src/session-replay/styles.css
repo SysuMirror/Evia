@@ -23,7 +23,15 @@
 .replay-access-panel .data-surface,
 .replay-records-panel .data-surface,
 .replay-details-panel .data-surface {
+  padding: 0;
   overflow: hidden;
+}
+
+.replay-session-panel .evia-table-region,
+.replay-access-panel .evia-table-region,
+.replay-records-panel .evia-table-region {
+  border: 0;
+  border-radius: 0;
 }
 
 .replay-player .data-surface {

@@ -93,6 +93,9 @@ export function QuotaPanel({ project, session }: Props) {
 
   return (
     <DataSurface label="采集配额管理">
+      <div className="diagnostics-section-head">
+        <h2>采集配额管理</h2>
+      </div>
       {quota.isError ? (
         <Alert
           tone="error"

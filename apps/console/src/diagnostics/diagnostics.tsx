@@ -117,6 +117,9 @@ export function DiagnosticsPage({ project, session }: PageProps) {
       </div>
 
       <DataSurface label="功能开关">
+        <div className="diagnostics-section-head">
+          <h2>功能开关</h2>
+        </div>
         {report ? (
           <dl className="diagnostics-features">
             <div>
@@ -154,8 +157,9 @@ export function DiagnosticsPage({ project, session }: PageProps) {
       </DataSurface>
 
       <DataSurface label="接入来源">
-        {report ? (
-          <>
+        <div className="diagnostics-section-head">
+          <h2>接入来源</h2>
+          {report ? (
             <div className="diagnostics-heading">
               <Badge tone={sectionStatusTone(report.sources.status)}>
                 {sectionStatusLabel(report.sources.status)}
@@ -165,42 +169,58 @@ export function DiagnosticsPage({ project, session }: PageProps) {
                 {report.sources.truncated ? '（达到单页上限，仅展示前 200 条）' : ''}
               </span>
             </div>
-            <DataTable
-              caption="来源状态分布"
-              columns={countColumns}
-              rows={report.sources.by_status}
-              rowKey={(row) => `status-${row.name}`}
-              minWidth={320}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="暂无来源。" />}
-            />
-            <DataTable
-              caption="来源环境分布"
-              columns={countColumns}
-              rows={report.sources.by_environment}
-              rowKey={(row) => `env-${row.name}`}
-              minWidth={320}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="暂无来源。" />}
-            />
-            <DataTable
-              caption="已停用来源"
-              columns={disabledColumns}
-              rows={report.sources.disabled_sources}
-              rowKey={(row) => row.id}
-              minWidth={560}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="没有已停用来源。" />}
-            />
-          </>
+          ) : null}
+        </div>
+        {report ? (
+          <div className="diagnostics-blocks">
+            <div className="diagnostics-split">
+              <div className="diagnostics-subblock">
+                <h3>按状态分布</h3>
+                <DataTable
+                  caption="来源状态分布"
+                  columns={countColumns}
+                  rows={report.sources.by_status}
+                  rowKey={(row) => `status-${row.name}`}
+                  minWidth={240}
+                  loading={diagnostics.isFetching}
+                  empty={<EmptyPanel description="暂无来源。" />}
+                />
+              </div>
+              <div className="diagnostics-subblock">
+                <h3>按环境分布</h3>
+                <DataTable
+                  caption="来源环境分布"
+                  columns={countColumns}
+                  rows={report.sources.by_environment}
+                  rowKey={(row) => `env-${row.name}`}
+                  minWidth={240}
+                  loading={diagnostics.isFetching}
+                  empty={<EmptyPanel description="暂无来源。" />}
+                />
+              </div>
+            </div>
+            <div className="diagnostics-subblock">
+              <h3>已停用来源</h3>
+              <DataTable
+                caption="已停用来源"
+                columns={disabledColumns}
+                rows={report.sources.disabled_sources}
+                rowKey={(row) => row.id}
+                minWidth={560}
+                loading={diagnostics.isFetching}
+                empty={<EmptyPanel description="没有已停用来源。" />}
+              />
+            </div>
+          </div>
         ) : (
           <EmptyPanel description="正在读取来源清单。" />
         )}
       </DataSurface>
 
       <DataSurface label="采集预算">
-        {report ? (
-          <>
+        <div className="diagnostics-section-head">
+          <h2>采集预算</h2>
+          {report ? (
             <div className="diagnostics-heading">
               <Badge tone={sectionStatusTone(report.budget.status)}>
                 {sectionStatusLabel(report.budget.status)}
@@ -209,16 +229,18 @@ export function DiagnosticsPage({ project, session }: PageProps) {
                 <span className="evia-field-hint">错误码：{report.budget.error_code}</span>
               ) : null}
             </div>
-            <DataTable
-              caption="各环境有效预算策略"
-              columns={policyColumns}
-              rows={report.budget.environments}
-              rowKey={(row) => row.environment}
-              minWidth={560}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="预算能力未启用。" />}
-            />
-          </>
+          ) : null}
+        </div>
+        {report ? (
+          <DataTable
+            caption="各环境有效预算策略"
+            columns={policyColumns}
+            rows={report.budget.environments}
+            rowKey={(row) => row.environment}
+            minWidth={560}
+            loading={diagnostics.isFetching}
+            empty={<EmptyPanel description="预算能力未启用。" />}
+          />
         ) : (
           <EmptyPanel description="正在读取预算策略。" />
         )}
@@ -227,8 +249,9 @@ export function DiagnosticsPage({ project, session }: PageProps) {
       <QuotaPanel project={project} session={session} />
 
       <DataSurface label="管道就绪探针">
-        {report ? (
-          <>
+        <div className="diagnostics-section-head">
+          <h2>管道就绪探针</h2>
+          {report ? (
             <div className="diagnostics-heading">
               <Badge tone={sectionStatusTone(report.pipeline.status)}>
                 {sectionStatusLabel(report.pipeline.status)}
@@ -237,24 +260,27 @@ export function DiagnosticsPage({ project, session }: PageProps) {
                 <span className="evia-field-hint">错误码：{report.pipeline.error_code}</span>
               ) : null}
             </div>
-            <DataTable
-              caption="最近管道就绪证据"
-              columns={proofColumns}
-              rows={report.pipeline.proofs}
-              rowKey={(row) => `${row.environment}-${row.release_id}-${row.revision}`}
-              minWidth={760}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="保留窗口内没有探针收据。" />}
-            />
-          </>
+          ) : null}
+        </div>
+        {report ? (
+          <DataTable
+            caption="最近管道就绪证据"
+            columns={proofColumns}
+            rows={report.pipeline.proofs}
+            rowKey={(row) => `${row.environment}-${row.release_id}-${row.revision}`}
+            minWidth={760}
+            loading={diagnostics.isFetching}
+            empty={<EmptyPanel description="保留窗口内没有探针收据。" />}
+          />
         ) : (
           <EmptyPanel description="正在读取管道探针。" />
         )}
       </DataSurface>
 
       <DataSurface label="接收拒绝统计（近 24 小时）">
-        {report ? (
-          <>
+        <div className="diagnostics-section-head">
+          <h2>接收拒绝统计（近 24 小时）</h2>
+          {report ? (
             <div className="diagnostics-heading">
               <Badge tone={sectionStatusTone(report.rejections.status)}>
                 {sectionStatusLabel(report.rejections.status)}
@@ -264,28 +290,38 @@ export function DiagnosticsPage({ project, session }: PageProps) {
                 {report.rejections.error_code ? `；错误码：${report.rejections.error_code}` : ''}
               </span>
             </div>
-            <DataTable
-              caption="拒绝原因汇总"
-              columns={countColumns}
-              rows={report.rejections.totals.map((item) => ({
-                name: item.reason,
-                count: item.count,
-              }))}
-              rowKey={(row) => `total-${row.name}`}
-              minWidth={320}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="近 24 小时没有来源可归属的拒绝记录。" />}
-            />
-            <DataTable
-              caption="按小时拒绝明细"
-              columns={windowColumns}
-              rows={report.rejections.windows}
-              rowKey={(row) => `${row.bucket_at}-${row.environment}`}
-              minWidth={720}
-              loading={diagnostics.isFetching}
-              empty={<EmptyPanel description="没有小时级拒绝明细。" />}
-            />
-          </>
+          ) : null}
+        </div>
+        {report ? (
+          <div className="diagnostics-blocks">
+            <div className="diagnostics-subblock">
+              <h3>拒绝原因汇总</h3>
+              <DataTable
+                caption="拒绝原因汇总"
+                columns={countColumns}
+                rows={report.rejections.totals.map((item) => ({
+                  name: item.reason,
+                  count: item.count,
+                }))}
+                rowKey={(row) => `total-${row.name}`}
+                minWidth={320}
+                loading={diagnostics.isFetching}
+                empty={<EmptyPanel description="近 24 小时没有来源可归属的拒绝记录。" />}
+              />
+            </div>
+            <div className="diagnostics-subblock">
+              <h3>按小时拒绝明细</h3>
+              <DataTable
+                caption="按小时拒绝明细"
+                columns={windowColumns}
+                rows={report.rejections.windows}
+                rowKey={(row) => `${row.bucket_at}-${row.environment}`}
+                minWidth={720}
+                loading={diagnostics.isFetching}
+                empty={<EmptyPanel description="没有小时级拒绝明细。" />}
+              />
+            </div>
+          </div>
         ) : (
           <EmptyPanel description="正在读取拒绝统计。" />
         )}
