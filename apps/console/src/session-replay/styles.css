@@ -155,8 +155,50 @@
 }
 
 .replay-controls input[type='range'] {
+  appearance: none;
   flex: 1;
   min-width: 140px;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.replay-controls input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #e1e4ee;
+}
+
+.replay-controls input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgb(20 22 36 / 18%);
+  transition: transform 120ms ease;
+}
+
+.replay-controls input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+
+.replay-controls input[type='range']::-moz-range-track {
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #e1e4ee;
+}
+
+.replay-controls input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgb(20 22 36 / 18%);
 }
 
 .replay-local-error {

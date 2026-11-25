@@ -1079,6 +1079,7 @@ p {
   outline: none;
 }
 .evia-select-popover {
+  position: fixed;
   z-index: 2000;
   display: flex;
   flex-direction: column;
@@ -1151,6 +1152,284 @@ p {
   flex: 0 0 auto;
   color: var(--color-accent);
 }
+.evia-datetime {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.evia-datetime:hover:not([data-disabled='true']):not([data-readonly='true']):not(
+    [data-open='true']
+  ):not([data-invalid='true']) {
+  border-color: #aeb3c2;
+  background: #ffffff;
+}
+.evia-datetime:has(.evia-datetime-native:focus-visible),
+.evia-datetime[data-open='true'] {
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+.evia-datetime[data-invalid='true'] {
+  border-color: var(--color-error);
+}
+.evia-datetime[data-invalid='true']:has(.evia-datetime-native:focus-visible),
+.evia-datetime[data-invalid='true'][data-open='true'] {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgb(180 35 53 / 12%);
+}
+.evia-datetime[data-disabled='true'] {
+  background: var(--color-surface-inset);
+  color: var(--color-muted);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+.evia-datetime[data-readonly='true']:not([data-disabled='true']) {
+  border-color: var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+.evia-datetime-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.evia-datetime-placeholder {
+  color: #8b8594;
+}
+.evia-datetime-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  transition: color 120ms;
+}
+.evia-datetime:hover:not([data-disabled='true']) .evia-datetime-icon,
+.evia-datetime[data-open='true'] .evia-datetime-icon {
+  color: var(--color-accent);
+}
+.evia-datetime-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: inherit;
+  outline: none;
+}
+.evia-datetime-popover {
+  position: fixed;
+  z-index: 2000;
+  border: 1px solid #dfe2ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow:
+    0 14px 36px rgb(20 22 36 / 12%),
+    0 2px 6px rgb(20 22 36 / 4%);
+  overflow: hidden;
+  animation: evia-select-pop 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.evia-datetime-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 106px;
+}
+.evia-datetime-calendar {
+  padding: 12px 12px 10px;
+}
+.evia-datetime-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.evia-datetime-month {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.evia-datetime-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 100ms,
+    color 100ms;
+}
+.evia-datetime-nav:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+.evia-datetime-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--color-muted);
+}
+.evia-datetime-weekdays span {
+  line-height: 24px;
+}
+.evia-datetime-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.evia-datetime-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 31px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 100ms,
+    color 100ms,
+    border-color 100ms;
+}
+.evia-datetime-day[data-outside='true'] {
+  color: #b4b5c2;
+}
+.evia-datetime-day[data-today='true']:not([aria-selected='true']) {
+  border-color: var(--color-border-strong);
+  font-weight: 600;
+}
+.evia-datetime-day:hover:enabled:not([aria-selected='true']) {
+  background: var(--color-surface-hover);
+}
+.evia-datetime-day[aria-selected='true'] {
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+.evia-datetime-day:disabled {
+  color: #c9cad4;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.evia-datetime-time {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-left: 1px solid var(--color-border);
+  background: #fafafc;
+}
+.evia-datetime-time-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.evia-datetime-time-col + .evia-datetime-time-col {
+  border-left: 1px solid var(--color-border);
+}
+.evia-datetime-time-label {
+  padding: 9px 0 6px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+.evia-datetime-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 224px;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.evia-datetime-time-item {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 100ms,
+    color 100ms;
+}
+.evia-datetime-time-item:hover:not([aria-selected='true']) {
+  background: var(--color-surface-hover);
+}
+.evia-datetime-time-item[aria-selected='true'] {
+  background: var(--color-surface-selected);
+  color: var(--color-accent-active);
+  font-weight: 650;
+}
+.evia-datetime-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border);
+  background: #ffffff;
+}
+.evia-datetime-footer-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.evia-datetime-link {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.evia-datetime-link:hover {
+  background: var(--color-surface-selected);
+}
+.evia-datetime-done {
+  padding: 5px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background-color 120ms;
+}
+.evia-datetime-done:hover {
+  background: var(--color-accent-hover);
+}
 .evia-field-hint,
 .evia-field-error {
   font-size: 12px;
@@ -1172,28 +1451,61 @@ p {
 .evia-checkbox {
   display: inline-flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 9px;
   font-size: 14px;
   line-height: 1.6;
   cursor: pointer;
 }
 .evia-checkbox input {
+  appearance: none;
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin: 3px 0 0;
-  accent-color: var(--color-accent);
+  width: 17px;
+  height: 17px;
+  margin: 2.5px 0 0;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 5px;
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.evia-checkbox input:hover:enabled:not(:checked) {
+  border-color: var(--color-accent);
+}
+.evia-checkbox input:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 6.2 4.9 8.6 9.6 3.5' stroke='%23ffffff' stroke-width='1.85' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 11px 11px;
+}
+.evia-checkbox input:checked:hover:enabled {
+  border-color: var(--color-accent-hover);
+  background-color: var(--color-accent-hover);
+}
+.evia-checkbox input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 .evia-checkbox:has(input:disabled) {
   color: var(--color-muted);
   cursor: not-allowed;
 }
 .evia-checkbox input:disabled {
+  border-color: var(--color-border);
+  background-color: var(--color-surface-inset);
   cursor: not-allowed;
 }
+.evia-checkbox input:disabled:checked {
+  border-color: #9dc7c2;
+  background-color: #9dc7c2;
+}
 .evia-checkbox input[aria-invalid='true'] {
-  accent-color: var(--color-error);
-  box-shadow: 0 0 0 1px var(--color-error);
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgb(180 35 53 / 12%);
 }
 .evia-alert {
   display: flex;
@@ -1752,9 +2064,26 @@ p {
   overflow-wrap: anywhere;
 }
 .funnel-step progress {
+  appearance: none;
   width: 100%;
-  height: 12px;
-  accent-color: var(--color-accent);
+  height: 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-surface-inset);
+  overflow: hidden;
+}
+.funnel-step progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--color-surface-inset);
+}
+.funnel-step progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width 200ms ease;
+}
+.funnel-step progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--color-accent);
 }
 .chart-surface {
   min-width: 0;

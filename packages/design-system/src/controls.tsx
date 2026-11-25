@@ -18,6 +18,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { DateTimeInput } from './datetime-input';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
@@ -217,6 +218,9 @@ function useFieldProps<
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className = '', ...props }, ref) {
     const field = useFieldProps(props);
+    if (props.type === 'datetime-local') {
+      return <DateTimeInput {...props} {...field} className={className} ref={ref} />;
+    }
     return <input {...props} {...field} className={`evia-input ${className}`} ref={ref} />;
   },
 );
