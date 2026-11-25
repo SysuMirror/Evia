@@ -20,14 +20,33 @@ test('unauthenticated landing and split login adapt cleanly on desktop and mobil
     'src',
     '/media/hero-horizon.mp4',
   );
+  await expect(page.locator('.evia-brand-img--white')).toHaveAttribute(
+    'src',
+    '/evia-icon-white.png',
+  );
+  await expect(page.locator('.evia-brand-img--white')).not.toHaveClass(/is-hidden/);
+  await expect(page.locator('.evia-footer-brand img')).toHaveAttribute(
+    'src',
+    '/evia-icon-white.png',
+  );
   const heroCta = page
     .locator('.evia-landing-hero')
     .getByRole('link', { name: '登录控制台', exact: true });
   await expect(heroCta).toBeVisible();
   await page.getByRole('tab', { name: '强类型契约与多环境发布' }).click();
   await expect(page.getByRole('tabpanel')).toContainText("evia.emit('checkout_completed'");
+  await page.locator('#architecture').evaluate((el) => {
+    el.scrollIntoView({ block: 'start', behavior: 'instant' });
+  });
+  await expect(page.locator('.evia-landing-header')).toHaveClass(/evia-landing-header--light/);
+  await expect(page.locator('#architecture .evia-pillar').first()).toHaveAttribute(
+    'data-revealed',
+    'true',
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect(page.locator('.evia-landing-header')).not.toHaveClass(/evia-landing-header--solid/);
   await heroCta.click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
