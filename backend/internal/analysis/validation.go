@@ -94,7 +94,19 @@ func Validate(r *Request) error {
 	if _, e := time.LoadLocation(r.Timezone); e != nil {
 		return Invalid("INVALID_TIMEZONE", "时区无效", "/timezone")
 	}
-	return ValidateConfiguration(r)
+	if e := ValidateConfiguration(r); e != nil {
+		return e
+	}
+	if r.Kind == QueryKindJourney && r.Cursor != "" {
+		payload, e := ParseJourneyCursor(r.Cursor)
+		if e != nil {
+			return e
+		}
+		if payload.EventTimeNs < r.TimeRange.From.UTC().UnixNano() || payload.EventTimeNs >= r.TimeRange.To.UTC().UnixNano() {
+			return Invalid("INVALID_QUERY_CURSOR", "行为链续拉游标超出查询时间范围", "/cursor")
+		}
+	}
+	return nil
 }
 
 // ValidateConfiguration validates structural policy and normalizes defaults and
@@ -117,7 +129,12 @@ func ValidateConfiguration(r *Request) error {
 		return Invalid("INVALID_LIMIT", "结果大小必须在 1 到 500 之间", "/limit")
 	}
 	if r.Cursor != "" {
-		return Invalid("UNSUPPORTED_QUERY_CURSOR", "此版本仅支持有界快照，请缩小时间范围", "/cursor")
+		if r.Kind != QueryKindJourney {
+			return Invalid("UNSUPPORTED_QUERY_CURSOR", "此版本仅支持有界快照，请缩小时间范围", "/cursor")
+		}
+		if _, e := ParseJourneyCursor(r.Cursor); e != nil {
+			return e
+		}
 	}
 	if r.Kind == QueryKindHeatmap {
 		if e := validateHeatmap(r); e != nil {

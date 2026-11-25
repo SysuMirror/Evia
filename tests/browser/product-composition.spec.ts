@@ -309,6 +309,151 @@ test('heatmap supports top element ranking and multi-viewport aggregation in con
   await expect(page.getByRole('img', { name: /视口点击分布/ })).toHaveCount(0);
 });
 
+test('journey console paginates snapshot and continues engine timeline seamlessly', async ({
+  page,
+}) => {
+  const postedBodies: Record<string, unknown>[] = [];
+  const job1 = '99999999-1111-4111-8111-111111111111';
+  const job2 = '99999999-2222-4222-8222-222222222222';
+  const columns = [
+    { key: 'event_key', type: 'string' },
+    { key: 'event_time', type: 'datetime' },
+    { key: 'uid', type: 'string' },
+    { key: 'anonymous_id', type: 'string' },
+    { key: 'context', type: 'object' },
+    { key: 'properties', type: 'object' },
+  ];
+  const metadata = {
+    data_watermark: '2026-11-22T11:58:00.000Z',
+    accuracy: 'exact',
+    sample_rate: 1,
+    coverage: {
+      time_range: { from: '2026-11-21T12:00:00.000Z', to: now },
+      state: 'provisional',
+      known_gaps: ['pipeline_completeness_not_established'],
+    },
+    cache_hit: false,
+    generated_at: now,
+  };
+  await page.route(`**/api/v1/projects/${projectID}/event-definitions**`, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } }),
+  );
+  await page.route(`**/api/v1/projects/${projectID}/queries`, async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      postedBodies.push(body);
+      const id = postedBodies.length === 1 ? job1 : job2;
+      return route.fulfill({
+        status: 202,
+        json: {
+          query_id: id,
+          state: 'succeeded',
+          created_at: now,
+          finished_at: now,
+          result_url: `/api/v1/projects/${projectID}/queries/${id}/result`,
+        },
+      });
+    }
+    return route.fallback();
+  });
+  await page.route(`**/api/v1/projects/${projectID}/queries/${job1}/result**`, (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('cursor') === 'snap-p2') {
+      return route.fulfill({
+        json: {
+          query_id: job1,
+          columns,
+          rows: [
+            {
+              event_key: 'step_two',
+              event_time: '2026-11-22T10:02:00.000Z',
+              uid: 'user-timeline',
+              anonymous_id: '',
+              context: {},
+              properties: {},
+            },
+          ],
+          next_cursor: null,
+          timeline_cursor: 'signed-jt-seg2',
+          metadata,
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        query_id: job1,
+        columns,
+        rows: [
+          {
+            event_key: 'step_one',
+            event_time: '2026-11-22T10:01:00.000Z',
+            uid: 'user-timeline',
+            anonymous_id: '',
+            context: {},
+            properties: {},
+          },
+        ],
+        next_cursor: 'snap-p2',
+        timeline_cursor: null,
+        metadata,
+      },
+    });
+  });
+  await page.route(`**/api/v1/projects/${projectID}/queries/${job2}/result**`, (route) =>
+    route.fulfill({
+      json: {
+        query_id: job2,
+        columns,
+        rows: [
+          {
+            event_key: 'step_three',
+            event_time: '2026-11-22T10:03:00.000Z',
+            uid: 'user-timeline',
+            anonymous_id: '',
+            context: {},
+            properties: {},
+          },
+        ],
+        next_cursor: null,
+        timeline_cursor: null,
+        metadata,
+      },
+    }),
+  );
+
+  await page.goto(`/projects/${projectID}/analysis?environment=development`);
+  await page.getByRole('tab', { name: '用户旅程' }).click();
+  await page.locator('[data-query-control="identity"]').fill('user-timeline');
+  await page.getByRole('button', { name: '运行查询', exact: true }).click();
+
+  await expect(page.getByText('step_one')).toBeVisible();
+  await expect(page.getByRole('button', { name: '加载下一页' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '续拉后续时间线' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '加载下一页' }).click();
+  await expect(page.getByText('step_two')).toBeVisible();
+  await expect(page.getByRole('button', { name: '加载下一页' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '续拉后续时间线' })).toBeVisible();
+
+  await page.getByRole('button', { name: '续拉后续时间线' }).click();
+  await expect(page.getByText('step_three')).toBeVisible();
+  await expect(page.getByText('step_one')).toBeVisible();
+  await expect(page.getByText('step_two')).toBeVisible();
+  await expect(page.getByText(/已续拉 2 段，共 3 行/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '续拉后续时间线' })).toHaveCount(0);
+
+  expect(postedBodies).toHaveLength(2);
+  expect(postedBodies[0]).toMatchObject({
+    kind: 'journey',
+    identity_filter: { uid: 'user-timeline' },
+  });
+  expect(postedBodies[1]).toMatchObject({
+    kind: 'journey',
+    identity_filter: { uid: 'user-timeline' },
+    cursor: 'signed-jt-seg2',
+  });
+});
+
 test('replay failure is exclusive and transport details stay disclosed', async ({ page }) => {
   await page.goto(`/projects/${projectID}/session-replay?environment=development`);
   await page.locator('button.replay-stream-link').click();

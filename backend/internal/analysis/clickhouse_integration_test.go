@@ -1331,3 +1331,106 @@ func TestClickHousePathCollapseRepeats(t *testing.T) {
 		t.Fatalf("folded path mismatch: %v", foldedSteps)
 	}
 }
+
+func TestClickHouseJourneyEngineTimelineContinuation(t *testing.T) {
+	client := clickHouseDatabase(t)
+	sameTime := time.Date(2026, 11, 7, 10, 10, 0, 0, time.UTC)
+	sameStamp := sameTime.Format("2006-01-02 15:04:05.000")
+	makeEvent := func(id, key, uid, source, session, tab string, seq any, offsetSec int, fixedStamp string) map[string]any {
+		row := fact(id, key, uid, "", source, offsetSec, map[string]any{"step": id})
+		if fixedStamp != "" {
+			row["event_time"] = fixedStamp
+			row["occurred_at"] = fixedStamp
+		}
+		if session == "" {
+			row["session_id"] = nil
+		} else {
+			row["session_id"] = session
+		}
+		if tab == "" {
+			row["tab_id"] = nil
+		} else {
+			row["tab_id"] = tab
+		}
+		row["sequence"] = seq
+		return row
+	}
+	seedRows(t, client, []map[string]any{
+		makeEvent("e1", "view", "user-timeline", "src-a", "s1", "t1", 1, 1, ""),
+		// Five events at the exact same millisecond differentiated only by tie-breakers.
+		makeEvent("e2", "click", "user-timeline", "src-a", "", "", nil, 10, sameStamp),
+		makeEvent("e3", "click", "user-timeline", "src-a", "s1", "t1", 1, 10, sameStamp),
+		makeEvent("e4", "click", "user-timeline", "src-a", "s1", "t1", 2, 10, sameStamp),
+		makeEvent("e5", "click", "user-timeline", "src-a", "s1", "t2", 1, 10, sameStamp),
+		makeEvent("e6", "click", "user-timeline", "src-b", "s1", "t2", 1, 10, sameStamp),
+		makeEvent("e7", "purchase", "user-timeline", "src-a", "s2", "t1", 1, 20, ""),
+		// Unrelated user that must never leak into the timeline.
+		makeEvent("other-1", "view", "user-other", "src-a", "s9", "t9", 1, 5, ""),
+	})
+
+	uid := "user-timeline"
+	base := Request{
+		Kind:           QueryKindJourney,
+		Environment:    "development",
+		Subject:        SubjectUID,
+		IdentityFilter: &IdentityFilter{UID: &uid},
+		TimeRange:      TimeRange{From: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)},
+		Timezone:       "UTC",
+		Limit:          50,
+	}
+	full := execute(t, client, base)
+	if len(full.Rows) != 7 || full.TimelineCursor != nil {
+		t.Fatalf("full journey wants 7 rows and nil timeline_cursor, got rows=%d cursor=%v", len(full.Rows), full.TimelineCursor)
+	}
+	var expectedIDs []string
+	for _, row := range full.Rows {
+		expectedIDs = append(expectedIDs, stringValue(row["event_id"]))
+		if _, leaked := row["_cursor_tab_id"]; leaked {
+			t.Fatal("_cursor_tab_id leaked into row")
+		}
+		if _, leaked := row["_cursor_sequence"]; leaked {
+			t.Fatal("_cursor_sequence leaked into row")
+		}
+	}
+
+	// Walk with limit=2 across equal-timestamp boundaries using timeline_cursor.
+	var pagedIDs []string
+	var savedCursor string
+	cursorToken := ""
+	pages := 0
+	for {
+		pages++
+		if pages > 10 {
+			t.Fatal("timeline continuation did not terminate")
+		}
+		req := base
+		req.Limit = 2
+		req.Cursor = cursorToken
+		res := execute(t, client, req)
+		for _, row := range res.Rows {
+			pagedIDs = append(pagedIDs, stringValue(row["event_id"]))
+		}
+		if res.TimelineCursor == nil {
+			break
+		}
+		if savedCursor == "" {
+			savedCursor = *res.TimelineCursor
+		}
+		cursorToken = *res.TimelineCursor
+	}
+	if pages != 4 {
+		t.Fatalf("expected 4 pages (2+2+2+1), got %d", pages)
+	}
+	if strings.Join(pagedIDs, ",") != strings.Join(expectedIDs, ",") {
+		t.Fatalf("paged timeline diverged from full timeline:\n got: %v\nwant: %v", pagedIDs, expectedIDs)
+	}
+
+	// Reusing the cursor with a different identity must fail closed.
+	otherUID := "user-other"
+	tampered := base
+	tampered.IdentityFilter = &IdentityFilter{UID: &otherUID}
+	tampered.Cursor = savedCursor
+	if _, err := client.Execute(context.Background(), Scope{ProjectID: "project-one", Environment: "development"}, tampered); err == nil {
+		t.Fatal("expected mismatched identity cursor to fail")
+	}
+}

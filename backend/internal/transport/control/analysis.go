@@ -1,6 +1,7 @@
 package control
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -72,16 +73,34 @@ func (a *AnalysisAPI) createKind(w http.ResponseWriter, r *http.Request, s autho
 	if e = a.API.Boundary.Decode(w, r, "QueryRequest", &raw); e != nil {
 		return e
 	}
-	if journey {
-		var kind struct {
-			Kind string `json:"kind"`
+	var meta struct {
+		Kind   string `json:"kind"`
+		Cursor string `json:"cursor"`
+	}
+	if e = json.Unmarshal(raw, &meta); e != nil {
+		return e
+	}
+	if journey && meta.Kind != analysis.QueryKindJourney {
+		return analysis.Invalid("INVALID_QUERY_KIND", "轨迹接口必须使用 journey 查询", "/kind")
+	}
+	if meta.Kind == analysis.QueryKindJourney && meta.Cursor != "" && a.API.Cursor != nil {
+		timelineScope := "journey_timeline:" + s.ID + ":" + project
+		unwrapped, err := a.API.Cursor.Decode(timelineScope, meta.Cursor)
+		if err != nil {
+			return analysis.Invalid("INVALID_QUERY_CURSOR", "行为链续拉游标无效或已过期", "/cursor")
 		}
-		if e = json.Unmarshal(raw, &kind); e != nil {
-			return e
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		var body map[string]any
+		if err = decoder.Decode(&body); err != nil {
+			return err
 		}
-		if kind.Kind != analysis.QueryKindJourney {
-			return analysis.Invalid("INVALID_QUERY_KIND", "轨迹接口必须使用 journey 查询", "/kind")
+		body["cursor"] = unwrapped
+		rewritten, err := json.Marshal(body)
+		if err != nil {
+			return err
 		}
+		raw = rewritten
 	}
 	job, e := a.Service.Create(r.Context(), s.ID, project, raw)
 	if e != nil {
@@ -127,14 +146,24 @@ func (a *AnalysisAPI) result(w http.ResponseWriter, r *http.Request, s authorize
 	if e != nil {
 		return e
 	}
+	timelineScope := "journey_timeline:" + s.ID + ":" + project
 	if !paginate {
+		result.TimelineCursor = a.wrapTimelineCursor(timelineScope, result.TimelineCursor)
 		return a.API.Boundary.JSON(w, http.StatusOK, "QueryResult", result)
 	}
-	page, e := a.sliceQueryResult(result, position, scope)
+	page, e := a.sliceQueryResult(result, position, scope, timelineScope)
 	if e != nil {
 		return e
 	}
 	return a.API.Boundary.JSON(w, http.StatusOK, "QueryResult", page)
+}
+
+func (a *AnalysisAPI) wrapTimelineCursor(scope string, raw *string) *string {
+	if raw == nil || *raw == "" || a.API.Cursor == nil {
+		return raw
+	}
+	signed := a.API.Cursor.Encode(scope, *raw)
+	return &signed
 }
 
 // queryResultPosition is the signed, scope-bound continuation state embedded
@@ -181,7 +210,7 @@ func (a *AnalysisAPI) resolveResultPosition(values url.Values, scope string) (qu
 	return queryResultPosition{Offset: 0, Limit: limit}, true, nil
 }
 
-func (a *AnalysisAPI) sliceQueryResult(result analysis.Result, position queryResultPosition, scope string) (analysis.Result, error) {
+func (a *AnalysisAPI) sliceQueryResult(result analysis.Result, position queryResultPosition, scope, timelineScope string) (analysis.Result, error) {
 	total := len(result.Rows)
 	if position.Offset > total {
 		return analysis.Result{}, governanceCursorError()
@@ -194,6 +223,7 @@ func (a *AnalysisAPI) sliceQueryResult(result analysis.Result, position queryRes
 	page := result
 	page.Rows = result.Rows[start:end]
 	page.NextCursor = nil
+	page.TimelineCursor = nil
 	if end < total {
 		data, err := json.Marshal(queryResultPosition{Offset: end, Limit: position.Limit})
 		if err != nil {
@@ -201,6 +231,8 @@ func (a *AnalysisAPI) sliceQueryResult(result analysis.Result, position queryRes
 		}
 		token := a.API.Cursor.Encode(scope, string(data))
 		page.NextCursor = &token
+	} else {
+		page.TimelineCursor = a.wrapTimelineCursor(timelineScope, result.TimelineCursor)
 	}
 	return page, nil
 }

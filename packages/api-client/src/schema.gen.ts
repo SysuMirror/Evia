@@ -4063,6 +4063,8 @@ export interface components {
                 [key: string]: unknown;
             }[];
             next_cursor?: string | null;
+            /** @description 仅在 journey 查询命中单次结果行数上限且时间线上仍有更晚事件时返回；将此游标回传到相同查询条件的 cursor 字段即可无遗漏、无重复续拉后续时间线。 */
+            timeline_cursor?: string | null;
             metadata: {
                 /**
                  * Format: date-time

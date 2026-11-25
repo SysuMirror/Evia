@@ -23,9 +23,11 @@ const queryURL = "/api/v1/projects/" + projectID + "/queries"
 const validQueryBody = `{"kind":"trend","environment":"development","time_range":{"from":"2026-11-07T10:00:00Z","to":"2026-11-07T11:00:00Z"},"timezone":"UTC"}`
 
 type analysisFake struct {
-	calls    int
-	err      error
-	rowCount int
+	calls          int
+	err            error
+	rowCount       int
+	timelineCursor string
+	lastCreateBody json.RawMessage
 }
 
 func (f *analysisFake) job(actor, project string) (analysis.Job, error) {
@@ -35,7 +37,8 @@ func (f *analysisFake) job(actor, project string) (analysis.Job, error) {
 	f.calls++
 	return analysis.Job{ID: queryJobID, State: analysis.JobStateQueued, CreatedAt: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)}, f.err
 }
-func (f *analysisFake) Create(_ context.Context, a, p string, _ json.RawMessage) (analysis.Job, error) {
+func (f *analysisFake) Create(_ context.Context, a, p string, raw json.RawMessage) (analysis.Job, error) {
+	f.lastCreateBody = append([]byte(nil), raw...)
 	return f.job(a, p)
 }
 func (f *analysisFake) Get(_ context.Context, a, p, id string) (analysis.Job, error) {
@@ -53,7 +56,12 @@ func (f *analysisFake) Result(_ context.Context, a, p, id string) (analysis.Resu
 	for i := 0; i < f.rowCount; i++ {
 		rows = append(rows, map[string]any{"seq": i})
 	}
-	return analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "seq", Type: "integer"}}, Rows: rows, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: analysis.TimeRange{From: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}, State: analysis.CoverageStateProvisional, KnownGaps: []string{"pipeline_completeness_not_established"}}, GeneratedAt: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}}, e
+	var tc *string
+	if f.timelineCursor != "" {
+		v := f.timelineCursor
+		tc = &v
+	}
+	return analysis.Result{QueryID: id, Columns: []analysis.Column{{Key: "seq", Type: "integer"}}, Rows: rows, TimelineCursor: tc, Metadata: analysis.Metadata{Accuracy: analysis.AccuracyExact, SampleRate: 1, Coverage: analysis.Coverage{TimeRange: analysis.TimeRange{From: time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}, State: analysis.CoverageStateProvisional, KnownGaps: []string{"pipeline_completeness_not_established"}}, GeneratedAt: time.Date(2026, 11, 7, 11, 0, 0, 0, time.UTC)}}, e
 }
 func analysisHandler(t *testing.T, f *analysisFake, access *catalogAccess) http.Handler {
 	t.Helper()
@@ -115,10 +123,11 @@ func analysisResultCodec(t *testing.T) *cursor.Codec {
 }
 
 type queryResultPage struct {
-	QueryID    string            `json:"query_id"`
-	Columns    []analysis.Column `json:"columns"`
-	Rows       []map[string]any  `json:"rows"`
-	NextCursor *string           `json:"next_cursor"`
+	QueryID        string            `json:"query_id"`
+	Columns        []analysis.Column `json:"columns"`
+	Rows           []map[string]any  `json:"rows"`
+	NextCursor     *string           `json:"next_cursor"`
+	TimelineCursor *string           `json:"timeline_cursor"`
 }
 
 func TestAnalysisQueryResultPagination(t *testing.T) {
@@ -277,4 +286,51 @@ func flipBase64(last string) string {
 		return "B"
 	}
 	return "A"
+}
+
+func TestAnalysisJourneyTimelineCursorTransport(t *testing.T) {
+	const innerCursor = "jt1.eyJ2IjoxLCJmcCI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwidCI6MTc5NDA0NjIwMDAwMDAwMDAwMCwicyI6InMxIiwiYiI6InQxIiwicSI6MSwiciI6InNyYyIsImUiOiJlMSJ9"
+	resultPath := queryURL + "/" + queryJobID + "/result"
+	journeyPath := "/api/v1/projects/" + projectID + "/journeys/query"
+
+	fake := &analysisFake{rowCount: 3, timelineCursor: innerCursor}
+	handler := analysisHandler(t, fake, &catalogAccess{fakeAccess: &fakeAccess{}})
+
+	// Paginated snapshot hides timeline_cursor on non-terminal pages and exposes HMAC-signed token on the last page.
+	w1 := catalogRequest(handler, http.MethodGet, resultPath+"?limit=2", "", nil)
+	catalogStatus(t, w1, http.StatusOK)
+	var page1 queryResultPage
+	if err := json.Unmarshal(w1.Body.Bytes(), &page1); err != nil || page1.NextCursor == nil || page1.TimelineCursor != nil {
+		t.Fatalf("first snapshot page should not expose timeline_cursor: %+v", page1)
+	}
+	w2 := catalogRequest(handler, http.MethodGet, resultPath+"?cursor="+url.QueryEscape(*page1.NextCursor), "", nil)
+	catalogStatus(t, w2, http.StatusOK)
+	var page2 queryResultPage
+	if err := json.Unmarshal(w2.Body.Bytes(), &page2); err != nil || page2.NextCursor != nil || page2.TimelineCursor == nil {
+		t.Fatalf("final snapshot page must expose signed timeline_cursor: %+v", page2)
+	}
+	if *page2.TimelineCursor == innerCursor {
+		t.Fatal("timeline_cursor must be HMAC-wrapped at the HTTP boundary")
+	}
+
+	// Submitting the signed cursor unwraps back to innerCursor before Service.Create.
+	body := `{"kind":"journey","environment":"development","subject":"uid","identity_filter":{"uid":"u1"},"time_range":{"from":"2026-11-07T10:00:00Z","to":"2026-11-07T11:00:00Z"},"timezone":"UTC","cursor":"` + *page2.TimelineCursor + `"}`
+	wCreate := catalogRequest(handler, http.MethodPost, journeyPath, body, nil)
+	catalogStatus(t, wCreate, http.StatusAccepted)
+	var forwarded struct {
+		Cursor string `json:"cursor"`
+	}
+	if err := json.Unmarshal(fake.lastCreateBody, &forwarded); err != nil || forwarded.Cursor != innerCursor {
+		t.Fatalf("expected unwrapped cursor %q, got %q", innerCursor, forwarded.Cursor)
+	}
+
+	// Tampered or foreign cursor fails closed with 400 before reaching Service.Create.
+	prevCalls := fake.calls
+	parts := strings.Split(*page2.TimelineCursor, ".")
+	tampered := parts[0] + "." + flipBase64(parts[1][:1]) + parts[1][1:]
+	badBody := strings.Replace(body, *page2.TimelineCursor, tampered, 1)
+	catalogStatus(t, catalogRequest(handler, http.MethodPost, journeyPath, badBody, nil), http.StatusBadRequest)
+	if fake.calls != prevCalls {
+		t.Fatal("tampered timeline cursor reached Service.Create")
+	}
 }

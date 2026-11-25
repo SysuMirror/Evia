@@ -92,6 +92,8 @@ type Snapshot = {
   semanticMetric?: AnalysisForm['metric'];
   job: QueryJob;
   result?: QueryResult;
+  carriedRows?: Record<string, unknown>[];
+  segments?: number;
   started: number;
 };
 const jobLabels: Record<QueryJob['state'], string> = {
@@ -299,6 +301,7 @@ function AnalysisWorkspace({
     queryID: string;
     rows: Record<string, unknown>[];
     cursor?: string;
+    timelineCursor?: string;
   }>();
   const [loadingMoreRows, setLoadingMoreRows] = useState(false);
   const [propertyEvent, setPropertyEvent] = useState('');
@@ -586,6 +589,7 @@ function AnalysisWorkspace({
     try {
       const job = await api.createQuery(project.id, request, session.csrf_token, controller.signal);
       if (controller.signal.aborted || generation.current !== epoch) return;
+      setResultPaging(undefined);
       setSnapshot({
         scope,
         semanticMetric: form.mode === 'metrics' || form.mode === 'trend' ? form.metric : undefined,
@@ -687,12 +691,16 @@ function AnalysisWorkspace({
   const result = snapshot?.result;
   const pagingMatches = resultPaging?.queryID === result?.query_id;
   const rows: Record<string, unknown>[] = [
+    ...(snapshot?.carriedRows ?? []),
     ...(result?.rows ?? []),
     ...(pagingMatches ? (resultPaging?.rows ?? []) : []),
   ];
   const nextResultCursor = pagingMatches
     ? resultPaging?.cursor
     : (result?.next_cursor ?? undefined);
+  const nextTimelineCursor = pagingMatches
+    ? resultPaging?.timelineCursor
+    : (result?.timeline_cursor ?? undefined);
   const columns: DataTableColumn<Record<string, unknown>>[] =
     result?.columns.map((column) => ({
       key: column.key,
@@ -769,12 +777,65 @@ function AnalysisWorkspace({
           queryID,
           rows: [...prior, ...page.rows],
           cursor: page.next_cursor ?? undefined,
+          timelineCursor: page.timeline_cursor ?? undefined,
         };
       });
     } catch (failure) {
       reportFailure(failure);
     } finally {
       setLoadingMoreRows(false);
+    }
+  };
+  const continueTimeline = async () => {
+    if (
+      !snapshot ||
+      snapshot.request.kind !== 'journey' ||
+      !nextTimelineCursor ||
+      operation.current ||
+      submitting ||
+      activeJob(snapshot.job) ||
+      loadingMoreRows
+    )
+      return;
+    const nextRequest: QueryRequest = { ...snapshot.request, cursor: nextTimelineCursor };
+    const carriedRows = rows;
+    const segments = (snapshot.segments ?? 1) + 1;
+    const controller = new AbortController();
+    requestAbort.current?.abort();
+    requestAbort.current = controller;
+    const epoch = generation.current;
+    operation.current = true;
+    setSubmitting(true);
+    setError(undefined);
+    setNotice('');
+    setObserving(false);
+    try {
+      const job = await api.createQuery(
+        project.id,
+        nextRequest,
+        session.csrf_token,
+        controller.signal,
+      );
+      if (controller.signal.aborted || generation.current !== epoch) return;
+      setResultPaging(undefined);
+      setSnapshot({
+        scope,
+        semanticMetric: snapshot.semanticMetric,
+        request: nextRequest,
+        name: snapshot.name,
+        job,
+        carriedRows,
+        segments,
+        started: Date.now(),
+      });
+      setObserving(true);
+    } catch (failure) {
+      if (!controller.signal.aborted && generation.current === epoch) reportFailure(failure);
+    } finally {
+      if (!controller.signal.aborted && generation.current === epoch) {
+        operation.current = false;
+        setSubmitting(false);
+      }
     }
   };
   const queryEditor = (
@@ -1460,18 +1521,37 @@ function AnalysisWorkspace({
                       )}
                     </div>
                     <p className="field-help">
-                      返回 {rows.length} 行，上限 {snapshot.request.limit}{' '}
-                      行。超出预算会明确失败；原始事件与行为链可通过下一页继续读取。
+                      {snapshot.request.kind === 'journey' && (snapshot.segments ?? 1) > 1
+                        ? `已续拉 ${snapshot.segments} 段，共 ${rows.length} 行（单段上限 ${snapshot.request.limit} 行）。`
+                        : `返回 ${rows.length} 行，上限 ${snapshot.request.limit} 行。`}
+                      超出预算会明确失败；原始事件与行为链可通过下一页继续读取
+                      {snapshot.request.kind === 'journey'
+                        ? '，行为链命中上限后可按游标无遗漏续拉后续时间线。'
+                        : '。'}
                     </p>
-                    {nextResultCursor && (
-                      <Button
-                        size="small"
-                        loading={loadingMoreRows}
-                        onClick={() => void loadMoreRows()}
-                      >
-                        加载下一页
-                      </Button>
-                    )}
+                    <div className="inline-actions">
+                      {nextResultCursor && (
+                        <Button
+                          size="small"
+                          loading={loadingMoreRows}
+                          onClick={() => void loadMoreRows()}
+                        >
+                          加载下一页
+                        </Button>
+                      )}
+                      {!nextResultCursor &&
+                        nextTimelineCursor &&
+                        snapshot.request.kind === 'journey' && (
+                          <Button
+                            size="small"
+                            loading={submitting}
+                            disabled={busy || loadingMoreRows}
+                            onClick={() => void continueTimeline()}
+                          >
+                            续拉后续时间线
+                          </Button>
+                        )}
+                    </div>
                     {snapshot.request.kind !== 'heatmap' && (
                       <QueryMetadataDetails result={result} snapshot={snapshot} />
                     )}

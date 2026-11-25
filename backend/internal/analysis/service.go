@@ -23,6 +23,11 @@ func (s *Service) Create(ctx context.Context, actor, project string, raw json.Ra
 	if e != nil {
 		return Job{}, e
 	}
+	if request.Kind == QueryKindJourney && request.Cursor != "" {
+		if _, e = ValidateJourneyCursorScope(Scope{ProjectID: project, Environment: request.Environment}, request); e != nil {
+			return Job{}, e
+		}
+	}
 	if s.engine == nil {
 		return Job{}, fault.New(fault.Unavailable, "QUERY_STORAGE_UNAVAILABLE", "分析存储尚未配置")
 	}

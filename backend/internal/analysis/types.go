@@ -224,11 +224,12 @@ type Metadata struct {
 	GeneratedAt      time.Time  `json:"generated_at"`
 }
 type Result struct {
-	QueryID    string           `json:"query_id"`
-	Columns    []Column         `json:"columns"`
-	Rows       []map[string]any `json:"rows"`
-	NextCursor *string          `json:"next_cursor"`
-	Metadata   Metadata         `json:"metadata"`
+	QueryID        string           `json:"query_id"`
+	Columns        []Column         `json:"columns"`
+	Rows           []map[string]any `json:"rows"`
+	NextCursor     *string          `json:"next_cursor"`
+	TimelineCursor *string          `json:"timeline_cursor,omitempty"`
+	Metadata       Metadata         `json:"metadata"`
 }
 type Claim struct {
 	JobID, ActorID, ProjectID, Worker string

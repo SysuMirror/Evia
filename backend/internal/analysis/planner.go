@@ -441,8 +441,26 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 	base += " AND " + predicate
 	plan := Plan{Parameters: p.params, Kind: r.Kind, Limit: r.Limit, Accuracy: AccuracyNotApplicable}
 	switch r.Kind {
-	case QueryKindEvents, QueryKindJourney:
+	case QueryKindEvents:
 		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,context_json,properties_json" + base + " ORDER BY event_time,ifNull(session_id,''),ifNull(tab_id,''),ifNull(sequence,0),source_id,event_id LIMIT " + strconv.Itoa(r.Limit+1)
+		plan.Columns = []Column{{Key: "event_key", Type: "string"}, {Key: "event_time", Type: "datetime"}, {Key: "uid", Type: "string"}, {Key: "anonymous_id", Type: "string"}, {Key: "context", Type: "object"}, {Key: "properties", Type: "object"}}
+	case QueryKindJourney:
+		if r.Cursor != "" {
+			pos, e := ValidateJourneyCursorScope(scope, r)
+			if e != nil {
+				return Plan{}, e
+			}
+			eventTimeParam := p.bind("Int64", strconv.FormatInt(pos.EventTimeNs, 10))
+			base += " AND toUnixTimestamp64Nano(event_time)>=" + eventTimeParam +
+				" AND (toUnixTimestamp64Nano(event_time),ifNull(session_id,''),ifNull(tab_id,''),toUInt64(ifNull(sequence,0)),source_id,event_id)>(" +
+				eventTimeParam + "," +
+				p.bind("String", pos.SessionID) + "," +
+				p.bind("String", pos.TabID) + "," +
+				p.bind("UInt64", strconv.FormatUint(pos.Sequence, 10)) + "," +
+				p.bind("String", pos.SourceID) + "," +
+				p.bind("String", pos.EventID) + ")"
+		}
+		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,ifNull(tab_id,'') AS _cursor_tab_id,toUInt64(ifNull(sequence,0)) AS _cursor_sequence,context_json,properties_json" + base + " ORDER BY event_time,ifNull(session_id,''),ifNull(tab_id,''),toUInt64(ifNull(sequence,0)),source_id,event_id LIMIT " + strconv.Itoa(r.Limit+1)
 		plan.Columns = []Column{{Key: "event_key", Type: "string"}, {Key: "event_time", Type: "datetime"}, {Key: "uid", Type: "string"}, {Key: "anonymous_id", Type: "string"}, {Key: "context", Type: "object"}, {Key: "properties", Type: "object"}}
 	case QueryKindTrend:
 		selectSQL := []string{}

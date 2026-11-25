@@ -161,6 +161,11 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 	}
 	metadata := Metadata{Accuracy: plan.Accuracy, SampleRate: 1, IdentityRevision: identityRevision, Coverage: Coverage{TimeRange: r.TimeRange, State: CoverageStateProvisional, KnownGaps: knownGaps}, GeneratedAt: time.Now().UTC()}
 	result := Result{Columns: plan.Columns, Rows: make([]map[string]any, 0), Metadata: metadata}
+	hasMoreJourney := false
+	if r.Kind == QueryKindJourney && len(rows) > r.Limit {
+		hasMoreJourney = true
+		rows = rows[:r.Limit]
+	}
 	for _, row := range rows {
 		key := "received_at_ns"
 		if r.Kind == QueryKindTrend || r.Kind == QueryKindHeatmap {
@@ -172,6 +177,26 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 				result.Metadata.DataWatermark = &value
 			}
 		}
+	}
+	if hasMoreJourney && len(rows) > 0 {
+		last := rows[len(rows)-1]
+		when, okTime := integer(last["event_time_ns"])
+		seq, okSeq := uint64Value(last["_cursor_sequence"])
+		if !okTime || !okSeq {
+			return Result{}, fault.New(fault.Unavailable, "QUERY_STORAGE_RESPONSE_INVALID", "事件排序位点无效")
+		}
+		token, err := EncodeJourneyCursor(scope, r, JourneyCursorPosition{
+			EventTimeNs: when,
+			SessionID:   stringValue(last["session_id"]),
+			TabID:       stringValue(last["_cursor_tab_id"]),
+			Sequence:    seq,
+			SourceID:    stringValue(last["source_id"]),
+			EventID:     stringValue(last["event_id"]),
+		})
+		if err != nil {
+			return Result{}, err
+		}
+		result.TimelineCursor = &token
 	}
 	if r.Kind == QueryKindFunnel {
 		if len(rows) > 100000 {
@@ -243,6 +268,8 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 			row["event_time"] = time.Unix(0, when).UTC().Format(time.RFC3339Nano)
 			delete(row, "event_time_ns")
 			delete(row, "received_at_ns")
+			delete(row, "_cursor_tab_id")
+			delete(row, "_cursor_sequence")
 			for _, key := range []string{"context", "properties"} {
 				raw, ok := row[key+"_json"].(string)
 				if !ok {
