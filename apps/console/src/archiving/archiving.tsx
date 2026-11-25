@@ -268,7 +268,7 @@ export function ArchivingPage({ project, session, environment }: PageProps) {
         />
       </div>
 
-      <DataSurface label="发起数据回补">
+      <DataSurface label="发起数据回补" title="发起数据回补">
         {notice ? (
           <Alert
             tone="error"
@@ -336,7 +336,7 @@ export function ArchivingPage({ project, session, environment }: PageProps) {
         </form>
       </DataSurface>
 
-      <DataSurface label="回补作业">
+      <DataSurface label="回补作业" title="回补作业">
         {backfills.isError ? (
           <Alert
             tone="error"
@@ -358,7 +358,7 @@ export function ArchivingPage({ project, session, environment }: PageProps) {
         )}
       </DataSurface>
 
-      <DataSurface label="归档清单">
+      <DataSurface label="归档清单" title="归档清单">
         {manifests.isError ? (
           <Alert
             tone="error"

@@ -285,7 +285,7 @@ export function ExportsPage({ project, session, environment }: PageProps) {
           title="导出复用有界分析查询，结果物化为 JSON 文件；下载采用一次性授权令牌（15 分钟内有效、兑换即失效），全程审计留痕。"
         />
       </div>
-      <DataSurface label="发起数据导出">
+      <DataSurface label="发起数据导出" title="发起数据导出">
         <Toolbar label="导出请求">
           <div className="export-fields">
             <Field label="导出名称" htmlFor="export-name">
@@ -400,7 +400,7 @@ export function ExportsPage({ project, session, environment }: PageProps) {
         </div>
       </DataSurface>
 
-      <DataSurface label="导出作业">
+      <DataSurface label="导出作业" title="导出作业">
         {jobs.isError ? (
           <Alert
             tone="error"

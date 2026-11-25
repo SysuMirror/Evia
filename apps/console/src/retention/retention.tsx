@@ -242,7 +242,7 @@ export function RetentionPage({ project, session, environment }: PageProps) {
         />
       </div>
 
-      <DataSurface label="保留策略">
+      <DataSurface label="保留策略" title="保留策略配置">
         {policy.isError ? (
           <Alert
             tone="error"
@@ -333,7 +333,7 @@ export function RetentionPage({ project, session, environment }: PageProps) {
         )}
       </DataSurface>
 
-      <DataSurface label="清理历史">
+      <DataSurface label="清理历史" title="清理历史">
         {sweeps.isError ? (
           <Alert
             tone="error"

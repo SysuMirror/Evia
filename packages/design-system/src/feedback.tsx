@@ -198,11 +198,20 @@ export function DesignProvider({ children }: { children: ReactNode }) {
             <Button
               variant="ghost"
               size="small"
+              iconOnly
+              startIcon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="m4 4 8 8m0-8-8 8"
+                    stroke="currentColor"
+                    strokeWidth="1.65"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
               onClick={() => dismiss(toast.id)}
               aria-label="关闭通知"
-            >
-              ×
-            </Button>
+            />
           </div>
         ))}
       </div>

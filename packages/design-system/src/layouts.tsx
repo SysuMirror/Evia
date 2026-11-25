@@ -319,15 +319,25 @@ export function PageHeading({
 
 export function DataSurface({
   label,
+  title,
+  headerAction,
   children,
   footer,
 }: {
   label: string;
+  title?: ReactNode;
+  headerAction?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) {
   return (
     <section className="data-surface" aria-label={label}>
+      {(title || headerAction) && (
+        <header className="data-surface-header">
+          {title && <h2>{title}</h2>}
+          {headerAction && <div className="inline-actions">{headerAction}</div>}
+        </header>
+      )}
       {children}
       {footer}
     </section>

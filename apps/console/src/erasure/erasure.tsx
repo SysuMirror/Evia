@@ -190,7 +190,7 @@ export function ErasurePage({ project, session, environment }: PageProps) {
           title="数据删除不可逆：提交后会立即建立删除屏障，阻断该身份的新事实写入，并由 erasure-worker 异步清除历史事实。"
         />
       </div>
-      <DataSurface label="发起数据删除">
+      <DataSurface label="发起数据删除" title="发起数据删除">
         <Toolbar label="删除请求">
           <div className="erasure-fields">
             <Field label="环境" htmlFor="erasure-environment">
@@ -264,7 +264,7 @@ export function ErasurePage({ project, session, environment }: PageProps) {
         </div>
       </DataSurface>
 
-      <DataSurface label="删除作业">
+      <DataSurface label="删除作业" title="删除作业">
         {jobs.isError ? (
           <Alert
             tone="error"
