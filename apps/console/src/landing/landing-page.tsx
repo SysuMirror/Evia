@@ -439,6 +439,16 @@ export function LandingPage() {
                 <p>原生支持用户一键退出分析，并内建按主体彻底擦除、数据保留期自动清理与全量操作审计追踪。</p>
               </div>
             </div>
+            <figure className="evia-arch-figure" data-reveal="up" data-delay="2">
+              <img
+                src="/media/privacy-architecture.webp"
+                alt="Evia 映途隐私优先自托管架构图：端侧隐私边界（默认输入脱敏、一键退出分析、端到端混合加密、Ed25519 配置验签）通过加密载荷与白名单信号进入自有集群（契约准入与解耦、主权存储与合规）"
+                width={2200}
+                height={676}
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
           </div>
         </section>
 
@@ -538,9 +548,6 @@ export function LandingPage() {
           <div className="evia-footer-bottom">
             <p className="evia-footer-copyright">
               © {new Date().getFullYear()} Evia 映途. All rights reserved.
-            </p>
-            <p className="evia-footer-meta">
-              Evia 映途为自托管产品分析平台，所有分析数据、身份边界与审计日志均留存于部署方自有基础设施，不经第三方云中转。
             </p>
           </div>
         </div>
