@@ -669,16 +669,56 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 		yKey := p.bind("String", "y_ratio")
 		widthKey := p.bind("String", "viewport_width")
 		heightKey := p.bind("String", "viewport_height")
-		xBin := "least(toUInt8(floor(least(greatest(JSONExtractFloat(properties_json," + xKey + "),0.0),1.0)*20)),19)"
-		yBin := "least(toUInt8(floor(least(greatest(JSONExtractFloat(properties_json," + yKey + "),0.0),1.0)*10)),9)"
 		base += " AND event_key=" + p.bind("String", "sys.heatmap_click")
 		base += " AND schema_version=" + p.bind("UInt64", "1")
 		base += " AND " + routeColumn + "=" + p.bind("String", routeValue)
-		base += " AND JSONExtractUInt(properties_json," + widthKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportWidth))
-		base += " AND JSONExtractUInt(properties_json," + heightKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportHeight))
-		plan.SQL = "SELECT " + xBin + " AS x_bin," + yBin + " AS y_bin,count() AS clicks,toUnixTimestamp64Nano(max(received_at)) AS watermark_ns" + base + " GROUP BY x_bin,y_bin ORDER BY y_bin,x_bin LIMIT 201"
-		plan.Accuracy = AccuracyExact
-		plan.Columns = []Column{{Key: "x_bin", Type: "integer"}, {Key: "y_bin", Type: "integer"}, {Key: "clicks", Type: "integer"}}
+		viewportScope := h.ViewportScope
+		if viewportScope == "" {
+			viewportScope = HeatmapViewportExact
+		}
+		switch viewportScope {
+		case HeatmapViewportExact:
+			base += " AND JSONExtractUInt(properties_json," + widthKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportWidth))
+			base += " AND JSONExtractUInt(properties_json," + heightKey + ")=" + p.bind("UInt64", strconv.Itoa(h.ViewportHeight))
+		case HeatmapViewportBucket:
+			widthExpr := "JSONExtractUInt(properties_json," + widthKey + ")"
+			switch h.ViewportBucket {
+			case HeatmapBucketMobile:
+				base += " AND " + widthExpr + ">0 AND " + widthExpr + "<" + p.bind("UInt64", "768")
+			case HeatmapBucketTablet:
+				base += " AND " + widthExpr + ">=" + p.bind("UInt64", "768") + " AND " + widthExpr + "<" + p.bind("UInt64", "1024")
+			case HeatmapBucketDesktop:
+				base += " AND " + widthExpr + ">=" + p.bind("UInt64", "1024")
+			}
+		case HeatmapViewportAll:
+			// Aggregate across every recorded viewport on this route.
+		}
+		xClamped := "least(greatest(JSONExtractFloat(properties_json," + xKey + "),0.0),1.0)"
+		yClamped := "least(greatest(JSONExtractFloat(properties_json," + yKey + "),0.0),1.0)"
+		mode := h.Mode
+		if mode == "" {
+			mode = HeatmapModeGrid
+		}
+		if mode == HeatmapModeElements {
+			elementKey := p.bind("String", "element_path")
+			elementExpr := "JSONExtractString(properties_json," + elementKey + ")"
+			base += " AND " + elementExpr + "!=''"
+			plan.SQL = "SELECT " + elementExpr + " AS element_path,count() AS clicks,round(avg(" + xClamped + "),4) AS avg_x_ratio,round(avg(" + yClamped + "),4) AS avg_y_ratio,uniqExact(tuple(JSONExtractUInt(properties_json," + widthKey + "),JSONExtractUInt(properties_json," + heightKey + "))) AS viewport_count,toUnixTimestamp64Nano(max(received_at)) AS watermark_ns" + base + " GROUP BY element_path ORDER BY clicks DESC,element_path ASC LIMIT " + strconv.Itoa(r.Limit)
+			plan.Accuracy = AccuracyExact
+			plan.Columns = []Column{
+				{Key: "element_path", Type: "string"},
+				{Key: "clicks", Type: "integer"},
+				{Key: "avg_x_ratio", Type: "number"},
+				{Key: "avg_y_ratio", Type: "number"},
+				{Key: "viewport_count", Type: "integer"},
+			}
+		} else {
+			xBin := "least(toUInt8(floor(" + xClamped + "*20)),19)"
+			yBin := "least(toUInt8(floor(" + yClamped + "*10)),9)"
+			plan.SQL = "SELECT " + xBin + " AS x_bin," + yBin + " AS y_bin,count() AS clicks,toUnixTimestamp64Nano(max(received_at)) AS watermark_ns" + base + " GROUP BY x_bin,y_bin ORDER BY y_bin,x_bin LIMIT 201"
+			plan.Accuracy = AccuracyExact
+			plan.Columns = []Column{{Key: "x_bin", Type: "integer"}, {Key: "y_bin", Type: "integer"}, {Key: "clicks", Type: "integer"}}
+		}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

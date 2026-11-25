@@ -3914,13 +3914,28 @@ export interface components {
                  */
                 model: "last_touch" | "first_touch" | "linear" | "position_based" | "time_decay";
             };
-            /** @description Bounded click heatmap over fixed sys.heatmap_click schema version 1. Exactly one route_name or route_template is matched literally together with the exact viewport dimensions; results use fixed 20x10 bins. */
+            /** @description Bounded click heatmap over fixed sys.heatmap_click schema version 1. Matches exactly one route_name or route_template with exact, responsive bucket, or all-viewport aggregation, returning either fixed 20x10 coordinate bins (mode=grid) or bounded Top-N element_path rankings (mode=elements). */
             heatmap?: {
                 route_name?: string;
                 route_template?: string;
-                viewport_width: number;
-                viewport_height: number;
-            } & (unknown | unknown);
+                /** @enum {unknown} */
+                mode?: "grid" | "elements";
+                /** @enum {unknown} */
+                viewport_scope?: "exact" | "bucket" | "all";
+                /** @enum {unknown} */
+                viewport_bucket?: "mobile" | "tablet" | "desktop";
+                viewport_width?: number;
+                viewport_height?: number;
+            } & ((unknown | unknown) & ({
+                /** @constant */
+                viewport_scope?: "exact";
+            } | {
+                /** @constant */
+                viewport_scope: "bucket";
+            } | {
+                /** @constant */
+                viewport_scope: "all";
+            }));
             limit?: number;
             cursor?: string;
             event_versions?: {

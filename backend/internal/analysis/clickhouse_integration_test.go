@@ -319,6 +319,86 @@ func TestClickHouseBoundedHeatmapExactScopeBinsAndWatermark(t *testing.T) {
 	}
 }
 
+func TestClickHouseHeatmapElementsRankingAndMultiViewportBuckets(t *testing.T) {
+	client := clickHouseDatabase(t)
+	click := func(id string, second, width, height int, x, y float64, path string) map[string]any {
+		row := fact(id, "sys.heatmap_click", "", "device-one", "source-one", second, map[string]any{
+			"x_ratio": x, "y_ratio": y, "viewport_width": width, "viewport_height": height,
+			"element_path": path,
+		})
+		row["route_template"] = "/posts/:id"
+		return row
+	}
+	seedRows(t, client, []map[string]any{
+		click("d1", 1, 1440, 900, 0.2, 0.4, "main>button.like"),
+		click("d2", 2, 1920, 1080, 0.4, 0.6, "main>button.like"),
+		click("m1", 3, 390, 844, 0.5, 0.5, "main>button.like"),
+		click("t1", 4, 834, 1112, 0.8, 0.2, "main>a.comment"),
+		click("m2", 5, 390, 844, 0.8, 0.2, "main>a.comment"),
+		click("d3", 6, 1440, 900, 0.1, 0.1, "nav>a.home"),
+	})
+	route := "/posts/:id"
+	// All-viewport Top-2 element ranking returns like (3 clicks across 3 viewports)
+	// and comment (2 clicks across 2 viewports), bounded cleanly by limit=2.
+	topElements := execute(t, client, Request{
+		Kind: QueryKindHeatmap, Environment: "development", Timezone: "UTC", Limit: 2,
+		TimeRange: aggregateRequest(t).TimeRange,
+		Heatmap: &Heatmap{
+			RouteTemplate: &route,
+			Mode:          HeatmapModeElements,
+			ViewportScope: HeatmapViewportAll,
+		},
+	})
+	if len(topElements.Rows) != 2 {
+		t.Fatalf("expected top 2 elements, got %+v", topElements.Rows)
+	}
+	if topElements.Rows[0]["element_path"] != "main>button.like" {
+		t.Fatalf("top element wrong: %+v", topElements.Rows[0])
+	}
+	if clicks, ok := integer(topElements.Rows[0]["clicks"]); !ok || clicks != 3 {
+		t.Fatalf("top element clicks wrong: %+v", topElements.Rows[0])
+	}
+	if viewports, ok := integer(topElements.Rows[0]["viewport_count"]); !ok || viewports != 3 {
+		t.Fatalf("top element viewport_count wrong: %+v", topElements.Rows[0])
+	}
+	if topElements.Rows[1]["element_path"] != "main>a.comment" {
+		t.Fatalf("second element wrong: %+v", topElements.Rows[1])
+	}
+	// Responsive bucket (desktop >= 1024) grid aggregates d1, d2, d3 only (3 clicks total).
+	desktopGrid := execute(t, client, Request{
+		Kind: QueryKindHeatmap, Environment: "development", Timezone: "UTC", Limit: 200,
+		TimeRange: aggregateRequest(t).TimeRange,
+		Heatmap: &Heatmap{
+			RouteTemplate:  &route,
+			Mode:           HeatmapModeGrid,
+			ViewportScope:  HeatmapViewportBucket,
+			ViewportBucket: HeatmapBucketDesktop,
+		},
+	})
+	var desktopClicks int64
+	for _, row := range desktopGrid.Rows {
+		c, _ := integer(row["clicks"])
+		desktopClicks += c
+	}
+	if desktopClicks != 3 {
+		t.Fatalf("expected 3 desktop clicks across 1440x900 and 1920x1080, got %d (%+v)", desktopClicks, desktopGrid.Rows)
+	}
+	// Mobile bucket (< 768) elements returns only mobile clicks (m1, m2).
+	mobileElements := execute(t, client, Request{
+		Kind: QueryKindHeatmap, Environment: "development", Timezone: "UTC", Limit: 10,
+		TimeRange: aggregateRequest(t).TimeRange,
+		Heatmap: &Heatmap{
+			RouteTemplate:  &route,
+			Mode:           HeatmapModeElements,
+			ViewportScope:  HeatmapViewportBucket,
+			ViewportBucket: HeatmapBucketMobile,
+		},
+	})
+	if len(mobileElements.Rows) != 2 {
+		t.Fatalf("expected 2 mobile elements, got %+v", mobileElements.Rows)
+	}
+}
+
 func TestClickHouseJourneyAndOrderedFunnel(t *testing.T) {
 	client := clickHouseDatabase(t)
 	rows := []map[string]any{fact("anonymous-before", "sys.page_view", "", "device-one", "source-one", 0, map[string]any{}), fact("logged-in", "sys.page_view", "user-one", "device-one", "source-one", 1, map[string]any{}), fact("switched-account", "sys.page_view", "user-two", "device-one", "source-one", 2, map[string]any{})}

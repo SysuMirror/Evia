@@ -54,6 +54,9 @@ export type AnalysisForm = {
   attributionHalfLife: string;
   heatmapRouteField: 'route_name' | 'route_template';
   heatmapRoute: string;
+  heatmapMode: 'grid' | 'elements';
+  heatmapViewportScope: 'exact' | 'bucket' | 'all';
+  heatmapViewportBucket: 'mobile' | 'tablet' | 'desktop';
   heatmapViewportWidth: string;
   heatmapViewportHeight: string;
 };
@@ -195,6 +198,9 @@ export function initialForm(timezone: string): AnalysisForm {
     attributionHalfLife: '600',
     heatmapRouteField: 'route_template',
     heatmapRoute: '',
+    heatmapMode: 'grid',
+    heatmapViewportScope: 'exact',
+    heatmapViewportBucket: 'desktop',
     heatmapViewportWidth: '1366',
     heatmapViewportHeight: '900',
   };
@@ -288,13 +294,12 @@ function readRetention(form: AnalysisForm): NonNullable<QueryRequest['retention'
 }
 function readLimit(form: AnalysisForm) {
   const limit = Number(form.limit);
-  const minimum = form.mode === 'heatmap' ? 200 : 1;
+  const gridHeatmap = form.mode === 'heatmap' && form.heatmapMode !== 'elements';
+  const minimum = gridHeatmap ? 200 : 1;
   if (!Number.isInteger(limit) || limit < minimum || limit > 500)
     throw new AnalysisValidationError(
       'settings',
-      form.mode === 'heatmap'
-        ? '点击热力图结果行数须为 200 至 500 的整数。'
-        : '结果行数须为 1 至 500 的整数。',
+      gridHeatmap ? '点击热力图结果行数须为 200 至 500 的整数。' : '结果行数须为 1 至 500 的整数。',
     );
   return limit;
 }
@@ -505,6 +510,28 @@ function readHeatmap(form: AnalysisForm): NonNullable<QueryRequest['heatmap']> {
       'heatmap',
       `${form.heatmapRouteField === 'route_name' ? '路由名称' : '路由模板'}须为 1 至 ${maxLength} 个字符。`,
     );
+  const mode = form.heatmapMode === 'elements' ? { mode: 'elements' as const } : {};
+  if (form.heatmapViewportScope === 'all') {
+    return {
+      [form.heatmapRouteField]: route,
+      ...mode,
+      viewport_scope: 'all',
+    };
+  }
+  if (form.heatmapViewportScope === 'bucket') {
+    if (
+      form.heatmapViewportBucket !== 'mobile' &&
+      form.heatmapViewportBucket !== 'tablet' &&
+      form.heatmapViewportBucket !== 'desktop'
+    )
+      throw new AnalysisValidationError('heatmap', '视口分档须为移动端、平板或桌面端。');
+    return {
+      [form.heatmapRouteField]: route,
+      ...mode,
+      viewport_scope: 'bucket',
+      viewport_bucket: form.heatmapViewportBucket,
+    };
+  }
   const width = Number(form.heatmapViewportWidth);
   const height = Number(form.heatmapViewportHeight);
   if (
@@ -518,6 +545,7 @@ function readHeatmap(form: AnalysisForm): NonNullable<QueryRequest['heatmap']> {
     throw new AnalysisValidationError('heatmap', '视口宽高须为 1 至 65535 的整数。');
   return {
     [form.heatmapRouteField]: route,
+    ...mode,
     viewport_width: width,
     viewport_height: height,
   };
@@ -660,6 +688,50 @@ export function heatmapCellColor(clicks: number, maximum: number): string {
     Math.max(0, Math.ceil((clicks / maximum) * heatmapPalette.length) - 1),
   );
   return heatmapPalette[index]!;
+}
+
+const heatmapBucketLabels: Record<'mobile' | 'tablet' | 'desktop', string> = {
+  mobile: '移动端视口（< 768px）',
+  tablet: '平板视口（768–1023px）',
+  desktop: '桌面视口（≥ 1024px）',
+};
+
+export function heatmapViewportLabel(heatmap?: QueryRequest['heatmap']): string {
+  if (!heatmap) return '未指定视口';
+  if (heatmap.viewport_scope === 'all') return '全部视口聚合';
+  if (heatmap.viewport_scope === 'bucket' && heatmap.viewport_bucket)
+    return heatmapBucketLabels[heatmap.viewport_bucket];
+  return `${(heatmap.viewport_width ?? 0).toLocaleString('zh-CN')} × ${(heatmap.viewport_height ?? 0).toLocaleString('zh-CN')} 视口`;
+}
+
+export function heatmapFormViewportLabel(form: AnalysisForm): string {
+  if (form.heatmapViewportScope === 'all') return '全部视口聚合';
+  if (form.heatmapViewportScope === 'bucket')
+    return heatmapBucketLabels[form.heatmapViewportBucket];
+  return `${form.heatmapViewportWidth} × ${form.heatmapViewportHeight} 视口`;
+}
+
+export function heatmapGridAspect(heatmap: NonNullable<QueryRequest['heatmap']>): {
+  width: number;
+  height: number;
+  label: string;
+} {
+  if (heatmap.viewport_scope === 'all')
+    return { width: 1440, height: 900, label: '全部视口聚合（归一化比例）' };
+  if (heatmap.viewport_scope === 'bucket') {
+    if (heatmap.viewport_bucket === 'mobile')
+      return { width: 390, height: 700, label: heatmapBucketLabels.mobile };
+    if (heatmap.viewport_bucket === 'tablet')
+      return { width: 834, height: 1024, label: heatmapBucketLabels.tablet };
+    return { width: 1440, height: 900, label: heatmapBucketLabels.desktop };
+  }
+  const width = heatmap.viewport_width ?? 1366;
+  const height = heatmap.viewport_height ?? 900;
+  return {
+    width,
+    height,
+    label: `${width.toLocaleString('zh-CN')} × ${height.toLocaleString('zh-CN')} 像素`,
+  };
 }
 
 export function formatTime(value: unknown, timezone: string) {

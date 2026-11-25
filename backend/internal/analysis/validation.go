@@ -275,8 +275,9 @@ func ValidateConfiguration(r *Request) error {
 	return nil
 }
 
-// validateHeatmap closes the ad-hoc v1 surface around one reserved event,
-// exact route/viewport matching and the fixed 200-cell grid.
+// validateHeatmap closes the bounded heatmap surface around sys.heatmap_click v1,
+// exact route matching, exact/bucket/all viewport selection, and either the
+// fixed 200-cell grid or Top-N element_path ranking.
 func validateHeatmap(r *Request) error {
 	if r.Heatmap == nil {
 		return Invalid("INVALID_HEATMAP", "热力图配置缺失", "/heatmap")
@@ -287,10 +288,21 @@ func validateHeatmap(r *Request) error {
 	if r.Funnel != nil || r.Retention != nil || r.Segment != nil || r.Path != nil || r.Attribution != nil {
 		return Invalid("INVALID_HEATMAP_OPTIONS", "热力图不接受其他分析配置", "/heatmap")
 	}
-	if r.Limit < 200 {
-		return Invalid("INVALID_HEATMAP_LIMIT", "热力图结果行数上限不能小于 200", "/limit")
-	}
 	h := r.Heatmap
+	mode := h.Mode
+	if mode == "" {
+		mode = HeatmapModeGrid
+	}
+	switch mode {
+	case HeatmapModeGrid:
+		if r.Limit < 200 {
+			return Invalid("INVALID_HEATMAP_LIMIT", "热力图网格模式结果行数上限不能小于 200", "/limit")
+		}
+	case HeatmapModeElements:
+		// Top-N element ranking accepts any valid positive limit up to BudgetResultRows.
+	default:
+		return Invalid("INVALID_HEATMAP_MODE", "热力图模式必须是 grid 或 elements", "/heatmap/mode")
+	}
 	routes := 0
 	var route string
 	var maxRunes int
@@ -307,8 +319,33 @@ func validateHeatmap(r *Request) error {
 	if routes != 1 || route == "" || strings.ContainsRune(route, 0) || utf8.RuneCountInString(route) > maxRunes {
 		return Invalid("INVALID_HEATMAP_ROUTE", "必须且只能指定一个有效的 route_name 或 route_template", "/heatmap")
 	}
-	if h.ViewportWidth < 1 || h.ViewportWidth > 65535 || h.ViewportHeight < 1 || h.ViewportHeight > 65535 {
-		return Invalid("INVALID_HEATMAP_VIEWPORT", "视口宽高必须是 1 到 65535 的整数", "/heatmap")
+	scope := h.ViewportScope
+	if scope == "" {
+		scope = HeatmapViewportExact
+	}
+	switch scope {
+	case HeatmapViewportExact:
+		if h.ViewportBucket != "" {
+			return Invalid("INVALID_HEATMAP_VIEWPORT", "精确视口模式不接受 viewport_bucket", "/heatmap/viewport_bucket")
+		}
+		if h.ViewportWidth < 1 || h.ViewportWidth > 65535 || h.ViewportHeight < 1 || h.ViewportHeight > 65535 {
+			return Invalid("INVALID_HEATMAP_VIEWPORT", "视口宽高必须是 1 到 65535 的整数", "/heatmap")
+		}
+	case HeatmapViewportBucket:
+		if h.ViewportWidth != 0 || h.ViewportHeight != 0 {
+			return Invalid("INVALID_HEATMAP_VIEWPORT", "视口分档模式不接受精确视口宽高", "/heatmap")
+		}
+		switch h.ViewportBucket {
+		case HeatmapBucketMobile, HeatmapBucketTablet, HeatmapBucketDesktop:
+		default:
+			return Invalid("INVALID_HEATMAP_VIEWPORT", "视口分档必须是 mobile、tablet 或 desktop", "/heatmap/viewport_bucket")
+		}
+	case HeatmapViewportAll:
+		if h.ViewportBucket != "" || h.ViewportWidth != 0 || h.ViewportHeight != 0 {
+			return Invalid("INVALID_HEATMAP_VIEWPORT", "全视口聚合模式不接受具体视口尺寸或分档", "/heatmap")
+		}
+	default:
+		return Invalid("INVALID_HEATMAP_VIEWPORT", "视口范围必须是 exact、bucket 或 all", "/heatmap/viewport_scope")
 	}
 	return nil
 }

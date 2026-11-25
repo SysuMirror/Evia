@@ -94,13 +94,30 @@ type Attribution struct {
 	DecayHalfLifeSeconds int64  `json:"decay_half_life_seconds,omitempty"`
 }
 
-// Heatmap selects one exact route and one exact browser viewport. The event,
-// schema version and 20x10 coordinate grid are fixed by the v1 engine.
+const (
+	HeatmapModeGrid     = "grid"
+	HeatmapModeElements = "elements"
+
+	HeatmapViewportExact  = "exact"
+	HeatmapViewportBucket = "bucket"
+	HeatmapViewportAll    = "all"
+
+	HeatmapBucketMobile  = "mobile"
+	HeatmapBucketTablet  = "tablet"
+	HeatmapBucketDesktop = "desktop"
+)
+
+// Heatmap selects one exact route and either an exact pixel viewport, a
+// responsive viewport breakpoint bucket, or all viewports. Mode selects the
+// 20x10 normalized coordinate grid (default) or Top-N element_path ranking.
 type Heatmap struct {
 	RouteName      *string `json:"route_name,omitempty"`
 	RouteTemplate  *string `json:"route_template,omitempty"`
-	ViewportWidth  int     `json:"viewport_width"`
-	ViewportHeight int     `json:"viewport_height"`
+	Mode           string  `json:"mode,omitempty"`
+	ViewportScope  string  `json:"viewport_scope,omitempty"`
+	ViewportBucket string  `json:"viewport_bucket,omitempty"`
+	ViewportWidth  int     `json:"viewport_width,omitempty"`
+	ViewportHeight int     `json:"viewport_height,omitempty"`
 }
 
 // EventVersion selects facts from one immutable event schema version.

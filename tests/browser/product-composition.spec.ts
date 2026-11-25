@@ -231,6 +231,84 @@ test('viewport click distribution keeps controls secondary after a real result',
   await expect(page.getByText('查询标识与原始条件')).not.toBeVisible();
 });
 
+test('heatmap supports top element ranking and multi-viewport aggregation in console', async ({
+  page,
+}) => {
+  let postedBody: Record<string, unknown> | undefined;
+  await page.route(`**/api/v1/projects/${projectID}/queries`, async (route) => {
+    if (route.request().method() === 'POST') {
+      postedBody = route.request().postDataJSON() as Record<string, unknown>;
+      return route.fulfill({
+        status: 202,
+        json: {
+          query_id: '88888888-8888-4888-8888-888888888888',
+          state: 'succeeded',
+          created_at: now,
+          finished_at: now,
+          result_url: `/api/v1/projects/${projectID}/queries/88888888-8888-4888-8888-888888888888/result`,
+        },
+      });
+    }
+    return route.fallback();
+  });
+  await page.route(
+    `**/api/v1/projects/${projectID}/queries/88888888-8888-4888-8888-888888888888/result**`,
+    (route) =>
+      route.fulfill({
+        json: {
+          query_id: '88888888-8888-4888-8888-888888888888',
+          columns: [
+            { key: 'element_path', type: 'string' },
+            { key: 'clicks', type: 'integer' },
+            { key: 'avg_x_ratio', type: 'number' },
+            { key: 'avg_y_ratio', type: 'number' },
+            { key: 'viewport_count', type: 'integer' },
+          ],
+          rows: [
+            {
+              element_path: 'main:nth-of-type(1)>button:nth-of-type(1)',
+              clicks: 14,
+              avg_x_ratio: 0.425,
+              avg_y_ratio: 0.18,
+              viewport_count: 3,
+            },
+          ],
+          metadata: {
+            data_watermark: '2026-11-22T11:58:00.000Z',
+            accuracy: 'exact',
+            sample_rate: 1,
+            coverage: {
+              time_range: { from: '2026-11-21T12:00:00.000Z', to: now },
+              state: 'provisional',
+              known_gaps: ['pipeline_completeness_not_established'],
+            },
+            cache_hit: false,
+            generated_at: now,
+          },
+        },
+      }),
+  );
+
+  await page.goto(`/projects/${projectID}/heatmap?environment=development`);
+  await page.getByLabel('分析视角').selectOption('elements');
+  await page.getByLabel('路由模板').fill('/home');
+  await page.getByLabel('视口范围').selectOption('all');
+  await page.getByRole('button', { name: '运行查询', exact: true }).click();
+
+  expect(postedBody).toMatchObject({
+    kind: 'heatmap',
+    heatmap: {
+      route_template: '/home',
+      mode: 'elements',
+      viewport_scope: 'all',
+    },
+  });
+  await expect(page.getByText('main:nth-of-type(1)>button:nth-of-type(1)')).toBeVisible();
+  await expect(page.getByText('42.5%')).toBeVisible();
+  await expect(page.getByText('18.0%')).toBeVisible();
+  await expect(page.getByRole('img', { name: /视口点击分布/ })).toHaveCount(0);
+});
+
 test('replay failure is exclusive and transport details stay disclosed', async ({ page }) => {
   await page.goto(`/projects/${projectID}/session-replay?environment=development`);
   await page.locator('button.replay-stream-link').click();

@@ -1347,7 +1347,15 @@ WindowSeconds int64 `json:"window_seconds"`
 DecayHalfLifeSeconds *int64 `json:"decay_half_life_seconds,omitempty"`
 Model string `json:"model"`
 } `json:"attribution,omitempty"`
-Heatmap json.RawMessage `json:"heatmap,omitempty"`
+Heatmap *struct {
+RouteName *string `json:"route_name,omitempty"`
+RouteTemplate *string `json:"route_template,omitempty"`
+Mode *string `json:"mode,omitempty"`
+ViewportScope *string `json:"viewport_scope,omitempty"`
+ViewportBucket *string `json:"viewport_bucket,omitempty"`
+ViewportWidth *int64 `json:"viewport_width,omitempty"`
+ViewportHeight *int64 `json:"viewport_height,omitempty"`
+} `json:"heatmap,omitempty"`
 Limit *int64 `json:"limit,omitempty"`
 Cursor *string `json:"cursor,omitempty"`
 EventVersions []struct {

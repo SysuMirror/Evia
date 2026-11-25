@@ -51,6 +51,9 @@ import {
   formatTime,
   heatmapCellColor,
   heatmapCells,
+  heatmapFormViewportLabel,
+  heatmapGridAspect,
+  heatmapViewportLabel,
   initialForm,
   metricLabel,
   modes,
@@ -204,28 +207,24 @@ function QuerySourceDetails({ snapshot }: { snapshot: Snapshot }) {
 
 function HeatmapGrid({
   rows,
-  viewportWidth,
-  viewportHeight,
+  heatmap,
 }: {
   rows: Record<string, unknown>[];
-  viewportWidth: number;
-  viewportHeight: number;
+  heatmap: NonNullable<QueryRequest['heatmap']>;
 }) {
   const captionID = useId();
   const cells = heatmapCells(rows);
   const maximum = Math.max(0, ...cells.map((item) => item.clicks));
-  const width = Math.min(960, (560 * viewportWidth) / viewportHeight);
+  const aspect = heatmapGridAspect(heatmap);
+  const width = Math.min(960, (560 * aspect.width) / aspect.height);
   return (
     <figure className="analysis-heatmap" aria-labelledby={captionID}>
-      <figcaption id={captionID}>
-        视口点击分布，{viewportWidth.toLocaleString('zh-CN')} ×{' '}
-        {viewportHeight.toLocaleString('zh-CN')} 像素，20 × 10 网格
-      </figcaption>
+      <figcaption id={captionID}>视口点击分布，{aspect.label}，20 × 10 网格</figcaption>
       <div
         className="analysis-heatmap-grid"
         role="img"
         aria-label={`视口点击分布，最高单格 ${maximum.toLocaleString('zh-CN')} 次；完整数值见下方结果表。`}
-        style={{ aspectRatio: `${viewportWidth} / ${viewportHeight}`, maxWidth: `${width}px` }}
+        style={{ aspectRatio: `${aspect.width} / ${aspect.height}`, maxWidth: `${width}px` }}
       >
         {cells.map((item) => (
           <span
@@ -724,29 +723,38 @@ function AnalysisWorkspace({
               x_bin: '横向格（0–19）',
               y_bin: '纵向格（0–9）',
               clicks: '点击次数',
+              element_path: '元素路径',
+              avg_x_ratio: '平均横向位置',
+              avg_y_ratio: '平均纵向位置',
+              viewport_count: '覆盖视口数',
             }[column.key] ??
             column.label ??
             column.key),
       render: (row) =>
         column.key === 'conversion_rate' && typeof row[column.key] === 'number'
           ? `${((row[column.key] as number) * 100).toFixed(2)}%`
-          : column.key === 'step_index' && typeof row[column.key] === 'number'
-            ? String((row[column.key] as number) + 1)
-            : column.key === 'credit' && typeof row[column.key] === 'number'
-              ? (row[column.key] as number).toFixed(4).replace(/\.?0+$/, '')
-              : column.key === 'share' && typeof row[column.key] === 'number'
-                ? `${((row[column.key] as number) * 100).toFixed(2)}%`
-                : column.key === 'retention_rate' && Array.isArray(row[column.key])
-                  ? (row[column.key] as unknown[])
-                      .map((value) =>
-                        typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value),
-                      )
-                      .join('，')
-                  : column.key === 'retained' && Array.isArray(row[column.key])
-                    ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
-                    : column.key === 'path' && Array.isArray(row[column.key])
-                      ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
-                      : cell(row[column.key], column.type, snapshot!.request.timezone),
+          : (column.key === 'avg_x_ratio' || column.key === 'avg_y_ratio') &&
+              typeof row[column.key] === 'number'
+            ? `${((row[column.key] as number) * 100).toFixed(1)}%`
+            : column.key === 'step_index' && typeof row[column.key] === 'number'
+              ? String((row[column.key] as number) + 1)
+              : column.key === 'credit' && typeof row[column.key] === 'number'
+                ? (row[column.key] as number).toFixed(4).replace(/\.?0+$/, '')
+                : column.key === 'share' && typeof row[column.key] === 'number'
+                  ? `${((row[column.key] as number) * 100).toFixed(2)}%`
+                  : column.key === 'retention_rate' && Array.isArray(row[column.key])
+                    ? (row[column.key] as unknown[])
+                        .map((value) =>
+                          typeof value === 'number'
+                            ? `${(value * 100).toFixed(2)}%`
+                            : String(value),
+                        )
+                        .join('，')
+                    : column.key === 'retained' && Array.isArray(row[column.key])
+                      ? (row[column.key] as unknown[]).map((value) => String(value)).join('，')
+                      : column.key === 'path' && Array.isArray(row[column.key])
+                        ? (row[column.key] as unknown[]).map((value) => String(value)).join(' → ')
+                        : cell(row[column.key], column.type, snapshot!.request.timezone),
     })) ?? [];
   const loadMoreRows = async () => {
     const current = snapshot?.result;
@@ -971,6 +979,18 @@ function AnalysisWorkspace({
           )}
           {form.mode === 'heatmap' && (
             <>
+              <Field label="分析视角">
+                <Select
+                  value={form.heatmapMode}
+                  onChange={(event) =>
+                    patch('heatmapMode', event.target.value as AnalysisForm['heatmapMode'])
+                  }
+                  options={[
+                    { value: 'grid', label: '20 × 10 坐标网格' },
+                    { value: 'elements', label: 'Top 元素点击排行' },
+                  ]}
+                />
+              </Field>
               <Field label="精确路由字段">
                 <Select
                   value={form.heatmapRouteField}
@@ -999,28 +1019,66 @@ function AnalysisWorkspace({
                   placeholder={form.heatmapRouteField === 'route_name' ? 'Course' : '/courses/:id'}
                 />
               </Field>
-              <Field label="视口宽度">
-                <Input
-                  required
-                  type="number"
-                  min="1"
-                  max="65535"
-                  step="1"
-                  value={form.heatmapViewportWidth}
-                  onChange={(event) => patch('heatmapViewportWidth', event.target.value)}
+              <Field label="视口范围">
+                <Select
+                  value={form.heatmapViewportScope}
+                  onChange={(event) =>
+                    patch(
+                      'heatmapViewportScope',
+                      event.target.value as AnalysisForm['heatmapViewportScope'],
+                    )
+                  }
+                  options={[
+                    { value: 'exact', label: '精确视口' },
+                    { value: 'bucket', label: '响应式断点分档' },
+                    { value: 'all', label: '全部视口聚合' },
+                  ]}
                 />
               </Field>
-              <Field label="视口高度">
-                <Input
-                  required
-                  type="number"
-                  min="1"
-                  max="65535"
-                  step="1"
-                  value={form.heatmapViewportHeight}
-                  onChange={(event) => patch('heatmapViewportHeight', event.target.value)}
-                />
-              </Field>
+              {form.heatmapViewportScope === 'exact' && (
+                <>
+                  <Field label="视口宽度">
+                    <Input
+                      required
+                      type="number"
+                      min="1"
+                      max="65535"
+                      step="1"
+                      value={form.heatmapViewportWidth}
+                      onChange={(event) => patch('heatmapViewportWidth', event.target.value)}
+                    />
+                  </Field>
+                  <Field label="视口高度">
+                    <Input
+                      required
+                      type="number"
+                      min="1"
+                      max="65535"
+                      step="1"
+                      value={form.heatmapViewportHeight}
+                      onChange={(event) => patch('heatmapViewportHeight', event.target.value)}
+                    />
+                  </Field>
+                </>
+              )}
+              {form.heatmapViewportScope === 'bucket' && (
+                <Field label="视口分档">
+                  <Select
+                    value={form.heatmapViewportBucket}
+                    onChange={(event) =>
+                      patch(
+                        'heatmapViewportBucket',
+                        event.target.value as AnalysisForm['heatmapViewportBucket'],
+                      )
+                    }
+                    options={[
+                      { value: 'mobile', label: '移动端（< 768px）' },
+                      { value: 'tablet', label: '平板（768–1023px）' },
+                      { value: 'desktop', label: '桌面端（≥ 1024px）' },
+                    ]}
+                  />
+                </Field>
+              )}
             </>
           )}
         </div>
@@ -1061,8 +1119,8 @@ function AnalysisWorkspace({
       )}
       {form.mode === 'heatmap' && (
         <p className="field-help">
-          仅统计 sys.heatmap_click v1，按精确路由和精确视口匹配，固定汇总为 20 × 10
-          个视口坐标格；不读取页面截图或 DOM，时间范围最多 7 天。
+          仅统计 sys.heatmap_click v1，按精确路由与所选视口范围聚合；支持 20 × 10 归一化坐标网格或
+          Top-N 结构化 element_path 点击排行，不读取页面截图或文本，时间范围最多 7 天。
         </p>
       )}
       {catalog.hasNextPage && (
@@ -1153,8 +1211,8 @@ function AnalysisWorkspace({
                 <span>
                   <strong>查询范围</strong>
                   <span>
-                    {form.heatmapRoute || '尚未选择路由'}，{form.heatmapViewportWidth} ×{' '}
-                    {form.heatmapViewportHeight} 视口
+                    {form.heatmapRoute || '尚未选择路由'}，{heatmapFormViewportLabel(form)}，
+                    {form.heatmapMode === 'elements' ? 'Top 元素排行' : '20 × 10 网格'}
                   </span>
                 </span>
                 <span>{heatmapControlsOpen ? '收起条件' : '调整条件'}</span>
@@ -1220,7 +1278,7 @@ function AnalysisWorkspace({
                               : snapshot.request.kind === 'attribution'
                                 ? `${{ last_touch: '末次', first_touch: '首次', linear: '线性均分', position_based: '位置归因', time_decay: '时间衰减' }[snapshot.request.attribution?.model ?? 'last_touch']}触点归因，窗口 ${snapshot.request.attribution?.window_seconds ?? 0} 秒`
                                 : snapshot.request.kind === 'heatmap'
-                                  ? `${snapshot.request.heatmap?.route_name ?? snapshot.request.heatmap?.route_template ?? ''}，${snapshot.request.heatmap?.viewport_width ?? 0} × ${snapshot.request.heatmap?.viewport_height ?? 0} 视口`
+                                  ? `${snapshot.request.heatmap?.route_name ?? snapshot.request.heatmap?.route_template ?? ''}，${heatmapViewportLabel(snapshot.request.heatmap)}，${snapshot.request.heatmap?.mode === 'elements' ? 'Top 元素排行' : '20 × 10 网格'}`
                                   : '全部事件')}
                     {snapshot.request.subject
                       ? `，${snapshot.request.subject === 'uid' ? '原始 UID' : '原始匿名标识'}`
@@ -1325,7 +1383,8 @@ function AnalysisWorkspace({
                   <>
                     <div
                       className={`analysis-result-presentation${
-                        snapshot.request.kind === 'heatmap'
+                        snapshot.request.kind === 'heatmap' &&
+                        snapshot.request.heatmap?.mode !== 'elements'
                           ? ' analysis-result-presentation-heatmap'
                           : ''
                       }`}
@@ -1344,12 +1403,9 @@ function AnalysisWorkspace({
                         )}
                       {rows.length > 0 &&
                         snapshot.request.kind === 'heatmap' &&
-                        snapshot.request.heatmap && (
-                          <HeatmapGrid
-                            rows={rows}
-                            viewportWidth={snapshot.request.heatmap.viewport_width}
-                            viewportHeight={snapshot.request.heatmap.viewport_height}
-                          />
+                        snapshot.request.heatmap &&
+                        snapshot.request.heatmap.mode !== 'elements' && (
+                          <HeatmapGrid rows={rows} heatmap={snapshot.request.heatmap} />
                         )}
                       {rows.length > 0 &&
                         ((snapshot.request.kind === 'trend' && snapshot.request.interval) ||

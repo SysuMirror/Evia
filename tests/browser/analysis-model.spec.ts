@@ -9,6 +9,8 @@ import {
   fieldOperators,
   heatmapCellColor,
   heatmapCells,
+  heatmapGridAspect,
+  heatmapViewportLabel,
   operators,
   type AnalysisForm,
   type QueryField,
@@ -697,4 +699,44 @@ test('heatmap grid fills the fixed 20 by 10 surface and uses the validated blue 
   expect(heatmapCellColor(0, 5)).toBe('var(--color-surface-subtle)');
   expect(heatmapCellColor(1, 5)).toBe('#60a5fa');
   expect(heatmapCellColor(5, 5)).toBe('#172554');
+});
+
+test('heatmap form supports elements ranking and multi-viewport bucket or all scopes', () => {
+  const input = form();
+  input.mode = 'heatmap';
+  input.heatmapMode = 'elements';
+  input.heatmapRouteField = 'route_name';
+  input.heatmapRoute = 'Course';
+  input.heatmapViewportScope = 'all';
+  input.limit = '25';
+  const allElements = buildRequest(input, 'development');
+  expect(allElements).toMatchObject({
+    kind: 'heatmap',
+    limit: 25,
+    heatmap: {
+      route_name: 'Course',
+      mode: 'elements',
+      viewport_scope: 'all',
+    },
+  });
+  expect(allElements.heatmap?.viewport_width).toBeUndefined();
+  expect(allElements.heatmap?.viewport_height).toBeUndefined();
+  expect(allElements.heatmap?.viewport_bucket).toBeUndefined();
+  expect(heatmapViewportLabel(allElements.heatmap)).toBe('全部视口聚合');
+
+  input.heatmapMode = 'grid';
+  input.heatmapViewportScope = 'bucket';
+  input.heatmapViewportBucket = 'mobile';
+  input.limit = '200';
+  const mobileGrid = buildRequest(input, 'development');
+  expect(mobileGrid.heatmap).toEqual({
+    route_name: 'Course',
+    viewport_scope: 'bucket',
+    viewport_bucket: 'mobile',
+  });
+  expect(heatmapGridAspect(mobileGrid.heatmap!)).toEqual({
+    width: 390,
+    height: 700,
+    label: '移动端视口（< 768px）',
+  });
 });

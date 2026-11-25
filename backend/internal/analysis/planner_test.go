@@ -86,6 +86,45 @@ func TestHeatmapPlannerBindsExactScopeAndClampsEdges(t *testing.T) {
 	}
 }
 
+func TestHeatmapElementsAndMultiViewportValidationAndPlanning(t *testing.T) {
+	validator, e := contract.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	validCases := []string{
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_scope":"all"}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_scope":"bucket","viewport_bucket":"desktop"}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","limit":25,"heatmap":{"route_name":"Course","mode":"elements","viewport_scope":"all"}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","limit":10,"heatmap":{"route_name":"Course","mode":"elements","viewport_scope":"bucket","viewport_bucket":"mobile"}}`,
+	}
+	for _, raw := range validCases {
+		r, err := Parse([]byte(raw), validator)
+		if err != nil {
+			t.Fatalf("valid heatmap rejected: %v raw=%s", err, raw)
+		}
+		plan, err := Compile("db", "event_facts", Scope{ProjectID: "p1", Environment: "development"}, r)
+		if err != nil {
+			t.Fatalf("compile failed: %v raw=%s", err, raw)
+		}
+		if r.Heatmap.Mode == HeatmapModeElements {
+			if !strings.Contains(plan.SQL, "GROUP BY element_path") || !strings.Contains(plan.SQL, "ORDER BY clicks DESC,element_path ASC LIMIT ") {
+				t.Fatalf("elements SQL wrong: %s", plan.SQL)
+			}
+		}
+	}
+	invalidCases := []string{
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_scope":"all","viewport_width":1366}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_scope":"bucket"}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","viewport_scope":"bucket","viewport_bucket":"desktop","viewport_width":1440,"viewport_height":900}}`,
+		`{"kind":"heatmap","environment":"development","time_range":{"from":"2026-11-01T00:00:00Z","to":"2026-11-08T00:00:00Z"},"timezone":"UTC","heatmap":{"route_template":"/courses/:id","mode":"unknown","viewport_scope":"all"}}`,
+	}
+	for index, raw := range invalidCases {
+		if _, err := Parse([]byte(raw), validator); err == nil {
+			t.Fatalf("invalid heatmap multi-viewport case %d accepted: %s", index, raw)
+		}
+	}
+}
+
 func TestQueryBoundariesAndStrictDSL(t *testing.T) {
 	validator, e := contract.New()
 	if e != nil {

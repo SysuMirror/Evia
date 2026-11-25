@@ -411,7 +411,7 @@
     "heatmap": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Bounded click heatmap over fixed sys.heatmap_click schema version 1. Exactly one route_name or route_template is matched literally together with the exact viewport dimensions; results use fixed 20x10 bins.",
+      "description": "Bounded click heatmap over fixed sys.heatmap_click schema version 1. Matches exactly one route_name or route_template with exact, responsive bucket, or all-viewport aggregation, returning either fixed 20x10 coordinate bins (mode=grid) or bounded Top-N element_path rankings (mode=elements).",
       "properties": {
         "route_name": {
           "type": "string",
@@ -422,6 +422,15 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "mode": {
+          "enum": ["grid", "elements"]
+        },
+        "viewport_scope": {
+          "enum": ["exact", "bucket", "all"]
+        },
+        "viewport_bucket": {
+          "enum": ["mobile", "tablet", "desktop"]
         },
         "viewport_width": {
           "type": "integer",
@@ -434,19 +443,76 @@
           "maximum": 65535
         }
       },
-      "required": ["viewport_width", "viewport_height"],
-      "oneOf": [
+      "allOf": [
         {
-          "required": ["route_name"],
-          "not": {
-            "required": ["route_template"]
-          }
+          "oneOf": [
+            {
+              "required": ["route_name"],
+              "not": {
+                "required": ["route_template"]
+              }
+            },
+            {
+              "required": ["route_template"],
+              "not": {
+                "required": ["route_name"]
+              }
+            }
+          ]
         },
         {
-          "required": ["route_template"],
-          "not": {
-            "required": ["route_name"]
-          }
+          "oneOf": [
+            {
+              "properties": {
+                "viewport_scope": {
+                  "const": "exact"
+                }
+              },
+              "required": ["viewport_width", "viewport_height"],
+              "not": {
+                "required": ["viewport_bucket"]
+              }
+            },
+            {
+              "properties": {
+                "viewport_scope": {
+                  "const": "bucket"
+                }
+              },
+              "required": ["viewport_scope", "viewport_bucket"],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": ["viewport_width"]
+                  },
+                  {
+                    "required": ["viewport_height"]
+                  }
+                ]
+              }
+            },
+            {
+              "properties": {
+                "viewport_scope": {
+                  "const": "all"
+                }
+              },
+              "required": ["viewport_scope"],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": ["viewport_width"]
+                  },
+                  {
+                    "required": ["viewport_height"]
+                  },
+                  {
+                    "required": ["viewport_bucket"]
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -958,9 +1024,26 @@
       },
       "then": {
         "required": ["heatmap"],
-        "properties": {
-          "limit": {
-            "minimum": 200
+        "if": {
+          "not": {
+            "properties": {
+              "heatmap": {
+                "properties": {
+                  "mode": {
+                    "const": "elements"
+                  }
+                },
+                "required": ["mode"]
+              }
+            },
+            "required": ["heatmap"]
+          }
+        },
+        "then": {
+          "properties": {
+            "limit": {
+              "minimum": 200
+            }
           }
         },
         "not": {
