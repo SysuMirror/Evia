@@ -13,7 +13,8 @@
         "retention",
         "segment",
         "path",
-        "attribution"
+        "attribution",
+        "experiment"
       ]
     },
     "event_versions": {
@@ -51,6 +52,9 @@
     },
     "attribution": {
       "$ref": "../query/query-request.schema.json#/properties/attribution"
+    },
+    "experiment": {
+      "$ref": "../query/query-request.schema.json#/properties/experiment"
     }
   },
   "required": [
@@ -213,6 +217,11 @@
               "required": [
                 "attribution"
               ]
+            },
+            {
+              "required": [
+                "experiment"
+              ]
             }
           ]
         }
@@ -272,6 +281,11 @@
               "required": [
                 "attribution"
               ]
+            },
+            {
+              "required": [
+                "experiment"
+              ]
             }
           ]
         }
@@ -330,6 +344,75 @@
             {
               "required": [
                 "path"
+              ]
+            },
+            {
+              "required": [
+                "experiment"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "experiment"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "experiment",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
+              ]
+            },
+            {
+              "required": [
+                "retention"
+              ]
+            },
+            {
+              "required": [
+                "segment"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "attribution"
               ]
             }
           ]

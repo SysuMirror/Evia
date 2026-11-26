@@ -46,6 +46,7 @@ type Service struct {
 	validator              Validator
 	options                Options
 	reserved               ReservedEventProvider
+	experiments            ExperimentProvider
 	contentEncryption      *ContentEncryption
 	telemetrySigner        *telemetry.Signer
 	telemetryTTL           time.Duration
@@ -62,6 +63,14 @@ type Service struct {
 // events, byte-identical to the historical behaviour.
 func (s *Service) WithReservedEvents(provider ReservedEventProvider) *Service {
 	s.reserved = provider
+	return s
+}
+
+// WithExperiments attaches a provider of running experiments for /v1/config.
+// Passing nil or returning zero running experiments keeps the response
+// byte-identical to historical configs.
+func (s *Service) WithExperiments(provider ExperimentProvider) *Service {
+	s.experiments = provider
 	return s
 }
 
@@ -281,6 +290,18 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 		}
 		if len(out.Config.Events) > PublicConfigEventLimit {
 			return ConfigResult{}, Unavailable("PUBLIC_CONFIG_LIMIT_EXCEEDED")
+		}
+	}
+	if s.experiments != nil {
+		exps, expErr := s.experiments.RunningExperiments(ctx, snapshot.Source.ProjectID, snapshot.Source.Environment)
+		if expErr != nil {
+			return ConfigResult{}, expErr
+		}
+		if len(exps) > 0 {
+			if len(exps) > 100 {
+				exps = exps[:100]
+			}
+			out.Config.Experiments = exps
 		}
 	}
 	if s.contentEncryption != nil {

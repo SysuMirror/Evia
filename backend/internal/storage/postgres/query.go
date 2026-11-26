@@ -142,6 +142,13 @@ func resolveQueryFields(ctx context.Context, tx pgx.Tx, project string, request 
 			}
 		}
 	}
+	if request.Experiment != nil {
+		for _, step := range []analysis.Step{request.Experiment.ExposureEvent, request.Experiment.OutcomeEvent} {
+			if _, e := load(step.EventKey, step.SchemaVersion); e != nil {
+				return e
+			}
+		}
+	}
 	if e := analysis.WalkFields(request, func(field *analysis.Field) error {
 		if field.Kind == "system" {
 			return nil

@@ -1,15 +1,18 @@
 import type {
   BrowserClient,
   ClientOptions,
+  ConfigExperiment,
   DrainUntilSettledOptions,
   DrainUntilSettledReason,
   DrainUntilSettledResult,
   Emission,
   EncryptedContentChunk,
   Envelope,
+  EvaluateExperimentOptions,
   EventContext,
   EventOptions,
   EventOutcome,
+  ExperimentAssignment,
   FlushResult,
   HeatmapClick,
   HeatmapHost,
@@ -22,6 +25,7 @@ import type {
   SessionEndReason,
   StoragePort,
 } from './types.js';
+import { assignExperimentVariant } from './experiments.js';
 import {
   boundedInteger,
   byteLength,
@@ -393,6 +397,7 @@ class Client implements BrowserClient {
   private queueBytes = 0;
   private batch?: Batch;
   private readonly ownedEmissions = new WeakSet<Emission>();
+  private readonly exposedExperiments = new Set<string>();
   private uid?: string;
   private anonymousId: string;
   private readonly tabId: string;
@@ -1008,6 +1013,66 @@ class Client implements BrowserClient {
     return emission;
   }
 
+  listExperiments(): readonly ConfigExperiment[] {
+    return this.config?.experiments ? [...this.config.experiments] : [];
+  }
+
+  evaluateExperiment(
+    experimentKey: string,
+    options: EvaluateExperimentOptions = {},
+  ): ExperimentAssignment {
+    const subjectId = this.uid ?? this.anonymousId;
+    const experiment = this.config?.experiments?.find(
+      (item) => item.experiment_key === experimentKey,
+    );
+    if (!experiment) {
+      return {
+        experimentKey,
+        variant: options.fallback ?? null,
+        allocated: false,
+        reason: 'not_found',
+        subjectId,
+      };
+    }
+    const decision = assignExperimentVariant(experiment, subjectId);
+    let exposure: Emission | undefined;
+    if (
+      options.autoExpose !== false &&
+      decision.allocated &&
+      this.enabled &&
+      !this.destroyed &&
+      this.config
+    ) {
+      const dedupeKey = `${experiment.experiment_key}:${experiment.version}:${decision.variant}:${subjectId}`;
+      if (!this.exposedExperiments.has(dedupeKey)) {
+        const eventRule = this.config.events.find(
+          (item) => item.event_key === experiment.exposure_event_key,
+        );
+        if (eventRule) {
+          this.exposedExperiments.add(dedupeKey);
+          const props: Record<string, string | number | boolean> = {
+            experiment_key: experiment.experiment_key,
+            variant: decision.variant,
+          };
+          const schemaProps = eventRule.schema.properties as Record<string, unknown> | undefined;
+          if (schemaProps && 'experiment_version' in schemaProps) {
+            props.experiment_version = experiment.version;
+          }
+          exposure = this.emit(experiment.exposure_event_key, props);
+        }
+      }
+    }
+    return {
+      experimentKey: experiment.experiment_key,
+      variant: decision.variant,
+      version: experiment.version,
+      allocated: decision.allocated,
+      reason: decision.reason,
+      subjectId,
+      exposure,
+    };
+  }
+
   identify(uid: string): void {
     this.assertEnabled();
     requireText(uid, 128, true);
@@ -1029,6 +1094,7 @@ class Client implements BrowserClient {
     // emit before rotating so the event keeps the prior session/identity context.
     this.emitSessionEnd('logout');
     this.uid = undefined;
+    this.exposedExperiments.clear();
     this.anonymousId = this.uuid();
     this.persistAnonymous();
     this.sessionId = this.uuid();

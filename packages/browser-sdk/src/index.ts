@@ -1,18 +1,24 @@
 export { createEviaClient } from './client.js';
+export { assignExperimentVariant, hashExperimentBucketBps } from './experiments.js';
 export { EviaSDKError } from './validation.js';
 export type {
   BrowserClient,
   ClientOptions,
   Clock,
+  ConfigExperiment,
+  ConfigExperimentVariant,
   DrainUntilSettledOptions,
   DrainUntilSettledReason,
   DrainUntilSettledResult,
   Emission,
   EncryptedContentChunk,
   Environment,
+  EvaluateExperimentOptions,
   EventContext,
   EventOptions,
   EventOutcome,
+  ExperimentAssignment,
+  ExperimentAssignmentReason,
   FlushResult,
   HeatmapClick,
   HeatmapHost,

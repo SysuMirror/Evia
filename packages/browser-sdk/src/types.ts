@@ -2,6 +2,40 @@ export type Environment = 'development' | 'staging' | 'production';
 export type Scalar = string | number | boolean;
 export type Properties = Readonly<Record<string, Scalar | readonly Scalar[]>>;
 
+export interface ConfigExperimentVariant {
+  readonly key: string;
+  readonly weight_bps: number;
+}
+
+export interface ConfigExperiment {
+  readonly experiment_key: string;
+  readonly version: number;
+  readonly salt: string;
+  readonly control_variant: string;
+  readonly exposure_event_key: string;
+  readonly variants: readonly ConfigExperimentVariant[];
+  readonly overrides?: Readonly<Record<string, string>>;
+}
+
+export type ExperimentAssignmentReason = 'override' | 'allocated' | 'unallocated' | 'not_found';
+
+export interface ExperimentAssignment {
+  readonly experimentKey: string;
+  readonly variant: string | null;
+  readonly version?: number;
+  readonly allocated: boolean;
+  readonly reason: ExperimentAssignmentReason;
+  readonly subjectId: string;
+  readonly exposure?: Emission;
+}
+
+export interface EvaluateExperimentOptions {
+  /** Fallback variant returned when config is unavailable or experiment is not running. */
+  fallback?: string;
+  /** Automatically emit the configured exposure event once per session/subject/version. Defaults to true. */
+  autoExpose?: boolean;
+}
+
 export interface PublicConfig {
   format: 'evia.public-config.v1';
   project_id: string;
@@ -12,6 +46,7 @@ export interface PublicConfig {
     schema_version: number;
     schema: Readonly<Record<string, unknown>>;
   }[];
+  experiments?: readonly ConfigExperiment[];
   content_encryption?: Readonly<{
     key_id: string;
     alg: 'RSA-OAEP-256';
@@ -300,6 +335,13 @@ export interface BrowserClient {
     options?: DrainUntilSettledOptions,
   ): Promise<DrainUntilSettledResult>;
   reportOperationFailure(failure: OperationFailure): Emission;
+  /** Read-only snapshot of running experiments received from /v1/config. */
+  listExperiments(): readonly ConfigExperiment[];
+  /** Deterministically evaluate a running experiment locally and optionally emit its exposure event once. */
+  evaluateExperiment(
+    experimentKey: string,
+    options?: EvaluateExperimentOptions,
+  ): ExperimentAssignment;
   identify(uid: string): void;
   reset(): void;
   beginNavigation(): NavigationLink;

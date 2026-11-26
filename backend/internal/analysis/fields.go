@@ -81,6 +81,22 @@ func WalkFields(r *Request, visit func(*Field) error) error {
 			}
 		}
 	}
+	if r.Experiment != nil {
+		if e := visit(&r.Experiment.VariantField); e != nil {
+			return e
+		}
+		if e := filter(r.Experiment.ExposureEvent.Filter); e != nil {
+			return e
+		}
+		if e := filter(r.Experiment.OutcomeEvent.Filter); e != nil {
+			return e
+		}
+		if r.Experiment.OutcomeValueField != nil {
+			if e := visit(r.Experiment.OutcomeValueField); e != nil {
+				return e
+			}
+		}
+	}
 	return nil
 }
 func CheckResolved(r Request) error {
@@ -208,6 +224,29 @@ func CheckResolved(r Request) error {
 		case "string", "boolean", "number", "integer":
 		default:
 			return Invalid("INVALID_SEGMENT_FIELD", "分群字段必须是字符串、布尔或数值标量")
+		}
+	}
+	if r.Experiment != nil {
+		if e := filter(r.Experiment.ExposureEvent.Filter); e != nil {
+			return e
+		}
+		if e := filter(r.Experiment.OutcomeEvent.Filter); e != nil {
+			return e
+		}
+		switch r.Experiment.VariantField.ResolvedType {
+		case "string", "boolean", "number", "integer":
+		default:
+			return Invalid("INVALID_EXPERIMENT_VARIANT_FIELD", "实验分组字段必须是字符串、布尔或数值标量")
+		}
+		if r.Experiment.MetricMode == ExperimentMetricModeNumericMean {
+			if r.Experiment.OutcomeValueField == nil {
+				return Invalid("INVALID_EXPERIMENT_VALUE_FIELD", "数值均值实验必须指定目标数值字段")
+			}
+			switch r.Experiment.OutcomeValueField.ResolvedType {
+			case "number", "integer":
+			default:
+				return Invalid("INVALID_EXPERIMENT_VALUE_FIELD", "实验目标指标字段必须是数值类型")
+			}
 		}
 	}
 	return nil

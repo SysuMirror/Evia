@@ -23,6 +23,12 @@ export type SourceUpdate = components['schemas']['SourceUpdate'];
 export type SourceList = components['schemas']['SourceList'];
 export type SourceIssued = components['schemas']['SourceIssued'];
 export type CredentialRotation = components['schemas']['CredentialRotation'];
+export type ExperimentVariant = components['schemas']['ExperimentVariant'];
+export type Experiment = components['schemas']['Experiment'];
+export type ExperimentList = components['schemas']['ExperimentList'];
+export type ExperimentCreate = components['schemas']['ExperimentCreate'];
+export type ExperimentUpdate = components['schemas']['ExperimentUpdate'];
+export type ExperimentStatusChange = components['schemas']['ExperimentStatusChange'];
 export type MachinePermission = components['schemas']['MachinePermission'];
 export type MachinePrincipal = components['schemas']['MachinePrincipal'];
 export type MachineCredential = components['schemas']['MachineCredential'];
@@ -894,6 +900,47 @@ export const api = {
     }),
   listSources: (projectID: string, page: CatalogPage = {}, signal?: AbortSignal) =>
     request<SourceList>(`${projectPath(projectID)}/sources${catalogQuery(page)}`, { signal }),
+  listExperiments: (projectID: string, environment?: Environment, signal?: AbortSignal) =>
+    request<ExperimentList>(
+      `${projectPath(projectID)}/experiments${environment ? `?environment=${encodeURIComponent(environment)}` : ''}`,
+      { signal },
+    ),
+  getExperiment: (projectID: string, experimentID: string, signal?: AbortSignal) =>
+    request<Experiment>(
+      `${projectPath(projectID)}/experiments/${encodeURIComponent(experimentID)}`,
+      { signal },
+    ),
+  createExperiment: (projectID: string, body: ExperimentCreate, csrf: string) =>
+    request<Experiment>(`${projectPath(projectID)}/experiments`, {
+      method: 'POST',
+      body,
+      csrf,
+    }),
+  updateExperiment: (
+    projectID: string,
+    experimentID: string,
+    body: ExperimentUpdate,
+    csrf: string,
+  ) =>
+    request<Experiment>(
+      `${projectPath(projectID)}/experiments/${encodeURIComponent(experimentID)}`,
+      { method: 'PATCH', body, csrf },
+    ),
+  changeExperimentStatus: (
+    projectID: string,
+    experimentID: string,
+    body: ExperimentStatusChange,
+    csrf: string,
+  ) =>
+    request<Experiment>(
+      `${projectPath(projectID)}/experiments/${encodeURIComponent(experimentID)}/status`,
+      { method: 'POST', body, csrf },
+    ),
+  deleteExperiment: (projectID: string, experimentID: string, csrf: string) =>
+    request<void>(`${projectPath(projectID)}/experiments/${encodeURIComponent(experimentID)}`, {
+      method: 'DELETE',
+      csrf,
+    }),
   getSource: (projectID: string, sourceID: string, signal?: AbortSignal) =>
     request<Source>(`${projectPath(projectID)}/sources/${encodeURIComponent(sourceID)}`, {
       signal,

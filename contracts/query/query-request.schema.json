@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "properties": {
     "kind": {
-      "description": "Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints; heatmap aggregates fixed sys.heatmap_click v1 coordinates into a fixed 20x10 viewport grid.",
+      "description": "Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints; heatmap aggregates fixed sys.heatmap_click v1 coordinates into a fixed 20x10 viewport grid. experiment compares variants from an exposure event against a post-exposure outcome with SRM and statistical significance tests.",
       "enum": [
         "events",
         "trend",
@@ -15,12 +15,17 @@
         "segment",
         "path",
         "attribution",
-        "heatmap"
+        "heatmap",
+        "experiment"
       ]
     },
     "environment": {
       "description": "Deployment scope. The query runs only against facts published in this environment, and for machine credentials it must match the granted environment.",
-      "enum": ["development", "staging", "production"]
+      "enum": [
+        "development",
+        "staging",
+        "production"
+      ]
     },
     "time_range": {
       "type": "object",
@@ -35,7 +40,10 @@
           "format": "date-time"
         }
       },
-      "required": ["from", "to"]
+      "required": [
+        "from",
+        "to"
+      ]
     },
     "timezone": {
       "type": "string",
@@ -57,7 +65,11 @@
     },
     "subject": {
       "description": "Subject identifier the per-subject analyses count on. uid uses the original UID, anonymous uses the raw anonymous device identifier. resolved_person groups identities through the versioned identity graph: the request is expanded at enqueue time against the pinned (or latest completed) identity revision, bounded by the identity expansion budgets (IDENTITY_EXPANSION_EXCEEDED otherwise). Journeys stay single-raw-identity and reject resolved_person; raw-row event listings require identity_filter.resolved_person_id.",
-      "enum": ["uid", "anonymous", "resolved_person"]
+      "enum": [
+        "uid",
+        "anonymous",
+        "resolved_person"
+      ]
     },
     "identity_revision": {
       "type": "integer",
@@ -112,7 +124,10 @@
                 ]
               }
             },
-            "required": ["kind", "key"]
+            "required": [
+              "kind",
+              "key"
+            ]
           },
           {
             "type": "object",
@@ -136,7 +151,12 @@
                 "pattern": "^[a-z][a-z0-9_]{0,63}$"
               }
             },
-            "required": ["kind", "event_key", "schema_version", "key"]
+            "required": [
+              "kind",
+              "event_key",
+              "schema_version",
+              "key"
+            ]
           }
         ]
       }
@@ -150,7 +170,18 @@
         "properties": {
           "op": {
             "description": "Aggregation operator. p50/p90/p95/p99 are exact (quantileExact) or approximate (quantileTDigest) percentiles over a numeric field.",
-            "enum": ["count", "unique", "sum", "avg", "max", "min", "p50", "p90", "p95", "p99"]
+            "enum": [
+              "count",
+              "unique",
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "p50",
+              "p90",
+              "p95",
+              "p99"
+            ]
           },
           "field": {
             "oneOf": [
@@ -174,7 +205,10 @@
                     ]
                   }
                 },
-                "required": ["kind", "key"]
+                "required": [
+                  "kind",
+                  "key"
+                ]
               },
               {
                 "type": "object",
@@ -198,21 +232,36 @@
                     "pattern": "^[a-z][a-z0-9_]{0,63}$"
                   }
                 },
-                "required": ["kind", "event_key", "schema_version", "key"]
+                "required": [
+                  "kind",
+                  "event_key",
+                  "schema_version",
+                  "key"
+                ]
               }
             ]
           },
           "accuracy": {
             "description": "exact (the default) uses precise aggregation; approximate is accepted only for unique counts and the p50/p90/p95/p99 percentiles (ClickHouse uniqCombined64/quantileTDigest) and is rejected for every other operator.",
-            "enum": ["exact", "approximate"]
+            "enum": [
+              "exact",
+              "approximate"
+            ]
           }
         },
-        "required": ["op"]
+        "required": [
+          "op"
+        ]
       }
     },
     "interval": {
       "description": "Trend time bucket in the request timezone. Omit it to aggregate the whole range into one value. week starts on Monday (ClickHouse toStartOfWeek mode 1); month is intentionally not a trend interval because it is variable-duration.",
-      "enum": ["minute", "hour", "day", "week"]
+      "enum": [
+        "minute",
+        "hour",
+        "day",
+        "week"
+      ]
     },
     "funnel": {
       "type": "object",
@@ -240,7 +289,10 @@
                 "$ref": "#/$defs/filter"
               }
             },
-            "required": ["event_key", "schema_version"]
+            "required": [
+              "event_key",
+              "schema_version"
+            ]
           }
         },
         "window_seconds": {
@@ -285,7 +337,10 @@
                         ]
                       }
                     },
-                    "required": ["kind", "key"]
+                    "required": [
+                      "kind",
+                      "key"
+                    ]
                   },
                   {
                     "type": "object",
@@ -309,16 +364,28 @@
                         "pattern": "^[a-z][a-z0-9_]{0,63}$"
                       }
                     },
-                    "required": ["kind", "event_key", "schema_version", "key"]
+                    "required": [
+                      "kind",
+                      "event_key",
+                      "schema_version",
+                      "key"
+                    ]
                   }
                 ]
               }
             },
-            "required": ["step_index", "field"]
+            "required": [
+              "step_index",
+              "field"
+            ]
           }
         }
       },
-      "required": ["steps", "window_seconds", "mode"]
+      "required": [
+        "steps",
+        "window_seconds",
+        "mode"
+      ]
     },
     "retention": {
       "type": "object",
@@ -332,7 +399,11 @@
         },
         "granularity": {
           "description": "Calendar cohort period. month aligns each cohort to the first day of its calendar month in the request timezone; the bounded raw-pull window for month uses a conservative 31-day-per-period upper bound.",
-          "enum": ["day", "week", "month"]
+          "enum": [
+            "day",
+            "week",
+            "month"
+          ]
         },
         "periods": {
           "type": "integer",
@@ -340,7 +411,12 @@
           "maximum": 12
         }
       },
-      "required": ["start_event", "return_event", "granularity", "periods"]
+      "required": [
+        "start_event",
+        "return_event",
+        "granularity",
+        "periods"
+      ]
     },
     "segment": {
       "type": "object",
@@ -353,7 +429,10 @@
           "$ref": "#/$defs/segment_field"
         }
       },
-      "required": ["event", "field"]
+      "required": [
+        "event",
+        "field"
+      ]
     },
     "path": {
       "type": "object",
@@ -372,7 +451,9 @@
           "description": "When true, fold consecutive identical event keys into one node before start-pin and depth extraction. Defaults to false so existing path results stay byte-stable."
         }
       },
-      "required": ["depth"]
+      "required": [
+        "depth"
+      ]
     },
     "attribution": {
       "type": "object",
@@ -403,10 +484,21 @@
         "model": {
           "type": "string",
           "description": "Multi-touch model. position_based applies U-shaped weights: the first and last distinct in-window touchpoint each receive 0.4, the middle touchpoints share 0.2 equally; two touchpoints split 0.5/0.5 and a single touchpoint receives full weight.",
-          "enum": ["last_touch", "first_touch", "linear", "position_based", "time_decay"]
+          "enum": [
+            "last_touch",
+            "first_touch",
+            "linear",
+            "position_based",
+            "time_decay"
+          ]
         }
       },
-      "required": ["conversion", "touchpoints", "window_seconds", "model"]
+      "required": [
+        "conversion",
+        "touchpoints",
+        "window_seconds",
+        "model"
+      ]
     },
     "heatmap": {
       "type": "object",
@@ -424,13 +516,24 @@
           "maxLength": 256
         },
         "mode": {
-          "enum": ["grid", "elements"]
+          "enum": [
+            "grid",
+            "elements"
+          ]
         },
         "viewport_scope": {
-          "enum": ["exact", "bucket", "all"]
+          "enum": [
+            "exact",
+            "bucket",
+            "all"
+          ]
         },
         "viewport_bucket": {
-          "enum": ["mobile", "tablet", "desktop"]
+          "enum": [
+            "mobile",
+            "tablet",
+            "desktop"
+          ]
         },
         "viewport_width": {
           "type": "integer",
@@ -447,15 +550,23 @@
         {
           "oneOf": [
             {
-              "required": ["route_name"],
+              "required": [
+                "route_name"
+              ],
               "not": {
-                "required": ["route_template"]
+                "required": [
+                  "route_template"
+                ]
               }
             },
             {
-              "required": ["route_template"],
+              "required": [
+                "route_template"
+              ],
               "not": {
-                "required": ["route_name"]
+                "required": [
+                  "route_name"
+                ]
               }
             }
           ]
@@ -468,9 +579,14 @@
                   "const": "exact"
                 }
               },
-              "required": ["viewport_width", "viewport_height"],
+              "required": [
+                "viewport_width",
+                "viewport_height"
+              ],
               "not": {
-                "required": ["viewport_bucket"]
+                "required": [
+                  "viewport_bucket"
+                ]
               }
             },
             {
@@ -479,14 +595,21 @@
                   "const": "bucket"
                 }
               },
-              "required": ["viewport_scope", "viewport_bucket"],
+              "required": [
+                "viewport_scope",
+                "viewport_bucket"
+              ],
               "not": {
                 "anyOf": [
                   {
-                    "required": ["viewport_width"]
+                    "required": [
+                      "viewport_width"
+                    ]
                   },
                   {
-                    "required": ["viewport_height"]
+                    "required": [
+                      "viewport_height"
+                    ]
                   }
                 ]
               }
@@ -497,17 +620,25 @@
                   "const": "all"
                 }
               },
-              "required": ["viewport_scope"],
+              "required": [
+                "viewport_scope"
+              ],
               "not": {
                 "anyOf": [
                   {
-                    "required": ["viewport_width"]
+                    "required": [
+                      "viewport_width"
+                    ]
                   },
                   {
-                    "required": ["viewport_height"]
+                    "required": [
+                      "viewport_height"
+                    ]
                   },
                   {
-                    "required": ["viewport_bucket"]
+                    "required": [
+                      "viewport_bucket"
+                    ]
                   }
                 ]
               }
@@ -545,11 +676,75 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["event_key", "schema_version"]
+        "required": [
+          "event_key",
+          "schema_version"
+        ]
       }
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A/B experiment evaluation comparing variants assigned by earliest exposure against an in-window outcome event.",
+      "properties": {
+        "exposure_event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "variant_field": {
+          "$ref": "#/$defs/segment_field"
+        },
+        "control_variant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "outcome_event": {
+          "$ref": "#/$defs/retention_step"
+        },
+        "metric_mode": {
+          "type": "string",
+          "enum": [
+            "conversion",
+            "numeric_mean"
+          ],
+          "description": "conversion computes binary subject conversion rate (two-proportion Z-test); numeric_mean sums outcome_value_field per exposed subject (Welch t-test)."
+        },
+        "outcome_value_field": {
+          "$ref": "#/$defs/segment_field"
+        },
+        "window_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 2592000,
+          "description": "Post-exposure outcome attribution window in seconds (1 minute to 30 days)."
+        },
+        "expected_splits": {
+          "type": "object",
+          "maxProperties": 20,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "description": "Optional expected traffic weights (basis points) per variant for the SRM chi-squared test; omitted defaults to equal split across observed variants."
+        }
+      },
+      "required": [
+        "exposure_event",
+        "variant_field",
+        "control_variant",
+        "outcome_event",
+        "metric_mode",
+        "window_seconds"
+      ]
     }
   },
-  "required": ["kind", "environment", "time_range", "timezone"],
+  "required": [
+    "kind",
+    "environment",
+    "time_range",
+    "timezone"
+  ],
   "$defs": {
     "field": {
       "oneOf": [
@@ -573,7 +768,10 @@
               ]
             }
           },
-          "required": ["kind", "key"]
+          "required": [
+            "kind",
+            "key"
+          ]
         },
         {
           "type": "object",
@@ -597,7 +795,12 @@
               "pattern": "^[a-z][a-z0-9_]{0,63}$"
             }
           },
-          "required": ["kind", "event_key", "schema_version", "key"]
+          "required": [
+            "kind",
+            "event_key",
+            "schema_version",
+            "key"
+          ]
         }
       ]
     },
@@ -619,7 +822,10 @@
           "$ref": "#/$defs/filter"
         }
       },
-      "required": ["event_key", "schema_version"]
+      "required": [
+        "event_key",
+        "schema_version"
+      ]
     },
     "segment_field": {
       "oneOf": [
@@ -642,7 +848,10 @@
               ]
             }
           },
-          "required": ["kind", "key"]
+          "required": [
+            "kind",
+            "key"
+          ]
         },
         {
           "type": "object",
@@ -666,7 +875,12 @@
               "pattern": "^[a-z][a-z0-9_]{0,63}$"
             }
           },
-          "required": ["kind", "event_key", "schema_version", "key"]
+          "required": [
+            "kind",
+            "event_key",
+            "schema_version",
+            "key"
+          ]
         }
       ]
     },
@@ -678,7 +892,10 @@
           "properties": {
             "op": {
               "description": "Logical node combining 1-20 nested filter nodes. There is no generic NOT node; negation is expressed only through the explicit negated scalar operators (not_in/not_prefix/not_suffix/not_contains) so missing-key handling stays explicit.",
-              "enum": ["and", "or"]
+              "enum": [
+                "and",
+                "or"
+              ]
             },
             "args": {
               "type": "array",
@@ -689,7 +906,10 @@
               }
             }
           },
-          "required": ["op", "args"]
+          "required": [
+            "op",
+            "args"
+          ]
         },
         {
           "type": "object",
@@ -736,7 +956,10 @@
                       ]
                     }
                   },
-                  "required": ["kind", "key"]
+                  "required": [
+                    "kind",
+                    "key"
+                  ]
                 },
                 {
                   "type": "object",
@@ -760,7 +983,12 @@
                       "pattern": "^[a-z][a-z0-9_]{0,63}$"
                     }
                   },
-                  "required": ["kind", "event_key", "schema_version", "key"]
+                  "required": [
+                    "kind",
+                    "event_key",
+                    "schema_version",
+                    "key"
+                  ]
                 }
               ]
             },
@@ -805,7 +1033,11 @@
               ]
             }
           },
-          "required": ["op", "field", "value"]
+          "required": [
+            "op",
+            "field",
+            "value"
+          ]
         },
         {
           "type": "object",
@@ -813,7 +1045,10 @@
           "properties": {
             "op": {
               "description": "Key-existence test within the pinned event/version. is_present matches when the key exists, including an explicit null; is_missing matches absent keys. Neither coerces a missing value into a default or a typed comparison.",
-              "enum": ["is_missing", "is_present"]
+              "enum": [
+                "is_missing",
+                "is_present"
+              ]
             },
             "field": {
               "oneOf": [
@@ -837,7 +1072,10 @@
                       ]
                     }
                   },
-                  "required": ["kind", "key"]
+                  "required": [
+                    "kind",
+                    "key"
+                  ]
                 },
                 {
                   "type": "object",
@@ -861,12 +1099,20 @@
                       "pattern": "^[a-z][a-z0-9_]{0,63}$"
                     }
                   },
-                  "required": ["kind", "event_key", "schema_version", "key"]
+                  "required": [
+                    "kind",
+                    "event_key",
+                    "schema_version",
+                    "key"
+                  ]
                 }
               ]
             }
           },
-          "required": ["op", "field"]
+          "required": [
+            "op",
+            "field"
+          ]
         }
       ]
     }
@@ -881,7 +1127,9 @@
         }
       },
       "then": {
-        "required": ["identity_filter"]
+        "required": [
+          "identity_filter"
+        ]
       }
     },
     {
@@ -893,9 +1141,14 @@
         }
       },
       "then": {
-        "required": ["funnel", "subject"],
+        "required": [
+          "funnel",
+          "subject"
+        ],
         "not": {
-          "required": ["event_versions"]
+          "required": [
+            "event_versions"
+          ]
         }
       }
     },
@@ -908,14 +1161,21 @@
         }
       },
       "then": {
-        "required": ["retention", "subject"],
+        "required": [
+          "retention",
+          "subject"
+        ],
         "not": {
           "anyOf": [
             {
-              "required": ["event_versions"]
+              "required": [
+                "event_versions"
+              ]
             },
             {
-              "required": ["event_keys"]
+              "required": [
+                "event_keys"
+              ]
             }
           ]
         }
@@ -930,23 +1190,36 @@
         }
       },
       "then": {
-        "required": ["segment", "subject"],
+        "required": [
+          "segment",
+          "subject"
+        ],
         "not": {
           "anyOf": [
             {
-              "required": ["event_versions"]
+              "required": [
+                "event_versions"
+              ]
             },
             {
-              "required": ["event_keys"]
+              "required": [
+                "event_keys"
+              ]
             },
             {
-              "required": ["group_by"]
+              "required": [
+                "group_by"
+              ]
             },
             {
-              "required": ["metrics"]
+              "required": [
+                "metrics"
+              ]
             },
             {
-              "required": ["interval"]
+              "required": [
+                "interval"
+              ]
             }
           ]
         }
@@ -961,23 +1234,36 @@
         }
       },
       "then": {
-        "required": ["path", "subject"],
+        "required": [
+          "path",
+          "subject"
+        ],
         "not": {
           "anyOf": [
             {
-              "required": ["event_versions"]
+              "required": [
+                "event_versions"
+              ]
             },
             {
-              "required": ["event_keys"]
+              "required": [
+                "event_keys"
+              ]
             },
             {
-              "required": ["group_by"]
+              "required": [
+                "group_by"
+              ]
             },
             {
-              "required": ["metrics"]
+              "required": [
+                "metrics"
+              ]
             },
             {
-              "required": ["interval"]
+              "required": [
+                "interval"
+              ]
             }
           ]
         }
@@ -992,23 +1278,36 @@
         }
       },
       "then": {
-        "required": ["attribution", "subject"],
+        "required": [
+          "attribution",
+          "subject"
+        ],
         "not": {
           "anyOf": [
             {
-              "required": ["event_versions"]
+              "required": [
+                "event_versions"
+              ]
             },
             {
-              "required": ["event_keys"]
+              "required": [
+                "event_keys"
+              ]
             },
             {
-              "required": ["group_by"]
+              "required": [
+                "group_by"
+              ]
             },
             {
-              "required": ["metrics"]
+              "required": [
+                "metrics"
+              ]
             },
             {
-              "required": ["interval"]
+              "required": [
+                "interval"
+              ]
             }
           ]
         }
@@ -1023,7 +1322,9 @@
         }
       },
       "then": {
-        "required": ["heatmap"],
+        "required": [
+          "heatmap"
+        ],
         "if": {
           "not": {
             "properties": {
@@ -1033,10 +1334,14 @@
                     "const": "elements"
                   }
                 },
-                "required": ["mode"]
+                "required": [
+                  "mode"
+                ]
               }
             },
-            "required": ["heatmap"]
+            "required": [
+              "heatmap"
+            ]
           }
         },
         "then": {
@@ -1048,27 +1353,135 @@
         },
         "not": {
           "anyOf": [
-            { "required": ["event_keys"] },
-            { "required": ["event_versions"] },
-            { "required": ["filter"] },
-            { "required": ["subject"] },
-            { "required": ["identity_revision"] },
-            { "required": ["identity_filter"] },
-            { "required": ["group_by"] },
-            { "required": ["metrics"] },
-            { "required": ["interval"] },
-            { "required": ["funnel"] },
-            { "required": ["retention"] },
-            { "required": ["segment"] },
-            { "required": ["path"] },
-            { "required": ["attribution"] }
+            {
+              "required": [
+                "event_keys"
+              ]
+            },
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "filter"
+              ]
+            },
+            {
+              "required": [
+                "subject"
+              ]
+            },
+            {
+              "required": [
+                "identity_revision"
+              ]
+            },
+            {
+              "required": [
+                "identity_filter"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            },
+            {
+              "required": [
+                "funnel"
+              ]
+            },
+            {
+              "required": [
+                "retention"
+              ]
+            },
+            {
+              "required": [
+                "segment"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "attribution"
+              ]
+            },
+            {
+              "required": [
+                "experiment"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "experiment"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "experiment",
+          "subject"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "event_versions"
+              ]
+            },
+            {
+              "required": [
+                "event_keys"
+              ]
+            },
+            {
+              "required": [
+                "group_by"
+              ]
+            },
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            }
           ]
         }
       }
     },
     {
       "not": {
-        "required": ["event_keys", "event_versions"]
+        "required": [
+          "event_keys",
+          "event_versions"
+        ]
       }
     }
   ]

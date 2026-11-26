@@ -120,6 +120,31 @@ type Heatmap struct {
 	ViewportHeight int     `json:"viewport_height,omitempty"`
 }
 
+const (
+	ExperimentMetricModeConversion  = "conversion"
+	ExperimentMetricModeNumericMean = "numeric_mean"
+)
+
+// ExperimentMetricModes is the closed set of experiment evaluation modes.
+var ExperimentMetricModes = []string{
+	ExperimentMetricModeConversion,
+	ExperimentMetricModeNumericMean,
+}
+
+// Experiment defines an A/B experiment evaluation. Subjects are assigned once
+// to the variant of their earliest matching exposure event, and outcomes
+// occurring inside the post-exposure window are compared against control.
+type Experiment struct {
+	ExposureEvent     Step           `json:"exposure_event"`
+	VariantField      Field          `json:"variant_field"`
+	ControlVariant    string         `json:"control_variant"`
+	OutcomeEvent      Step           `json:"outcome_event"`
+	MetricMode        string         `json:"metric_mode"`
+	OutcomeValueField *Field         `json:"outcome_value_field,omitempty"`
+	WindowSeconds     int64          `json:"window_seconds"`
+	ExpectedSplits    map[string]int `json:"expected_splits,omitempty"`
+}
+
 // EventVersion selects facts from one immutable event schema version.
 type EventVersion struct {
 	EventKey      string `json:"event_key"`
@@ -145,6 +170,7 @@ type Request struct {
 	Path             *Path           `json:"path,omitempty"`
 	Attribution      *Attribution    `json:"attribution,omitempty"`
 	Heatmap          *Heatmap        `json:"heatmap,omitempty"`
+	Experiment       *Experiment     `json:"experiment,omitempty"`
 	Limit            int             `json:"limit,omitempty"`
 	Cursor           string          `json:"cursor,omitempty"`
 	// Formula is an internal-only execution marker. It is absent from the

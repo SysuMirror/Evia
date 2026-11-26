@@ -741,6 +741,73 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 			plan.Accuracy = AccuracyExact
 			plan.Columns = []Column{{Key: "x_bin", Type: "integer"}, {Key: "y_bin", Type: "integer"}, {Key: "clicks", Type: "integer"}}
 		}
+	case QueryKindExperiment:
+		subject, e := p.subjectColumn(r)
+		if e != nil {
+			return Plan{}, e
+		}
+		exp := r.Experiment
+		exposureFilter, e := p.filter(exp.ExposureEvent.Filter)
+		if e != nil {
+			return Plan{}, e
+		}
+		outcomeFilter, e := p.filter(exp.OutcomeEvent.Filter)
+		if e != nil {
+			return Plan{}, e
+		}
+		variantField, e := p.field(exp.VariantField)
+		if e != nil {
+			return Plan{}, e
+		}
+		exposureMatch := "(event_key=" + p.bind("String", exp.ExposureEvent.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(exp.ExposureEvent.SchemaVersion, 10)) + " AND " + exposureFilter + ")"
+		outcomeMatch := "(event_key=" + p.bind("String", exp.OutcomeEvent.EventKey) + " AND schema_version=" + p.bind("UInt64", strconv.FormatInt(exp.OutcomeEvent.SchemaVersion, 10)) + " AND " + outcomeFilter + ")"
+		selectSQL := []string{
+			subject + " AS subject_id",
+			"event_id",
+			"source_id",
+			"session_id",
+			"tab_id",
+			"event_key",
+			"toUnixTimestamp64Nano(event_time) AS event_time_ns",
+			"toUnixTimestamp64Nano(received_at) AS received_at_ns",
+			"ifNull(sequence,0) AS sequence",
+			exposureMatch + " AS is_exposure",
+			"(" + exposureMatch + " AND " + variantField.scope + " AND " + variantField.present + " AND isNotNull(" + variantField.value + ")) AS variant_present",
+			"if(" + exposureMatch + "," + variantField.value + ",NULL) AS variant_value",
+			outcomeMatch + " AS is_outcome",
+		}
+		if exp.MetricMode == ExperimentMetricModeNumericMean && exp.OutcomeValueField != nil {
+			valField, err := p.field(*exp.OutcomeValueField)
+			if err != nil {
+				return Plan{}, err
+			}
+			selectSQL = append(selectSQL,
+				"("+outcomeMatch+" AND "+valField.scope+" AND "+valField.present+" AND isNotNull("+valField.value+")) AS outcome_value_present",
+				"if("+outcomeMatch+","+valField.value+",NULL) AS outcome_value",
+			)
+		}
+		base += " AND isNotNull(" + subject + ") AND " + subject + "!=''"
+		base += " AND (" + exposureMatch + " OR " + outcomeMatch + ")"
+		plan.SQL = "SELECT " + strings.Join(selectSQL, ",") + base + " ORDER BY subject_id,event_time,ifNull(session_id,''),ifNull(tab_id,''),sequence,source_id,event_id LIMIT 100001"
+		plan.Accuracy = AccuracyExact
+		plan.Columns = []Column{
+			{Key: "variant", Type: "string"},
+			{Key: "is_control", Type: "boolean"},
+			{Key: "exposed_subjects", Type: "integer"},
+			{Key: "contaminated_subjects", Type: "integer"},
+			{Key: "sample_share", Type: "number"},
+			{Key: "converted_subjects", Type: "integer"},
+			{Key: "metric_value", Type: "number"},
+			{Key: "metric_stddev", Type: "number"},
+			{Key: "lift_absolute", Type: "number"},
+			{Key: "lift_relative", Type: "number"},
+			{Key: "ci_lower", Type: "number"},
+			{Key: "ci_upper", Type: "number"},
+			{Key: "p_value", Type: "number"},
+			{Key: "significant", Type: "boolean"},
+			{Key: "srm_p_value", Type: "number"},
+			{Key: "srm_alert", Type: "boolean"},
+		}
 	default:
 		return Plan{}, Invalid("UNSUPPORTED_QUERY_KIND", "查询类型尚未实现")
 	}

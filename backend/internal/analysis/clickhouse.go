@@ -250,6 +250,16 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 		}
 		return result, nil
 	}
+	if r.Kind == QueryKindExperiment {
+		if len(rows) > 100000 {
+			return Result{}, Invalid("QUERY_COST_EXCEEDED", "实验明细超过执行预算，请缩小范围")
+		}
+		result.Rows, e = evaluateExperiment(executionCtx, r, rows)
+		if e != nil {
+			return Result{}, e
+		}
+		return result, nil
+	}
 	if len(rows) > r.Limit {
 		return Result{}, Invalid("QUERY_RESULT_LIMIT_EXCEEDED", "结果超过行数限制，请缩小范围")
 	}

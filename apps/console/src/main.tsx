@@ -63,6 +63,9 @@ const AnalysisPage = lazy(() =>
 const HeatmapPage = lazy(() =>
   import('./analysis').then((module) => ({ default: module.HeatmapPage })),
 );
+const ExperimentsPage = lazy(() =>
+  import('./experiments/experiments').then((module) => ({ default: module.ExperimentsPage })),
+);
 const DashboardsPage = lazy(() =>
   import('./dashboards').then((module) => ({ default: module.DashboardsPage })),
 );
@@ -327,6 +330,7 @@ function Workspace({ session }: { session: Session }) {
     { path: 'sources', label: '接入来源', component: SourcesPage },
     { path: 'diagnostics', label: '采集诊断', component: DiagnosticsPage },
     { path: 'heatmap', label: '视口点击分布', component: HeatmapPage },
+    { path: 'experiments', label: 'A/B 实验', component: ExperimentsPage },
     { path: 'analysis', label: '高级查询工作台', component: AnalysisPage },
     { path: 'saved-analyses', label: '保存的分析', component: SavedAnalysesPage },
     { path: 'dashboards', label: '自定义看板', component: DashboardsPage },
@@ -372,6 +376,7 @@ function Workspace({ session }: { session: Session }) {
     if (
       [
         'heatmap',
+        'experiments',
         'analysis',
         'saved-analyses',
         'dashboards',

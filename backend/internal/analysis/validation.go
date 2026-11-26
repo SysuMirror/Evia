@@ -286,6 +286,13 @@ func ValidateConfiguration(r *Request) error {
 	} else if r.Attribution != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有归因查询接受 attribution 参数", "/attribution")
 	}
+	if r.Kind == QueryKindExperiment {
+		if e := validateExperiment(r); e != nil {
+			return e
+		}
+	} else if r.Experiment != nil {
+		return Invalid("INVALID_QUERY_OPTIONS", "只有实验查询接受 experiment 参数", "/experiment")
+	}
 	if r.Kind != QueryKindHeatmap && r.Heatmap != nil {
 		return Invalid("INVALID_QUERY_OPTIONS", "只有热力图查询接受 heatmap 参数", "/heatmap")
 	}
@@ -302,7 +309,7 @@ func validateHeatmap(r *Request) error {
 	if r.EventKeys != nil || r.EventVersions != nil || r.Filter != nil || r.Subject != "" || r.IdentityRevision != nil || r.IdentityFilter != nil || len(r.GroupBy) > 0 || len(r.Metrics) > 0 || r.Interval != "" {
 		return Invalid("INVALID_HEATMAP_OPTIONS", "热力图不接受通用事件、过滤、主体、分组、指标或间隔字段", "/heatmap")
 	}
-	if r.Funnel != nil || r.Retention != nil || r.Segment != nil || r.Path != nil || r.Attribution != nil {
+	if r.Funnel != nil || r.Retention != nil || r.Segment != nil || r.Path != nil || r.Attribution != nil || r.Experiment != nil {
 		return Invalid("INVALID_HEATMAP_OPTIONS", "热力图不接受其他分析配置", "/heatmap")
 	}
 	h := r.Heatmap
@@ -475,6 +482,71 @@ func validateSegment(r *Request) error {
 	}
 	nodes := 0
 	if e := validateFilter(sg.Event.Filter, 0, &nodes); e != nil {
+		return e
+	}
+	return nil
+}
+
+func validateExperiment(r *Request) error {
+	if !ValidQuerySubject(r.Subject) {
+		return Invalid("SUBJECT_REQUIRED", "实验分析必须指定 uid、anonymous 或 resolved_person 统计主体", "/subject")
+	}
+	exp := r.Experiment
+	if exp == nil {
+		return Invalid("INVALID_EXPERIMENT", "实验配置缺失", "/experiment")
+	}
+	if len(r.EventKeys) > 0 {
+		return Invalid("INVALID_EVENT_SELECTION", "实验分析通过曝光和目标事件固定事件版本", "/event_keys")
+	}
+	if !eventKey.MatchString(exp.ExposureEvent.EventKey) || exp.ExposureEvent.SchemaVersion < 1 || exp.ExposureEvent.SchemaVersion > MaxSafeInteger {
+		return Invalid("INVALID_EXPERIMENT_EXPOSURE", "实验曝光事件或版本无效", "/experiment/exposure_event")
+	}
+	if !eventKey.MatchString(exp.OutcomeEvent.EventKey) || exp.OutcomeEvent.SchemaVersion < 1 || exp.OutcomeEvent.SchemaVersion > MaxSafeInteger {
+		return Invalid("INVALID_EXPERIMENT_OUTCOME", "实验目标事件或版本无效", "/experiment/outcome_event")
+	}
+	if !utf8.ValidString(exp.ControlVariant) || strings.TrimSpace(exp.ControlVariant) == "" || utf8.RuneCountInString(exp.ControlVariant) > 128 || strings.ContainsRune(exp.ControlVariant, 0) {
+		return Invalid("INVALID_EXPERIMENT_CONTROL", "实验对照组名称无效", "/experiment/control_variant")
+	}
+	if exp.WindowSeconds < 60 || exp.WindowSeconds > 2592000 {
+		return Invalid("INVALID_EXPERIMENT_WINDOW", "实验归因窗口必须在 60 秒到 30 天之间", "/experiment/window_seconds")
+	}
+	if e := validateField(&exp.VariantField); e != nil {
+		return e
+	}
+	if exp.VariantField.Kind == "property" && (exp.VariantField.EventKey != exp.ExposureEvent.EventKey || exp.VariantField.SchemaVersion != exp.ExposureEvent.SchemaVersion) {
+		return Invalid("INVALID_EXPERIMENT_VARIANT_FIELD", "实验分组字段必须属于曝光事件及所选版本", "/experiment/variant_field")
+	}
+	switch exp.MetricMode {
+	case ExperimentMetricModeConversion:
+		if exp.OutcomeValueField != nil {
+			return Invalid("INVALID_EXPERIMENT_VALUE_FIELD", "转化率模式不接受目标数值字段", "/experiment/outcome_value_field")
+		}
+	case ExperimentMetricModeNumericMean:
+		if exp.OutcomeValueField == nil {
+			return Invalid("INVALID_EXPERIMENT_VALUE_FIELD", "数值均值模式必须指定目标数值字段", "/experiment/outcome_value_field")
+		}
+		if e := validateField(exp.OutcomeValueField); e != nil {
+			return e
+		}
+		if exp.OutcomeValueField.Kind == "property" && (exp.OutcomeValueField.EventKey != exp.OutcomeEvent.EventKey || exp.OutcomeValueField.SchemaVersion != exp.OutcomeEvent.SchemaVersion) {
+			return Invalid("INVALID_EXPERIMENT_VALUE_FIELD", "目标数值字段必须属于目标事件及所选版本", "/experiment/outcome_value_field")
+		}
+	default:
+		return Invalid("INVALID_EXPERIMENT_METRIC_MODE", "实验指标模式必须是 conversion 或 numeric_mean", "/experiment/metric_mode")
+	}
+	if len(exp.ExpectedSplits) > 20 {
+		return Invalid("INVALID_EXPERIMENT_SPLITS", "预期分流比例最多支持 20 个分组", "/experiment/expected_splits")
+	}
+	for variant, weight := range exp.ExpectedSplits {
+		if strings.TrimSpace(variant) == "" || utf8.RuneCountInString(variant) > 128 || weight < 1 || weight > 10000 {
+			return Invalid("INVALID_EXPERIMENT_SPLITS", "预期分流比例必须为 1 到 10000 的正整数", "/experiment/expected_splits")
+		}
+	}
+	nodes := 0
+	if e := validateFilter(exp.ExposureEvent.Filter, 0, &nodes); e != nil {
+		return e
+	}
+	if e := validateFilter(exp.OutcomeEvent.Filter, 0, &nodes); e != nil {
 		return e
 	}
 	return nil
@@ -655,8 +727,8 @@ func validateEventSelection(r Request) error {
 		}
 		seen[key] = true
 	}
-	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == QueryKindFunnel || r.Kind == QueryKindRetention || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution) {
-		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群、路径或归因查询", "/event_versions")
+	if r.EventVersions != nil && (len(r.EventVersions) == 0 || r.Kind == QueryKindFunnel || r.Kind == QueryKindRetention || r.Kind == QueryKindSegment || r.Kind == QueryKindPath || r.Kind == QueryKindAttribution || r.Kind == QueryKindExperiment) {
+		return Invalid("INVALID_EVENT_SELECTION", "固定事件版本不能为空且不能用于漏斗、留存、分群、路径、归因或实验查询", "/event_versions")
 	}
 	for _, version := range r.EventVersions {
 		if !eventKey.MatchString(version.EventKey) || version.SchemaVersion < 1 || version.SchemaVersion > MaxSafeInteger || seen[version.EventKey] {

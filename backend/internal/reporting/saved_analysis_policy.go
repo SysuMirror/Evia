@@ -461,6 +461,12 @@ func savedDependencies(draft SavedAnalysisDraft, template analysis.Template, in 
 			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
 		}
 	}
+	if template.Kind == analysis.QueryKindExperiment {
+		mode = SelectionModeExperimentSteps
+		for _, step := range []analysis.Step{template.Experiment.ExposureEvent, template.Experiment.OutcomeEvent} {
+			selected[analysis.EventVersion{EventKey: step.EventKey, SchemaVersion: step.SchemaVersion}] = true
+		}
+	}
 	if in.ProjectID != draft.ProjectID || in.Environment != draft.Environment || in.SelectionMode != mode || len(in.UnfixedEventKeys) > 0 || len(in.EventVersions) != len(selected) {
 		return invalid()
 	}
@@ -504,6 +510,7 @@ func savedAnalysisDiff(before *SavedAnalysisDefinition, after SavedAnalysisDefin
 	add(ChangeCategorySegment, "/query/segment", before.Query.Segment, after.Query.Segment)
 	add(ChangeCategoryPath, "/query/path", before.Query.Path, after.Query.Path)
 	add(ChangeCategoryAttribution, "/query/attribution", before.Query.Attribution, after.Query.Attribution)
+	add(ChangeCategoryExperiment, "/query/experiment", before.Query.Experiment, after.Query.Experiment)
 	add(ChangeCategoryLimit, "/query/limit", before.Query.Limit, after.Query.Limit)
 	add(ChangeCategoryMetricRef, "/metric_ref", before.MetricRef, after.MetricRef)
 	add(ChangeCategoryVisualization, "/visualization", before.Visualization, after.Visualization)

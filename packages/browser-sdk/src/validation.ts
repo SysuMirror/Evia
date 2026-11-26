@@ -180,5 +180,58 @@ export function validateConfig(
       throw new EviaSDKError('INVALID_CONFIG');
     seen.add(event.event_key);
   }
+  if (value.experiments !== undefined) {
+    if (!Array.isArray(value.experiments) || value.experiments.length > 100)
+      throw new EviaSDKError('INVALID_CONFIG');
+    const seenExperiments = new Set<string>();
+    for (const exp of value.experiments) {
+      if (
+        !isRecord(exp) ||
+        typeof exp.experiment_key !== 'string' ||
+        !/^[a-z][a-z0-9_]{1,63}$/.test(exp.experiment_key) ||
+        seenExperiments.has(exp.experiment_key) ||
+        !Number.isSafeInteger(exp.version) ||
+        Number(exp.version) < 1 ||
+        typeof exp.salt !== 'string' ||
+        exp.salt.length < 1 ||
+        exp.salt.length > 64 ||
+        typeof exp.control_variant !== 'string' ||
+        !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(exp.control_variant) ||
+        typeof exp.exposure_event_key !== 'string' ||
+        !/^[a-z][a-z0-9_]{1,63}$/.test(exp.exposure_event_key) ||
+        !Array.isArray(exp.variants) ||
+        exp.variants.length < 2 ||
+        exp.variants.length > 10
+      )
+        throw new EviaSDKError('INVALID_CONFIG');
+      seenExperiments.add(exp.experiment_key);
+      let weightSum = 0;
+      const variantKeys = new Set<string>();
+      for (const variant of exp.variants) {
+        if (
+          !isRecord(variant) ||
+          typeof variant.key !== 'string' ||
+          !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(variant.key) ||
+          variantKeys.has(variant.key) ||
+          !Number.isSafeInteger(variant.weight_bps) ||
+          Number(variant.weight_bps) < 0 ||
+          Number(variant.weight_bps) > 10000
+        )
+          throw new EviaSDKError('INVALID_CONFIG');
+        variantKeys.add(variant.key);
+        weightSum += Number(variant.weight_bps);
+      }
+      if (weightSum < 1 || weightSum > 10000 || !variantKeys.has(exp.control_variant))
+        throw new EviaSDKError('INVALID_CONFIG');
+      if (exp.overrides !== undefined) {
+        if (!isRecord(exp.overrides) || Object.keys(exp.overrides).length > 100)
+          throw new EviaSDKError('INVALID_CONFIG');
+        for (const target of Object.values(exp.overrides)) {
+          if (typeof target !== 'string' || !variantKeys.has(target))
+            throw new EviaSDKError('INVALID_CONFIG');
+        }
+      }
+    }
+  }
   return value as unknown as PublicConfig;
 }

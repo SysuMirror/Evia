@@ -104,12 +104,35 @@ type ConfigSignature struct {
 	Signature    string `json:"signature"`
 }
 
+type ConfigExperimentVariant struct {
+	Key       string `json:"key"`
+	WeightBps int    `json:"weight_bps"`
+}
+
+type ConfigExperiment struct {
+	Key              string                    `json:"experiment_key"`
+	Version          int64                     `json:"version"`
+	Salt             string                    `json:"salt"`
+	ControlVariant   string                    `json:"control_variant"`
+	ExposureEventKey string                    `json:"exposure_event_key"`
+	Variants         []ConfigExperimentVariant `json:"variants"`
+	Overrides        map[string]string         `json:"overrides,omitempty"`
+}
+
+// ExperimentProvider supplies running experiments for deterministic local
+// bucketing in public config. Returned slices must be deterministically ordered
+// because their JSON feeds ETag and Ed25519 config_signature.
+type ExperimentProvider interface {
+	RunningExperiments(ctx context.Context, projectID, environment string) ([]ConfigExperiment, error)
+}
+
 type Config struct {
 	Format             string             `json:"format"`
 	ProjectID          string             `json:"project_id"`
 	Environment        string             `json:"environment"`
 	Revision           int64              `json:"release_revision"`
 	Events             []ConfigEvent      `json:"events"`
+	Experiments        []ConfigExperiment `json:"experiments,omitempty"`
 	ContentEncryption  *ContentEncryption `json:"content_encryption,omitempty"`
 	TelemetryToken     string             `json:"telemetry_token,omitempty"`
 	TelemetryExpiresAt *time.Time         `json:"telemetry_expires_at,omitempty"`

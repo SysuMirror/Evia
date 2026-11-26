@@ -22,6 +22,7 @@ const (
 	ChangeCategorySegment       = "segment"
 	ChangeCategoryPath          = "path"
 	ChangeCategoryAttribution   = "attribution"
+	ChangeCategoryExperiment    = "experiment"
 	ChangeCategoryLimit         = "limit"
 	ChangeCategoryMetricRef     = "metric_ref"
 	ChangeCategoryVisualization = "visualization"
@@ -47,7 +48,7 @@ var (
 		ChangeCategoryEventVersions, ChangeCategoryFilter, ChangeCategorySubject,
 		ChangeCategoryMetrics, ChangeCategoryGroupBy, ChangeCategoryInterval,
 		ChangeCategoryFunnel, ChangeCategoryRetention, ChangeCategorySegment,
-		ChangeCategoryPath, ChangeCategoryAttribution, ChangeCategoryLimit,
+		ChangeCategoryPath, ChangeCategoryAttribution, ChangeCategoryExperiment, ChangeCategoryLimit,
 		ChangeCategoryMetricRef, ChangeCategoryVisualization,
 	}
 	MetricChangeCategories = []string{

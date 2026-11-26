@@ -26,6 +26,7 @@ import (
 	"github.com/howtomakeaname/Evia/backend/internal/delivery"
 	"github.com/howtomakeaname/Evia/backend/internal/diagnostics"
 	"github.com/howtomakeaname/Evia/backend/internal/erasure"
+	"github.com/howtomakeaname/Evia/backend/internal/experiments"
 	"github.com/howtomakeaname/Evia/backend/internal/exporting"
 	"github.com/howtomakeaname/Evia/backend/internal/ingestion"
 	"github.com/howtomakeaname/Evia/backend/internal/overview"
@@ -248,6 +249,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 	api.Settings = access.NewSettings(store)
 	api.AuditLogs = access.NewAuditLogs(store)
 	api.Accounts = access.NewAccounts(store)
+	api.Experiments = experiments.New(store)
 	api.Invitations = access.NewInvitations(store)
 	api.OAuth = access.NewOAuth(store, oauth2client.New(nil), toAccessOAuthProviders(c.OAuthProviders))
 	api.Erasure = store

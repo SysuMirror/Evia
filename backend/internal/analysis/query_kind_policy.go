@@ -14,6 +14,7 @@ const (
 	QueryKindPath        = "path"
 	QueryKindAttribution = "attribution"
 	QueryKindHeatmap     = "heatmap"
+	QueryKindExperiment  = "experiment"
 )
 
 // QueryKinds is the single Go-side source of truth for the query kinds
@@ -21,7 +22,7 @@ const (
 var QueryKinds = []string{
 	QueryKindEvents, QueryKindTrend, QueryKindFunnel, QueryKindJourney,
 	QueryKindRetention, QueryKindSegment, QueryKindPath, QueryKindAttribution,
-	QueryKindHeatmap,
+	QueryKindHeatmap, QueryKindExperiment,
 }
 
 // ValidQueryKind reports whether kind is one of the published query kinds.

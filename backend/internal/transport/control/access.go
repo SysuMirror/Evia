@@ -64,6 +64,7 @@ type API struct {
 	QuotaRuntime     QuotaRuntime
 	Artifacts        ArtifactService
 	Reports          ReportService
+	Experiments      ExperimentService
 	Cursor           *cursor.Codec
 	Origin           string
 	SecureCookies    bool
@@ -90,6 +91,7 @@ func (a *API) Handler() http.Handler {
 	a.registerOAuth(mux)
 	a.registerCatalog(mux)
 	a.registerSources(mux)
+	a.registerExperiments(mux)
 	(&AnalysisAPI{API: a, Service: a.Analysis}).Register(mux)
 	(&DiscoveryAPI{API: a, Service: a.Discovery}).Register(mux)
 	(&SavedAnalysesAPI{API: a, Service: a.SavedAnalyses}).Register(mux)

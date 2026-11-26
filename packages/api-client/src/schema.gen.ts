@@ -2072,6 +2072,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** listExperiments */
+        get: operations["listExperiments"];
+        put?: never;
+        /** createExperiment */
+        post: operations["createExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/experiments/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getExperiment */
+        get: operations["getExperiment"];
+        put?: never;
+        post?: never;
+        /** deleteExperiment */
+        delete: operations["deleteExperiment"];
+        options?: never;
+        head?: never;
+        /** updateExperiment */
+        patch: operations["updateExperiment"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/experiments/{experiment_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** changeExperimentStatus */
+        post: operations["changeExperimentStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2610,6 +2664,8 @@ export interface components {
             /** Format: date-time */
             telemetry_expires_at?: string;
             config_signature?: components["schemas"]["PublicConfigSignature"];
+            /** @description Running experiments for deterministic local bucketing; omitted when no experiment is active. */
+            experiments?: components["schemas"]["ConfigExperiment"][];
         };
         ProblemDetails: {
             field_paths?: string[];
@@ -2715,7 +2771,7 @@ export interface components {
             project_id: string;
             environment: string;
             /** @enum {string} */
-            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events" | "retention_steps" | "segment_steps" | "path_steps" | "attribution_steps";
+            selection_mode: "event_versions" | "funnel_steps" | "event_keys" | "all_events" | "retention_steps" | "segment_steps" | "path_steps" | "attribution_steps" | "experiment_steps";
             unfixed_event_keys: string[];
             event_versions: components["schemas"]["QueryDependency"][];
             metric?: components["schemas"]["MetricDependency"];
@@ -3010,7 +3066,7 @@ export interface components {
         };
         SavedAnalysisChange: {
             /** @enum {string} */
-            category: "definition" | "metadata" | "kind" | "event_versions" | "filter" | "subject" | "metrics" | "group_by" | "interval" | "funnel" | "limit" | "visualization" | "retention" | "segment" | "path" | "attribution" | "metric_ref";
+            category: "definition" | "metadata" | "kind" | "event_versions" | "filter" | "subject" | "metrics" | "group_by" | "interval" | "funnel" | "limit" | "visualization" | "retention" | "segment" | "path" | "attribution" | "metric_ref" | "experiment";
             path: string;
             before?: unknown;
             after?: unknown;
@@ -3997,6 +4053,89 @@ export interface components {
             session: components["schemas"]["Session"];
             next_path: string;
         };
+        ConfigExperimentVariant: {
+            key: string;
+            weight_bps: number;
+        };
+        ConfigExperiment: {
+            experiment_key: string;
+            version: number;
+            salt: string;
+            control_variant: string;
+            exposure_event_key: string;
+            variants: components["schemas"]["ConfigExperimentVariant"][];
+            overrides?: {
+                [key: string]: string;
+            };
+        };
+        ExperimentVariant: {
+            key: string;
+            name: string;
+            weight_bps: number;
+        };
+        Experiment: {
+            /** Format: uuid */
+            experiment_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            experiment_key: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            status: "draft" | "running" | "paused" | "completed";
+            salt: string;
+            control_variant: string;
+            exposure_event_key: string;
+            variants: components["schemas"]["ExperimentVariant"][];
+            overrides: {
+                [key: string]: string;
+            };
+            version: number;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            ended_at: string | null;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ExperimentList: {
+            items: components["schemas"]["Experiment"][];
+        };
+        ExperimentCreate: {
+            /** @enum {string} */
+            environment: "development" | "staging" | "production";
+            experiment_key: string;
+            name: string;
+            description?: string;
+            salt?: string;
+            control_variant: string;
+            exposure_event_key?: string;
+            variants: components["schemas"]["ExperimentVariant"][];
+            overrides?: {
+                [key: string]: string;
+            };
+        };
+        ExperimentUpdate: {
+            name: string;
+            description?: string;
+            salt?: string;
+            control_variant: string;
+            exposure_event_key?: string;
+            variants: components["schemas"]["ExperimentVariant"][];
+            overrides?: {
+                [key: string]: string;
+            };
+        };
+        ExperimentStatusChange: {
+            /** @enum {string} */
+            status: "draft" | "running" | "paused" | "completed";
+        };
         filter: {
             /**
              * @description Logical node combining 1-20 nested filter nodes. There is no generic NOT node; negation is expressed only through the explicit negated scalar operators (not_in/not_prefix/not_suffix/not_contains) so missing-key handling stays explicit.
@@ -4070,10 +4209,10 @@ export interface components {
         };
         "query-request.schema": {
             /**
-             * @description Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints; heatmap aggregates fixed sys.heatmap_click v1 coordinates into a fixed 20x10 viewport grid.
+             * @description Query kind selecting the analysis engine and its config block. events returns bounded raw rows; journey traces one subject and requires a single identity filter; trend aggregates over optional time buckets and groups; funnel is ordered multi-step conversion; retention is a calendar cohort matrix; segment partitions a subject population into scalar groups; path counts ordered event sequences; attribution credits converters across touchpoints; heatmap aggregates fixed sys.heatmap_click v1 coordinates into a fixed 20x10 viewport grid. experiment compares variants from an exposure event against a post-exposure outcome with SRM and statistical significance tests.
              * @enum {unknown}
              */
-            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution" | "heatmap";
+            kind: "events" | "trend" | "funnel" | "journey" | "retention" | "segment" | "path" | "attribution" | "heatmap" | "experiment";
             /**
              * @description Deployment scope. The query runs only against facts published in this environment, and for machine credentials it must match the granted environment.
              * @enum {unknown}
@@ -4240,6 +4379,25 @@ export interface components {
                 event_key: string;
                 schema_version: number;
             }[];
+            /** @description A/B experiment evaluation comparing variants assigned by earliest exposure against an in-window outcome event. */
+            experiment?: {
+                exposure_event: components["schemas"]["retention_step"];
+                variant_field: components["schemas"]["segment_field"];
+                control_variant: string;
+                outcome_event: components["schemas"]["retention_step"];
+                /**
+                 * @description conversion computes binary subject conversion rate (two-proportion Z-test); numeric_mean sums outcome_value_field per exposed subject (Welch t-test).
+                 * @enum {string}
+                 */
+                metric_mode: "conversion" | "numeric_mean";
+                outcome_value_field?: components["schemas"]["segment_field"];
+                /** @description Post-exposure outcome attribution window in seconds (1 minute to 30 days). */
+                window_seconds: number;
+                /** @description Optional expected traffic weights (basis points) per variant for the SRM chi-squared test; omitted defaults to equal split across observed variants. */
+                expected_splits?: {
+                    [key: string]: number;
+                };
+            };
             $defs: {
                 field: {
                     /** @constant */
@@ -4328,7 +4486,7 @@ export interface components {
                     };
                 };
             };
-        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown);
+        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown);
         "query-job.schema": {
             /** Format: uuid */
             query_id: string;
@@ -4607,13 +4765,32 @@ export interface components {
              */
             model: "last_touch" | "first_touch" | "linear" | "position_based" | "time_decay";
         };
+        /** @description A/B experiment evaluation comparing variants assigned by earliest exposure against an in-window outcome event. */
+        experiment: {
+            exposure_event: components["schemas"]["retention_step"];
+            variant_field: components["schemas"]["segment_field"];
+            control_variant: string;
+            outcome_event: components["schemas"]["retention_step"];
+            /**
+             * @description conversion computes binary subject conversion rate (two-proportion Z-test); numeric_mean sums outcome_value_field per exposed subject (Welch t-test).
+             * @enum {string}
+             */
+            metric_mode: "conversion" | "numeric_mean";
+            outcome_value_field?: components["schemas"]["segment_field"];
+            /** @description Post-exposure outcome attribution window in seconds (1 minute to 30 days). */
+            window_seconds: number;
+            /** @description Optional expected traffic weights (basis points) per variant for the SRM chi-squared test; omitted defaults to equal split across observed variants. */
+            expected_splits?: {
+                [key: string]: number;
+            };
+        };
         /** @description Context-free saved query configuration. Event versions and funnel steps pin immutable facts; execution supplies environment, time_range and timezone. Semantic validation enforces version ownership of every property reference. */
         "saved-analysis-template.schema": {
             /**
              * @description Reusable aggregate query engine. The closed set is trend, funnel, retention, segment, path and attribution; the ad-hoc-only kinds events and journey are rejected with UNSUPPORTED_QUERY_KIND. Event versions are pinned immutably through event_versions or typed steps, while environment, time range and timezone are supplied only when the template is bound.
              * @enum {string}
              */
-            kind: "trend" | "funnel" | "retention" | "segment" | "path" | "attribution";
+            kind: "trend" | "funnel" | "retention" | "segment" | "path" | "attribution" | "experiment";
             event_versions?: components["schemas"]["event_versions"];
             filter?: components["schemas"]["filter"];
             subject?: components["schemas"]["subject"];
@@ -4626,7 +4803,8 @@ export interface components {
             segment?: components["schemas"]["segment"];
             path?: components["schemas"]["path"];
             attribution?: components["schemas"]["attribution"];
-        } & (unknown & unknown & unknown & unknown & unknown & unknown);
+            experiment?: components["schemas"]["experiment"];
+        } & (unknown & unknown & unknown & unknown & unknown & unknown & unknown);
         time_range: {
             /** Format: date-time */
             from: string;
@@ -20524,6 +20702,648 @@ export interface operations {
             };
             /** @description 请求媒体类型不支持 */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listExperiments: {
+        parameters: {
+            query?: {
+                environment?: "development" | "staging" | "production";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentList"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createExperiment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentCreate"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteExperiment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateExperiment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentUpdate"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 服务端错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 暂不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    changeExperimentStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                project_id: string;
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentStatusChange"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 无权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 请求方法不被此接口支持 */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description 版本或状态冲突 */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

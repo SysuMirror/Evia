@@ -7,6 +7,7 @@ export type WorkspaceSection =
   | 'sources'
   | 'diagnostics'
   | 'heatmap'
+  | 'experiments'
   | 'analysis'
   | 'saved-analyses'
   | 'dashboards'
@@ -35,6 +36,12 @@ const paths: Record<WorkspaceSection, ReactNode> = {
       <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
       <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
       <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  experiments: (
+    <>
+      <path d="M9 3h6M10 3v5.5L5.2 17a2 2 0 0 0 1.7 3h10.2a2 2 0 0 0 1.7-3L14 8.5V3" />
+      <path d="M8.2 14h7.6" />
     </>
   ),
   exports: (

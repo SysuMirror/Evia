@@ -70,6 +70,7 @@ func newDelivery(c config.Config, store *postgres.Store, validator *contract.Val
 		return nil, nil, result
 	}
 	service.WithReservedEvents(systemEventProvider{catalog: systemCatalog})
+	service.WithExperiments(store)
 	if c.ConfigSigningJWKPath != "" {
 		signer, signerErr := configsign.NewFromFile(c.ConfigSigningJWKPath, c.ConfigSigningKeyID)
 		if signerErr != nil {

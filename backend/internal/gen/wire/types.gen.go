@@ -207,6 +207,21 @@ type ComparisonSpec struct {
 	Amount *int64 `json:"amount,omitempty"`
 }
 
+type ConfigExperiment struct {
+	ExperimentKey    string                    `json:"experiment_key"`
+	Version          int64                     `json:"version"`
+	Salt             string                    `json:"salt"`
+	ControlVariant   string                    `json:"control_variant"`
+	ExposureEventKey string                    `json:"exposure_event_key"`
+	Variants         []ConfigExperimentVariant `json:"variants"`
+	Overrides        map[string]any            `json:"overrides,omitzero"`
+}
+
+type ConfigExperimentVariant struct {
+	Key       string `json:"key"`
+	WeightBps int64  `json:"weight_bps"`
+}
+
 type ContentEncryptionPublicKey struct {
 	KeyID     string         `json:"key_id"`
 	Alg       string         `json:"alg"`
@@ -715,6 +730,63 @@ type EventVersion struct {
 	SchemaVersion int64      `json:"schema_version"`
 	DraftRevision int64      `json:"draft_revision"`
 	Definition    DraftInput `json:"definition"`
+}
+
+type Experiment struct {
+	ExperimentID     string              `json:"experiment_id"`
+	ProjectID        string              `json:"project_id"`
+	Environment      string              `json:"environment"`
+	ExperimentKey    string              `json:"experiment_key"`
+	Name             string              `json:"name"`
+	Description      string              `json:"description"`
+	Status           string              `json:"status"`
+	Salt             string              `json:"salt"`
+	ControlVariant   string              `json:"control_variant"`
+	ExposureEventKey string              `json:"exposure_event_key"`
+	Variants         []ExperimentVariant `json:"variants"`
+	Overrides        map[string]any      `json:"overrides"`
+	Version          int64               `json:"version"`
+	StartedAt        *string             `json:"started_at"`
+	EndedAt          *string             `json:"ended_at"`
+	CreatedBy        string              `json:"created_by"`
+	CreatedAt        string              `json:"created_at"`
+	UpdatedAt        string              `json:"updated_at"`
+}
+
+type ExperimentCreate struct {
+	Environment      string              `json:"environment"`
+	ExperimentKey    string              `json:"experiment_key"`
+	Name             string              `json:"name"`
+	Description      *string             `json:"description,omitempty"`
+	Salt             *string             `json:"salt,omitempty"`
+	ControlVariant   string              `json:"control_variant"`
+	ExposureEventKey *string             `json:"exposure_event_key,omitempty"`
+	Variants         []ExperimentVariant `json:"variants"`
+	Overrides        map[string]any      `json:"overrides,omitzero"`
+}
+
+type ExperimentList struct {
+	Items []Experiment `json:"items"`
+}
+
+type ExperimentStatusChange struct {
+	Status string `json:"status"`
+}
+
+type ExperimentUpdate struct {
+	Name             string              `json:"name"`
+	Description      *string             `json:"description,omitempty"`
+	Salt             *string             `json:"salt,omitempty"`
+	ControlVariant   string              `json:"control_variant"`
+	ExposureEventKey *string             `json:"exposure_event_key,omitempty"`
+	Variants         []ExperimentVariant `json:"variants"`
+	Overrides        map[string]any      `json:"overrides,omitzero"`
+}
+
+type ExperimentVariant struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	WeightBps int64  `json:"weight_bps"`
 }
 
 type ExportGrant struct {
@@ -1352,6 +1424,7 @@ type PublicConfig struct {
 	TelemetryToken     *string                     `json:"telemetry_token,omitempty"`
 	TelemetryExpiresAt *string                     `json:"telemetry_expires_at,omitempty"`
 	ConfigSignature    *PublicConfigSignature      `json:"config_signature,omitempty"`
+	Experiments        []ConfigExperiment          `json:"experiments,omitzero"`
 }
 
 type PublicConfigSignature struct {
@@ -1464,6 +1537,16 @@ type QueryRequest struct {
 		EventKey      string `json:"event_key"`
 		SchemaVersion int64  `json:"schema_version"`
 	} `json:"event_versions,omitzero"`
+	Experiment *struct {
+		ExposureEvent     json.RawMessage `json:"exposure_event"`
+		VariantField      json.RawMessage `json:"variant_field"`
+		ControlVariant    string          `json:"control_variant"`
+		OutcomeEvent      json.RawMessage `json:"outcome_event"`
+		MetricMode        string          `json:"metric_mode"`
+		OutcomeValueField json.RawMessage `json:"outcome_value_field,omitempty"`
+		WindowSeconds     int64           `json:"window_seconds"`
+		ExpectedSplits    map[string]any  `json:"expected_splits,omitzero"`
+	} `json:"experiment,omitempty"`
 }
 
 type QueryResult struct {
@@ -1717,6 +1800,7 @@ type SavedAnalysisTemplate struct {
 	Segment       json.RawMessage `json:"segment,omitempty"`
 	Path          json.RawMessage `json:"path,omitempty"`
 	Attribution   json.RawMessage `json:"attribution,omitempty"`
+	Experiment    json.RawMessage `json:"experiment,omitempty"`
 }
 
 type SavedAnalysisUpdate struct {

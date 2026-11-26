@@ -120,9 +120,10 @@ const (
 	SelectionModeSegmentSteps     = "segment_steps"
 	SelectionModePathSteps        = "path_steps"
 	SelectionModeAttributionSteps = "attribution_steps"
+	SelectionModeExperimentSteps  = "experiment_steps"
 )
 
-// SelectionModes is the single Go-side source of truth for the eight
+// SelectionModes is the single Go-side source of truth for the
 // dependency selection modes.
 var SelectionModes = []string{
 	SelectionModeEventKeys,
@@ -133,6 +134,7 @@ var SelectionModes = []string{
 	SelectionModeSegmentSteps,
 	SelectionModePathSteps,
 	SelectionModeAttributionSteps,
+	SelectionModeExperimentSteps,
 }
 
 type DependencyManifest struct {

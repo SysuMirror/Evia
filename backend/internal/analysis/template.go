@@ -20,6 +20,7 @@ type Template struct {
 	Segment       *Segment       `json:"segment,omitempty"`
 	Path          *Path          `json:"path,omitempty"`
 	Attribution   *Attribution   `json:"attribution,omitempty"`
+	Experiment    *Experiment    `json:"experiment,omitempty"`
 	Limit         int            `json:"limit,omitempty"`
 }
 
@@ -38,7 +39,7 @@ func ValidateTemplate(template *Template) error {
 	if e = WalkFields(&r, func(field *Field) error { field.ResolvedType = ""; return nil }); e != nil {
 		return e
 	}
-	*template = Template{Kind: r.Kind, EventVersions: r.EventVersions, Filter: r.Filter, Subject: r.Subject, GroupBy: r.GroupBy, Metrics: r.Metrics, Interval: r.Interval, Funnel: r.Funnel, Retention: r.Retention, Segment: r.Segment, Path: r.Path, Attribution: r.Attribution, Limit: r.Limit}
+	*template = Template{Kind: r.Kind, EventVersions: r.EventVersions, Filter: r.Filter, Subject: r.Subject, GroupBy: r.GroupBy, Metrics: r.Metrics, Interval: r.Interval, Funnel: r.Funnel, Retention: r.Retention, Segment: r.Segment, Path: r.Path, Attribution: r.Attribution, Experiment: r.Experiment, Limit: r.Limit}
 	return nil
 }
 
@@ -87,12 +88,12 @@ func (template Template) validatedRequest() (Request, error) {
 		if template.EventVersions != nil {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存留存分析通过起止事件固定事件版本", "/event_versions")
 		}
-	case QueryKindSegment, QueryKindPath, QueryKindAttribution:
+	case QueryKindSegment, QueryKindPath, QueryKindAttribution, QueryKindExperiment:
 		if template.EventVersions != nil {
 			return Request{}, Invalid("INVALID_EVENT_SELECTION", "保存高级分析通过类型化步骤固定事件版本", "/event_versions")
 		}
 	default:
-		return Request{}, Invalid("UNSUPPORTED_QUERY_KIND", "保存分析仅支持趋势、漏斗、留存、分群、路径或归因", "/kind")
+		return Request{}, Invalid("UNSUPPORTED_QUERY_KIND", "保存分析仅支持趋势、漏斗、留存、分群、路径、归因或实验", "/kind")
 	}
 	r, e := template.request()
 	if e != nil {
