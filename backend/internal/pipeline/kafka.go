@@ -97,7 +97,7 @@ func NewKafkaProducer(c KafkaConfig) (*KafkaProducer, error) {
 	}
 	// franz-go enables idempotent production by default. All in-sync replicas must
 	// acknowledge; bounded buffers apply backpressure instead of growing memory.
-	opts = append(opts, kgo.RequiredAcks(kgo.AllISRAcks()), kgo.StopProducerOnDataLossDetected(), kgo.MaxBufferedRecords(5000), kgo.MaxBufferedBytes(32*1024*1024), kgo.ProducerBatchMaxBytes(2*1024*1024), kgo.ProducerLinger(5*time.Millisecond), kgo.RecordDeliveryTimeout(timeout), kgo.ProducerBatchCompression(kgo.ZstdCompression()))
+	opts = append(opts, kgo.RequiredAcks(kgo.AllISRAcks()), kgo.StopProducerOnDataLossDetected(), kgo.MaxBufferedRecords(20000), kgo.MaxBufferedBytes(64*1024*1024), kgo.ProducerBatchMaxBytes(2*1024*1024), kgo.ProducerLinger(5*time.Millisecond), kgo.RecordDeliveryTimeout(timeout), kgo.ProducerBatchCompression(kgo.ZstdCompression()))
 	client, e := kgo.NewClient(opts...)
 	if e != nil {
 		return nil, e
@@ -315,7 +315,7 @@ func (p *KafkaProducer) admit(ctx context.Context) (func(), error) {
 	}
 	p.slotsOnce.Do(func() {
 		if p.slots == nil {
-			p.slots = make(chan struct{}, 16)
+			p.slots = make(chan struct{}, 256)
 		}
 	})
 	select {

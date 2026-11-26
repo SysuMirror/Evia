@@ -123,7 +123,11 @@ func (a *API) publicConfig(w http.ResponseWriter, r *http.Request) error {
 		return delivery.Invalid("INVALID_ETAG", "配置 ETag 不可重复")
 	}
 	etag := r.Header.Get("If-None-Match")
-	if etag != "" && (len(etag) != 66 || etag[0] != '"' || etag[65] != '"') {
+	normalizedETag := etag
+	if strings.HasPrefix(normalizedETag, "W/") {
+		normalizedETag = strings.TrimPrefix(normalizedETag, "W/")
+	}
+	if etag != "" && (len(normalizedETag) != 66 || normalizedETag[0] != '"' || normalizedETag[65] != '"') {
 		return delivery.Invalid("INVALID_ETAG", "请提供单个配置 ETag")
 	}
 	out, e := a.Delivery.PublicConfig(r.Context(), key, auth, current)
@@ -134,7 +138,7 @@ func (a *API) publicConfig(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("ETag", out.ETag)
 	// Source status, credential expiry and exact Origin have already been checked
 	// on this request. An ETag never bypasses revocation or compatibility policy.
-	if etag != "" && etag == out.ETag {
+	if normalizedETag != "" && normalizedETag == out.ETag {
 		w.WriteHeader(http.StatusNotModified)
 		return nil
 	}

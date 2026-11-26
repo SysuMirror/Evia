@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"regexp"
 	"sync"
 	"time"
@@ -56,6 +57,8 @@ type Service struct {
 	cacheBytes, cacheRules int
 	flights                map[string]*manifestFlight
 	slots                  chan struct{}
+	renderedMu             sync.RWMutex
+	renderedCache          map[string]ConfigResult
 }
 
 // WithReservedEvents attaches the platform sys.* catalog provider. It is
@@ -127,7 +130,7 @@ func New(store Store, probe Probe, validator Validator, options Options) (*Servi
 	if options.ProbeTimeout < time.Second || options.ProbeTimeout > 20*time.Second {
 		return nil, errors.New("invalid pipeline verification deadline")
 	}
-	return &Service{store: store, probe: probe, validator: validator, options: options, cache: map[string]manifestCache{}, flights: map[string]*manifestFlight{}, slots: make(chan struct{}, 8)}, nil
+	return &Service{store: store, probe: probe, validator: validator, options: options, cache: map[string]manifestCache{}, flights: map[string]*manifestFlight{}, slots: make(chan struct{}, 8), renderedCache: map[string]ConfigResult{}}, nil
 }
 func (s *Service) Activate(ctx context.Context, actor, project, key string, in ActivationInput) (Activation, error) {
 	if !uuid.MatchString(project) || !uuid.MatchString(in.ReleaseID) || !validEnvironment(in.Environment) || in.ExpectedActiveRevision < 0 || in.ExpectedActiveRevision >= MaxRevision {
@@ -254,6 +257,7 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 		return out, Unavailable("RELEASE_NOT_READY")
 	}
 	chosen := active
+	chosenHash := snapshot.Active.ManifestHash
 	if current > 0 && current != snapshot.Active.Revision {
 		if snapshot.Current == nil {
 			return out, fault.New(fault.Conflict, "CONFIG_REVISION_NOT_ACTIVATED", "请求的版本未曾激活")
@@ -270,8 +274,44 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 				return out, Unavailable("RELEASE_NOT_READY")
 			}
 			chosen = prior
+			chosenHash = snapshot.Current.ManifestHash
 		}
 	}
+	var exps []ConfigExperiment
+	expHash := ""
+	if s.experiments != nil {
+		loaded, expErr := s.experiments.RunningExperiments(ctx, snapshot.Source.ProjectID, snapshot.Source.Environment)
+		if expErr != nil {
+			return ConfigResult{}, expErr
+		}
+		if len(loaded) > 0 {
+			if len(loaded) > 100 {
+				loaded = loaded[:100]
+			}
+			exps = loaded
+			if h, hErr := canonical.Hash(exps); hErr == nil {
+				expHash = h
+			}
+		}
+	}
+	var telemetryExpires *time.Time
+	telemetryBucket := int64(0)
+	if s.telemetrySigner != nil && snapshot.Source.Kind == "browser" && auth.Origin != "" {
+		expires := time.Now().UTC().Truncate(s.telemetryTTL).Add(2 * s.telemetryTTL)
+		telemetryExpires = &expires
+		telemetryBucket = expires.Unix()
+	}
+	renderKey := fmt.Sprintf("%s|%s|%s|%d|%s|%s|%d|%s|%s",
+		snapshot.Source.ProjectID, snapshot.Source.Environment, snapshot.Source.Kind,
+		chosen.Revision, chosenHash, expHash, telemetryBucket, auth.Origin, key)
+	s.renderedMu.RLock()
+	cachedResult, hit := s.renderedCache[renderKey]
+	s.renderedMu.RUnlock()
+	if hit {
+		cachedResult.AllowedOrigin = out.AllowedOrigin
+		return cachedResult, nil
+	}
+
 	out.Config = Config{Format: "evia.public-config.v1", ProjectID: snapshot.Source.ProjectID, Environment: snapshot.Source.Environment, Revision: chosen.Revision, Events: []ConfigEvent{}}
 	for _, event := range chosen.Events {
 		if allows(event.Kinds, snapshot.Source.Kind) {
@@ -292,40 +332,28 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 			return ConfigResult{}, Unavailable("PUBLIC_CONFIG_LIMIT_EXCEEDED")
 		}
 	}
-	if s.experiments != nil {
-		exps, expErr := s.experiments.RunningExperiments(ctx, snapshot.Source.ProjectID, snapshot.Source.Environment)
-		if expErr != nil {
-			return ConfigResult{}, expErr
-		}
-		if len(exps) > 0 {
-			if len(exps) > 100 {
-				exps = exps[:100]
-			}
-			out.Config.Experiments = exps
-		}
+	if len(exps) > 0 {
+		out.Config.Experiments = exps
 	}
 	if s.contentEncryption != nil {
 		clone := *s.contentEncryption
 		clone.PublicJWK = make(map[string]any, len(s.contentEncryption.PublicJWK))
-		for key, value := range s.contentEncryption.PublicJWK {
-			clone.PublicJWK[key] = value
+		for k, value := range s.contentEncryption.PublicJWK {
+			clone.PublicJWK[k] = value
 		}
 		out.Config.ContentEncryption = &clone
 	}
-	if s.telemetrySigner != nil && snapshot.Source.Kind == "browser" && auth.Origin != "" {
-		// Bucket issuance so the ETag/token stays stable inside one TTL window;
-		// the next bucket rotates before the prior token expires.
-		expires := time.Now().UTC().Truncate(s.telemetryTTL).Add(2 * s.telemetryTTL)
+	if telemetryExpires != nil {
 		token, signErr := s.telemetrySigner.Sign(telemetry.Claims{
 			SourceID: snapshot.Source.ID, ProjectID: snapshot.Source.ProjectID,
 			Environment: snapshot.Source.Environment, Origin: auth.Origin,
-			Revision: chosen.Revision, WriteKeyHash: telemetry.HashWriteKey(key), ExpiresAt: expires.Unix(),
+			Revision: chosen.Revision, WriteKeyHash: telemetry.HashWriteKey(key), ExpiresAt: telemetryExpires.Unix(),
 		})
 		if signErr != nil {
 			return ConfigResult{}, signErr
 		}
 		out.Config.TelemetryToken = token
-		out.Config.TelemetryExpiresAt = &expires
+		out.Config.TelemetryExpiresAt = telemetryExpires
 	}
 	hash, e := canonical.Hash(out.Config)
 	if e != nil {
@@ -341,6 +369,12 @@ func (s *Service) PublicConfig(ctx context.Context, key string, auth Authenticat
 		}
 	}
 	out.ETag = "\"" + hash + "\""
+	s.renderedMu.Lock()
+	if len(s.renderedCache) >= 256 {
+		s.renderedCache = map[string]ConfigResult{}
+	}
+	s.renderedCache[renderKey] = out
+	s.renderedMu.Unlock()
 	return out, nil
 }
 func allows(kinds []string, kind string) bool {

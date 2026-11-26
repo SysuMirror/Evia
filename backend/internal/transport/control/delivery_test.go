@@ -114,11 +114,16 @@ func TestPublicConfigBootstrapETagAndFreshRevocation(t *testing.T) {
 	if w.Code != 304 || w.Body.Len() != 0 || f.calls != 2 {
 		t.Fatal("ETag skipped source authorization", w.Code, w.Body.String(), f.calls)
 	}
+	headers["If-None-Match"] = "W/" + f.result.ETag
+	w = publicConfigRequest(h, "GET", "/v1/config?write_key=public-key&current_release_revision=0", headers)
+	if w.Code != 304 || w.Body.Len() != 0 || f.calls != 3 {
+		t.Fatal("weak ETag failed 304 negotiation", w.Code, w.Body.String(), f.calls)
+	}
 	f.err = fault.New(fault.Forbidden, "SOURCE_DISABLED", "来源已停用")
 	f.result.AllowedOrigin = ""
 	w = publicConfigRequest(h, "GET", "/v1/config?write_key=public-key", headers)
 	out = catalogStatus(t, w, 403)
-	if out["code"] != "SOURCE_DISABLED" || f.calls != 3 || w.Header().Get("Access-Control-Allow-Origin") != "" {
+	if out["code"] != "SOURCE_DISABLED" || f.calls != 4 || w.Header().Get("Access-Control-Allow-Origin") != "" {
 		t.Fatal("revoked source received cached response", out)
 	}
 }

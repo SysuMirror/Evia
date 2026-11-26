@@ -54,8 +54,8 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	if e != nil {
 		return nil, errors.New("invalid database configuration")
 	}
-	cfg.MaxConns = 20
-	cfg.MinConns = 2
+	cfg.MaxConns = 64
+	cfg.MinConns = 8
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
