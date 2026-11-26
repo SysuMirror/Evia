@@ -442,7 +442,11 @@ func CompileWithCatalogStrict(database, table string, scope Scope, r Request, ca
 	plan := Plan{Parameters: p.params, Kind: r.Kind, Limit: r.Limit, Accuracy: AccuracyNotApplicable}
 	switch r.Kind {
 	case QueryKindEvents:
-		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,context_json,properties_json" + base + " ORDER BY event_time,ifNull(session_id,''),ifNull(tab_id,''),ifNull(sequence,0),source_id,event_id LIMIT " + strconv.Itoa(r.Limit+1)
+		eventsWhere := base
+		if len(r.EventKeys) == 0 && len(r.EventVersions) == 0 {
+			eventsWhere += " AND event_key!='sys.content_chunk'"
+		}
+		plan.SQL = "SELECT event_id,source_id,source_kind,event_key,schema_version,toUnixTimestamp64Nano(event_time) AS event_time_ns,toUnixTimestamp64Nano(received_at) AS received_at_ns,uid,anonymous_id,session_id,page_view_id,operation_id,context_json,properties_json" + eventsWhere + " ORDER BY event_time DESC,ifNull(session_id,'') DESC,ifNull(tab_id,'') DESC,ifNull(sequence,0) DESC,source_id DESC,event_id DESC LIMIT " + strconv.Itoa(r.Limit+1)
 		plan.Columns = []Column{{Key: "event_key", Type: "string"}, {Key: "event_time", Type: "datetime"}, {Key: "uid", Type: "string"}, {Key: "anonymous_id", Type: "string"}, {Key: "context", Type: "object"}, {Key: "properties", Type: "object"}}
 	case QueryKindJourney:
 		if r.Cursor != "" {

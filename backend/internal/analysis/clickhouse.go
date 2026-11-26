@@ -165,6 +165,8 @@ func (c *ClickHouse) Execute(ctx context.Context, scope Scope, r Request) (Resul
 	if r.Kind == QueryKindJourney && len(rows) > r.Limit {
 		hasMoreJourney = true
 		rows = rows[:r.Limit]
+	} else if r.Kind == QueryKindEvents && len(rows) > r.Limit {
+		rows = rows[:r.Limit]
 	}
 	for _, row := range rows {
 		key := "received_at_ns"

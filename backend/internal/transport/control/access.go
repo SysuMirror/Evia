@@ -38,6 +38,7 @@ type API struct {
 	Settings         SettingsService
 	AuditLogs        AuditService
 	Catalog          CatalogService
+	EventLastSeen    EventLastSeenReader
 	Sources          SourceService
 	Analysis         AnalysisService
 	Discovery        reporting.DiscoveryService

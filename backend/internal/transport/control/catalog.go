@@ -7,11 +7,16 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/howtomakeaname/Evia/backend/internal/catalog"
 	"github.com/howtomakeaname/Evia/backend/internal/gen/wire"
 	"github.com/howtomakeaname/Evia/backend/internal/platform/httpapi"
 )
+
+type EventLastSeenReader interface {
+	ReadEventLastSeen(ctx context.Context, projectID, environment string, eventKeys []string) (map[string]time.Time, error)
+}
 
 type CatalogService interface {
 	CreateEvent(context.Context, string, string, catalog.EventInput) (catalog.Event, error)
@@ -136,8 +141,23 @@ func (a *API) listEvents(w http.ResponseWriter, r *http.Request, s authorizedAct
 		out.NextCursor = &next
 		events = events[:limit]
 	}
+	var lastSeen map[string]time.Time
+	if a.EventLastSeen != nil && len(events) > 0 {
+		keys := make([]string, 0, len(events))
+		for _, event := range events {
+			keys = append(keys, event.Key)
+		}
+		if seen, err := a.EventLastSeen.ReadEventLastSeen(r.Context(), p, env, keys); err == nil {
+			lastSeen = seen
+		}
+	}
 	for _, event := range events {
-		out.Items = append(out.Items, eventWire(event))
+		item := eventWire(event)
+		if ts, ok := lastSeen[event.Key]; ok && !ts.IsZero() {
+			formatted := ts.UTC().Format(time.RFC3339)
+			item.LastSeenAt = &formatted
+		}
+		out.Items = append(out.Items, item)
 	}
 	return a.Boundary.JSON(w, 200, "EventDefinitionList", out)
 }

@@ -378,6 +378,7 @@ func serve(ctx context.Context, c config.Config, store *postgres.Store, logger *
 		}
 		engine = configuredEngine
 		api.Overview = overview.NewService(store, configuredEngine)
+		api.EventLastSeen = configuredEngine
 		probes = append(probes, func(ctx context.Context) error { return clickHouseProbe(ctx, c, client) })
 	}
 	configureAnalysis(api, store, validator, engine)
