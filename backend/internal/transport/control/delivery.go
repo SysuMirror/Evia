@@ -169,6 +169,34 @@ func (a *API) publicConfig(w http.ResponseWriter, r *http.Request) error {
 			Schema        map[string]any `json:"schema"`
 		}{EventKey: event.Key, SchemaVersion: event.Version, Schema: event.Schema})
 	}
+	if len(out.Config.Experiments) > 0 {
+		resource.Experiments = make([]wire.ConfigExperiment, 0, len(out.Config.Experiments))
+		for _, exp := range out.Config.Experiments {
+			variants := make([]wire.ConfigExperimentVariant, 0, len(exp.Variants))
+			for _, v := range exp.Variants {
+				variants = append(variants, wire.ConfigExperimentVariant{
+					Key:       v.Key,
+					WeightBps: int64(v.WeightBps),
+				})
+			}
+			var overrides map[string]any
+			if len(exp.Overrides) > 0 {
+				overrides = make(map[string]any, len(exp.Overrides))
+				for k, v := range exp.Overrides {
+					overrides[k] = v
+				}
+			}
+			resource.Experiments = append(resource.Experiments, wire.ConfigExperiment{
+				ExperimentKey:    exp.Key,
+				Version:          exp.Version,
+				Salt:             exp.Salt,
+				ControlVariant:   exp.ControlVariant,
+				ExposureEventKey: exp.ExposureEventKey,
+				Variants:         variants,
+				Overrides:        overrides,
+			})
+		}
+	}
 	return a.Boundary.JSON(w, 200, "PublicConfig", resource)
 }
 func (a *API) preflightConfig(w http.ResponseWriter, r *http.Request) error {
