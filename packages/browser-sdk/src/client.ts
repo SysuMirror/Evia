@@ -1050,13 +1050,24 @@ class Client implements BrowserClient {
         );
         if (eventRule) {
           this.exposedExperiments.add(dedupeKey);
-          const props: Record<string, string | number | boolean> = {
+          const props: Record<
+            string,
+            string | number | boolean | readonly (string | number | boolean)[]
+          > = {
+            ...(options.exposureProperties ?? {}),
             experiment_key: experiment.experiment_key,
             variant: decision.variant,
           };
           const schemaProps = eventRule.schema.properties as Record<string, unknown> | undefined;
-          if (schemaProps && 'experiment_version' in schemaProps) {
+          if (
+            schemaProps &&
+            'experiment_version' in schemaProps &&
+            props.experiment_version === undefined
+          ) {
             props.experiment_version = experiment.version;
+          }
+          if (schemaProps && 'source' in schemaProps && props.source === undefined) {
+            props.source = decision.reason === 'override' ? 'sdk_override' : 'sdk';
           }
           exposure = this.emit(experiment.exposure_event_key, props);
         }

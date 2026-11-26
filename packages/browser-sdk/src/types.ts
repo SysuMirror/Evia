@@ -34,6 +34,8 @@ export interface EvaluateExperimentOptions {
   fallback?: string;
   /** Automatically emit the configured exposure event once per session/subject/version. Defaults to true. */
   autoExpose?: boolean;
+  /** Optional additional properties merged into the auto-emitted exposure event. */
+  exposureProperties?: Properties;
 }
 
 export interface PublicConfig {
