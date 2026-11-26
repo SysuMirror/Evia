@@ -159,8 +159,7 @@ export function ExperimentsPage({
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const canWrite =
-    project.permissions.includes('catalog.write') || project.permissions.includes('sources.write');
+  const canWrite = project.permissions.includes('project.write');
   const [activeTab, setActiveTab] = useState<'manage' | 'evaluate'>('manage');
 
   // --- Management state ---
