@@ -1,10 +1,10 @@
 # README figures and console screenshots
 
-The conceptual architecture diagram below was regenerated and visually reviewed on 2026-11-27 (Asia/Shanghai) using Image 2.5 Pro (`jm_image_model_lib_s`) to align with the migration `054_experiments.sql` platform baseline (control and collection APIs, Redis budgets, Kafka/ClickHouse ingestion, query and governance workers, A/B experimentation, identity graph, session replay, and separately planned Apache Flink stateful stream processing). The earlier versioned-analysis figure is retained as a historical illustration and is no longer embedded in the README. All originals are committed locally so the README does not depend on an external image host.
+The conceptual architecture diagram (`event-data-architecture.svg` / `event-data-architecture.png`) is authored as pure vector SVG in an academic systems-paper style and rendered at 2x DPI (2800 × 1560 PNG) on 2026-11-27 (Asia/Shanghai) to align with the migration `054_experiments.sql` platform baseline (control and collection APIs under a unified Go runtime, Redis admission budgets, PostgreSQL/Kafka/ClickHouse, query and governance workers, A/B experimentation, identity graph, session replay, and separately planned Apache Flink stateful stream processing). The earlier versioned-analysis figure is retained as a historical illustration and is no longer embedded in the README. All originals are committed locally so the README does not depend on an external image host.
 
 | Figure | Meaning | Authoritative references |
 | --- | --- | --- |
-| [Event data architecture](event-data-architecture.png) | Current logical architecture (2560 × 1440 PNG, SHA-256 `c5906b5515bc9b453be606edde629e48d71e0ecd98b3bcba4e8cf40580847482`): implemented client/agent entrypoints, unified Go runtime, Redis budgets, PostgreSQL/Kafka/ClickHouse and workers; planned Apache Flink stream processing | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [feature coverage](../feature-coverage.md) |
+| [Event data architecture](event-data-architecture.png) ([SVG](event-data-architecture.svg)) | Current logical architecture (2800 × 1560 PNG, SHA-256 `243e3ab325df495f6d7f1865600c286d29f2094b4d9099328da401c503fa8a64`; SVG SHA-256 `edba609aae4f87121d288ccabb448a139dc0a12e54db1e76d8a75c16cc25c162`): implemented control/query plane, event ingestion data plane, governance workers, and planned Apache Flink stream processing | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [feature coverage](../feature-coverage.md) |
 | [Versioned analytics model](versioned-analytics-model.png) | Historical pre-dashboard snapshot of the event and saved-analysis lifecycle | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md) |
 
 ## Current console captures (2026-11-27)
@@ -16,7 +16,8 @@ Captured on 2026-11-27 (Asia/Shanghai) against the local full-stack production c
 | [landing-desktop.jpg](landing-desktop.jpg) | 1920 × 1200 JPEG (from 1440 × 900 @2x) | `e25b7c5dcf435ef4ee9b7a666299152d9b3fa1fbd21dd3e8ce2aad44199ae1ac` | Public landing page hero and privacy positioning |
 | [overview-desktop.png](overview-desktop.png) | 1440 × 900 @2x PNG | `04bf515bdbb688138b3d7254fd34c22bf0596aea56d30ff6fce70ad48628f1f2` | Project overview with 7-day synthetic trend, KPI cards, and top events |
 | [analysis-desktop.png](analysis-desktop.png) | 1440 × 900 @2x PNG | `dba7a9e17016753945bc86fb9da99da98e25ad0e357eda2ac41a7a039f8d5ea1` | Multi-model analytics workbench showing a 3-step ordered tapered funnel and step-over-step conversion table |
-| [experiments-desktop.png](experiments-desktop.png) | 1440 × 900 @2x PNG | `df5f551a1465539e0c74af06a36a94dc9ba983e70ba55226acbc0491bf463a93` | A/B experimentation workspace with SRM check (`p = 0.5839`), conversion lift, 95% CI, and two-proportion Z-test results |
+| [retention-desktop.png](retention-desktop.png) | 1440 × 900 @2x PNG | `c99c8498299572f1c54e219f08f2aca931bde54adf6f9f665bfb8325bffbec48` | Cohort retention analysis workbench with color-coded daily retention heatmap matrix |
+| [experiments-desktop.png](experiments-desktop.png) | 1440 × 900 @2x PNG | `1a2d2f52b8ce4048db25ea1abfe7747cf067e9f4b409174c8bdad02d41e44d63` | A/B experimentation workspace with SRM check (`p = 0.5839`), Lift & 95% CI Forest Plot, and two-proportion Z-test results |
 
 ## Semantics to preserve
 

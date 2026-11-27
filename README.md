@@ -38,9 +38,9 @@
 
 ## 系统架构
 
-![Evia 映途系统逻辑架构：左侧接入与控制端经 Go 统一运行时（管理 API / 采集与配置 API + Redis 配额）对接 PostgreSQL、Apache Kafka、ClickHouse 及各后台治理工作进程；底部虚线框标示独立规划的 Apache Flink 有状态实时流计算模块。](docs/assets/event-data-architecture.png)
+![Evia Logical System Architecture: (a) Control & Query Plane, (b) Event Ingestion Data Plane, and (c) Governance & Lifecycle Workers / Planned Extension (Apache Flink).](docs/assets/event-data-architecture.png)
 
-> 管理 API 与采集 API 运行在同一 Go 二进制的职责边界内，可按业务负载水平扩展；各后台 Worker 按子命令独立拉起。实线表示已实现模块，虚线表示独立规划模块（Apache Flink 有状态流计算）。完整逻辑链路与设计边界见 [架构说明](docs/architecture.md) 与 [功能覆盖清单](docs/feature-coverage.md)。
+> 管理 API 与采集 API 运行在同一 Go 运行时（`evia serve`）的职责边界内，可按业务负载水平扩展；各后台 Worker 按子命令独立拉起。实线表示已实现模块，虚线表示独立规划模块（Apache Flink 有状态流计算）；矢量源文件见 [event-data-architecture.svg](docs/assets/event-data-architecture.svg)。完整设计边界见 [架构说明](docs/architecture.md) 与 [功能覆盖清单](docs/feature-coverage.md)。
 
 ---
 
@@ -52,9 +52,13 @@
 | --- | --- |
 | ![Evia 映途产品落地页](docs/assets/landing-desktop.jpg) | ![项目总览工作区：近 7 天事件趋势、会话/UID 指标卡与热门事件](docs/assets/overview-desktop.png) |
 
-| 多维洞察分析（3 步有序漏斗） | A/B 实验统计评估（SRM 与双比例 Z 检验） |
+| 有序漏斗分析（原生漏斗图与转化率明细） | 留存队列分析（色阶热力矩阵） |
 | --- | --- |
-| ![洞察分析工作区：3 步有序漏斗图与转化明细表](docs/assets/analysis-desktop.png) | ![A/B 实验工作区：SRM 拟合优度检验、对照提升与 95% 置信区间](docs/assets/experiments-desktop.png) |
+| ![洞察分析工作区：3 步原生漏斗图与步间转化明细表](docs/assets/analysis-desktop.png) | ![留存分析工作区：按天队列留存热力矩阵](docs/assets/retention-desktop.png) |
+
+| A/B 实验统计评估（SRM、95% CI 森林图与双比例 Z 检验） |
+| --- |
+| ![A/B 实验工作区：SRM 拟合优度检验、Forest Plot 森林图、对照提升与 95% 置信区间](docs/assets/experiments-desktop.png) |
 
 更多历史验证截图与图表维护说明见 [docs/assets/README.md](docs/assets/README.md)。
 
