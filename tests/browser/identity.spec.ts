@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { loginAsE2EUser } from './auth-session';
 
 // Credential responses must never enter automatic trace or screenshot artifacts.
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
@@ -21,11 +22,7 @@ test('the identity workspace lists folded revisions and resolves a member', asyn
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  await page.goto('/projects');
-  await page.getByLabel('账号', { exact: false }).fill(username!);
-  await page.getByLabel('密码', { exact: false }).fill(password!);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.waitForURL(/\/projects/);
+  await loginAsE2EUser(page, username, password);
   const sessionResponse = await page.request.get('/api/v1/session');
   const { csrf_token: csrf } = (await sessionResponse.json()) as { csrf_token: string };
   const headers = { Origin: new URL(page.url()).origin, 'X-CSRF-Token': csrf };

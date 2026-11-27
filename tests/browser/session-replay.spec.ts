@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { loginAsE2EUser } from './auth-session';
 
 test.use({ trace: 'off', screenshot: 'off', video: 'off', reducedMotion: 'reduce' });
 
@@ -16,11 +17,7 @@ test('owner discovers replay streams and renders a sandboxed snapshot', async ({
   page.on('response', (response) => {
     if (response.url().includes('/content/')) responses.push(response.status());
   });
-  await page.goto('/projects');
-  await page.getByLabel('账号', { exact: false }).fill(username!);
-  await page.getByLabel('密码', { exact: false }).fill(password!);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.waitForURL(/\/projects/);
+  await loginAsE2EUser(page, username, password);
   await page.goto(`/projects/${projectID}/session-replay?environment=development`);
   await expect(page.getByRole('heading', { name: '会话回放', exact: true })).toBeVisible();
   const stream = page.locator('section[aria-label="回放会话流"] button.project-link').first();

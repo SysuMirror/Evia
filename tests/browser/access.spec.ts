@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Locator } from '@playwright/test';
+import { loginAsE2EUser } from './auth-session';
 
 const username = process.env.EVIA_E2E_USERNAME;
 const password = process.env.EVIA_E2E_PASSWORD;
@@ -33,7 +34,7 @@ async function expectKeyboardFocus(control: Locator) {
   ).toBe(true);
 }
 
-async function login(page: Page) {
+async function loginFresh(page: Page) {
   await page.goto('/projects');
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('账号', { exact: false }).fill(username!);
@@ -42,11 +43,15 @@ async function login(page: Page) {
   await expect(page.getByRole('heading', { name: '项目管理' })).toBeVisible();
 }
 
+async function login(page: Page) {
+  await loginAsE2EUser(page, username, password);
+}
+
 async function findProjectOnPages(page: Page, name: string) {
   const table = page.getByRole('table', { name: '项目列表', exact: true });
   const region = page.locator('.evia-table-region').filter({ has: table });
   for (let number = 1; number <= 20; number++) {
-    await expect(region).toHaveAttribute('aria-busy', 'false');
+    await expect(region).not.toHaveAttribute('aria-busy', 'true');
     const project = page.getByRole('button', { name, exact: true });
     if (await project.count()) return project;
     const next = page.getByRole('button', { name: '下一页', exact: true });
@@ -328,7 +333,7 @@ test('native fields, keyboard containment, navigation guards and busy dismissal 
 test('an expired real session returns to login and fetches projects after reauthentication', async ({
   page,
 }) => {
-  await login(page);
+  await loginFresh(page);
   await expect(page.locator('section[aria-label="项目列表"]')).toBeVisible();
   const session = await (await page.request.get('/api/v1/session')).json();
   const revoked = await page.request.delete('/api/v1/session', {

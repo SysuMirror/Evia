@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import type { BrowserClient, Envelope } from '../../packages/browser-sdk/src/types';
+import { loginAsE2EUser } from './auth-session';
 
 type SDKWindow = Window & { eviaContinuityClient?: BrowserClient };
 type StoredEvent = { event_id: string; context: Envelope['context'] };
@@ -22,11 +23,7 @@ test('persistSession keeps one session across a hard reload and lands in the war
   test.setTimeout(180_000);
   page.setDefaultTimeout(12_000);
   await page.setViewportSize({ width: 1366, height: 900 });
-  await page.goto('/projects');
-  await page.getByLabel('账号', { exact: false }).fill(process.env.EVIA_E2E_USERNAME!);
-  await page.getByLabel('密码', { exact: false }).fill(process.env.EVIA_E2E_PASSWORD!);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.waitForURL(/\/projects/);
+  await loginAsE2EUser(page);
   const managementOrigin = new URL(page.url()).origin;
   const sessionResponse = await page.request.get('/api/v1/session');
   expect(sessionResponse.status()).toBe(200);

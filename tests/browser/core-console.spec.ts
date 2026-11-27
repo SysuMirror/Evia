@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { loginAsE2EUser } from './auth-session';
 import { verifySavedAnalysisWorkflow } from './saved-analysis-workflow';
 import { verifyBrowserSDKWorkflow } from './browser-sdk-workflow';
 import { verifyDashboardWorkflow } from './dashboard-workflow';
@@ -32,7 +33,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
       await notifications.first().click();
     await page.screenshot({ path: join(evidence, name), fullPage: true });
   }
-  await page.goto('/projects');
+  await loginAsE2EUser(page);
   const entryAsset = await page
     .locator('script[type=module][src]')
     .evaluateAll(
@@ -43,9 +44,6 @@ test('real console creates, publishes, activates, collects and queries scoped ev
     );
   expect(entryAsset, 'real application entry script is present').toBeTruthy();
   await writeFile(join(evidence, 'build.json'), JSON.stringify({ entryAsset }, null, 2));
-  await page.getByLabel('账号', { exact: false }).fill(process.env.EVIA_E2E_USERNAME!);
-  await page.getByLabel('密码', { exact: false }).fill(process.env.EVIA_E2E_PASSWORD!);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
   const name = `Core browser ${Date.now()}`;
   await page.getByRole('button', { name: '创建项目', exact: true }).click();
   const project = page.getByRole('dialog', { name: '创建项目' });
@@ -467,10 +465,7 @@ test.describe('real server-source credential lifecycle', () => {
     page.setDefaultTimeout(12_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto('/projects');
-    await page.getByLabel('账号', { exact: false }).fill(process.env.EVIA_E2E_USERNAME!);
-    await page.getByLabel('密码', { exact: false }).fill(process.env.EVIA_E2E_PASSWORD!);
-    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await loginAsE2EUser(page);
     const projectName = `Source lifecycle ${Date.now()}`;
     await page.getByRole('button', { name: '创建项目', exact: true }).click();
     const project = page.getByRole('dialog', { name: '创建项目' });

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Diagnostics } from '../../packages/api-client/src/index';
+import { loginAsE2EUser } from './auth-session';
 
 const username = process.env.EVIA_E2E_USERNAME;
 const password = process.env.EVIA_E2E_PASSWORD;
@@ -19,12 +20,7 @@ test.afterEach(({ page }) => {
 });
 
 async function login(page: Page) {
-  await page.goto('/projects');
-  await expect(page).toHaveURL(/\/login$/);
-  await page.getByLabel('账号', { exact: false }).fill(username!);
-  await page.getByLabel('密码', { exact: false }).fill(password!);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '项目管理' })).toBeVisible();
+  await loginAsE2EUser(page, username, password);
 }
 
 async function createProject(page: Page, name: string): Promise<string> {
