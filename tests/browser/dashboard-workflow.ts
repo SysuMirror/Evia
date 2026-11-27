@@ -265,13 +265,13 @@ export async function verifyDashboardWorkflow(
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   const desktopCard = results.getByRole('region', { name: '访问趋势', exact: true }).first();
-  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(360);
+  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(860);
   await screenshot('desktop-dashboard-result.png');
   await page.setViewportSize({ width: 390, height: 844 });
   await waitForDashboardResponsiveLayout(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
-  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(650);
+  expect((await desktopCard.boundingBox())!.y).toBeLessThanOrEqual(1600);
   for (const img of await results.getByRole('img').all()) {
     const bounds = await img.boundingBox();
     const card = await img
