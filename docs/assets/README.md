@@ -1,11 +1,22 @@
 # README figures and console screenshots
 
-The conceptual figures below were generated with ImageGen. The current event-data figure was regenerated and visually reviewed on 2026-11-09 (Asia/Shanghai) after the machine-access and public integration delivery. The earlier versioned-analysis figure is retained as a historical illustration and is no longer embedded in the README. They illustrate logical relationships, not measured performance or production capacity. PNG originals are committed locally so the README does not depend on an external image host.
+The conceptual architecture diagram below was regenerated and visually reviewed on 2026-11-27 (Asia/Shanghai) using Image 2.5 Pro (`jm_image_model_lib_s`) to align with the migration `054_experiments.sql` platform baseline (control and collection APIs, Redis budgets, Kafka/ClickHouse ingestion, query and governance workers, A/B experimentation, identity graph, session replay, and separately planned Apache Flink stateful stream processing). The earlier versioned-analysis figure is retained as a historical illustration and is no longer embedded in the README. All originals are committed locally so the README does not depend on an external image host.
 
-| Figure                                                     | Meaning                                                                                                                         | Authoritative references                                                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| [Event data architecture](event-data-architecture.png)     | Implemented SDK, scoped machine access, public skills, control, ingestion and query flows; planned identity, lifecycle and advanced analysis | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [backend evidence](../verification/backend-2026-11-07.md) |
-| [Versioned analytics model](versioned-analytics-model.png) | Historical pre-dashboard snapshot of the event and saved-analysis lifecycle                                                     | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md)      |
+| Figure | Meaning | Authoritative references |
+| --- | --- | --- |
+| [Event data architecture](event-data-architecture.png) | Current logical architecture (2560 × 1440 PNG, SHA-256 `c5906b5515bc9b453be606edde629e48d71e0ecd98b3bcba4e8cf40580847482`): implemented client/agent entrypoints, unified Go runtime, Redis budgets, PostgreSQL/Kafka/ClickHouse and workers; planned Apache Flink stream processing | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [feature coverage](../feature-coverage.md) |
+| [Versioned analytics model](versioned-analytics-model.png) | Historical pre-dashboard snapshot of the event and saved-analysis lifecycle | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md) |
+
+## Current console captures (2026-11-27)
+
+Captured on 2026-11-27 (Asia/Shanghai) against the local full-stack production console bundle (`apps/console/dist/`) backed by real `evia serve`, `ingest-worker`, `query-worker`, PostgreSQL (`054_experiments.sql`), Kafka, ClickHouse, and Redis using a synthetic demo project (`Acme Commerce`). No credentials or real business user data appear:
+
+| Asset | Viewport / Size | SHA-256 | Contents |
+| --- | --- | --- | --- |
+| [landing-desktop.jpg](landing-desktop.jpg) | 1920 × 1200 JPEG (from 1440 × 900 @2x) | `e25b7c5dcf435ef4ee9b7a666299152d9b3fa1fbd21dd3e8ce2aad44199ae1ac` | Public landing page hero and privacy positioning |
+| [overview-desktop.png](overview-desktop.png) | 1440 × 900 @2x PNG | `04bf515bdbb688138b3d7254fd34c22bf0596aea56d30ff6fce70ad48628f1f2` | Project overview with 7-day synthetic trend, KPI cards, and top events |
+| [analysis-desktop.png](analysis-desktop.png) | 1440 × 900 @2x PNG | `1a18c6453b019549b3e6f77c5abc87403fc6c02fd6df1ecd09dc4fb11414f4d4` | Multi-model analytics workbench showing a 3-step ordered funnel and conversion table |
+| [experiments-desktop.png](experiments-desktop.png) | 1440 × 900 @2x PNG | `df5f551a1465539e0c74af06a36a94dc9ba983e70ba55226acbc0491bf463a93` | A/B experimentation workspace with SRM check (`p = 0.5839`), conversion lift, 95% CI, and two-proportion Z-test results |
 
 ## Semantics to preserve
 

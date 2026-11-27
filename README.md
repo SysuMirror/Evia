@@ -38,61 +38,25 @@
 
 ## 系统架构
 
-```mermaid
-flowchart LR
-    subgraph Clients["采集端"]
-        Browser["浏览器应用<br/>@evia/browser-sdk"]
-        ServerApp["服务端应用<br/>HTTP Collect API"]
-        Console["React 管理控制台<br/>apps/console"]
-    end
+![Evia 映途系统逻辑架构：左侧接入与控制端经 Go 统一运行时（管理 API / 采集与配置 API + Redis 配额）对接 PostgreSQL、Apache Kafka、ClickHouse 及各后台治理工作进程；底部虚线框标示独立规划的 Apache Flink 有状态实时流计算模块。](docs/assets/event-data-architecture.png)
 
-    subgraph API["Go 运行时 (evia serve)"]
-        Collect["采集与配置 API<br/>/v1/config, /v1/collect"]
-        Control["管理与分析 API<br/>/api/v1/*"]
-    end
+> 管理 API 与采集 API 运行在同一 Go 二进制的职责边界内，可按业务负载水平扩展；各后台 Worker 按子命令独立拉起。实线表示已实现模块，虚线表示独立规划模块（Apache Flink 有状态流计算）。完整逻辑链路与设计边界见 [架构说明](docs/architecture.md) 与 [功能覆盖清单](docs/feature-coverage.md)。
 
-    subgraph Infra["存储与消息队列"]
-        Redis[("Redis<br/>接入配额预算")]
-        PG[("PostgreSQL<br/>元数据 / 任务 / 审计 / 身份图")]
-        Kafka[("Apache Kafka<br/>事件缓冲与死信队列")]
-        CH[("ClickHouse<br/>原始事件事实与分析读视图")]
-    end
+---
 
-    subgraph Workers["后台工作进程"]
-        Ingest["ingest-worker<br/>消费 / 擦除屏障 / 落盘"]
-        Query["query-worker<br/>异步查询与统计评估"]
-        GovWorkers["identity / erasure / export<br/>content / retention / backfill"]
-    end
+## 界面预览
 
-    Browser -->|配置拉取与批量上报| Collect
-    ServerApp -->|批量上报| Collect
-    Console -->|会话 / OAuth2 / 机器鉴权| Control
+以下均为最新控制台真实全栈运行截图（基于合成演示项目 `Acme Commerce`，无真实业务数据或凭据）：
 
-    Collect --> Redis
-    Collect --> PG
-    Collect --> Kafka
-    Control --> PG
+| 产品落地页 | 项目总览（7 日趋势与热门事件） |
+| --- | --- |
+| ![Evia 映途产品落地页](docs/assets/landing-desktop.jpg) | ![项目总览工作区：近 7 天事件趋势、会话/UID 指标卡与热门事件](docs/assets/overview-desktop.png) |
 
-    Kafka --> Ingest --> CH
-    Ingest --> PG
-    PG --> Query --> CH
-    GovWorkers --> PG
-    GovWorkers --> CH
-```
+| 多维洞察分析（3 步有序漏斗） | A/B 实验统计评估（SRM 与双比例 Z 检验） |
+| --- | --- |
+| ![洞察分析工作区：3 步有序漏斗图与转化明细表](docs/assets/analysis-desktop.png) | ![A/B 实验工作区：SRM 拟合优度检验、对照提升与 95% 置信区间](docs/assets/experiments-desktop.png) |
 
-> 管理 API 与采集 API 运行在同一 Go 二进制的职责边界内，可按业务负载水平扩展；各后台 Worker 按子命令独立拉起。完整逻辑链路与设计边界见 [架构说明](docs/architecture.md) 与 [功能覆盖清单](docs/feature-coverage.md)。有状态流计算（Flink）作为独立项目规划，当前未纳入主运行时。
-
-<details>
-<summary>查看架构图与控制台界面预览</summary>
-
-- **平台逻辑架构图**：`docs/assets/event-data-architecture.png`
-- **版本化看板（桌面端）**：![版本化看板](docs/assets/dashboard-desktop.png)
-- **机器访问管理（桌面端）**：![机器访问管理](docs/assets/machine-access-desktop.png)
-- **保存分析工作区（桌面端）**：![保存分析](docs/assets/saved-analysis-desktop.png)
-
-更多移动端截图与图表维护说明见 [docs/assets/README.md](docs/assets/README.md)。
-
-</details>
+更多历史验证截图与图表维护说明见 [docs/assets/README.md](docs/assets/README.md)。
 
 ---
 
