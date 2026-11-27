@@ -17,7 +17,7 @@ func failoverDSN(t *testing.T) string {
 	t.Helper()
 	dsn := os.Getenv("EVIA_TEST_PG_FAILOVER_DSN")
 	if dsn == "" {
-		t.Fatal("EVIA_TEST_PG_FAILOVER_DSN is required for PostgreSQL failover integration tests")
+		t.Skip("EVIA_TEST_PG_FAILOVER_DSN is unset; skipping PostgreSQL failover integration test")
 	}
 	return dsn
 }

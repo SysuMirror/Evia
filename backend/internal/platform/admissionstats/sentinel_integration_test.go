@@ -18,6 +18,9 @@ func realSentinelRecorder(t *testing.T) *Recorder {
 	t.Helper()
 	rawAddrs := os.Getenv("EVIA_TEST_REDIS_SENTINEL_ADDRS")
 	master := os.Getenv("EVIA_TEST_REDIS_SENTINEL_MASTER")
+	if rawAddrs == "" && master == "" {
+		t.Skip("EVIA_TEST_REDIS_SENTINEL_ADDRS and EVIA_TEST_REDIS_SENTINEL_MASTER are required for sentinel integration tests")
+	}
 	if rawAddrs == "" || master == "" {
 		t.Fatal("EVIA_TEST_REDIS_SENTINEL_ADDRS and EVIA_TEST_REDIS_SENTINEL_MASTER are required for sentinel integration tests")
 	}
