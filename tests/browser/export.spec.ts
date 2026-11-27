@@ -34,7 +34,7 @@ async function createProject(page: Page, name: string): Promise<string> {
 
 async function openExports(page: Page, projectID: string) {
   await page.goto(`/projects/${projectID}/exports?environment=development`);
-  await expect(page.getByRole('heading', { name: '数据导出' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '数据导出', exact: true })).toBeVisible();
   await expect(page.locator('section[aria-label="发起数据导出"]')).toBeVisible();
 }
 

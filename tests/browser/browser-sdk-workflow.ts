@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -21,11 +21,12 @@ export async function verifyBrowserSDKWorkflow(page: Page, projectID: string): P
   const browser = page.context().browser();
   if (!browser) throw new Error('SDK workflow requires a browser instance');
   // Never serve arbitrary repository files, source maps, credentials or paths.
+  const sdkDir = resolve('packages/browser-sdk/dist');
   const modules = new Map(
     await Promise.all(
-      ['index.js', 'client.js', 'transport.js', 'validation.js', 'types.js'].map(
-        async (name) => [name, await readFile(resolve('packages/browser-sdk/dist', name))] as const,
-      ),
+      (await readdir(sdkDir))
+        .filter((name) => name.endsWith('.js'))
+        .map(async (name) => [name, await readFile(resolve(sdkDir, name))] as const),
     ),
   );
   const server = createServer((request, response) => {

@@ -34,7 +34,7 @@ async function createProject(page: Page, name: string): Promise<string> {
 
 async function openErasure(page: Page, projectID: string) {
   await page.goto(`/projects/${projectID}/erasure?environment=development`);
-  await expect(page.getByRole('heading', { name: '数据删除' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '数据删除', exact: true })).toBeVisible();
   await expect(page.locator('section[aria-label="发起数据删除"]')).toBeVisible();
 }
 

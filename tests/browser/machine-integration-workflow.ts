@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -276,12 +276,12 @@ export async function verifyMachineIntegrationWorkflow(page: Page): Promise<void
     expect(version.schema_version).toBe(1);
 
     // Small allowlisted site serves the actual compiled SDK in a cookie-free context.
+    const sdkDir = resolve('packages/browser-sdk/dist');
     const modules = new Map(
       await Promise.all(
-        ['index.js', 'client.js', 'transport.js', 'validation.js', 'types.js'].map(
-          async (name) =>
-            [name, await readFile(resolve('packages/browser-sdk/dist', name))] as const,
-        ),
+        (await readdir(sdkDir))
+          .filter((name) => name.endsWith('.js'))
+          .map(async (name) => [name, await readFile(resolve(sdkDir, name))] as const),
       ),
     );
     const server = createServer((request, response) => {

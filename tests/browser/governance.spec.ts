@@ -91,7 +91,7 @@ test('owner edits project settings and reads audit through the real governance A
   await page.getByLabel('操作（精确）').fill('project.settings_updated');
   await page.getByRole('button', { name: '查询审计' }).click();
   await expect(auditRegion.getByRole('table')).toBeVisible();
-  const actionCells = auditRegion.locator('tbody tr td:nth-child(3) code');
+  const actionCells = auditRegion.locator('tbody tr td:nth-child(4) code');
   await expect.poll(async () => actionCells.count()).toBeGreaterThan(0);
   for (const cell of await actionCells.all())
     await expect(cell).toHaveText('project.settings_updated');

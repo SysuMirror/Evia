@@ -272,7 +272,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
       )
       .toBe('published');
   }
-  await page.getByRole('link', { name: '数据分析', exact: true }).click();
+  await page.getByRole('link', { name: '高级查询工作台', exact: true }).click();
   const rangeTrigger = page.getByRole('button', { name: '时间范围', exact: true });
   await rangeTrigger.focus();
   await page.keyboard.press('Enter');
@@ -338,7 +338,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await expect(page.locator('.metric-value')).toHaveText('2');
   await verifySavedAnalysisWorkflow(page, screenshot);
   await verifyDashboardWorkflow(page, screenshot);
-  await page.getByRole('link', { name: '数据分析', exact: true }).click();
+  await page.getByRole('link', { name: '高级查询工作台', exact: true }).click();
   await page.getByLabel('事件（跨已发布版本）').selectOption('browser_action');
   await page.getByRole('combobox', { name: '指标', exact: true }).selectOption('uv');
   await page.getByRole('button', { name: '时间范围', exact: true }).click();

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -89,11 +89,12 @@ test('the identity workspace lists folded revisions and resolves a member', asyn
   });
   expect(activated.status()).toBe(200);
 
+  const sdkDir = resolve('packages/browser-sdk/dist');
   const modules = new Map(
     await Promise.all(
-      ['index.js', 'client.js', 'transport.js', 'validation.js', 'types.js'].map(
-        async (name) => [name, await readFile(resolve('packages/browser-sdk/dist', name))] as const,
-      ),
+      (await readdir(sdkDir))
+        .filter((name) => name.endsWith('.js'))
+        .map(async (name) => [name, await readFile(resolve(sdkDir, name))] as const),
     ),
   );
   const server = createServer((request, response) => {
