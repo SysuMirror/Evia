@@ -9,6 +9,8 @@
 [![Kafka](https://img.shields.io/badge/Apache%20Kafka-4.4-231F20?logo=apachekafka&logoColor=white)](deploy/)
 [![Redis](https://img.shields.io/badge/Redis-8-DC382D?logo=redis&logoColor=white)](deploy/)
 
+![Evia 映途：洞见每一次交互，驱动确定性增长](docs/assets/landing-desktop.jpg)
+
 ---
 
 ## 核心能力
@@ -48,17 +50,13 @@
 
 以下均为最新控制台真实全栈运行截图（基于合成演示项目 `Acme Commerce`，无真实业务数据或凭据）：
 
-| 产品落地页 | 项目总览（7 日趋势与热门事件） |
+| 项目总览（7 日趋势与热门事件） | 有序漏斗分析（原生漏斗图与转化率明细） |
 | --- | --- |
-| ![Evia 映途产品落地页](docs/assets/landing-desktop.jpg) | ![项目总览工作区：近 7 天事件趋势、会话/UID 指标卡与热门事件](docs/assets/overview-desktop.png) |
+| ![项目总览工作区：近 7 天事件趋势、会话/UID 指标卡与热门事件](docs/assets/overview-desktop.png) | ![洞察分析工作区：3 步原生漏斗图与步间转化明细表](docs/assets/analysis-desktop.png) |
 
-| 有序漏斗分析（原生漏斗图与转化率明细） | 留存队列分析（色阶热力矩阵） |
+| 留存队列分析（色阶热力矩阵） | A/B 实验统计评估（SRM、95% CI 森林图与双比例 Z 检验） |
 | --- | --- |
-| ![洞察分析工作区：3 步原生漏斗图与步间转化明细表](docs/assets/analysis-desktop.png) | ![留存分析工作区：按天队列留存热力矩阵](docs/assets/retention-desktop.png) |
-
-| A/B 实验统计评估（SRM、95% CI 森林图与双比例 Z 检验） |
-| --- |
-| ![A/B 实验工作区：SRM 拟合优度检验、Forest Plot 森林图、对照提升与 95% 置信区间](docs/assets/experiments-desktop.png) |
+| ![留存分析工作区：按天队列留存热力矩阵](docs/assets/retention-desktop.png) | ![A/B 实验工作区：SRM 拟合优度检验、Forest Plot 森林图、对照提升与 95% 置信区间](docs/assets/experiments-desktop.png) |
 
 更多历史验证截图与图表维护说明见 [docs/assets/README.md](docs/assets/README.md)。
 
