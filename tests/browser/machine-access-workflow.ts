@@ -40,6 +40,7 @@ export async function verifyMachineAccessWorkflow(
   const headers = { Origin: origin, 'X-CSRF-Token': session.csrf_token };
   const name = `构建任务 ${Date.now()}`;
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('link', { name: '项目设置', exact: true }).click();
   await page.getByRole('link', { name: '机器访问', exact: true }).click();
   await expect(page.getByRole('heading', { name: '机器访问', exact: true })).toBeVisible();
   await expect(page.getByText('全部环境', { exact: true })).toBeVisible();
@@ -73,7 +74,7 @@ export async function verifyMachineAccessWorkflow(
   await creation.getByRole('checkbox', { name: '执行查询', exact: true }).check();
   await screenshot('desktop-metric-grants.png');
   await creation.getByRole('button', { name: '稍后继续', exact: true }).click();
-  await page.getByRole('link', { name: '事件管理', exact: true }).click();
+  await page.getByRole('link', { name: '数据接入', exact: true }).click();
   const discard = page.getByRole('dialog', { name: '放弃未保存的修改？', exact: true });
   await expect(discard.getByRole('button', { name: '继续编辑', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

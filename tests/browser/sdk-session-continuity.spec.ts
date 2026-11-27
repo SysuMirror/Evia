@@ -277,10 +277,13 @@ test('persistSession keeps one session across a hard reload and lands in the war
       first.session_id,
       first.session_id,
     ]);
-    // The warehouse observes one continued session with strictly increasing
-    // sequence numbers across the hard reload boundary.
-    expect(stored[1]!.context.sequence).toBeGreaterThan(stored[0]!.context.sequence);
-    expect(stored.every((event) => event.context.tab_id === first.tab_id)).toBe(true);
+    // The warehouse returns events newest-first, so order by sequence to verify
+    // strictly increasing sequence numbers across the hard reload boundary.
+    const ordered = [...stored].sort((a, b) => a.context.sequence - b.context.sequence);
+    expect(ordered[0]!.context.sequence).toBe(first.sequence);
+    expect(ordered[1]!.context.sequence).toBe(second.sequence);
+    expect(ordered[1]!.context.sequence).toBeGreaterThan(ordered[0]!.context.sequence);
+    expect(ordered.every((event) => event.context.tab_id === first.tab_id)).toBe(true);
   } finally {
     await context?.close();
     await new Promise<void>((done) => server.close(() => done()));

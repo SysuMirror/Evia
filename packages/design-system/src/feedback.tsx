@@ -181,8 +181,17 @@ export function DesignProvider({ children }: { children: ReactNode }) {
               if (element) elements.current.set(toast.id, element);
               else elements.current.delete(toast.id);
             }}
-            onFocusCapture={() => {
+            onFocusCapture={(event) => {
               focusedToast.current = toast.id;
+              const prior = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+              if (
+                !canRestoreFocus(origins.current.get(toast.id)) &&
+                canRestoreFocus(prior) &&
+                !prior.closest('.evia-toast-region')
+              ) {
+                origins.current.set(toast.id, prior);
+                pendingOrigins.current.delete(toast.id);
+              }
             }}
             onPointerEnter={() => {
               hoveredToast.current = toast.id;

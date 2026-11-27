@@ -52,6 +52,8 @@ def initialize(dependency_path, runtime_path):
     if path.is_relative_to(ROOT):
         fail("Runtime credentials must be stored outside the repository.")
     namespace = "evia_browser_" + secrets.token_hex(6)
+    export_dir = path.parent / (namespace + "-exports")
+    os.makedirs(export_dir, mode=0o700, exist_ok=True)
     password = os.environ.get("EVIA_E2E_PASSWORD") or secrets.token_hex(24)
     settings = {
         "EVIA_DATABASE_URL": required(os.environ, "EVIA_DATABASE_URL"),
@@ -61,6 +63,7 @@ def initialize(dependency_path, runtime_path):
         "EVIA_ALLOW_INSECURE_DEPENDENCIES": "true",
         "EVIA_COLLECTION_ENABLED": "true",
         "EVIA_ANALYSIS_ENABLED": "true",
+        "EVIA_EXPORT_DIR": str(export_dir),
         "EVIA_CURSOR_KEY": os.environ.get("EVIA_CURSOR_KEY") or secrets.token_hex(32),
         "EVIA_SOURCE_SECRET_KEY": os.environ.get("EVIA_SOURCE_SECRET_KEY") or secrets.token_hex(32),
         "EVIA_REDIS_URL": required(dependencies, "EVIA_TEST_REDIS_URL"),
