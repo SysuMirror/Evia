@@ -1,6 +1,6 @@
 # 生产就绪证据索引（Production Readiness Evidence Index）
 
-更新日期：2026-11-14 UTC。本文件把分散在 `docs/verification/` 的 37 份验证
+更新日期：2026-11-27 UTC。本文件把分散在 `docs/verification/` 的验证
 记录按「推动到正式生产规模使用」的硬阻塞主题归并，明确每个主题：已由
 哪些真实依赖证据闭环、还差什么、剩余项为何不能在单机环境完成。它是
 目标推进的导航，不替代各验证记录的原始数据；结论以被引用记录为准。
@@ -56,15 +56,14 @@
 
 | 子主题 | 关键证据 |
 | --- | --- |
-| 基线容量与 514/728 | [query-capacity](verification/query-capacity-2026-11-09.md)：默认双工作任务矩阵，失败记录保留未粉饰 |
+| 基线容量与 728/728 修复 | 原始基线 [query-capacity](verification/query-capacity-2026-11-09.md) 为 514/728；通过 `evia property-slots` 专用热键列 + 剪 Map + 严格模式在同数据集上复测达成 **728/728 零失败**（见 [query-capacity-fix](verification/query-capacity-fix-2026-11-20.md)） |
 | 物理读门控 | [property-layout-reads](verification/property-layout-reads-2026-11-10.md)、[dedicated-columns](verification/property-layout-dedicated-columns-2026-11-12.md)、G3 百万行矩阵 |
 | 多租户内存隔离 | [tenant-query-isolation](verification/tenant-query-isolation-2026-11-14.md)：单查询 512MiB 封顶、嘈杂邻居 containment、聚合上界演绎保证 |
 | 护栏完整性与取消 | [query-guard-rails](verification/query-guard-rails-2026-11-14.md)：164/159/396/307/158/241/394 全码表，KILL 作用域隔离 |
 
-**待外部/扩展验证**：数十上百租户的连接池化与排队大规模容量；514/728
-中属性分组/筛选的 182 个失败在专用列热键选定前保持开放。
+**待外部/扩展验证**：数十上百租户的连接池化与排队大规模容量；热键目录外的长尾动态属性仍保持既有文档回退边界；10 万行 Go 评估器类分析（漏斗/留存/分群/路径/归因/实验）在中高 DAU 规模下需下推 ClickHouse 原生 SQL。
 
-**待运营决策**：专用列热键选键、有界 backfill 与 514/728 端到端复测。
+**待运营决策**：真实生产事件的热键选键策略与 `EVIA_PROPERTY_SLOTS_STRICT` 开启时机。
 
 ## 5. 备份、恢复与异地容灾 —— 已闭环（厂商行为除外）
 
@@ -92,15 +91,11 @@ Grafana 11 仪表盘、Alertmanager 路由，均经 `check_monitoring.py` 静态
 | 生产拓扑分发（跨故障域/TLS） | 多机房/独立故障域环境 | 单宿主 HA 证据已就绪，拓扑 runbook 已写 |
 | TB 级与极端 part headroom | 更大基准盘/专用压测环境 | headroom 探针可直接扩规模复用 |
 | 多租户连接池化大规模容量 | 高连接数基准环境 | 单查询护栏与聚合上界已证 |
-| 热键选键 + 514/728 复测 | 运营数据决策 | 专用列代码侧已完结，门控与探针齐备 |
+| ~~热键选键 + 514/728 复测~~ / 生产热键运营策略 | 运营数据决策 | 专用列代码与 `evia property-slots` 已完结并在同数据集达成 `728/728`（[query-capacity-fix](verification/query-capacity-fix-2026-11-20.md)），待按真实业务采样确定生产热键 |
+| 持续万级 EPS 写入吞吐优化 | 工程优化与持续压测 | `ingest-worker` 攒大批次、墓碑缓存、`CachedSources` `singleflight` 与 SDK 退避 Jitter 待落地复测 |
 | 真实 Zipf 拟合指数 | 生产事件采样 | 参数化入口与闭集校验已交付 |
 | ~~parquet 格式~~ / 多段上传/SSE-KMS | 真实厂商环境 | parquet 导出已闭环（迁移 042）；SigV4 客户端与 fail-closed 编排已验证，待真实凭证联调 |
 
 ## 结论
 
-所有**不依赖外部环境与运营决策**的生产化硬阻塞，均已有真实依赖两轮
-证据并接入门禁，单机层面无遗留的可独立验证项。剩余六项的共同特征是
-需要多机房拓扑、真实厂商服务、更大基准资源或业务数据输入；在这些
-条件具备前，继续在已饱和主题上叠加探针不会降低生产风险，应转向等待
-外部条件或处理明确的产品功能（留存/分群/归因/会话回放，见
-feature-coverage「未实现」行）。
+所有**不依赖外部环境与运营决策**的单机生产化硬阻塞均已有真实依赖证据并接入门禁；同时，百万行查询矩阵已通过 `evia property-slots` 收敛至 `728/728`，留存、分群、路径、归因、热力图、会话回放、身份图与端到端 A/B 实验等核心产品能力均已交付。下一阶段生产化推进重点聚焦于：持续高压写入链路优化、复杂分析下推 ClickHouse 原生 SQL、弱网会话回放吞吐收敛，以及多机房拓扑与真实厂商对象存储联调。
