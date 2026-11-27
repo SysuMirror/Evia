@@ -301,7 +301,8 @@ test('real console creates, publishes, activates, collects and queries scoped ev
         response.request().method() === 'POST',
     );
     const received = page.waitForResponse(
-      (response) => /\/queries\/[^/]+\/result$/.test(response.url()) && response.status() === 200,
+      (response) =>
+        /\/queries\/[^/]+\/result(?:\?|$)/.test(response.url()) && response.status() === 200,
     );
     await page.getByRole('button', { name: '运行查询', exact: true }).click();
     expect((await submitted).status()).toBe(202);
