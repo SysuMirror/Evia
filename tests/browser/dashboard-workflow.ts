@@ -286,7 +286,9 @@ export async function verifyDashboardWorkflow(
   await page.getByRole('button', { name: '组件运行筛选 (0)', exact: true }).click();
   const filters = page.getByRole('dialog', { name: '组件运行筛选', exact: true });
   await filters.getByRole('button', { name: '添加运行筛选', exact: true }).click();
-  await filters.getByLabel('条件 1 目标组件', { exact: true }).selectOption({ label: '访问趋势' });
+  await filters
+    .getByLabel('条件 1 目标组件', { exact: true })
+    .selectOption({ label: '访问趋势（分析）' });
   const field = filters.getByLabel('条件 1 字段', { exact: true });
   await expect(field.locator('option')).toContainText(['page']);
   const property = await field
@@ -348,7 +350,9 @@ export async function verifyDashboardWorkflow(
   await range.getByRole('button', { name: '完成', exact: true }).click();
   await page.getByRole('button', { name: '组件运行筛选 (0)', exact: true }).click();
   await filters.getByRole('button', { name: '添加运行筛选', exact: true }).click();
-  await filters.getByLabel('条件 1 目标组件', { exact: true }).selectOption({ label: '访问趋势' });
+  await filters
+    .getByLabel('条件 1 目标组件', { exact: true })
+    .selectOption({ label: '访问趋势（分析）' });
   await filters.getByLabel('条件 1 字段', { exact: true }).selectOption(property!);
   await filters.getByLabel('条件 1 值', { exact: true }).fill('not-present-in-synthetic-events');
   await filters.getByRole('button', { name: '应用筛选', exact: true }).click();
