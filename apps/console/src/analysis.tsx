@@ -717,7 +717,7 @@ function AnalysisWorkspace({
               properties: '属性',
               step_index: '步骤',
               subjects: snapshot!.request.kind === 'attribution' ? '转化主体数' : '到达主体数',
-              conversion_rate: '相对首步转化率',
+              conversion_rate: '较上一步转化率',
               cohort_index: '队列序号',
               cohort_start: '队列起始',
               cohort_size: '队列规模',

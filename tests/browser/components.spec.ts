@@ -580,11 +580,10 @@ test('saved charts retain every metric, distinguish categories, and render gaps,
 
   await fixture.getByRole('button', { name: '显示漏斗图' }).click();
   const funnel = await read();
-  expect(funnel.series.map((series) => series.type)).toEqual(['bar', 'bar']);
-  expect(funnel.yAxis[0]).toMatchObject({
-    inverse: true,
-    data: ['渠道缺失', '渠道 null', '渠道为空字符串'],
-  });
+  expect(funnel.series.map((series) => series.type)).toEqual(['funnel', 'funnel']);
+  expect(
+    (funnel.series[0]?.data as Array<{ name?: string }> | undefined)?.map((item) => item.name),
+  ).toEqual(['渠道缺失', '渠道 null', '渠道为空字符串']);
   await page.setViewportSize({ width: 360, height: 800 });
   await expect(chart.locator('svg')).toHaveCount(1);
   expect(await chart.evaluate((node) => node.getBoundingClientRect().right)).toBeLessThanOrEqual(

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import { init, use } from 'echarts/core';
-import { LineChart, BarChart } from 'echarts/charts';
+import { LineChart, BarChart, FunnelChart } from 'echarts/charts';
 import {
   GridComponent,
   TooltipComponent,
@@ -12,12 +12,31 @@ import { SVGRenderer } from 'echarts/renderers';
 use([
   LineChart,
   BarChart,
+  FunnelChart,
   GridComponent,
   TooltipComponent,
   AriaComponent,
   LegendComponent,
   SVGRenderer,
 ]);
+
+const FUNNEL_PALETTE = [
+  '#1d4ed8',
+  '#2563eb',
+  '#3b82f6',
+  '#0d9488',
+  '#14b8a6',
+  '#4f46e5',
+  '#6366f1',
+  '#0284c7',
+];
+
+function formatPercent(numerator: number, denominator: number): string {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return '0.0%';
+  }
+  return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
 
 export interface SavedChartCategory {
   key: string;
@@ -178,95 +197,203 @@ export function SavedAnalysisChart({
         emphasis: { focus: 'series' as const },
       };
     });
-    chart.setOption({
-      animation: !motion.matches,
-      animationDuration: 200,
-      aria: { enabled: true, decal: { show: true }, label: { description } },
-      color: [
-        '#315bd6',
-        '#21857b',
-        '#9962c2',
-        '#bf762c',
-        '#c45279',
-        '#59798d',
-        '#7a883c',
-        '#7067b2',
-        '#a46550',
-        '#4388aa',
-      ],
-      legend: {
-        show: series.length > 1,
-        type: 'scroll',
-        top: 0,
-        left: 0,
-        right: 0,
-        padding: 0,
-        itemWidth: 12,
-        itemHeight: 8,
-        textStyle: { color: '#414752', fontSize: 12 },
-        data: names,
-      },
-      grid: {
-        top: series.length > 1 ? 52 : 28,
-        left: kind === 'funnel' ? 12 : 48,
-        right: 24 + Math.max(0, units.length - 1) * 48,
-        bottom: timeAxis ? 56 : 32,
-        containLabel: true,
-      },
-      tooltip: {
-        trigger: 'axis',
-        renderMode: 'richText',
-        confine: true,
-        axisPointer: timeAxis
-          ? {
-              label: {
-                formatter: (params: { value: number | string }) =>
-                  fullFormatter.format(Number(params.value)),
-              },
+    const chartColors = [
+      '#2563eb',
+      '#0d9488',
+      '#6366f1',
+      '#d97706',
+      '#e11d48',
+      '#475569',
+      '#65a30d',
+      '#7c3aed',
+      '#b45309',
+      '#0284c7',
+    ];
+    if (kind === 'funnel') {
+      const multi = series.length > 1;
+      const funnelSeries = series.map((item, seriesIndex) => {
+        const vals = entries.map(({ index }) => finite(item.values[index]) ?? 0);
+        const firstVal = vals[0] ?? 0;
+        const maxVal = Math.max(1, ...vals);
+        const slotWidth = multi ? Math.floor(86 / series.length) : 52;
+        const leftPct = multi ? 7 + seriesIndex * Math.floor(88 / series.length) : 10;
+        return {
+          id: `${seriesIndex}-${item.id}`,
+          name: names[seriesIndex],
+          type: 'funnel' as const,
+          sort: 'none' as const,
+          funnelAlign: 'center' as const,
+          left: `${leftPct}%`,
+          width: `${Math.max(24, slotWidth - (multi ? 6 : 0))}%`,
+          top: multi ? 44 : 20,
+          bottom: 20,
+          min: 0,
+          max: maxVal,
+          minSize: '20%',
+          maxSize: '100%',
+          gap: 4,
+          label: {
+            show: true,
+            position: multi ? ('inside' as const) : ('right' as const),
+            color: multi ? '#ffffff' : '#1e293b',
+            fontSize: 12,
+            lineHeight: 18,
+            formatter: (params: { name?: string; value?: unknown; dataIndex?: number }) => {
+              const idx = typeof params.dataIndex === 'number' ? params.dataIndex : 0;
+              const val = finite(params.value) ?? 0;
+              const prev = idx > 0 ? (vals[idx - 1] ?? 0) : val;
+              const overall = formatPercent(val, firstVal);
+              if (multi) {
+                return `${params.name ?? ''}\n${val} (${overall})`;
+              }
+              if (idx === 0) {
+                return `${params.name ?? ''}   ${val} (${overall})`;
+              }
+              const stepConv = formatPercent(val, prev);
+              return `${params.name ?? ''}   ${val} (总 ${overall} | 较上步 ${stepConv})`;
+            },
+          },
+          labelLine: {
+            show: !multi,
+            length: 18,
+            lineStyle: { color: '#cbd5e1', width: 1 },
+          },
+          itemStyle: {
+            borderColor: '#ffffff',
+            borderWidth: 2,
+          },
+          emphasis: {
+            itemStyle: { opacity: 0.92 },
+          },
+          data: entries.map(({ category }, idx) => ({
+            name: category.label,
+            value: vals[idx] ?? 0,
+            itemStyle: {
+              color: multi
+                ? chartColors[seriesIndex % chartColors.length]
+                : FUNNEL_PALETTE[idx % FUNNEL_PALETTE.length],
+            },
+          })),
+        };
+      });
+      chart.setOption({
+        animation: !motion.matches,
+        animationDuration: 200,
+        aria: { enabled: true, decal: { show: false }, label: { description } },
+        color: FUNNEL_PALETTE,
+        legend: {
+          show: multi,
+          type: 'scroll',
+          top: 0,
+          left: 0,
+          right: 0,
+          padding: 0,
+          itemWidth: 12,
+          itemHeight: 8,
+          textStyle: { color: '#414752', fontSize: 12 },
+          data: names,
+        },
+        tooltip: {
+          trigger: 'item',
+          renderMode: 'richText',
+          confine: true,
+          formatter: (params: {
+            seriesIndex?: number;
+            dataIndex?: number;
+            name?: string;
+            value?: unknown;
+          }) => {
+            const sIdx = typeof params.seriesIndex === 'number' ? params.seriesIndex : 0;
+            const dIdx = typeof params.dataIndex === 'number' ? params.dataIndex : 0;
+            const src = series[sIdx];
+            const vals = entries.map(({ index }) => finite(src?.values[index]) ?? 0);
+            const val = finite(params.value) ?? 0;
+            const firstVal = vals[0] ?? 0;
+            const prevVal = dIdx > 0 ? (vals[dIdx - 1] ?? 0) : val;
+            const unit = src?.unit ? ` ${src.unit}` : '';
+            const lines = [
+              `${params.name ?? ''}`,
+              `${names[sIdx] ?? ''}: ${val}${unit}`,
+              `相对首步转化: ${formatPercent(val, firstVal)}`,
+            ];
+            if (dIdx > 0) {
+              lines.push(`较上一步转化: ${formatPercent(val, prevVal)}`);
+              lines.push(`本步流失: ${Math.max(0, prevVal - val)}${unit}`);
             }
-          : undefined,
-      },
-      xAxis:
-        kind === 'funnel'
-          ? axes
-          : timeAxis
+            return lines.join('\n');
+          },
+        },
+        series: funnelSeries,
+      });
+    } else {
+      chart.setOption({
+        animation: !motion.matches,
+        animationDuration: 200,
+        aria: { enabled: true, decal: { show: false }, label: { description } },
+        color: chartColors,
+        legend: {
+          show: series.length > 1,
+          type: 'scroll',
+          top: 0,
+          left: 0,
+          right: 0,
+          padding: 0,
+          itemWidth: 12,
+          itemHeight: 8,
+          textStyle: { color: '#414752', fontSize: 12 },
+          data: names,
+        },
+        grid: {
+          top: series.length > 1 ? 52 : 28,
+          left: 48,
+          right: 24 + Math.max(0, units.length - 1) * 48,
+          bottom: timeAxis ? 56 : 32,
+          containLabel: true,
+        },
+        tooltip: {
+          trigger: 'axis',
+          renderMode: 'richText',
+          confine: true,
+          axisPointer: timeAxis
             ? {
-                type: 'time',
-                min: range?.from,
-                max: range?.to,
-                name: timezone,
-                nameLocation: 'middle',
-                nameGap: 34,
-                axisLabel: {
-                  hideOverlap: true,
-                  color: '#6b7280',
-                  fontSize: 11,
-                  formatter: timeLabel,
+                label: {
+                  formatter: (params: { value: number | string }) =>
+                    fullFormatter.format(Number(params.value)),
                 },
               }
-            : {
-                type: 'category',
-                data: entries.map(({ category }) => category.label),
-                axisLabel: {
-                  interval: 0,
-                  hideOverlap: false,
-                  width: 100,
-                  overflow: 'truncate',
-                  color: '#6b7280',
-                  fontSize: 11,
-                },
-              },
-      yAxis:
-        kind === 'funnel'
+            : undefined,
+        },
+        xAxis: timeAxis
           ? {
-              type: 'category',
-              inverse: true,
-              data: entries.map(({ category }) => category.label),
-              axisLabel: { width: 130, overflow: 'truncate', color: '#59606d', fontSize: 12 },
+              type: 'time',
+              min: range?.from,
+              max: range?.to,
+              name: timezone,
+              nameLocation: 'middle',
+              nameGap: 34,
+              axisLabel: {
+                hideOverlap: true,
+                color: '#6b7280',
+                fontSize: 11,
+                formatter: timeLabel,
+              },
             }
-          : axes,
-      series: plotSeries,
-    });
+          : {
+              type: 'category',
+              data: entries.map(({ category }) => category.label),
+              axisLabel: {
+                interval: 0,
+                hideOverlap: false,
+                width: 100,
+                overflow: 'truncate',
+                color: '#6b7280',
+                fontSize: 11,
+              },
+            },
+        yAxis: axes,
+        series: plotSeries,
+      });
+    }
     const fitCategoryLabels = () => {
       if (kind === 'funnel' || timeAxis || entries.length === 0) return;
       const first = chart.convertToPixel({ xAxisIndex: 0 }, 0);
@@ -311,7 +438,7 @@ export function SavedAnalysisChart({
         role="img"
         aria-label={description}
         aria-describedby={partialBucket ? partialID : undefined}
-        style={{ height: Math.max(320, kind === 'funnel' ? categories.length * 52 : 320) }}
+        style={{ height: Math.max(320, kind === 'funnel' ? categories.length * 80 : 320) }}
       />
       {partialBucket && (
         <p className="field-help saved-analysis-chart-note" id={partialID}>
@@ -356,77 +483,145 @@ export function AnalysisChart({ kind, rows, label, timezone, steps }: AnalysisCh
         ? timeLabel(row.bucket)
         : (steps?.[index] ?? String(row.event_key ?? `步骤 ${index + 1}`)),
     );
-    chart.setOption({
-      animation: !motion.matches,
-      animationDuration: 200,
-      aria: {
-        enabled: true,
-        decal: { show: true },
-        label: { description: `${label}。完整数值见下方结果表。` },
-      },
-      color: ['#2563eb'],
-      grid: {
-        top: 24,
-        left: kind === 'funnel' ? 16 : 56,
-        right: 28,
-        bottom: 38,
-        containLabel: kind === 'funnel',
-      },
-      tooltip: {
-        trigger: 'axis',
-        renderMode: 'richText',
-        confine: true,
-        axisPointer:
-          kind === 'trend'
-            ? {
-                label: {
-                  formatter: (params: { value: number | string }) =>
-                    timeLabel(Number(params.value)),
-                },
-              }
-            : undefined,
-      },
-      xAxis:
-        kind === 'trend'
-          ? {
-              type: 'time',
-              name: timezone,
-              nameLocation: 'middle',
-              nameGap: 28,
-              axisLabel: {
-                hideOverlap: true,
-                formatter: (value: number) => timeLabel(new Date(value).toISOString()),
-              },
-            }
-          : { type: 'value', min: 0, minInterval: 1 },
-      yAxis:
-        kind === 'trend'
-          ? { type: 'value', min: 0, minInterval: 1, name: label }
-          : {
-              type: 'category',
-              inverse: true,
-              data: categories,
-              axisLabel: { width: 150, overflow: 'truncate' },
-            },
-      series: [
-        {
-          name: label,
-          type: kind === 'trend' ? 'line' : 'bar',
-          data: rows.map((row) =>
-            kind === 'trend'
-              ? [Date.parse(String(row.bucket)), numeric(row.metric_0)]
-              : numeric(row.subjects),
-          ),
-          encode: kind === 'trend' ? { x: 0, y: 1, tooltip: 1 } : undefined,
-          connectNulls: false,
-          showSymbol: rows.length < 80,
-          symbolSize: 6,
-          barMaxWidth: 36,
-          label: { show: kind === 'funnel', position: 'right' },
-          emphasis: { disabled: true },
+    if (kind === 'funnel') {
+      const stepValues = rows.map((row) => numeric(row.subjects) ?? 0);
+      const firstVal = stepValues[0] ?? 0;
+      const maxVal = Math.max(1, ...stepValues);
+      chart.setOption({
+        animation: !motion.matches,
+        animationDuration: 200,
+        aria: {
+          enabled: true,
+          decal: { show: false },
+          label: { description: `${label}。完整数值见下方结果表。` },
         },
-      ],
-    });
+        color: FUNNEL_PALETTE,
+        tooltip: {
+          trigger: 'item',
+          renderMode: 'richText',
+          confine: true,
+          formatter: (params: { dataIndex?: number; name?: string; value?: unknown }) => {
+            const idx = typeof params.dataIndex === 'number' ? params.dataIndex : 0;
+            const val = numeric(params.value) ?? 0;
+            const prev = idx > 0 ? (stepValues[idx - 1] ?? 0) : val;
+            const lines = [
+              `${params.name ?? ''}`,
+              `到达主体: ${val}`,
+              `相对首步转化: ${formatPercent(val, firstVal)}`,
+            ];
+            if (idx > 0) {
+              lines.push(`较上一步转化: ${formatPercent(val, prev)}`);
+              lines.push(`本步流失: ${Math.max(0, prev - val)}`);
+            }
+            return lines.join('\n');
+          },
+        },
+        series: [
+          {
+            name: label,
+            type: 'funnel',
+            sort: 'none',
+            funnelAlign: 'center',
+            left: '8%',
+            width: '50%',
+            top: 20,
+            bottom: 20,
+            min: 0,
+            max: maxVal,
+            minSize: '22%',
+            maxSize: '100%',
+            gap: 5,
+            label: {
+              show: true,
+              position: 'right',
+              color: '#0f172a',
+              fontSize: 13,
+              lineHeight: 20,
+              formatter: (params: { dataIndex?: number; name?: string; value?: unknown }) => {
+                const idx = typeof params.dataIndex === 'number' ? params.dataIndex : 0;
+                const val = numeric(params.value) ?? 0;
+                const prev = idx > 0 ? (stepValues[idx - 1] ?? 0) : val;
+                const overall = formatPercent(val, firstVal);
+                if (idx === 0) {
+                  return `${params.name ?? ''}   ${val} (${overall})`;
+                }
+                const stepConv = formatPercent(val, prev);
+                return `${params.name ?? ''}   ${val} (总 ${overall} | 较上步 ${stepConv})`;
+              },
+            },
+            labelLine: {
+              show: true,
+              length: 22,
+              lineStyle: { color: '#cbd5e1', width: 1.2 },
+            },
+            itemStyle: {
+              borderColor: '#ffffff',
+              borderWidth: 2,
+            },
+            emphasis: {
+              itemStyle: { opacity: 0.92 },
+            },
+            data: categories.map((stepName, index) => ({
+              name: stepName,
+              value: stepValues[index] ?? 0,
+              itemStyle: { color: FUNNEL_PALETTE[index % FUNNEL_PALETTE.length] },
+            })),
+          },
+        ],
+      });
+    } else {
+      chart.setOption({
+        animation: !motion.matches,
+        animationDuration: 200,
+        aria: {
+          enabled: true,
+          decal: { show: false },
+          label: { description: `${label}。完整数值见下方结果表。` },
+        },
+        color: ['#2563eb'],
+        grid: {
+          top: 24,
+          left: 56,
+          right: 28,
+          bottom: 38,
+          containLabel: false,
+        },
+        tooltip: {
+          trigger: 'axis',
+          renderMode: 'richText',
+          confine: true,
+          axisPointer: {
+            label: {
+              formatter: (params: { value: number | string }) => timeLabel(Number(params.value)),
+            },
+          },
+        },
+        xAxis: {
+          type: 'time',
+          name: timezone,
+          nameLocation: 'middle',
+          nameGap: 28,
+          axisLabel: {
+            hideOverlap: true,
+            formatter: (value: number) => timeLabel(new Date(value).toISOString()),
+          },
+        },
+        yAxis: { type: 'value', min: 0, minInterval: 1, name: label },
+        series: [
+          {
+            name: label,
+            type: 'line',
+            data: rows.map((row) => [Date.parse(String(row.bucket)), numeric(row.metric_0)]),
+            encode: { x: 0, y: 1, tooltip: 1 },
+            connectNulls: false,
+            showSymbol: rows.length < 80,
+            symbolSize: 6,
+            emphasis: { disabled: true },
+          },
+        ],
+      });
+    }
+    target.current.querySelector('svg')?.setAttribute('aria-hidden', 'true');
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(target.current);
     return () => {
@@ -439,7 +634,7 @@ export function AnalysisChart({ kind, rows, label, timezone, steps }: AnalysisCh
       ref={target}
       className="chart-surface"
       style={{
-        height: Math.max(300, kind === 'funnel' ? rows.length * 52 : 300),
+        height: Math.max(320, kind === 'funnel' ? rows.length * 88 : 300),
         width: '100%',
         minWidth: 0,
       }}

@@ -15,7 +15,7 @@ Captured on 2026-11-27 (Asia/Shanghai) against the local full-stack production c
 | --- | --- | --- | --- |
 | [landing-desktop.jpg](landing-desktop.jpg) | 1920 × 1200 JPEG (from 1440 × 900 @2x) | `e25b7c5dcf435ef4ee9b7a666299152d9b3fa1fbd21dd3e8ce2aad44199ae1ac` | Public landing page hero and privacy positioning |
 | [overview-desktop.png](overview-desktop.png) | 1440 × 900 @2x PNG | `04bf515bdbb688138b3d7254fd34c22bf0596aea56d30ff6fce70ad48628f1f2` | Project overview with 7-day synthetic trend, KPI cards, and top events |
-| [analysis-desktop.png](analysis-desktop.png) | 1440 × 900 @2x PNG | `1a18c6453b019549b3e6f77c5abc87403fc6c02fd6df1ecd09dc4fb11414f4d4` | Multi-model analytics workbench showing a 3-step ordered funnel and conversion table |
+| [analysis-desktop.png](analysis-desktop.png) | 1440 × 900 @2x PNG | `dba7a9e17016753945bc86fb9da99da98e25ad0e357eda2ac41a7a039f8d5ea1` | Multi-model analytics workbench showing a 3-step ordered tapered funnel and step-over-step conversion table |
 | [experiments-desktop.png](experiments-desktop.png) | 1440 × 900 @2x PNG | `df5f551a1465539e0c74af06a36a94dc9ba983e70ba55226acbc0491bf463a93` | A/B experimentation workspace with SRM check (`p = 0.5839`), conversion lift, 95% CI, and two-proportion Z-test results |
 
 ## Semantics to preserve
