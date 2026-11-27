@@ -391,9 +391,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await page.getByRole('button', { name: '配置分群', exact: true }).click();
   const segment = page.getByRole('dialog', { name: '配置主体分群', exact: true });
   await segment.getByLabel('分群事件（已发布）', { exact: true }).selectOption('browser_action');
-  await segment
-    .getByLabel('分群标量字段', { exact: true })
-    .selectOption({ label: 'browser_action:1:page (string)' });
+  await segment.getByLabel('分群标量字段', { exact: true }).selectOption('browser_action:1:page');
   await segment.getByRole('button', { name: '完成', exact: true }).click();
   await query();
   await expect(page.getByText('按 page 分群')).toBeVisible();
