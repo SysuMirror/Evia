@@ -274,6 +274,8 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   }
   await page.getByRole('link', { name: '洞察分析', exact: true }).click();
   await page.getByRole('link', { name: '高级查询工作台', exact: true }).click();
+  await expect(page).toHaveURL(/\/analysis\b/);
+  await expect(page.getByRole('tab', { name: '指标', exact: true })).toBeVisible();
   const rangeTrigger = page.getByRole('button', { name: '时间范围', exact: true });
   await rangeTrigger.focus();
   await page.keyboard.press('Enter');
@@ -447,6 +449,7 @@ test('real console creates, publishes, activates, collects and queries scoped ev
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('link', { name: '数据接入', exact: true }).click();
   await page.getByRole('link', { name: '接入来源', exact: true }).click();
+  await expect(page).toHaveURL(/\/sources\b/);
   await expect(page.getByText('合成浏览器来源', { exact: true })).not.toBeVisible();
   await verifyBrowserSDKWorkflow(page, projectID);
   await verifyMachineAccessWorkflow(page, screenshot);

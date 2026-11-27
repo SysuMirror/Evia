@@ -222,7 +222,7 @@ test('the identity workspace lists folded revisions and resolves a member', asyn
     // Unknown identities surface the not-in-graph error state.
     await page.getByLabel('用户标识 uid', { exact: false }).fill('no-such-uid');
     await page.getByRole('button', { name: '解析', exact: true }).click();
-    await expect(page.getByText('该身份尚未进入身份图', { exact: false })).toBeVisible({
+    await expect(page.getByText('该身份尚未进入该修订的身份图', { exact: false })).toBeVisible({
       timeout: 15_000,
     });
 
