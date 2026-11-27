@@ -67,6 +67,12 @@ import {
   type AnalysisValidationTarget,
 } from './analysis-model';
 import { ResultChart } from './analysis-chart';
+import {
+  PathFlowVisual,
+  ProportionBarsVisual,
+  QuerySeriesVisual,
+  RetentionCohortMatrix,
+} from './analysis-visuals';
 
 function Field({
   label,
@@ -1450,42 +1456,93 @@ function AnalysisWorkspace({
                           : ''
                       }`}
                     >
-                      {snapshot.request.kind === 'trend' &&
-                        !snapshot.request.interval &&
-                        rows.length > 0 && (
-                          <div className="analysis-stat">
-                            <div>
-                              <span>{metricLabel(snapshot.request, snapshot.semanticMetric)}</span>
-                              <div className="metric-value">
-                                {cell(rows[0]!.metric_0, 'number', snapshot.request.timezone)}
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                      {rows.length > 0 && snapshot.request.kind === 'trend' && (
+                        <QuerySeriesVisual
+                          result={result}
+                          label={metricLabel(snapshot.request, snapshot.semanticMetric)}
+                          timezone={snapshot.request.timezone}
+                          interval={snapshot.request.interval}
+                          timeRange={
+                            snapshot.request.interval
+                              ? {
+                                  from: Date.parse(snapshot.request.time_range.from),
+                                  to: Date.parse(snapshot.request.time_range.to),
+                                }
+                              : undefined
+                          }
+                          metricLabels={[metricLabel(snapshot.request, snapshot.semanticMetric)]}
+                        />
+                      )}
                       {rows.length > 0 &&
                         snapshot.request.kind === 'heatmap' &&
                         snapshot.request.heatmap &&
                         snapshot.request.heatmap.mode !== 'elements' && (
                           <HeatmapGrid rows={rows} heatmap={snapshot.request.heatmap} />
                         )}
-                      {rows.length > 0 &&
-                        ((snapshot.request.kind === 'trend' && snapshot.request.interval) ||
-                          snapshot.request.kind === 'funnel') && (
-                          <ResultChart
-                            kind={snapshot.request.kind === 'funnel' ? 'funnel' : 'trend'}
-                            rows={rows}
-                            label={
-                              snapshot.request.kind === 'funnel'
-                                ? '到达主体数'
-                                : metricLabel(snapshot.request, snapshot.semanticMetric)
-                            }
-                            timezone={snapshot.request.timezone}
-                            steps={snapshot.request.funnel?.steps.map(
-                              (step, index) =>
-                                `${index + 1}. ${step.event_key} v${step.schema_version}`,
-                            )}
-                          />
-                        )}
+                      {rows.length > 0 && snapshot.request.kind === 'funnel' && (
+                        <ResultChart
+                          kind="funnel"
+                          rows={rows}
+                          label="到达主体数"
+                          timezone={snapshot.request.timezone}
+                          steps={snapshot.request.funnel?.steps.map(
+                            (step, index) =>
+                              `${index + 1}. ${step.event_key} v${step.schema_version}`,
+                          )}
+                        />
+                      )}
+                      {rows.length > 0 && snapshot.request.kind === 'retention' && (
+                        <RetentionCohortMatrix
+                          rows={rows}
+                          granularity={snapshot.request.retention?.granularity}
+                          timezone={snapshot.request.timezone}
+                        />
+                      )}
+                      {rows.length > 0 && snapshot.request.kind === 'segment' && (
+                        <ProportionBarsVisual
+                          title="主体分群分布"
+                          subtitle="按分群主体占比降序排列"
+                          items={rows.map((row, idx) => {
+                            const raw = row.segment_value;
+                            const missing = raw === null || raw === undefined || raw === '';
+                            return {
+                              key: `${idx}-${String(raw)}`,
+                              label: missing ? '缺失值' : String(raw),
+                              badge: missing ? '缺失组' : undefined,
+                              value: typeof row.subjects === 'number' ? row.subjects : 0,
+                              share: typeof row.share === 'number' ? row.share : 0,
+                            };
+                          })}
+                        />
+                      )}
+                      {rows.length > 0 && snapshot.request.kind === 'attribution' && (
+                        <ProportionBarsVisual
+                          title="触点归因贡献分布"
+                          subtitle="各触点转化归因占比"
+                          accentColor="#0d9488"
+                          items={rows.map((row, idx) => {
+                            const key = String(
+                              row.touchpoint ?? row.event_key ?? `触点 ${idx + 1}`,
+                            );
+                            const isDirect = key === '__direct__';
+                            const credit =
+                              typeof row.credit === 'number'
+                                ? `权重 ${row.credit.toFixed(2)}`
+                                : undefined;
+                            return {
+                              key: `${idx}-${key}`,
+                              label: isDirect ? '直接来源 (__direct__)' : key,
+                              badge: isDirect ? '无触点' : undefined,
+                              value: typeof row.subjects === 'number' ? row.subjects : 0,
+                              share: typeof row.share === 'number' ? row.share : 0,
+                              extra: credit,
+                            };
+                          })}
+                        />
+                      )}
+                      {rows.length > 0 && snapshot.request.kind === 'path' && (
+                        <PathFlowVisual rows={rows} />
+                      )}
                       {snapshot.request.kind === 'trend' && snapshot.request.interval && (
                         <p className="field-help">
                           仅展示实际返回的时间桶，缺失时间桶未补零。各桶 UV 不能相加作为整段 UV。

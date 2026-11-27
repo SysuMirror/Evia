@@ -28,11 +28,22 @@ func dashboardVersionMissing() error {
 func dashboardConflict(code string) error {
 	return fault.New(fault.Conflict, code, "看板已变更，请重新加载并校验")
 }
+func normalizeDashboardTimes(d *reporting.Dashboard) {
+	d.CreatedAt = d.CreatedAt.UTC()
+	d.UpdatedAt = d.UpdatedAt.UTC()
+	if d.ArchivedAt != nil {
+		u := d.ArchivedAt.UTC()
+		d.ArchivedAt = &u
+	}
+}
 func scanDashboard(row pgx.Row) (reporting.Dashboard, error) {
 	var out reporting.Dashboard
 	e := row.Scan(&out.ID, &out.ProjectID, &out.Environment, &out.FolderID, &out.Title, &out.DraftRevision, &out.PublishedVersion, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &out.ArchivedBy)
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = dashboardMissing()
+	}
+	if e == nil {
+		normalizeDashboardTimes(&out)
 	}
 	return out, e
 }
@@ -46,6 +57,7 @@ func readDashboardDraftTx(ctx context.Context, tx pgx.Tx, project, id string) (r
 	if e != nil {
 		return out, e
 	}
+	normalizeDashboardTimes(&out.Dashboard)
 	e = decodeSaved(data, &out.Definition)
 	return out, e
 }
@@ -59,6 +71,7 @@ func scanDashboardVersion(row pgx.Row) (reporting.DashboardVersion, error) {
 	if e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
 	if e = decodeSaved(def, &out.Definition); e != nil {
 		return out, e
 	}

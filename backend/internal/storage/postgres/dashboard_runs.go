@@ -214,6 +214,8 @@ func (s *Store) readDashboardRunTx(ctx context.Context, tx pgx.Tx, actor, projec
 	if e != nil {
 		return out, e
 	}
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.ExpiresAt = out.ExpiresAt.UTC()
 	var execution reporting.DashboardExecute
 	if e = decodeSaved(executionData, &execution); e != nil {
 		return out, e

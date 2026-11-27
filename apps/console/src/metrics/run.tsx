@@ -19,6 +19,7 @@ import {
   Select,
   type DataTableColumn,
 } from '@evia/design-system';
+import { QuerySeriesVisual } from '../analysis-visuals';
 import {
   buildRunExecute,
   defaultRunForm,
@@ -288,6 +289,12 @@ export function MetricRunPanel({ project, session, metricID, version, canRun }: 
                   ? `，已知缺口 ${result.metadata.coverage.known_gaps.length} 项`
                   : ''}
               </p>
+              <QuerySeriesVisual
+                result={result}
+                label={metricVersion.data?.definition.title ?? '指标结果'}
+                timezone={form.timezone || project.timezone}
+                interval={form.interval || undefined}
+              />
               <DataTable
                 caption="指标运行结果"
                 columns={columns}

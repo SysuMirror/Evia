@@ -32,6 +32,7 @@ import {
   useToast,
   type DataTableColumn,
 } from '@evia/design-system';
+import { QuerySeriesVisual } from '../analysis-visuals';
 import { useFormulaMetricsRequest } from './use-formula-metrics-request';
 import {
   buildFormulaRun,
@@ -1088,6 +1089,12 @@ function FormulaRunPanel({
           <p className="evia-field-hint">
             精度 {result.metadata.accuracy}，覆盖 {result.metadata.coverage.state}
           </p>
+          <QuerySeriesVisual
+            result={result}
+            label="复合指标结果"
+            timezone={form.timezone || project.timezone}
+            interval={form.interval || undefined}
+          />
           <DataTable
             caption="复合指标运行结果"
             columns={columns}

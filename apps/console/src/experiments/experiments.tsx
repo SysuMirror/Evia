@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExperimentForestPlot } from '../analysis-visuals';
 import {
   api,
   ApiError,
@@ -924,12 +925,15 @@ export function ExperimentsPage({
             {analysisRows.length === 0 ? (
               <EmptyPanel description="当前时间范围与过滤条件下没有查到任何曝光记录。" />
             ) : (
-              <DataTable
-                caption="实验分组统计对比结果"
-                columns={analysisColumns}
-                rows={analysisRows}
-                rowKey={(row) => row.variant}
-              />
+              <>
+                <ExperimentForestPlot rows={analysisRows} metricMode={evalMetricMode} />
+                <DataTable
+                  caption="实验分组统计对比结果"
+                  columns={analysisColumns}
+                  rows={analysisRows}
+                  rowKey={(row) => row.variant}
+                />
+              </>
             )}
           </div>
         </Panel>

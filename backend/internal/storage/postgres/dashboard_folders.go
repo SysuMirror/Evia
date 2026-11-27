@@ -26,6 +26,10 @@ func scanDashboardFolder(row pgx.Row) (reporting.DashboardFolder, error) {
 	if errors.Is(e, pgx.ErrNoRows) {
 		e = dashboardFolderMissing()
 	}
+	if e == nil {
+		out.CreatedAt = out.CreatedAt.UTC()
+		out.UpdatedAt = out.UpdatedAt.UTC()
+	}
 	return out, e
 }
 

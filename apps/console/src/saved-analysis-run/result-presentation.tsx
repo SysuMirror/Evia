@@ -13,6 +13,7 @@ import {
   Panel,
   ResultHeader,
 } from '@evia/design-system';
+import { PathFlowVisual, ProportionBarsVisual, RetentionCohortMatrix } from '../analysis-visuals';
 import { formatTime } from '../analysis-model';
 import { environmentLabel } from '../catalog-helpers';
 import { savedAnalysisResultChart } from './result-chart';
@@ -52,7 +53,7 @@ function savedResultHint(kind: SavedAnalysisTemplate['kind']): string {
     case 'trend':
       return '缺失时间桶未补零，各桶去重数不能相加为整段去重数。';
     case 'funnel':
-      return '转化率均相对首步计算，步骤按固定顺序排列，未到达的步骤不补零。';
+      return '转化率按相邻步骤计算（较上一步转化率），步骤按固定顺序排列，未到达的步骤不补零。';
     case 'retention':
       return '0 期留存率恒为 1.0；各队列按起始事件所在周期划分，期数受配置上限约束。';
     case 'segment':
@@ -219,6 +220,52 @@ export function SavedResultPresentation({
                 </Suspense>
               </ChartBoundary>
             )}
+            {queryKind === 'retention' && rows.length > 0 && (
+              <RetentionCohortMatrix
+                rows={rows}
+                granularity={snapshot.version.definition.query.retention?.granularity}
+                timezone={snapshot.body.timezone}
+              />
+            )}
+            {queryKind === 'segment' && rows.length > 0 && (
+              <ProportionBarsVisual
+                title="主体分群分布"
+                subtitle="按分群主体占比降序排列"
+                items={rows.map((row, idx) => {
+                  const raw = row.segment_value;
+                  const missing = raw === null || raw === undefined || raw === '';
+                  return {
+                    key: `${idx}-${String(raw)}`,
+                    label: missing ? '缺失值' : String(raw),
+                    badge: missing ? '缺失组' : undefined,
+                    value: typeof row.subjects === 'number' ? row.subjects : 0,
+                    share: typeof row.share === 'number' ? row.share : 0,
+                  };
+                })}
+              />
+            )}
+            {queryKind === 'attribution' && rows.length > 0 && (
+              <ProportionBarsVisual
+                title="触点归因贡献分布"
+                subtitle="各触点转化归因占比"
+                accentColor="#0d9488"
+                items={rows.map((row, idx) => {
+                  const key = String(row.touchpoint ?? row.event_key ?? `触点 ${idx + 1}`);
+                  const isDirect = key === '__direct__';
+                  const credit =
+                    typeof row.credit === 'number' ? `权重 ${row.credit.toFixed(2)}` : undefined;
+                  return {
+                    key: `${idx}-${key}`,
+                    label: isDirect ? '直接来源 (__direct__)' : key,
+                    badge: isDirect ? '无触点' : undefined,
+                    value: typeof row.subjects === 'number' ? row.subjects : 0,
+                    share: typeof row.share === 'number' ? row.share : 0,
+                    extra: credit,
+                  };
+                })}
+              />
+            )}
+            {queryKind === 'path' && rows.length > 0 && <PathFlowVisual rows={rows} />}
             {compact ? (
               <details>
                 <summary>完整结果表（{rows.length} 行）</summary>
