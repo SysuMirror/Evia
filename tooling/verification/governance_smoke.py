@@ -110,8 +110,10 @@ class GovernanceSmoke:
         require(audit['next_cursor'] and len(audit['items']) == 2, 'Audit pagination was not exercised')
         continuation, _, _ = self.request(self.owner, 'GET', audit_path + '&cursor=' + urllib.parse.quote(audit['next_cursor'], safe=''))
         require(set(x['id'] for x in audit['items']).isdisjoint(x['id'] for x in continuation['items']), 'Audit cursor duplicated entries')
+        required_audit_keys = {'id', 'project_id', 'actor_id', 'actor_kind', 'credential_id', 'action', 'resource_key', 'outcome', 'occurred_at'}
+        allowed_audit_keys = required_audit_keys | {'environment'}
         for entry in audit['items'] + continuation['items']:
-            require(set(entry) == {'id', 'project_id', 'actor_id', 'actor_kind', 'credential_id', 'action', 'resource_key', 'occurred_at'}, 'Unexpected audit data exposed')
+            require(required_audit_keys <= set(entry) <= allowed_audit_keys, 'Unexpected audit data exposed')
             require(entry['project_id'] == self.project and entry['credential_id'] is None, 'Audit scope or human attribution is wrong')
         self.request(self.owner, 'GET', audit_path + '&action=project.created&cursor=' + urllib.parse.quote(audit['next_cursor'], safe=''), expected=(400,))
         filtered, _, _ = self.request(self.owner, 'GET', base + '/audit-logs?' + urllib.parse.urlencode({**filters, 'action': 'project.settings_updated', 'actor_id': root_id}))
