@@ -1,10 +1,39 @@
 package admissionstats
 
 import (
+	"context"
+	"net"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
+
+type emptyHGetAllHook struct {
+	calls int
+}
+
+func (h *emptyHGetAllHook) DialHook(next redis.DialHook) redis.DialHook {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return nil, net.ErrClosed
+	}
+}
+
+func (h *emptyHGetAllHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if m, ok := cmd.(*redis.MapStringStringCmd); ok {
+			h.calls++
+			m.SetVal(map[string]string{})
+			return nil
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func (h *emptyHGetAllHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
 
 func testRecorder(t *testing.T) *Recorder {
 	t.Helper()
@@ -104,7 +133,14 @@ func TestRecordRejectsInvalidInputWithoutRedis(t *testing.T) {
 }
 
 func TestReadClampsWindowCount(t *testing.T) {
-	recorder := testRecorder(t)
+	recorder, err := New(Config{URL: "redis://127.0.0.1:1", KeyPrefix: "evia:test:admission", Timeout: time.Second, PoolSize: 4, AllowInsecureLocal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = recorder.Close() })
+	hook := &emptyHGetAllHook{}
+	recorder.client.AddHook(hook)
+
 	project := "12345678-1234-1234-1234-123456789abc"
 	read, err := recorder.Read(t.Context(), project, 0)
 	if err != nil {
@@ -112,6 +148,16 @@ func TestReadClampsWindowCount(t *testing.T) {
 	}
 	if len(read.Environments) != 3 || len(read.Totals) != 0 {
 		t.Fatalf("unexpected empty read: %+v", read)
+	}
+	if want := len(environments) * DefaultWindows; hook.calls != want {
+		t.Fatalf("expected windows=0 to clamp to %d reads, got %d", want, hook.calls)
+	}
+	hook.calls = 0
+	if _, err := recorder.Read(t.Context(), project, maxWindows+10); err != nil {
+		t.Fatal(err)
+	}
+	if want := len(environments) * DefaultWindows; hook.calls != want {
+		t.Fatalf("expected windows>max to clamp to %d reads, got %d", want, hook.calls)
 	}
 	if _, err := recorder.Read(t.Context(), "bad-uuid", DefaultWindows); err == nil {
 		t.Fatal("invalid project must be rejected")
