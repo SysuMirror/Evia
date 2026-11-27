@@ -4,7 +4,7 @@ The conceptual architecture diagram (`event-data-architecture.svg` / `event-data
 
 | Figure | Meaning | Authoritative references |
 | --- | --- | --- |
-| [Event data architecture](event-data-architecture.png) ([SVG](event-data-architecture.svg)) | Current logical architecture (2800 × 1560 PNG, SHA-256 `243e3ab325df495f6d7f1865600c286d29f2094b4d9099328da401c503fa8a64`; SVG SHA-256 `edba609aae4f87121d288ccabb448a139dc0a12e54db1e76d8a75c16cc25c162`): implemented control/query plane, event ingestion data plane, governance workers, and planned Apache Flink stream processing | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [feature coverage](../feature-coverage.md) |
+| [Event data architecture](event-data-architecture.png) ([SVG](event-data-architecture.svg)) | Current logical architecture (2800 × 1520 PNG, SHA-256 `db1aef8d673602a6cd715f5af9ca2699300fa99611eea5fb0eae79f3f4c06a4e`; SVG SHA-256 `c3bd54e564dbf4829abd1b34b0c72086f30bbc228b7817bc7998dc2991b69789`): implemented control/query plane, event ingestion data plane, six governance/lifecycle workers, and planned Apache Flink stream processing | [Architecture](../architecture.md), [progress](../../PROGRESS.md), [feature coverage](../feature-coverage.md) |
 | [Versioned analytics model](versioned-analytics-model.png) | Historical pre-dashboard snapshot of the event and saved-analysis lifecycle | [Releases](../releases.md), [saved analyses](../saved-analyses.md), [dashboard proposal](../plans/custom-dashboards.md) |
 
 ## Current console captures (2026-11-27)

@@ -1,247 +1,291 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
   <defs>
     <style>
       .bg { fill: #ffffff; }
-      .title { font-family: "Liberation Serif", "Times New Roman", Georgia, serif; font-size: 23px; font-weight: 700; fill: #0f172a; }
-      .subtitle { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 12.5px; fill: #475569; }
-      .lane-box { fill: #fafbfc; stroke: #cbd5e1; stroke-width: 1; rx: 4; }
-      .lane-title { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 11.5px; font-weight: 700; fill: #334155; letter-spacing: 0.3px; }
-      .runtime-frame { fill: #f4f8ff; fill-opacity: 0.78; stroke: #3b82f6; stroke-width: 1.1; stroke-dasharray: 5,3; rx: 4; }
-      .runtime-label { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 11px; font-weight: 700; fill: #1d4ed8; }
-      .box-client { fill: #f8fafc; stroke: #334155; stroke-width: 1.25; rx: 3; }
-      .box-api { fill: #ebf3fe; stroke: #1d4ed8; stroke-width: 1.35; rx: 3; }
-      .box-worker { fill: #edf7f2; stroke: #166534; stroke-width: 1.35; rx: 3; }
-      .box-store { fill: #fdf7ec; stroke: #92400e; stroke-width: 1.3; }
-      .box-planned-outer { fill: #ffffff; stroke: #64748b; stroke-width: 1.1; stroke-dasharray: 5,3; rx: 4; }
-      .box-planned { fill: #ffffff; stroke: #475569; stroke-width: 1.25; stroke-dasharray: 4,3; rx: 3; }
-      .node-title { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
-      .node-mono { font-family: "Liberation Mono", "DejaVu Sans Mono", Menlo, monospace; font-size: 12px; font-weight: 700; fill: #0f172a; }
-      .node-sub { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 10.6px; fill: #334155; }
-      .node-sub-mono { font-family: "Liberation Mono", "DejaVu Sans Mono", Menlo, monospace; font-size: 10px; fill: #334155; }
-      .edge { fill: none; stroke: #1e293b; stroke-width: 1.3; stroke-linejoin: miter; }
-      .edge-dashed { fill: none; stroke: #334155; stroke-width: 1.2; stroke-dasharray: 4,3; stroke-linejoin: miter; }
-      .edge-label { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 10.3px; font-weight: 600; fill: #1e293b; }
-      .edge-mono { font-family: "Liberation Mono", "DejaVu Sans Mono", Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #1e293b; }
-      .legend-text { font-family: "Liberation Sans", "Helvetica Neue", Arial, sans-serif; font-size: 11px; fill: #334155; }
-      .caption { font-family: "Liberation Serif", "Times New Roman", Georgia, serif; font-size: 12px; font-style: italic; fill: #334155; }
-      .rule { stroke: #cbd5e1; stroke-width: 1; }
+      .title { font-family: "Noto Sans", sans-serif; font-size: 19px; font-weight: 700; fill: #0f172a; letter-spacing: -0.2px; }
+      .subtitle { font-family: "Noto Sans", sans-serif; font-size: 11.5px; font-weight: 400; fill: #64748b; }
+
+      .lane-box { fill: #f8f9fb; stroke: #dce2ea; stroke-width: 1; rx: 4; }
+      .lane-tag { font-family: "Noto Sans", sans-serif; font-size: 11px; font-weight: 700; fill: #334155; letter-spacing: 0.2px; }
+
+      .runtime-frame { fill: #f2f6fb; fill-opacity: 0.65; stroke: #64748b; stroke-width: 1; stroke-dasharray: 4,3; rx: 4; }
+      .runtime-label { font-family: "Noto Sans", sans-serif; font-size: 10.5px; font-weight: 600; fill: #334155; }
+
+      /* Unified refined charcoal-slate borders across all solid components */
+      .box-client { fill: #ffffff; stroke: #3b4b5c; stroke-width: 1.15; rx: 3; }
+      .box-api { fill: #e9f0f8; stroke: #2c3e50; stroke-width: 1.2; rx: 3; }
+      .box-worker { fill: #eaf3ef; stroke: #2c3e50; stroke-width: 1.2; rx: 3; }
+      .box-worker-group { fill: #f3f8f5; stroke: #94a89e; stroke-width: 1; rx: 4; }
+      .box-worker-tile { fill: #ffffff; stroke: #3b4b5c; stroke-width: 1.05; rx: 3; }
+
+      .store-body { fill: #f4f1ea; stroke: #3b4b5c; stroke-width: 1.15; }
+      .store-cap { fill: #eae5d8; stroke: #3b4b5c; stroke-width: 1.15; }
+
+      .box-planned-outer { fill: #ffffff; stroke: #94a3b8; stroke-width: 1; stroke-dasharray: 4,3; rx: 4; }
+      .box-planned { fill: #ffffff; stroke: #64748b; stroke-width: 1.15; stroke-dasharray: 4,3; rx: 3; }
+
+      .node-title { font-family: "Noto Sans", sans-serif; font-size: 12.2px; font-weight: 700; fill: #0f172a; }
+      .node-mono { font-family: "Fira Code", "DejaVu Sans Mono", monospace; font-size: 11.2px; font-weight: 600; fill: #0f172a; }
+      .node-sub { font-family: "Noto Sans", sans-serif; font-size: 10px; font-weight: 400; fill: #475569; }
+      .node-sub-mono { font-family: "Fira Code", "DejaVu Sans Mono", monospace; font-size: 9.4px; font-weight: 500; fill: #334155; }
+      .tile-title { font-family: "Fira Code", "DejaVu Sans Mono", monospace; font-size: 9.8px; font-weight: 600; fill: #0f172a; }
+      .tile-sub { font-family: "Noto Sans", sans-serif; font-size: 9.2px; fill: #475569; }
+
+      .edge { fill: none; stroke: #334155; stroke-width: 1.15; stroke-linejoin: miter; }
+      .edge-dashed { fill: none; stroke: #475569; stroke-width: 1.1; stroke-dasharray: 4,3; stroke-linejoin: miter; }
+      .edge-label { font-family: "Noto Sans", sans-serif; font-size: 9.8px; font-weight: 500; fill: #334155; }
+      .edge-mono { font-family: "Fira Code", "DejaVu Sans Mono", monospace; font-size: 9.1px; font-weight: 500; fill: #334155; }
+
+      .legend-title { font-family: "Noto Sans", sans-serif; font-size: 10.5px; font-weight: 700; fill: #334155; }
+      .legend-text { font-family: "Noto Sans", sans-serif; font-size: 10.5px; fill: #475569; }
+      .caption { font-family: "Latin Modern Roman", "LM Roman 10", Georgia, serif; font-size: 12.5px; fill: #334155; }
+      .caption-bold { font-family: "Latin Modern Roman", "LM Roman 10", Georgia, serif; font-size: 12.5px; font-weight: 700; fill: #0f172a; }
+      .rule { stroke: #e2e8f0; stroke-width: 1; }
     </style>
 
-    <marker id="arrow" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="7.5" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0.8 L 9 4 L 0 7.2 z" fill="#1e293b"/>
+    <!-- Crisp TikZ stealth-style arrowhead -->
+    <marker id="stealth" viewBox="0 0 10 8" refX="8.5" refY="4" markerWidth="7" markerHeight="5.6" orient="auto-start-reverse">
+      <path d="M 0 0.8 L 9 4 L 0 7.2 L 2.2 4 z" fill="#334155"/>
     </marker>
-    <marker id="arrow-open" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="7.5" markerHeight="6" orient="auto">
-      <path d="M 1 1 L 8.5 4 L 1 7" fill="none" stroke="#334155" stroke-width="1.4"/>
+    <marker id="stealth-open" viewBox="0 0 10 8" refX="8.5" refY="4" markerWidth="7" markerHeight="5.6" orient="auto">
+      <path d="M 1 1 L 8.2 4 L 1 7" fill="none" stroke="#475569" stroke-width="1.35"/>
     </marker>
   </defs>
 
-  <!-- Pure white academic canvas -->
-  <rect class="bg" x="0" y="0" width="1400" height="780"/>
+  <!-- Pure white canvas -->
+  <rect class="bg" x="0" y="0" width="1400" height="760"/>
 
-  <!-- Header -->
-  <text class="title" x="700" y="34" text-anchor="middle">Evia: Logical System Architecture</text>
-  <text class="subtitle" x="700" y="54" text-anchor="middle">Contract-First Event Ingestion, Durable Processing, Multi-Model Analytics, and Online Experimentation</text>
+  <!-- Understated academic header -->
+  <text class="title" x="32" y="34">Evia — Logical System Architecture</text>
+  <text class="subtitle" x="32" y="52">Contract-first event ingestion, durable processing, multi-model analytics, and online experimentation</text>
+  <line class="rule" x1="32" y1="62" x2="1368" y2="62"/>
 
   <!-- ==================== SWIMLANE (a): CONTROL & QUERY PLANE ==================== -->
-  <rect class="lane-box" x="28" y="72" width="1344" height="190"/>
-  <text class="lane-title" x="42" y="92">(a) Control &amp; Query Plane</text>
+  <rect class="lane-box" x="32" y="76" width="1336" height="186"/>
+  <text class="lane-tag" x="46" y="96">(a) Control &amp; Query Plane</text>
 
   <!-- ==================== SWIMLANE (b): EVENT INGESTION DATA PLANE ==================== -->
-  <rect class="lane-box" x="28" y="274" width="1344" height="270"/>
-  <text class="lane-title" x="42" y="294">(b) Event Ingestion Data Plane</text>
+  <rect class="lane-box" x="32" y="274" width="1336" height="264"/>
+  <text class="lane-tag" x="46" y="294">(b) Event Ingestion Data Plane</text>
 
   <!-- ==================== SWIMLANE (c): GOVERNANCE WORKERS & PLANNED EXTENSION ==================== -->
-  <rect class="lane-box" x="28" y="556" width="1344" height="148"/>
-  <text class="lane-title" x="42" y="576">(c) Governance &amp; Lifecycle Workers / Planned Extension</text>
+  <rect class="lane-box" x="32" y="550" width="1336" height="148"/>
+  <text class="lane-tag" x="46" y="570">(c) Governance &amp; Lifecycle Workers / Planned Extension</text>
 
-  <!-- ==================== UNIFIED GO RUNTIME FRAME (spans Plane a & top of Plane b) ==================== -->
-  <rect class="runtime-frame" x="372" y="96" width="220" height="328"/>
-  <text class="runtime-label" x="482" y="114" text-anchor="middle">Unified Go Runtime (evia serve)</text>
+  <!-- ==================== UNIFIED GO RUNTIME FRAME ==================== -->
+  <rect class="runtime-frame" x="374" y="98" width="218" height="320"/>
+  <text class="runtime-label" x="483" y="116" text-anchor="middle">Unified Go Runtime (evia serve)</text>
 
   <!-- ==================== LANE (a) NODES ==================== -->
   <!-- React Console -->
-  <rect class="box-client" x="46" y="112" width="188" height="58"/>
-  <text class="node-title" x="140" y="135" text-anchor="middle">React Console</text>
+  <rect class="box-client" x="48" y="114" width="184" height="56"/>
+  <text class="node-title" x="140" y="136" text-anchor="middle">React Console</text>
   <text class="node-sub" x="140" y="153" text-anchor="middle">Session / CSRF / OAuth2 PKCE</text>
 
   <!-- Business Agents -->
-  <rect class="box-client" x="46" y="184" width="188" height="58"/>
-  <text class="node-title" x="140" y="207" text-anchor="middle">Business Agents</text>
-  <text class="node-sub" x="140" y="225" text-anchor="middle">Public Skills / Machine Bearer</text>
+  <rect class="box-client" x="48" y="184" width="184" height="56"/>
+  <text class="node-title" x="140" y="206" text-anchor="middle">Business Agents</text>
+  <text class="node-sub" x="140" y="223" text-anchor="middle">Public Skills / Machine Bearer</text>
 
   <!-- Control & Analysis API -->
-  <rect class="box-api" x="386" y="130" width="192" height="92"/>
-  <text class="node-title" x="482" y="155" text-anchor="middle">Control &amp; Analysis API</text>
-  <text class="node-sub-mono" x="482" y="173" text-anchor="middle">/api/v1/*</text>
-  <text class="node-sub" x="482" y="191" text-anchor="middle">Catalog, Releases, Experiments,</text>
-  <text class="node-sub" x="482" y="206" text-anchor="middle">Metrics, Dashboards, Governance</text>
+  <rect class="box-api" x="388" y="130" width="190" height="90"/>
+  <text class="node-title" x="483" y="153" text-anchor="middle">Control &amp; Analysis API</text>
+  <text class="node-sub-mono" x="483" y="170" text-anchor="middle">/api/v1/*</text>
+  <text class="node-sub" x="483" y="188" text-anchor="middle">Catalog, Releases, Experiments,</text>
+  <text class="node-sub" x="483" y="203" text-anchor="middle">Metrics, Dashboards, Governance</text>
 
-  <!-- PostgreSQL Cylinder (x=706..864, y=108..236, generous interior padding) -->
+  <!-- PostgreSQL Cylinder -->
   <g id="pg-store">
-    <path class="box-store" d="M 706 124 L 706 218 A 79 14 0 0 0 864 218 L 864 124 Z"/>
-    <ellipse class="box-store" cx="785" cy="124" rx="79" ry="14"/>
-    <text class="node-title" x="785" y="158" text-anchor="middle">PostgreSQL</text>
-    <text class="node-sub" x="785" y="176" text-anchor="middle">Metadata, Releases,</text>
-    <text class="node-sub" x="785" y="191" text-anchor="middle">Experiments, Identity Graph,</text>
-    <text class="node-sub" x="785" y="206" text-anchor="middle">Job Queue &amp; Audit</text>
+    <path class="store-body" d="M 708 124 L 708 218 A 79 13 0 0 0 866 218 L 866 124 Z"/>
+    <ellipse class="store-cap" cx="787" cy="124" rx="79" ry="13"/>
+    <text class="node-title" x="787" y="157" text-anchor="middle">PostgreSQL</text>
+    <text class="node-sub" x="787" y="175" text-anchor="middle">Metadata, Releases,</text>
+    <text class="node-sub" x="787" y="190" text-anchor="middle">Experiments, Identity Graph,</text>
+    <text class="node-sub" x="787" y="205" text-anchor="middle">Job Queue &amp; Audit</text>
   </g>
 
-  <!-- query-worker (x=958..1138) -->
-  <rect class="box-worker" x="958" y="128" width="180" height="92"/>
-  <text class="node-mono" x="1048" y="152" text-anchor="middle">query-worker</text>
-  <text class="node-sub" x="1048" y="172" text-anchor="middle">Trend, Funnel, Retention,</text>
-  <text class="node-sub" x="1048" y="188" text-anchor="middle">Path, Attribution, Heatmap,</text>
-  <text class="node-sub" x="1048" y="204" text-anchor="middle">Formula DAG, A/B Statistics</text>
+  <!-- query-worker -->
+  <rect class="box-worker" x="960" y="130" width="178" height="90"/>
+  <text class="node-mono" x="1049" y="153" text-anchor="middle">query-worker</text>
+  <text class="node-sub" x="1049" y="172" text-anchor="middle">Trend, Funnel, Retention,</text>
+  <text class="node-sub" x="1049" y="187" text-anchor="middle">Path, Attribution, Heatmap,</text>
+  <text class="node-sub" x="1049" y="202" text-anchor="middle">Formula DAG, A/B Statistics</text>
 
   <!-- ==================== LANE (b) NODES ==================== -->
   <!-- Browser SDK -->
-  <rect class="box-client" x="46" y="314" width="188" height="72"/>
+  <rect class="box-client" x="48" y="314" width="184" height="70"/>
   <text class="node-title" x="140" y="335" text-anchor="middle">Browser SDK</text>
   <text class="node-sub-mono" x="140" y="351" text-anchor="middle">@evia/browser-sdk</text>
-  <text class="node-sub" x="140" y="368" text-anchor="middle">Emit / FNV-1a Bucketing / Replay</text>
+  <text class="node-sub" x="140" y="367" text-anchor="middle">Emit / FNV-1a Bucketing / Replay</text>
 
   <!-- Server Applications -->
-  <rect class="box-client" x="46" y="410" width="188" height="58"/>
-  <text class="node-title" x="140" y="433" text-anchor="middle">Server Applications</text>
-  <text class="node-sub" x="140" y="451" text-anchor="middle">HTTP Batch Collect API</text>
+  <rect class="box-client" x="48" y="408" width="184" height="56"/>
+  <text class="node-title" x="140" y="430" text-anchor="middle">Server Applications</text>
+  <text class="node-sub" x="140" y="447" text-anchor="middle">HTTP Batch Collect API</text>
 
   <!-- Collection & Config API -->
-  <rect class="box-api" x="386" y="312" width="192" height="96"/>
-  <text class="node-title" x="482" y="336" text-anchor="middle">Collection &amp; Config API</text>
-  <text class="node-sub-mono" x="482" y="353" text-anchor="middle">/v1/config, /v1/collect</text>
-  <text class="node-sub" x="482" y="371" text-anchor="middle">Origin/Key Auth, Schema Check,</text>
-  <text class="node-sub" x="482" y="387" text-anchor="middle">Ed25519 Signature &amp; ETag Cache</text>
+  <rect class="box-api" x="388" y="310" width="190" height="94"/>
+  <text class="node-title" x="483" y="333" text-anchor="middle">Collection &amp; Config API</text>
+  <text class="node-sub-mono" x="483" y="350" text-anchor="middle">/v1/config, /v1/collect</text>
+  <text class="node-sub" x="483" y="368" text-anchor="middle">Origin/Key Auth, Schema Check,</text>
+  <text class="node-sub" x="483" y="384" text-anchor="middle">Ed25519 Signature &amp; ETag Cache</text>
 
-  <!-- Redis Cylinder (cleanly OUTSIDE runtime frame, x=405..559, y=458..532) -->
+  <!-- Redis Cylinder (outside runtime frame) -->
   <g id="redis-store">
-    <path class="box-store" d="M 405 470 L 405 520 A 77 11 0 0 0 559 520 L 559 470 Z"/>
-    <ellipse class="box-store" cx="482" cy="470" rx="77" ry="11"/>
-    <text class="node-title" x="482" y="497" text-anchor="middle">Redis</text>
-    <text class="node-sub" x="482" y="513" text-anchor="middle">Distributed Token Bucket</text>
+    <path class="store-body" d="M 408 466 L 408 514 A 75 10.5 0 0 0 558 514 L 558 466 Z"/>
+    <ellipse class="store-cap" cx="483" cy="466" rx="75" ry="10.5"/>
+    <text class="node-title" x="483" y="492" text-anchor="middle">Redis</text>
+    <text class="node-sub" x="483" y="507" text-anchor="middle">Distributed Token Bucket</text>
   </g>
 
-  <!-- Apache Kafka Cylinder (x=706..864, y=306..414) -->
+  <!-- Apache Kafka Cylinder -->
   <g id="kafka-store">
-    <path class="box-store" d="M 706 320 L 706 400 A 79 13 0 0 0 864 400 L 864 320 Z"/>
-    <ellipse class="box-store" cx="785" cy="320" rx="79" ry="13"/>
-    <text class="node-title" x="785" y="354" text-anchor="middle">Apache Kafka</text>
-    <text class="node-sub" x="785" y="372" text-anchor="middle">Durable Event Topic,</text>
-    <text class="node-sub" x="785" y="388" text-anchor="middle">Readiness Probe, Dead-Letter</text>
+    <path class="store-body" d="M 708 318 L 708 398 A 79 12.5 0 0 0 866 398 L 866 318 Z"/>
+    <ellipse class="store-cap" cx="787" cy="318" rx="79" ry="12.5"/>
+    <text class="node-title" x="787" y="352" text-anchor="middle">Apache Kafka</text>
+    <text class="node-sub" x="787" y="369" text-anchor="middle">Durable Event Topic,</text>
+    <text class="node-sub" x="787" y="384" text-anchor="middle">Readiness Probe, Dead-Letter</text>
   </g>
 
-  <!-- ingest-worker (x=958..1138, leaving 86px clear channel to ClickHouse!) -->
-  <rect class="box-worker" x="958" y="314" width="180" height="92"/>
-  <text class="node-mono" x="1048" y="338" text-anchor="middle">ingest-worker</text>
-  <text class="node-sub" x="1048" y="357" text-anchor="middle">Decode, Erasure Barrier,</text>
-  <text class="node-sub" x="1048" y="373" text-anchor="middle">Sync Fact Insert,</text>
-  <text class="node-sub" x="1048" y="389" text-anchor="middle">Readiness Lease Renewal</text>
+  <!-- ingest-worker -->
+  <rect class="box-worker" x="960" y="312" width="178" height="90"/>
+  <text class="node-mono" x="1049" y="335" text-anchor="middle">ingest-worker</text>
+  <text class="node-sub" x="1049" y="354" text-anchor="middle">Decode, Erasure Barrier,</text>
+  <text class="node-sub" x="1049" y="369" text-anchor="middle">Sync Fact Insert,</text>
+  <text class="node-sub" x="1049" y="384" text-anchor="middle">Readiness Lease Renewal</text>
 
-  <!-- ClickHouse Cylinder (x=1224..1358) -->
+  <!-- ClickHouse Cylinder -->
   <g id="ch-store">
-    <path class="box-store" d="M 1224 300 L 1224 422 A 67 14 0 0 0 1358 422 L 1358 300 Z"/>
-    <ellipse class="box-store" cx="1291" cy="300" rx="67" ry="14"/>
-    <text class="node-title" x="1291" y="344" text-anchor="middle">ClickHouse</text>
-    <text class="node-sub-mono" x="1291" y="363" text-anchor="middle">event_facts_raw</text>
-    <text class="node-sub" x="1291" y="380" text-anchor="middle">Deduplicated Read View,</text>
-    <text class="node-sub" x="1291" y="396" text-anchor="middle">Hot-Key Property Slots</text>
+    <path class="store-body" d="M 1226 298 L 1226 418 A 66 13 0 0 0 1358 418 L 1358 298 Z"/>
+    <ellipse class="store-cap" cx="1292" cy="298" rx="66" ry="13"/>
+    <text class="node-title" x="1292" y="341" text-anchor="middle">ClickHouse</text>
+    <text class="node-sub-mono" x="1292" y="359" text-anchor="middle">event_facts_raw</text>
+    <text class="node-sub" x="1292" y="376" text-anchor="middle">Deduplicated Read View,</text>
+    <text class="node-sub" x="1292" y="391" text-anchor="middle">Hot-Key Property Slots</text>
   </g>
 
-  <!-- ==================== LANE (c) NODES ==================== -->
-  <!-- Governance & Lifecycle Workers -->
-  <rect class="box-worker" x="46" y="592" width="908" height="94"/>
-  <text class="node-title" x="500" y="618" text-anchor="middle">Governance &amp; Lifecycle Workers</text>
-  <text class="node-sub-mono" x="500" y="641" text-anchor="middle">identity-worker   |   erasure-worker   |   export-worker (CSV / NDJSON / Parquet)</text>
-  <text class="node-sub-mono" x="500" y="661" text-anchor="middle">content-worker (Encrypted Replay)   |   retention-worker   |   backfill-worker</text>
+  <!-- ==================== LANE (c) NODES (6 structured worker tiles + Planned Extension) ==================== -->
+  <rect class="box-worker-group" x="48" y="582" width="932" height="102"/>
+  <text class="runtime-label" x="62" y="601">Background Governance &amp; Lifecycle Workers (independent Go subcommands)</text>
+
+  <!-- 6 evenly spaced crisp tiles inside x=60..968 (width=142 each, gap=12) -->
+  <rect class="box-worker-tile" x="60" y="612" width="142" height="58"/>
+  <text class="tile-title" x="131" y="635" text-anchor="middle">identity-worker</text>
+  <text class="tile-sub" x="131" y="652" text-anchor="middle">Graph Folding &amp; Snapshots</text>
+
+  <rect class="box-worker-tile" x="214" y="612" width="142" height="58"/>
+  <text class="tile-title" x="285" y="635" text-anchor="middle">erasure-worker</text>
+  <text class="tile-sub" x="285" y="652" text-anchor="middle">Compliance &amp; Tombstones</text>
+
+  <rect class="box-worker-tile" x="368" y="612" width="142" height="58"/>
+  <text class="tile-title" x="439" y="635" text-anchor="middle">export-worker</text>
+  <text class="tile-sub" x="439" y="652" text-anchor="middle">CSV / NDJSON / Parquet</text>
+
+  <rect class="box-worker-tile" x="522" y="612" width="142" height="58"/>
+  <text class="tile-title" x="593" y="635" text-anchor="middle">content-worker</text>
+  <text class="tile-sub" x="593" y="652" text-anchor="middle">Encrypted Replay Chunks</text>
+
+  <rect class="box-worker-tile" x="676" y="612" width="142" height="58"/>
+  <text class="tile-title" x="747" y="635" text-anchor="middle">retention-worker</text>
+  <text class="tile-sub" x="747" y="652" text-anchor="middle">TTL Sweeps &amp; Archiving</text>
+
+  <rect class="box-worker-tile" x="830" y="612" width="138" height="58"/>
+  <text class="tile-title" x="899" y="635" text-anchor="middle">backfill-worker</text>
+  <text class="tile-sub" x="899" y="652" text-anchor="middle">Controlled History Replay</text>
 
   <!-- Planned Extension -->
-  <rect class="box-planned-outer" x="1008" y="582" width="348" height="106"/>
-  <text class="lane-title" x="1182" y="601" text-anchor="middle">Planned Extension</text>
-  <rect class="box-planned" x="1032" y="612" width="300" height="62"/>
-  <text class="node-title" x="1182" y="636" text-anchor="middle">Apache Flink</text>
-  <text class="node-sub" x="1182" y="655" text-anchor="middle">Stateful Stream Processing (Separate Project)</text>
+  <rect class="box-planned-outer" x="1012" y="582" width="340" height="102"/>
+  <text class="runtime-label" x="1182" y="601" text-anchor="middle">Planned Extension</text>
+  <rect class="box-planned" x="1032" y="612" width="300" height="58"/>
+  <text class="node-title" x="1182" y="635" text-anchor="middle">Apache Flink</text>
+  <text class="node-sub" x="1182" y="652" text-anchor="middle">Stateful Stream Processing (Separate Project)</text>
 
-  <!-- ==================== ALL EDGES (ZERO TEXT/LINE COLLISIONS) ==================== -->
+  <!-- ==================== ALL EDGES ==================== -->
 
-  <!-- React Console & Business Agents -> Control & Analysis API -->
-  <path class="edge" d="M 234 141 L 304 141 L 304 162 L 385 162" marker-end="url(#arrow)"/>
-  <path class="edge" d="M 234 213 L 304 213 L 304 190 L 385 190" marker-end="url(#arrow)"/>
-  <text class="edge-mono" x="309" y="134" text-anchor="middle">HTTPS /api/v1/*</text>
+  <!-- Clients -> Control API -->
+  <path class="edge" d="M 232 142 L 304 142 L 304 162 L 387 162" marker-end="url(#stealth)"/>
+  <path class="edge" d="M 232 212 L 304 212 L 304 188 L 387 188" marker-end="url(#stealth)"/>
+  <text class="edge-mono" x="308" y="134" text-anchor="middle">HTTPS /api/v1/*</text>
 
-  <!-- Control & Analysis API <-> PostgreSQL -->
-  <line class="edge" x1="579" y1="176" x2="705" y2="176" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="642" y="167" text-anchor="middle">Transactions</text>
-  <text class="edge-label" x="642" y="191" text-anchor="middle">&amp; Audit</text>
+  <!-- Control API <-> PostgreSQL -->
+  <line class="edge" x1="579" y1="175" x2="707" y2="175" marker-start="url(#stealth)" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="643" y="166" text-anchor="middle">Transactions</text>
+  <text class="edge-label" x="643" y="189" text-anchor="middle">&amp; Audit</text>
 
   <!-- PostgreSQL <-> query-worker -->
-  <line class="edge" x1="864" y1="156" x2="957" y2="156" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="911" y="148" text-anchor="middle">Lease Jobs</text>
-  <line class="edge" x1="958" y1="194" x2="865" y2="194" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="911" y="186" text-anchor="middle">Persist Results</text>
+  <line class="edge" x1="866" y1="156" x2="959" y2="156" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="913" y="148" text-anchor="middle">Lease Jobs</text>
+  <line class="edge" x1="960" y1="194" x2="867" y2="194" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="913" y="186" text-anchor="middle">Persist Results</text>
 
   <!-- query-worker -> ClickHouse -->
-  <path class="edge" d="M 1138 174 L 1291 174 L 1291 285" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="1291" y="152" text-anchor="middle">Analytical Read View</text>
-  <text class="edge-label" x="1291" y="166" text-anchor="middle">&amp; Hot-Key Slots</text>
+  <path class="edge" d="M 1138 175 L 1292 175 L 1292 284" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="1292" y="153" text-anchor="middle">Analytical Read View</text>
+  <text class="edge-label" x="1292" y="166" text-anchor="middle">&amp; Hot-Key Slots</text>
 
-  <!-- Browser SDK -> Collection & Config API -->
-  <line class="edge" x1="234" y1="348" x2="385" y2="348" marker-end="url(#arrow)"/>
-  <text class="edge-mono" x="308" y="324" text-anchor="middle">GET /v1/config</text>
-  <text class="edge-mono" x="308" y="338" text-anchor="middle">(Ed25519, ETag 304)</text>
-  <text class="edge-mono" x="308" y="364" text-anchor="middle">&amp; POST /v1/collect</text>
+  <!-- Browser SDK -> Collection API -->
+  <line class="edge" x1="232" y1="347" x2="387" y2="347" marker-end="url(#stealth)"/>
+  <text class="edge-mono" x="309" y="324" text-anchor="middle">GET /v1/config</text>
+  <text class="edge-mono" x="309" y="337" text-anchor="middle">(Ed25519, ETag 304)</text>
+  <text class="edge-mono" x="309" y="362" text-anchor="middle">&amp; POST /v1/collect</text>
 
-  <!-- Server Applications -> Collection & Config API -->
-  <path class="edge" d="M 234 439 L 308 439 L 308 384 L 385 384" marker-end="url(#arrow)"/>
-  <text class="edge-mono" x="308" y="454" text-anchor="middle">POST /v1/collect</text>
-  <text class="edge-label" x="308" y="468" text-anchor="middle">(Bearer Auth)</text>
+  <!-- Server Apps -> Collection API -->
+  <path class="edge" d="M 232 436 L 308 436 L 308 382 L 387 382" marker-end="url(#stealth)"/>
+  <text class="edge-mono" x="308" y="451" text-anchor="middle">POST /v1/collect</text>
+  <text class="edge-label" x="308" y="464" text-anchor="middle">(Bearer Auth)</text>
 
-  <!-- Collection & Config API <-> Redis -->
-  <line class="edge" x1="482" y1="409" x2="482" y2="458" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="492" y="438">Admission Budget</text>
+  <!-- Collection API <-> Redis -->
+  <line class="edge" x1="483" y1="405" x2="483" y2="455" marker-start="url(#stealth)" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="493" y="434">Admission Budget</text>
 
-  <!-- Collection & Config API -> Apache Kafka (label centered cleanly at x=634, well clear of vertical line at x=688!) -->
-  <line class="edge" x1="578" y1="360" x2="705" y2="360" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="634" y="350" text-anchor="middle">All-ISR Zstd</text>
-  <text class="edge-label" x="634" y="376" text-anchor="middle">Produce</text>
+  <!-- Collection API -> Kafka -->
+  <line class="edge" x1="578" y1="358" x2="707" y2="358" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="635" y="349" text-anchor="middle">All-ISR Zstd</text>
+  <text class="edge-label" x="635" y="373" text-anchor="middle">Produce</text>
 
-  <!-- Apache Kafka -> ingest-worker -->
-  <line class="edge" x1="864" y1="360" x2="957" y2="360" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="911" y="351" text-anchor="middle">Poll &amp; Commit</text>
+  <!-- Kafka -> ingest-worker -->
+  <line class="edge" x1="866" y1="358" x2="959" y2="358" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="913" y="349" text-anchor="middle">Poll &amp; Commit</text>
 
-  <!-- ingest-worker -> ClickHouse (86px clear span: 1138..1224) -->
-  <line class="edge" x1="1138" y1="360" x2="1223" y2="360" marker-end="url(#arrow)"/>
-  <text class="edge-mono" x="1181" y="348" text-anchor="middle">JSONEachRow</text>
-  <text class="edge-label" x="1181" y="376" text-anchor="middle">Sync Insert</text>
+  <!-- ingest-worker -> ClickHouse -->
+  <line class="edge" x1="1138" y1="358" x2="1225" y2="358" marker-end="url(#stealth)"/>
+  <text class="edge-mono" x="1182" y="347" text-anchor="middle">JSONEachRow</text>
+  <text class="edge-label" x="1182" y="373" text-anchor="middle">Sync Insert</text>
 
-  <!-- ingest-worker --(dashed Erasure Tombstone Check)--> PostgreSQL (label placed cleanly ABOVE horizontal segment, zero crossing!) -->
-  <path class="edge-dashed" d="M 1048 314 L 1048 250 L 826 250 L 826 234" marker-end="url(#arrow-open)"/>
-  <text class="edge-label" x="937" y="244" text-anchor="middle">Erasure Tombstone Check</text>
+  <!-- ingest-worker --(Erasure Tombstone Check)--> PostgreSQL -->
+  <path class="edge-dashed" d="M 1049 312 L 1049 250 L 828 250 L 828 232" marker-end="url(#stealth-open)"/>
+  <text class="edge-label" x="939" y="243" text-anchor="middle">Erasure Tombstone Check</text>
 
-  <!-- Governance & Lifecycle Workers -> PostgreSQL (x=688 corridor, crisp semicircular bridge over y=360, completely clear of All-ISR label!) -->
-  <path class="edge" d="M 688 592 L 688 366 A 6 6 0 0 1 688 354 L 688 250 L 752 250 L 752 234" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="678" y="494" text-anchor="end">State, Metadata</text>
-  <text class="edge-label" x="678" y="508" text-anchor="end">&amp; Snapshots</text>
+  <!-- Governance Workers -> PostgreSQL (clean x=688 corridor + semicircular bridge over y=358) -->
+  <path class="edge" d="M 688 582 L 688 364 A 6 6 0 0 1 688 352 L 688 249 L 752 249 L 752 232" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="678" y="488" text-anchor="end">State, Metadata</text>
+  <text class="edge-label" x="678" y="502" text-anchor="end">&amp; Snapshots</text>
 
-  <!-- Governance & Lifecycle Workers -> ClickHouse (clean orthogonal along bottom corridor y=496 -> x=1291 -> bottom of CH) -->
-  <path class="edge" d="M 910 592 L 910 496 L 1291 496 L 1291 437" marker-end="url(#arrow)"/>
-  <text class="edge-label" x="1100" y="488" text-anchor="middle">Identity Scans, Retention Sweeps, Exports &amp; Backfill</text>
+  <!-- Governance Workers -> ClickHouse -->
+  <path class="edge" d="M 910 582 L 910 492 L 1292 492 L 1292 432" marker-end="url(#stealth)"/>
+  <text class="edge-label" x="1102" y="484" text-anchor="middle">Identity Scans, Retention Sweeps, Exports &amp; Backfill</text>
 
-  <!-- ==================== FOOTER: LEGEND & ACADEMIC CAPTION ==================== -->
-  <line class="rule" x1="28" y1="720" x2="1372" y2="720"/>
+  <!-- ==================== FOOTER: LEGEND & FORMAL LATEX-STYLE CAPTION ==================== -->
+  <line class="rule" x1="32" y1="712" x2="1368" y2="712"/>
 
-  <!-- Legend -->
-  <text class="legend-text" x="34" y="746" font-weight="700">Legend:</text>
-  <rect class="box-api" x="92" y="734" width="26" height="15"/>
-  <text class="legend-text" x="126" y="746">API / Runtime</text>
+  <!-- Compact Legend -->
+  <text class="legend-title" x="36" y="737">Legend</text>
 
-  <rect class="box-worker" x="220" y="734" width="26" height="15"/>
-  <text class="legend-text" x="254" y="746">Worker</text>
+  <rect class="box-client" x="90" y="726" width="22" height="14"/>
+  <text class="legend-text" x="119" y="737">Client / Agent</text>
 
-  <rect class="box-store" x="316" y="734" width="26" height="15" rx="2"/>
-  <text class="legend-text" x="350" y="746">Storage / Queue</text>
+  <rect class="box-api" x="206" y="726" width="22" height="14"/>
+  <text class="legend-text" x="235" y="737">API / Runtime</text>
 
-  <rect class="box-planned" x="462" y="734" width="26" height="15"/>
-  <text class="legend-text" x="496" y="746">Planned Module</text>
+  <rect class="box-worker" x="322" y="726" width="22" height="14"/>
+  <text class="legend-text" x="351" y="737">Worker</text>
+
+  <rect class="store-body" x="408" y="726" width="22" height="14" rx="2"/>
+  <text class="legend-text" x="437" y="737">Storage / Queue</text>
+
+  <rect class="box-planned" x="538" y="726" width="22" height="14"/>
+  <text class="legend-text" x="567" y="737">Planned</text>
 
   <!-- Formal Paper Caption -->
-  <text class="caption" x="1368" y="746" text-anchor="end">Fig. 1. Logical architecture and trust boundaries of Evia (not a throughput or capacity claim).</text>
+  <text class="caption" x="1366" y="737" text-anchor="end"><tspan class="caption-bold">Fig. 1.</tspan> Logical architecture and trust boundaries of Evia (logical model; not a capacity claim).</text>
 </svg>
