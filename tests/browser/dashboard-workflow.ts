@@ -153,8 +153,8 @@ export async function verifyDashboardWorkflow(
   const title = `合成多图看板 ${stamp}`;
   await page.getByLabel('看板标题', { exact: true }).fill(title);
   for (const [index, analysisTitle] of analysisTitles.entries()) {
-    await page.getByRole('button', { name: '添加分析组件', exact: true }).click();
-    const picker = page.getByRole('dialog', { name: '添加分析组件', exact: true });
+    await page.getByRole('button', { name: '添加组件', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: '添加看板组件', exact: true });
     await picker
       .getByLabel('保存的分析', { exact: true })
       .selectOption({ label: `${analysisTitle}，最新 v1` });
@@ -206,11 +206,11 @@ export async function verifyDashboardWorkflow(
     ).toBeDisabled();
     await expect(
       review
-        .getByRole('table', { name: '本次发布的精确分析版本', exact: true })
+        .getByRole('table', { name: '本次发布的精确组件来源版本', exact: true })
         .locator('tbody tr'),
     ).toHaveCount(2);
     await review
-      .getByRole('checkbox', { name: '已核对语义差异与固定分析版本', exact: true })
+      .getByRole('checkbox', { name: '已核对语义差异与固定组件版本', exact: true })
       .check();
     await review.getByRole('button', { name: '发布不可变版本', exact: true }).click();
     if (lost) {
