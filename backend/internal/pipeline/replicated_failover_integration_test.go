@@ -28,6 +28,9 @@ func haEnv(t *testing.T) (lb, node1, node2, user, password string) {
 	node2 = os.Getenv("EVIA_TEST_CH_HA_NODE2_URL")
 	user = os.Getenv("EVIA_TEST_CH_HA_USERNAME")
 	password = os.Getenv("EVIA_TEST_CH_HA_PASSWORD")
+	if lb == "" && node1 == "" && node2 == "" && user == "" {
+		t.Skip("ClickHouse HA topology env vars are unset; skipping HA integration test")
+	}
 	if lb == "" || node1 == "" || node2 == "" || user == "" {
 		t.Fatal("EVIA_TEST_CH_HA_LB_URL, NODE1_URL, NODE2_URL and USERNAME are required for ClickHouse HA tests")
 	}

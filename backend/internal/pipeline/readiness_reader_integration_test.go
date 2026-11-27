@@ -101,7 +101,9 @@ func TestReadinessReaderGroupsAndScopesProofs(t *testing.T) {
 	projectB := "62222222-2222-4222-8222-222222222222"
 	releaseA := "71111111-1111-4111-8111-111111111111"
 	releaseB := "72222222-2222-4222-8222-222222222222"
-	base := time.Date(2026, 11, 12, 8, 0, 0, 0, time.UTC)
+	// pipeline_readiness expires rows 24 hours after observed_at, so anchor
+	// fixtures relative to now rather than a fixed calendar date.
+	base := time.Now().UTC().Truncate(time.Second).Add(-4 * time.Hour)
 	stamp := func(offset time.Duration) string {
 		return base.Add(offset).Format("2006-01-02 15:04:05.000000000")
 	}

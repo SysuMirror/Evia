@@ -23,9 +23,17 @@ const CAPABILITIES: CapabilityItem[] = [
     panelTitle: '克制而清晰的产品分析',
     panelNote: '查询任务与版本化分析口径保持一致，避免团队间口径漂移与冗余追踪。',
     rows: [
-      { label: '事件与趋势', value: '计数 / 去重 UV / 属性分组', detail: '支持按环境与时区聚合分析' },
+      {
+        label: '事件与趋势',
+        value: '计数 / 去重 UV / 属性分组',
+        detail: '支持按环境与时区聚合分析',
+      },
       { label: '有序漏斗', value: '多步转化窗口', detail: '逐步骤展示留存与流失比例' },
-      { label: '留存与路径', value: '队列留存 / 关键路径', detail: '基于结构化交互信号定位体验断点' },
+      {
+        label: '留存与路径',
+        value: '队列留存 / 关键路径',
+        detail: '基于结构化交互信号定位体验断点',
+      },
       { label: '指标与看板', value: '独立指标 / 复合公式', detail: '多图固定版本统一运行与复用' },
     ],
   },
@@ -420,23 +428,31 @@ export function LandingPage() {
           <div className="evia-container">
             <div className="evia-light-head" data-reveal="up">
               <h2>隐私不是附加项，而是默认前提</h2>
-              <p>从浏览器端默认脱敏加密到自有集群独立落盘，每一层设计都围绕「最小化、可验证、可删除」构建。</p>
+              <p>
+                从浏览器端默认脱敏加密到自有集群独立落盘，每一层设计都围绕「最小化、可验证、可删除」构建。
+              </p>
             </div>
             <div className="evia-pillars">
               <div className="evia-pillar" data-reveal="pillar" data-delay="0">
                 <strong>零外流</strong>
                 <h3>100% 自有集群数据主权</h3>
-                <p>所有分析结果、身份边界与审计日志全部留在你掌控的基础设施中，绝不经任何第三方云中转或共享。</p>
+                <p>
+                  所有分析结果、身份边界与审计日志全部留在你掌控的基础设施中，绝不经任何第三方云中转或共享。
+                </p>
               </div>
               <div className="evia-pillar" data-reveal="pillar" data-delay="1">
                 <strong>端到端</strong>
                 <h3>客户端默认脱敏与加密</h3>
-                <p>表单输入、令牌与敏感区域默认自动掩码，加密载荷在离开浏览器前即完成封装，未经授权无法解密。</p>
+                <p>
+                  表单输入、令牌与敏感区域默认自动掩码，加密载荷在离开浏览器前即完成封装，未经授权无法解密。
+                </p>
               </div>
               <div className="evia-pillar" data-reveal="pillar" data-delay="2">
                 <strong>可撤回</strong>
                 <h3>尊重选择与全周期合规删除</h3>
-                <p>原生支持用户一键退出分析，并内建按主体彻底擦除、数据保留期自动清理与全量操作审计追踪。</p>
+                <p>
+                  原生支持用户一键退出分析，并内建按主体彻底擦除、数据保留期自动清理与全量操作审计追踪。
+                </p>
               </div>
             </div>
             <figure className="evia-arch-figure" data-reveal="up" data-delay="2">
@@ -456,7 +472,10 @@ export function LandingPage() {
           <div className="evia-container">
             <div className="evia-closing-inner" data-reveal="up">
               <h2>守护用户隐私，更清晰地理解你的产品</h2>
-              <p>使用平台管理员分配的账号登录 Evia 映途控制台，在自有基础设施中开启安全可控的产品洞察。</p>
+              <p>
+                使用平台管理员分配的账号登录 Evia
+                映途控制台，在自有基础设施中开启安全可控的产品洞察。
+              </p>
               <div className="evia-closing-actions">
                 <Link to="/login" className="evia-landing-primary-btn">
                   登录控制台
